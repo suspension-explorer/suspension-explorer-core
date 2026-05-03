@@ -13,6 +13,23 @@ from kinematics.core.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.geometry import Direction3
 
 
+def frozen_unit_axis(values: tuple[float, float, float]) -> np.ndarray:
+    """
+    Create a frozen (immutable) unit-axis array from the given values.
+
+    Args:
+        values: A tuple of three floats representing the axis direction.
+
+    Returns:
+        A numpy array with writeable flag set to False to prevent mutation.
+    """
+    # Build a non-writeable unit-axis array so the shared WorldAxisSystem
+    # constants cannot be mutated through their .data attribute.
+    arr = np.array(values, dtype=np.float64)
+    arr.flags.writeable = False
+    return arr
+
+
 class WorldAxisSystem:
     """
     World coordinate system unit axis directions.
@@ -23,15 +40,9 @@ class WorldAxisSystem:
         WorldAxisSystem.Z  # -> Direction3 along [0, 0, 1]
     """
 
-    X: Final[Direction3] = Direction3.from_trusted(
-        np.array([1.0, 0.0, 0.0], dtype=np.float64)
-    )
-    Y: Final[Direction3] = Direction3.from_trusted(
-        np.array([0.0, 1.0, 0.0], dtype=np.float64)
-    )
-    Z: Final[Direction3] = Direction3.from_trusted(
-        np.array([0.0, 0.0, 1.0], dtype=np.float64)
-    )
+    X: Final[Direction3] = Direction3.from_trusted(frozen_unit_axis((1.0, 0.0, 0.0)))
+    Y: Final[Direction3] = Direction3.from_trusted(frozen_unit_axis((0.0, 1.0, 0.0)))
+    Z: Final[Direction3] = Direction3.from_trusted(frozen_unit_axis((0.0, 0.0, 1.0)))
 
 
 @dataclass

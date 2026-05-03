@@ -74,10 +74,27 @@ class Point3:
         if isinstance(data, Point3):
             self.data: np.ndarray = data.data.copy()
         else:
-            arr = np.asarray(data, dtype=np.float64)
+            # np.array (not asarray) to guarantee an owned copy: if the caller
+            # passes a float64 ndarray, asarray would alias and later mutations
+            # of self.data would leak back into their buffer.
+            arr = np.array(data, dtype=np.float64)
             if arr.shape != (3,):
                 raise ValueError(f"Point3 requires shape (3,), got {arr.shape}")
             self.data = arr
+
+    @classmethod
+    def from_trusted(cls, data: np.ndarray) -> Point3:
+        """
+        Wrap a (3,) float64 ndarray without copying or validation.
+
+        The caller must ensure the array is shape (3,) and dtype float64.
+        Storage is shared with the input -- mutations on either side are
+        visible to the other. Use only at hot-path boundaries where the
+        aliasing is intentional (e.g. binding to a solver parameter buffer).
+        """
+        obj = cls.__new__(cls)
+        obj.data = data
+        return obj
 
     # -- Affine arithmetic --------------------------------------------------
 
@@ -134,9 +151,21 @@ class Point3:
         return Point3(self.data.copy())
 
     def __eq__(self, other: object) -> bool:
+        # Exact bitwise comparison via np.array_equal. Use almost_equals for
+        # tolerant comparison across two arithmetic paths.
         if isinstance(other, Point3):
             return bool(np.array_equal(self.data, other.data))
         return NotImplemented
+
+    def almost_equals(
+        self, other: Point3, rtol: float = 1e-5, atol: float = 1e-8
+    ) -> bool:
+        """
+        Tolerant elementwise comparison via np.allclose with numpy defaults.
+        """
+        if not isinstance(other, Point3):
+            return NotImplemented
+        return bool(np.allclose(self.data, other.data, rtol=rtol, atol=atol))
 
     def __repr__(self) -> str:
         return f"Point3({self.data})"
@@ -160,10 +189,22 @@ class Vector3:
         if isinstance(data, Vector3):
             self.data: np.ndarray = data.data.copy()
         else:
-            arr = np.asarray(data, dtype=np.float64)
+            # np.array (not asarray) to guarantee an owned copy; see Point3.
+            arr = np.array(data, dtype=np.float64)
             if arr.shape != (3,):
                 raise ValueError(f"Vector3 requires shape (3,), got {arr.shape}")
             self.data = arr
+
+    @classmethod
+    def from_trusted(cls, data: np.ndarray) -> Vector3:
+        """
+        Wrap a (3,) float64 ndarray without copying or validation.
+
+        See Point3.from_trusted for caveats. Storage is shared with the input.
+        """
+        obj = cls.__new__(cls)
+        obj.data = data
+        return obj
 
     # -- Vector arithmetic --------------------------------------------------
 
@@ -295,9 +336,20 @@ class Vector3:
         return Vector3(self.data.copy())
 
     def __eq__(self, other: object) -> bool:
+        # Exact comparison; use almost_equals for tolerant comparison.
         if isinstance(other, Vector3):
             return bool(np.array_equal(self.data, other.data))
         return NotImplemented
+
+    def almost_equals(
+        self, other: Vector3, rtol: float = 1e-5, atol: float = 1e-8
+    ) -> bool:
+        """
+        Tolerant elementwise comparison via np.allclose with numpy defaults.
+        """
+        if not isinstance(other, Vector3):
+            return NotImplemented
+        return bool(np.allclose(self.data, other.data, rtol=rtol, atol=atol))
 
     def __repr__(self) -> str:
         return f"Vector3({self.data})"
@@ -416,9 +468,20 @@ class Direction3:
     # -- Utilities ----------------------------------------------------------
 
     def __eq__(self, other: object) -> bool:
+        # Exact comparison; use almost_equals for tolerant comparison.
         if isinstance(other, Direction3):
             return bool(np.array_equal(self.data, other.data))
         return NotImplemented
+
+    def almost_equals(
+        self, other: Direction3, rtol: float = 1e-5, atol: float = 1e-8
+    ) -> bool:
+        """
+        Tolerant elementwise comparison via np.allclose with numpy defaults.
+        """
+        if not isinstance(other, Direction3):
+            return NotImplemented
+        return bool(np.allclose(self.data, other.data, rtol=rtol, atol=atol))
 
     def __repr__(self) -> str:
         return f"Direction3({self.data})"

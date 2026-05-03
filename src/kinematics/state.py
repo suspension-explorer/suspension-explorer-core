@@ -84,7 +84,11 @@ class SuspensionState:
 
         positions_2d = array.reshape(n_points, 3)
         for i, point_id in enumerate(self.free_points_order):
-            self.positions[point_id] = Point3(positions_2d[i])
+            # Bind each Point3 directly to its slice of the solver parameter
+            # buffer so least_squares can update positions without us copying
+            # 3 floats per free point per iteration. from_trusted is the
+            # explicit opt-in to this aliasing.
+            self.positions[point_id] = Point3.from_trusted(positions_2d[i])
 
     def update_positions(self, new_positions: dict[PointID, Point3]) -> None:
         """
