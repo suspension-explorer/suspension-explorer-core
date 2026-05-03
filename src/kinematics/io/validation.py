@@ -81,9 +81,13 @@ def coerce_point3(value: Any) -> Point3:
     return Point3(arr)
 
 
-# Pydantic field type that accepts Point3Like inputs and coerces to Point3.
-# Note: Type checkers see Point3Like, but runtime value is always Point3.
-PydanticPoint3 = Annotated[Point3Like, BeforeValidator(coerce_point3)]
+# Pydantic field type for Point3-valued fields.
+# Static type is Point3 (so attribute access works without casts), but the
+# BeforeValidator coerces wider inputs (lists, tuples, dicts, ndarrays) at
+# runtime. Direct model construction with raw inputs requires explicit
+# Point3(...) wrapping to satisfy the type checker; YAML/dict-driven
+# `Model.model_validate(...)` is unaffected.
+PydanticPoint3 = Annotated[Point3, BeforeValidator(coerce_point3)]
 
 
 def coerce_direction3(value: Any) -> Direction3:
@@ -118,6 +122,8 @@ def coerce_direction3(value: Any) -> Direction3:
     return Direction3(arr)
 
 
-# Pydantic field type that accepts Direction3Like inputs and coerces to Direction3.
-# The result is always a unit vector; zero-length inputs raise ValueError.
-PydanticDirection3 = Annotated[Direction3Like, BeforeValidator(coerce_direction3)]
+# Pydantic field type for Direction3-valued fields.
+# Static type is Direction3 (so attribute access works without casts). The
+# BeforeValidator coerces wider inputs at runtime and normalises to unit
+# length; zero-length inputs raise ValueError.
+PydanticDirection3 = Annotated[Direction3, BeforeValidator(coerce_direction3)]

@@ -7,12 +7,9 @@ wheel parameters, and static alignment settings.
 
 from __future__ import annotations
 
-from typing import cast
-
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from kinematics.core.constants import MM_PER_INCH
-from kinematics.core.geometry import Point3
 from kinematics.io.validation import PydanticDirection3, PydanticPoint3
 
 
@@ -111,9 +108,7 @@ class CamberShimConfig(BaseModel):
 
         # shim_face_normal is already validated as a unit Direction3 by its
         # PydanticDirection3 coercer, so no zero-length check is needed here.
-        point_a = cast(Point3, self.shim_face_point_a)
-        point_b = cast(Point3, self.shim_face_point_b)
-        datum_separation = (point_b - point_a).norm()
+        datum_separation = (self.shim_face_point_b - self.shim_face_point_a).norm()
         if datum_separation < EPS_GEOMETRIC:
             raise ValueError("shim_face_point_a and shim_face_point_b must be distinct")
 

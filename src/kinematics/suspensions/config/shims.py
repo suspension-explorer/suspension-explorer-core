@@ -25,13 +25,12 @@ With 10 residuals:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import cast
 
 import numpy as np
 
 from kinematics.core.constants import EPS_GEOMETRIC, EPS_NUMERICAL
 from kinematics.core.enums import PointID
-from kinematics.core.geometry import Direction3, Point3, Vector3, extract_array
+from kinematics.core.geometry import Point3, Vector3, extract_array
 from kinematics.core.vector_utils.generic import normalize_vector
 from kinematics.core.vector_utils.geometric import rotate_vector_rodrigues
 from kinematics.solver import SolverConfig, solve_least_squares_problem
@@ -272,12 +271,9 @@ def solve_camber_shim_assembly(
     trackrod_inboard = positions[PointID.TRACKROD_INBOARD].data
 
     # Shim geometry: datum points are Point3, normal is a unit Direction3.
-    shim_face_point_a = cast(Point3, shim_config.shim_face_point_a)
-    shim_face_point_b = cast(Point3, shim_config.shim_face_point_b)
-    shim_face_normal = cast(Direction3, shim_config.shim_face_normal)
-    shim_face_datum_a = shim_face_point_a.data
-    shim_face_datum_b = shim_face_point_b.data
-    design_face_normal = shim_face_normal.data
+    shim_face_datum_a = shim_config.shim_face_point_a.data
+    shim_face_datum_b = shim_config.shim_face_point_b.data
+    design_face_normal = shim_config.shim_face_normal.data
 
     # Early exit when there is no shim thickness change.
     if abs(shim_config.setup_thickness - shim_config.design_thickness) < EPS_GEOMETRIC:

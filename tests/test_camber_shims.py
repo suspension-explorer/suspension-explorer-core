@@ -82,9 +82,9 @@ def make_simple_geometry(
         PointID.TRACKROD_INBOARD: Point3([50.0, 200.0, 250.0]),
     }
     shim_config = CamberShimConfig(
-        shim_face_point_a=[0.0, 750.0, 510.0],
-        shim_face_point_b=[0.0, 750.0, 490.0],
-        shim_face_normal=[0.0, 1.0, 0.0],
+        shim_face_point_a=Point3([0.0, 750.0, 510.0]),
+        shim_face_point_b=Point3([0.0, 750.0, 490.0]),
+        shim_face_normal=Direction3([0.0, 1.0, 0.0]),
         design_thickness=design_thickness,
         setup_thickness=setup_thickness,
     )
@@ -267,9 +267,9 @@ def _make_shim_config(
     Build a CamberShimConfig matching the test geometry YAML datum positions.
     """
     return CamberShimConfig(
-        shim_face_point_a={"x": -25.0, "y": 750.0, "z": 510.0},
-        shim_face_point_b={"x": -25.0, "y": 750.0, "z": 490.0},
-        shim_face_normal={"x": 0.0, "y": 1.0, "z": 0.0},
+        shim_face_point_a=Point3([-25.0, 750.0, 510.0]),
+        shim_face_point_b=Point3([-25.0, 750.0, 490.0]),
+        shim_face_normal=Direction3([0.0, 1.0, 0.0]),
         design_thickness=design_thickness,
         setup_thickness=setup_thickness,
     )

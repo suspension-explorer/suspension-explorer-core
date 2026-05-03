@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from kinematics.core.enums import PointID, ShimType, Units
-from kinematics.core.geometry import Point3
+from kinematics.core.geometry import Direction3, Point3
 from kinematics.io.geometry_loader import load_geometry
 from kinematics.suspensions.base import Suspension
 from kinematics.suspensions.config.settings import (
@@ -64,12 +64,12 @@ def valid_config() -> SuspensionConfig:
                 rim_diameter=13,
             ),
         ),
-        cg_position={"x": 1250, "y": 0, "z": 450},
+        cg_position=Point3([1250, 0, 450]),
         wheelbase=2500.0,
         camber_shim=CamberShimConfig(
-            shim_face_point_a={"x": -25.0, "y": 750.0, "z": 510.0},
-            shim_face_point_b={"x": -25.0, "y": 750.0, "z": 490.0},
-            shim_face_normal={"x": 0.0, "y": 1.0, "z": 0.0},
+            shim_face_point_a=Point3([-25.0, 750.0, 510.0]),
+            shim_face_point_b=Point3([-25.0, 750.0, 490.0]),
+            shim_face_normal=Direction3([0.0, 1.0, 0.0]),
             design_thickness=30.0,
             setup_thickness=30.0,
         ),
@@ -246,9 +246,9 @@ class TestCamberShimConfig:
         """
         with pytest.raises(ValueError, match="must be distinct"):
             CamberShimConfig(
-                shim_face_point_a={"x": -25.0, "y": 750.0, "z": 500.0},
-                shim_face_point_b={"x": -25.0, "y": 750.0, "z": 500.0},
-                shim_face_normal={"x": 0.0, "y": 1.0, "z": 0.0},
+                shim_face_point_a=Point3([-25.0, 750.0, 500.0]),
+                shim_face_point_b=Point3([-25.0, 750.0, 500.0]),
+                shim_face_normal=Direction3([0.0, 1.0, 0.0]),
                 design_thickness=30.0,
                 setup_thickness=40.0,
             )
