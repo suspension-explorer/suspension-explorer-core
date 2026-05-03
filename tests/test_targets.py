@@ -26,13 +26,6 @@ def test_resolve_vector_target_normalizes():
     assert np.isclose(np.linalg.norm(direction.data), 1.0)
 
 
-def test_resolve_raw_vector_target_normalizes():
-    direction = resolve_target(PointTargetVector(np.array([0.0, 0.0, 10.0])))
-
-    np.testing.assert_allclose(direction.data, WorldAxisSystem.Z.data)
-    assert np.isclose(np.linalg.norm(direction.data), 1.0)
-
-
 def test_resolve_vector_target_zero_raises():
     with pytest.raises(ValueError):
-        resolve_target(PointTargetVector(np.array([0.0, 0.0, 0.0])))
+        PointTargetVector(Direction3([0.0, 0.0, 0.0]))

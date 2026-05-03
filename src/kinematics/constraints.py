@@ -459,7 +459,10 @@ class PointOnLineConstraint(Constraint):
     """
 
     def __init__(
-        self, point_id: PointID, line_point: Point3, line_direction: Direction3
+        self,
+        point_id: PointID,
+        line_point: Point3,
+        line_direction: Direction3,
     ):
         """
         Initialize the point-on-line constraint.
@@ -472,6 +475,11 @@ class PointOnLineConstraint(Constraint):
         Raises:
             ValueError: If line_direction has zero length.
         """
+        if not isinstance(line_point, Point3):
+            raise TypeError("line_point must be a Point3")
+        if not isinstance(line_direction, Direction3):
+            raise TypeError("line_direction must be a Direction3")
+
         self.point_id = point_id
         self.line_point = line_point.copy()
         self.line_direction = line_direction
@@ -521,6 +529,11 @@ class PointOnPlaneConstraint(Constraint):
             plane_point: A point on the plane.
             plane_normal: The normal direction of the plane (unit vector).
         """
+        if not isinstance(plane_point, Point3):
+            raise TypeError("plane_point must be a Point3")
+        if not isinstance(plane_normal, Direction3):
+            raise TypeError("plane_normal must be a Direction3")
+
         self.point_id = point_id
         self.plane_point = plane_point.copy()
         self.plane_normal = plane_normal

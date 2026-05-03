@@ -37,6 +37,6 @@ def resolve_target(target: PointTargetDirection) -> Direction3:
         raise ValueError(f"Unsupported axis: {target.axis!r}")
 
     if isinstance(target, PointTargetVector):
-        return Direction3(target.vector)
+        return target.vector
 
     raise TypeError(f"Unsupported target type: {type(target)!r}")

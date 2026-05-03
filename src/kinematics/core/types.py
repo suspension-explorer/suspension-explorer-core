@@ -109,10 +109,10 @@ class PointTargetVector:
     A target direction defined by an arbitrary vector.
 
     Attributes:
-        vector (Direction3 | np.ndarray): The vector defining the target.
+        vector (Direction3): The direction defining the target.
     """
 
-    vector: Direction3 | np.ndarray
+    vector: Direction3
 
 
 PointTargetDirection = Union[PointTargetAxis, PointTargetVector]

@@ -5,19 +5,18 @@ Derived point specifications and management.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Set, TypeVar
+from typing import Callable, Set, TypeAlias, TypeVar, cast
 
-import numpy as np
-
+from kinematics.core.dual import DualVec3
 from kinematics.core.enums import PointID
 from kinematics.core.geometry import Point3
 
-# Function signature for computing a derived point position.
-# Typed for the normal (Point3) path; the DualVec3 path works at runtime
-# via duck typing and is handled by the TypeVar on update_in_place.
-PositionFn = Callable[[dict[PointID, Point3]], np.ndarray]
+PositionValue: TypeAlias = Point3 | DualVec3
 
-_V = TypeVar("_V")
+# Function signature for computing a derived point position.
+PositionFn = Callable[[dict[PointID, PositionValue]], PositionValue]
+
+_V = TypeVar("_V", bound=PositionValue)
 
 
 @dataclass(frozen=True)
@@ -173,4 +172,5 @@ class DerivedPointsManager:
         """
         for point_id in self.update_order:
             update_func = self.spec.functions[point_id]
-            positions[point_id] = update_func(positions)  # type: ignore[assignment]
+            update_positions = cast(dict[PointID, PositionValue], positions)
+            positions[point_id] = cast(_V, update_func(update_positions))
