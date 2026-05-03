@@ -136,7 +136,7 @@ class DoubleWishboneSuspension(Suspension):
         if self._initial_state is not None:
             return self._initial_state
 
-        positions = self.get_hardpoints_as_arrays()
+        positions = self.get_hardpoints_copy()
 
         # Get camber shim point positions.
 
@@ -405,19 +405,8 @@ class DoubleWishboneSuspension(Suspension):
 
         shim_config = self.config.camber_shim
 
-        # Add shim geometry points from config so the solver can access them
-        # via PointID alongside the kinematic hardpoints. These are filtered
-        # from output by OUTPUT_POINTS.
-        positions[PointID.CAMBER_SHIM_FACE_POINT_A] = Point3(
-            shim_config.shim_face_point_a
-        )
-        positions[PointID.CAMBER_SHIM_FACE_POINT_B] = Point3(
-            shim_config.shim_face_point_b
-        )
-        positions[PointID.CAMBER_SHIM_FACE_NORMAL] = Point3(
-            shim_config.shim_face_normal
-        )
-
+        # Shim face geometry is read directly from shim_config by the solver,
+        # so the positions dict only needs the kinematic hardpoints.
         assembly_solution = solve_camber_shim_assembly(
             positions=positions,
             shim_config=shim_config,

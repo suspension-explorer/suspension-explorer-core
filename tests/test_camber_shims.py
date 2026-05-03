@@ -80,9 +80,6 @@ def make_simple_geometry(
         PointID.UPPER_WISHBONE_INBOARD_REAR: Point3([-275.0, 350.0, 500.0]),
         PointID.TRACKROD_OUTBOARD: Point3([150.0, 800.0, 275.0]),
         PointID.TRACKROD_INBOARD: Point3([50.0, 200.0, 250.0]),
-        PointID.CAMBER_SHIM_FACE_POINT_A: Point3([0.0, 750.0, 510.0]),
-        PointID.CAMBER_SHIM_FACE_POINT_B: Point3([0.0, 750.0, 490.0]),
-        PointID.CAMBER_SHIM_FACE_NORMAL: Point3([0.0, 1.0, 0.0]),
     }
     shim_config = CamberShimConfig(
         shim_face_point_a=[0.0, 750.0, 510.0],

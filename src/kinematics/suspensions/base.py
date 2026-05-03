@@ -153,7 +153,7 @@ class Suspension(ABC):
             missing_names = sorted(p.name for p in missing)
             raise ValueError(f"Missing required hardpoints: {', '.join(missing_names)}")
 
-    def get_hardpoints_as_arrays(self) -> dict[PointID, Point3]:
+    def get_hardpoints_copy(self) -> dict[PointID, Point3]:
         """
         Return a mutable copy of the hardpoints dictionary.
 

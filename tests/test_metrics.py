@@ -12,15 +12,16 @@ from kinematics.points.derived.manager import DerivedPointsManager
 from kinematics.suspensions.double_wishbone import DoubleWishboneSuspension
 
 
-def _shift_x(vec3: object, delta_x: float) -> tuple[float, float, float]:
+def _shift_x(point: object, delta_x: float):
     """
     Shift a 3D point along the world X axis by a fixed amount.
-    """
-    from kinematics.core.geometry import extract_array
 
-    shifted = extract_array(vec3).copy()
-    shifted[0] += delta_x
-    return (float(shifted[0]), float(shifted[1]), float(shifted[2]))
+    Returns a Point3 so it can be used with Pydantic's `model_copy(update=...)`
+    which does not re-run field validators.
+    """
+    from kinematics.core.geometry import Point3, Vector3, extract_array
+
+    return Point3(extract_array(point)) + Vector3([delta_x, 0.0, 0.0])
 
 
 def _translate_double_wishbone_x(

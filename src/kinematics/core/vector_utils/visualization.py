@@ -6,7 +6,7 @@ from typing import Any, Optional, cast
 
 import numpy as np
 
-from kinematics.core.geometry import Direction3, Point3, midpoint
+from kinematics.core.geometry import Direction3, Point3
 
 PLOTTING_ENABLED = False
 
@@ -74,8 +74,10 @@ def plot_plane_from_points(
     ax.plot(triangle[:, 0], triangle[:, 1], triangle[:, 2], "gray", alpha=0.5)
 
     if normal is not None and d is not None:
-        # Plot normal vector from centroid.
-        centroid = midpoint(midpoint(a, b), c)
+        # Plot normal vector from triangle centroid.
+        # Use an affine combination since Point3 + Point3 is not allowed:
+        # centroid = a + ((b - a) + (c - a)) / 3.
+        centroid = a + ((b - a) + (c - a)) / 3
         span = max((b - a).norm(), (c - a).norm(), (c - b).norm())
         normal_scale = span * 0.5
 

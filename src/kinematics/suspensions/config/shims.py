@@ -25,12 +25,13 @@ With 10 residuals:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 
 from kinematics.core.constants import EPS_GEOMETRIC, EPS_NUMERICAL
 from kinematics.core.enums import PointID
-from kinematics.core.geometry import Point3, Vector3, extract_array
+from kinematics.core.geometry import Direction3, Point3, Vector3, extract_array
 from kinematics.core.vector_utils.generic import normalize_vector
 from kinematics.core.vector_utils.geometric import rotate_vector_rodrigues
 from kinematics.solver import SolverConfig, solve_least_squares_problem
@@ -217,7 +218,9 @@ def compute_camber_shim_assembly_residuals(
     )
 
 
-# These are the points we need to run the solve.
+# Kinematic hardpoints required to run the shim solve. Shim face geometry
+# (datum points and normal) is read from shim_config, not from the positions
+# dict, since the normal is a Direction3 rather than a Point3.
 REQUIRED_POINT_IDS = frozenset(
     {
         PointID.UPPER_WISHBONE_OUTBOARD,
@@ -226,9 +229,6 @@ REQUIRED_POINT_IDS = frozenset(
         PointID.UPPER_WISHBONE_INBOARD_REAR,
         PointID.TRACKROD_OUTBOARD,
         PointID.TRACKROD_INBOARD,
-        PointID.CAMBER_SHIM_FACE_POINT_A,
-        PointID.CAMBER_SHIM_FACE_POINT_B,
-        PointID.CAMBER_SHIM_FACE_NORMAL,
     }
 )
 
@@ -270,11 +270,14 @@ def solve_camber_shim_assembly(
     upper_wishbone_pickup_rear = positions[PointID.UPPER_WISHBONE_INBOARD_REAR].data
     trackrod_outboard_design = positions[PointID.TRACKROD_OUTBOARD].data
     trackrod_inboard = positions[PointID.TRACKROD_INBOARD].data
-    shim_face_datum_a = positions[PointID.CAMBER_SHIM_FACE_POINT_A].data
-    shim_face_datum_b = positions[PointID.CAMBER_SHIM_FACE_POINT_B].data
-    design_face_normal = normalize_vector(
-        positions[PointID.CAMBER_SHIM_FACE_NORMAL].data
-    )
+
+    # Shim geometry: datum points are Point3, normal is a unit Direction3.
+    shim_face_point_a = cast(Point3, shim_config.shim_face_point_a)
+    shim_face_point_b = cast(Point3, shim_config.shim_face_point_b)
+    shim_face_normal = cast(Direction3, shim_config.shim_face_normal)
+    shim_face_datum_a = shim_face_point_a.data
+    shim_face_datum_b = shim_face_point_b.data
+    design_face_normal = shim_face_normal.data
 
     # Early exit when there is no shim thickness change.
     if abs(shim_config.setup_thickness - shim_config.design_thickness) < EPS_GEOMETRIC:
