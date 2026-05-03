@@ -190,6 +190,25 @@ def test_steering_axis_ground_intersection_uses_contact_patch_height(
     )
 
 
+def test_metric_context_exposes_cg_position(double_wishbone_geometry_file) -> None:
+    """
+    CG position should remain available after config coercion to Point3.
+    """
+    suspension = load_geometry(double_wishbone_geometry_file)
+    assert isinstance(suspension, DoubleWishboneSuspension)
+    assert suspension.config is not None
+
+    state = suspension.initial_state()
+    ctx = MetricContext(state=state, suspension=suspension, config=suspension.config)
+
+    np.testing.assert_allclose(
+        ctx.cg_position.data,
+        suspension.config.cg_position.data,
+        atol=TEST_TOLERANCE,
+    )
+    assert ctx.cg_position is not suspension.config.cg_position
+
+
 def test_scrub_radius_uses_ground_plane_wheel_lateral_direction(
     double_wishbone_geometry_file,
 ) -> None:

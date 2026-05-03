@@ -9,9 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
-from typing import TYPE_CHECKING
-
-import numpy as np
+from typing import TYPE_CHECKING, cast
 
 from kinematics.core.constants import EPS_GEOMETRIC
 from kinematics.core.enums import Axis, PointID
@@ -141,4 +139,4 @@ class MetricContext:
         """
         Center of gravity position from configuration.
         """
-        return Point3(np.asarray(self.config.cg_position, dtype=float))
+        return cast(Point3, self.config.cg_position).copy()
