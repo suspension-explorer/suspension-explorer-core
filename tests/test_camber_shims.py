@@ -12,7 +12,6 @@ import numpy as np
 from kinematics.core.constants import TEST_TOLERANCE
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.geometry import Direction3, Point3
-from kinematics.core.types import make_point3
 from kinematics.core.vector_utils.geometric import rotate_point_about_axis
 from kinematics.io.geometry_loader import load_geometry
 from kinematics.suspensions.base import Suspension
@@ -75,15 +74,15 @@ def make_simple_geometry(
     wishbone arms, LBJ below, trackrod connecting rack to upright.
     """
     positions = {
-        PointID.UPPER_WISHBONE_OUTBOARD: make_point3([0.0, 750.0, 500.0]),
-        PointID.LOWER_WISHBONE_OUTBOARD: make_point3([0.0, 900.0, 200.0]),
-        PointID.UPPER_WISHBONE_INBOARD_FRONT: make_point3([225.0, 350.0, 500.0]),
-        PointID.UPPER_WISHBONE_INBOARD_REAR: make_point3([-275.0, 350.0, 500.0]),
-        PointID.TRACKROD_OUTBOARD: make_point3([150.0, 800.0, 275.0]),
-        PointID.TRACKROD_INBOARD: make_point3([50.0, 200.0, 250.0]),
-        PointID.CAMBER_SHIM_FACE_POINT_A: make_point3([0.0, 750.0, 510.0]),
-        PointID.CAMBER_SHIM_FACE_POINT_B: make_point3([0.0, 750.0, 490.0]),
-        PointID.CAMBER_SHIM_FACE_NORMAL: make_point3([0.0, 1.0, 0.0]),
+        PointID.UPPER_WISHBONE_OUTBOARD: Point3([0.0, 750.0, 500.0]),
+        PointID.LOWER_WISHBONE_OUTBOARD: Point3([0.0, 900.0, 200.0]),
+        PointID.UPPER_WISHBONE_INBOARD_FRONT: Point3([225.0, 350.0, 500.0]),
+        PointID.UPPER_WISHBONE_INBOARD_REAR: Point3([-275.0, 350.0, 500.0]),
+        PointID.TRACKROD_OUTBOARD: Point3([150.0, 800.0, 275.0]),
+        PointID.TRACKROD_INBOARD: Point3([50.0, 200.0, 250.0]),
+        PointID.CAMBER_SHIM_FACE_POINT_A: Point3([0.0, 750.0, 510.0]),
+        PointID.CAMBER_SHIM_FACE_POINT_B: Point3([0.0, 750.0, 490.0]),
+        PointID.CAMBER_SHIM_FACE_NORMAL: Point3([0.0, 1.0, 0.0]),
     }
     shim_config = CamberShimConfig(
         shim_face_point_a=[0.0, 750.0, 510.0],

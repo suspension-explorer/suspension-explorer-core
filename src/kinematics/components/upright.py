@@ -8,7 +8,6 @@ import numpy as np
 from kinematics.core.enums import PointID
 from kinematics.core.geometry import Direction3, Point3, midpoint
 from kinematics.core.rigid_body import LocalCoordinateSystem, RigidBody
-from kinematics.core.types import make_point3
 
 
 @dataclass
@@ -185,9 +184,9 @@ class Upright(RigidBody):
             hardpoints: Dict with ball joint and trackrod keys.
         """
         # Update hardpoint positions.
-        self.hardpoints.upper_ball_joint = make_point3(hardpoints["upper_ball_joint"])
-        self.hardpoints.lower_ball_joint = make_point3(hardpoints["lower_ball_joint"])
-        self.hardpoints.trackrod_outboard = make_point3(
+        self.hardpoints.upper_ball_joint = Point3(hardpoints["upper_ball_joint"])
+        self.hardpoints.lower_ball_joint = Point3(hardpoints["lower_ball_joint"])
+        self.hardpoints.trackrod_outboard = Point3(
             hardpoints["trackrod_outboard"]
         )
 
@@ -315,20 +314,20 @@ class Upright(RigidBody):
 
         # Resolve mount positions from hardpoints.
         upright_hardpoints = UprightHardpoints(
-            upper_ball_joint=make_point3(
+            upper_ball_joint=Point3(
                 hardpoints[hardpoint_point_ids["upper_ball_joint"]]
             ),
-            lower_ball_joint=make_point3(
+            lower_ball_joint=Point3(
                 hardpoints[hardpoint_point_ids["lower_ball_joint"]]
             ),
-            trackrod_outboard=make_point3(
+            trackrod_outboard=Point3(
                 hardpoints[hardpoint_point_ids["trackrod_outboard"]]
             ),
         )
 
         upright_attachments = UprightAttachments(
-            axle_inboard=make_point3(attachments["axle_inboard"]),
-            axle_outboard=make_point3(attachments["axle_outboard"]),
+            axle_inboard=Point3(attachments["axle_inboard"]),
+            axle_outboard=Point3(attachments["axle_outboard"]),
         )
 
         upright = cls(hardpoints=upright_hardpoints, attachments=upright_attachments)

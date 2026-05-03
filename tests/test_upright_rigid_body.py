@@ -14,7 +14,6 @@ from kinematics.components.upright import Upright, UprightAttachments, UprightHa
 from kinematics.core.enums import PointID
 from kinematics.core.geometry import Direction3, Point3
 from kinematics.core.rigid_body import LocalCoordinateSystem
-from kinematics.core.types import make_point3
 
 
 class TestLocalCoordinateSystem:
@@ -112,14 +111,14 @@ class TestUprightRigidBody:
         Coordinate system: X=forward, Y=outboard, Z=up
         """
         hardpoints = UprightHardpoints(
-            lower_ball_joint=make_point3([0, 900, 200]),
-            upper_ball_joint=make_point3([-25, 750, 500]),
-            trackrod_outboard=make_point3([150, 800, 275]),
+            lower_ball_joint=Point3([0, 900, 200]),
+            upper_ball_joint=Point3([-25, 750, 500]),
+            trackrod_outboard=Point3([150, 800, 275]),
         )
 
         attachments = UprightAttachments(
-            axle_inboard=make_point3([-20, 800, 308.426]),
-            axle_outboard=make_point3([-20, 950, 313.426]),
+            axle_inboard=Point3([-20, 800, 308.426]),
+            axle_outboard=Point3([-20, 950, 313.426]),
         )
 
         return hardpoints, attachments
@@ -304,13 +303,13 @@ class TestUprightIntegration:
         """Test the complete shim workflow from design through suspension travel."""
         # Step 1: Create upright at design
         hardpoints = UprightHardpoints(
-            lower_ball_joint=make_point3([0, 900, 200]),
-            upper_ball_joint=make_point3([-25, 750, 500]),
-            trackrod_outboard=make_point3([150, 800, 275]),
+            lower_ball_joint=Point3([0, 900, 200]),
+            upper_ball_joint=Point3([-25, 750, 500]),
+            trackrod_outboard=Point3([150, 800, 275]),
         )
         attachments = UprightAttachments(
-            axle_inboard=make_point3([-20, 800, 308.426]),
-            axle_outboard=make_point3([-20, 950, 313.426]),
+            axle_inboard=Point3([-20, 800, 308.426]),
+            axle_outboard=Point3([-20, 950, 313.426]),
         )
 
         upright = Upright.from_global_positions(hardpoints, attachments)
@@ -363,14 +362,14 @@ class TestHardpointsArchitecture:
         This represents the central hardpoints registry that components reference.
         """
         return {
-            PointID.LOWER_WISHBONE_INBOARD_FRONT: make_point3([250, 400, 200]),
-            PointID.LOWER_WISHBONE_INBOARD_REAR: make_point3([-250, 450, 200]),
-            PointID.LOWER_WISHBONE_OUTBOARD: make_point3([0, 900, 200]),
-            PointID.UPPER_WISHBONE_INBOARD_FRONT: make_point3([225, 350, 500]),
-            PointID.UPPER_WISHBONE_INBOARD_REAR: make_point3([-275, 350, 500]),
-            PointID.UPPER_WISHBONE_OUTBOARD: make_point3([-25, 750, 500]),
-            PointID.TRACKROD_INBOARD: make_point3([50, 200, 250]),
-            PointID.TRACKROD_OUTBOARD: make_point3([150, 800, 275]),
+            PointID.LOWER_WISHBONE_INBOARD_FRONT: Point3([250, 400, 200]),
+            PointID.LOWER_WISHBONE_INBOARD_REAR: Point3([-250, 450, 200]),
+            PointID.LOWER_WISHBONE_OUTBOARD: Point3([0, 900, 200]),
+            PointID.UPPER_WISHBONE_INBOARD_FRONT: Point3([225, 350, 500]),
+            PointID.UPPER_WISHBONE_INBOARD_REAR: Point3([-275, 350, 500]),
+            PointID.UPPER_WISHBONE_OUTBOARD: Point3([-25, 750, 500]),
+            PointID.TRACKROD_INBOARD: Point3([50, 200, 250]),
+            PointID.TRACKROD_OUTBOARD: Point3([150, 800, 275]),
         }
 
     @pytest.fixture
@@ -390,8 +389,8 @@ class TestHardpointsArchitecture:
         Attachment positions (axle) in global coordinates at design.
         """
         return {
-            "axle_inboard": make_point3([-20, 800, 308.426]),
-            "axle_outboard": make_point3([-20, 950, 313.426]),
+            "axle_inboard": Point3([-20, 800, 308.426]),
+            "axle_outboard": Point3([-20, 950, 313.426]),
         }
 
     def test_from_hardpoints_and_attachments_creates_upright(
@@ -488,7 +487,7 @@ class TestHardpointsArchitecture:
         Test that missing attachments raise ValueError.
         """
         incomplete_attachments: dict[str, Point3] = {
-            "axle_inboard": make_point3([-20, 800, 308.426]),
+            "axle_inboard": Point3([-20, 800, 308.426]),
             # Missing axle_outboard
         }
 
@@ -546,19 +545,19 @@ class TestHardpointsArchitecture:
         """
         # Create upright using old-style constructor (no hardpoint_point_ids)
         hardpoints = UprightHardpoints(
-            lower_ball_joint=make_point3([0, 900, 200]),
-            upper_ball_joint=make_point3([-25, 750, 500]),
-            trackrod_outboard=make_point3([150, 800, 275]),
+            lower_ball_joint=Point3([0, 900, 200]),
+            upper_ball_joint=Point3([-25, 750, 500]),
+            trackrod_outboard=Point3([150, 800, 275]),
         )
         attachments = UprightAttachments(
-            axle_inboard=make_point3([-20, 800, 308.426]),
-            axle_outboard=make_point3([-20, 950, 313.426]),
+            axle_inboard=Point3([-20, 800, 308.426]),
+            axle_outboard=Point3([-20, 950, 313.426]),
         )
 
         upright = Upright.from_global_positions(hardpoints, attachments)
 
         # Attempting to use hardpoints registry-based update should fail
-        dummy_hardpoints = {PointID.LOWER_WISHBONE_OUTBOARD: make_point3([0, 0, 0])}
+        dummy_hardpoints = {PointID.LOWER_WISHBONE_OUTBOARD: Point3([0, 0, 0])}
 
         with pytest.raises(RuntimeError, match="not created with hardpoint references"):
             upright.update_from_hardpoints_registry(dummy_hardpoints)
@@ -569,13 +568,13 @@ class TestHardpointsArchitecture:
         uprights.
         """
         hardpoints = UprightHardpoints(
-            lower_ball_joint=make_point3([0, 900, 200]),
-            upper_ball_joint=make_point3([-25, 750, 500]),
-            trackrod_outboard=make_point3([150, 800, 275]),
+            lower_ball_joint=Point3([0, 900, 200]),
+            upper_ball_joint=Point3([-25, 750, 500]),
+            trackrod_outboard=Point3([150, 800, 275]),
         )
         attachments = UprightAttachments(
-            axle_inboard=make_point3([-20, 800, 308.426]),
-            axle_outboard=make_point3([-20, 950, 313.426]),
+            axle_inboard=Point3([-20, 800, 308.426]),
+            axle_outboard=Point3([-20, 950, 313.426]),
         )
 
         upright = Upright.from_global_positions(hardpoints, attachments)

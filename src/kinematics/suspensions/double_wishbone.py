@@ -20,7 +20,7 @@ from kinematics.constraints import (
 from kinematics.core.constants import EPS_GEOMETRIC
 from kinematics.core.enums import Axis, PointID, ShimType
 from kinematics.core.geometry import Direction3, Point3
-from kinematics.core.types import WorldAxisSystem, make_point3
+from kinematics.core.types import WorldAxisSystem
 from kinematics.core.vector_utils.geometric import (
     compute_point_point_distance,
     compute_vector_vector_angle,
@@ -408,13 +408,13 @@ class DoubleWishboneSuspension(Suspension):
         # Add shim geometry points from config so the solver can access them
         # via PointID alongside the kinematic hardpoints. These are filtered
         # from output by OUTPUT_POINTS.
-        positions[PointID.CAMBER_SHIM_FACE_POINT_A] = make_point3(
+        positions[PointID.CAMBER_SHIM_FACE_POINT_A] = Point3(
             shim_config.shim_face_point_a
         )
-        positions[PointID.CAMBER_SHIM_FACE_POINT_B] = make_point3(
+        positions[PointID.CAMBER_SHIM_FACE_POINT_B] = Point3(
             shim_config.shim_face_point_b
         )
-        positions[PointID.CAMBER_SHIM_FACE_NORMAL] = make_point3(
+        positions[PointID.CAMBER_SHIM_FACE_NORMAL] = Point3(
             shim_config.shim_face_normal
         )
 

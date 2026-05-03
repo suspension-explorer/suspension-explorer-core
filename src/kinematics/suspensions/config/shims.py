@@ -25,14 +25,12 @@ With 10 residuals:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 import numpy as np
 
 from kinematics.core.constants import EPS_GEOMETRIC, EPS_NUMERICAL
 from kinematics.core.enums import PointID
-from kinematics.core.geometry import Vector3, extract_array
-from kinematics.core.types import make_point3
+from kinematics.core.geometry import Point3, Vector3, extract_array
 from kinematics.core.vector_utils.generic import normalize_vector
 from kinematics.core.vector_utils.geometric import rotate_vector_rodrigues
 from kinematics.solver import SolverConfig, solve_least_squares_problem
@@ -236,7 +234,7 @@ REQUIRED_POINT_IDS = frozenset(
 
 
 def solve_camber_shim_assembly(
-    positions: dict[PointID, Any],
+    positions: dict[PointID, Point3],
     shim_config: CamberShimConfig,
     solver_config: SolverConfig = SolverConfig(),
 ) -> CamberShimAssemblySolution:
@@ -249,7 +247,7 @@ def solve_camber_shim_assembly(
     with trackrod length remaining equal to design condition.
 
     Args:
-        positions: Dict mapping PointID to np.ndarray positions.
+        positions: Dict mapping PointID to Point3 positions.
         shim_config: Shim thickness configuration (design and setup thicknesses).
         solver_config: Solver configuration (tolerances, verbosity, etc.).
 
@@ -266,32 +264,16 @@ def solve_camber_shim_assembly(
         names = sorted(p.name for p in missing)
         raise KeyError(f"Missing required PointIDs: {names}")
 
-    upper_ball_joint_design = make_point3(
-        positions[PointID.UPPER_WISHBONE_OUTBOARD]
-    ).data
-    lower_ball_joint = make_point3(
-        positions[PointID.LOWER_WISHBONE_OUTBOARD]
-    ).data
-    upper_wishbone_pickup_front = make_point3(
-        positions[PointID.UPPER_WISHBONE_INBOARD_FRONT]
-    ).data
-    upper_wishbone_pickup_rear = make_point3(
-        positions[PointID.UPPER_WISHBONE_INBOARD_REAR]
-    ).data
-    trackrod_outboard_design = make_point3(
-        positions[PointID.TRACKROD_OUTBOARD]
-    ).data
-    trackrod_inboard = make_point3(
-        positions[PointID.TRACKROD_INBOARD]
-    ).data
-    shim_face_datum_a = make_point3(
-        positions[PointID.CAMBER_SHIM_FACE_POINT_A]
-    ).data
-    shim_face_datum_b = make_point3(
-        positions[PointID.CAMBER_SHIM_FACE_POINT_B]
-    ).data
+    upper_ball_joint_design = positions[PointID.UPPER_WISHBONE_OUTBOARD].data
+    lower_ball_joint = positions[PointID.LOWER_WISHBONE_OUTBOARD].data
+    upper_wishbone_pickup_front = positions[PointID.UPPER_WISHBONE_INBOARD_FRONT].data
+    upper_wishbone_pickup_rear = positions[PointID.UPPER_WISHBONE_INBOARD_REAR].data
+    trackrod_outboard_design = positions[PointID.TRACKROD_OUTBOARD].data
+    trackrod_inboard = positions[PointID.TRACKROD_INBOARD].data
+    shim_face_datum_a = positions[PointID.CAMBER_SHIM_FACE_POINT_A].data
+    shim_face_datum_b = positions[PointID.CAMBER_SHIM_FACE_POINT_B].data
     design_face_normal = normalize_vector(
-        make_point3(positions[PointID.CAMBER_SHIM_FACE_NORMAL]).data
+        positions[PointID.CAMBER_SHIM_FACE_NORMAL].data
     )
 
     # Early exit when there is no shim thickness change.

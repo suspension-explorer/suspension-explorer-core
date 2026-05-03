@@ -10,32 +10,7 @@ from typing import Final, NamedTuple, Union
 import numpy as np
 
 from kinematics.core.enums import Axis, PointID, TargetPositionMode
-from kinematics.core.geometry import Direction3, Point3
-
-
-def make_point3(data) -> Point3:
-    """
-    Creates a Point3 from input data.
-
-    Handles passthrough for dual-number types (automatic differentiation).
-
-    Args:
-        data: Input data convertible to a 3-element array, or a Point3.
-
-    Returns:
-        A Point3 instance.
-
-    Raises:
-        ValueError: If the input cannot be shaped into a 3-element array.
-    """
-    # Passthrough for dual-number types (automatic differentiation).
-    if hasattr(data, "deriv"):
-        return data
-
-    if isinstance(data, Point3):
-        return data
-
-    return Point3(data)
+from kinematics.core.geometry import Direction3
 
 
 class WorldAxisSystem:
