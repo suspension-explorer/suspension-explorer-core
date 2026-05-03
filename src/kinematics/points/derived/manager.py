@@ -10,12 +10,12 @@ from typing import Callable, Set, TypeVar
 import numpy as np
 
 from kinematics.core.enums import PointID
-from kinematics.core.types import Vec3
+from kinematics.core.geometry import Point3
 
 # Function signature for computing a derived point position.
-# Typed for the normal (Vec3) path; the DualVec3 path works at runtime
+# Typed for the normal (Point3) path; the DualVec3 path works at runtime
 # via duck typing and is handled by the TypeVar on update_in_place.
-PositionFn = Callable[[dict[PointID, Vec3]], np.ndarray]
+PositionFn = Callable[[dict[PointID, Point3]], np.ndarray]
 
 _V = TypeVar("_V")
 
@@ -169,7 +169,7 @@ class DerivedPointsManager:
 
         Args:
             positions: Dictionary to mutate in-place by adding derived points.
-                       Works with both Vec3 (normal solve) and DualVec3 (autodiff).
+                       Works with both Point3 (normal solve) and DualVec3 (autodiff).
         """
         for point_id in self.update_order:
             update_func = self.spec.functions[point_id]

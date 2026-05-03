@@ -17,10 +17,12 @@ from kinematics.state import SuspensionState
 
 @pytest.fixture
 def simple_positions():
+    from kinematics.core.geometry import Point3
+
     positions_dict = {
-        PointID.LOWER_WISHBONE_INBOARD_FRONT: np.array([-1.0, 0.0, 0.0]),
-        PointID.LOWER_WISHBONE_INBOARD_REAR: np.array([1.0, 0.0, 0.0]),
-        PointID.LOWER_WISHBONE_OUTBOARD: np.array([0.0, 1.0, 0.0]),
+        PointID.LOWER_WISHBONE_INBOARD_FRONT: Point3([-1.0, 0.0, 0.0]),
+        PointID.LOWER_WISHBONE_INBOARD_REAR: Point3([1.0, 0.0, 0.0]),
+        PointID.LOWER_WISHBONE_OUTBOARD: Point3([0.0, 1.0, 0.0]),
     }
     return positions_dict
 

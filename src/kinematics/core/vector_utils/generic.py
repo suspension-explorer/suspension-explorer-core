@@ -14,6 +14,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from kinematics.core.constants import EPS_GEOMETRIC
+from kinematics.core.geometry import Direction3, Point3, Vector3
 
 if TYPE_CHECKING:
     from kinematics.core.dual import DualVec3
@@ -124,15 +125,25 @@ def normalize_vector(v: DualVec3) -> DualVec3: ...
 
 
 @overload
+def normalize_vector(v: Vector3) -> Direction3: ...
+
+
+@overload
 def normalize_vector(v: NDArray[FloatingT]) -> NDArray[FloatingT]: ...
 
 
-def normalize_vector(v: NDArray[FloatingT] | DualVec3) -> NDArray[FloatingT] | DualVec3:
+def normalize_vector(
+    v: NDArray[FloatingT] | DualVec3 | Vector3,
+) -> NDArray[FloatingT] | DualVec3 | Direction3:
     """
-    Normalize a vector of any dimension to a unit vector.
+    Normalize a vector to a unit vector.
+
+    For Vector3 input, returns Direction3.
+    For DualVec3 input, returns DualVec3 (preserves derivative tracking).
+    For raw ndarray input, returns ndarray.
 
     Args:
-        v: Input vector of any dimension (ndarray or DualVec3).
+        v: Input vector (Vector3, ndarray, or DualVec3).
 
     Returns:
         Unit vector in the same direction as the input.
@@ -151,32 +162,28 @@ def normalize_vector(v: NDArray[FloatingT] | DualVec3) -> NDArray[FloatingT] | D
             raise ValueError("Cannot normalize zero-length vector")
         return v / n
 
+    if isinstance(v, Vector3):
+        return Direction3(v)
+
     norm = np.linalg.norm(v)
     if norm < EPS_GEOMETRIC:
         raise ValueError("Cannot normalize zero-length vector")
     return (v / norm).astype(v.dtype)
 
 
-def project_coordinate(position: np.ndarray, direction: np.ndarray) -> float:
+def project_coordinate(position: Point3, direction: Direction3) -> float:
     """
-    Computes the scalar coordinate of a position vector along a unit direction. This
+    Computes the scalar coordinate of a position along a unit direction. This
     represents the signed distance of the position along the given direction.
 
     Args:
-        position: The 3D position vector.
-        direction: The unit direction vector (magnitude must be 1).
+        position: The 3D position (Point3).
+        direction: The unit direction (Direction3).
 
     Returns:
         The scalar projection value.
-
-    Raises:
-        ValueError: If direction is not a unit vector.
     """
-    if not np.isclose(np.linalg.norm(direction), 1.0, atol=EPS_GEOMETRIC):
-        raise ValueError(
-            f"Direction vector not normalized; magnitude {np.linalg.norm(direction)}"
-        )
-    return float(np.dot(position, direction))
+    return float(np.dot(position.data, direction.data))
 
 
 def rotate_2d_vector(vector: np.ndarray, angle_radians: float) -> np.ndarray:
@@ -211,8 +218,8 @@ def perpendicular_2d(vector: np.ndarray, clockwise: bool = False) -> np.ndarray:
         Perpendicular 2D vector with same magnitude as input.
     """
     if clockwise:
-        # 90° clockwise: [x, y] -> [y, -x].
+        # 90 degrees clockwise: [x, y] -> [y, -x].
         return np.array([vector[1], -vector[0]], dtype=np.float64)
     else:
-        # 90° anti-clockwise: [x, y] -> [-y, x].
+        # 90 degrees anti-clockwise: [x, y] -> [-y, x].
         return np.array([-vector[1], vector[0]], dtype=np.float64)

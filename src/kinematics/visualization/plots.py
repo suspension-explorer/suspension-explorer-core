@@ -14,15 +14,15 @@ from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
 from kinematics.core.enums import PointID
-from kinematics.core.types import Vec3
+from kinematics.core.geometry import Point3
 from kinematics.state import SuspensionState
 from kinematics.suspensions.base import Suspension
 from kinematics.visualization.main import SuspensionVisualizer, WheelVisualization
 
 
 def compute_bounds_from_positions(
-    positions: dict[PointID, Vec3],
-) -> tuple[Vec3, Vec3, tuple[float, float, float, float]]:
+    positions: dict[PointID, Point3],
+) -> tuple[Point3, Point3, tuple[float, float, float, float]]:
     """
     Compute axis bounds and limits from position data.
 
@@ -32,7 +32,7 @@ def compute_bounds_from_positions(
     Returns:
         Tuple of (min_bounds, max_bounds, (x_mid, y_mid, z_mid, max_range))
     """
-    all_points = np.array(list(positions.values()))
+    all_points = np.array([p.data for p in positions.values()])
     min_bounds = all_points.min(axis=0) - 100
     max_bounds = all_points.max(axis=0) + 100
 
@@ -49,8 +49,8 @@ def compute_bounds_from_positions(
 
 
 def compute_bounds_from_states(
-    states: list[dict[PointID, Vec3]],
-) -> tuple[Vec3, Vec3, tuple[float, float, float, float]]:
+    states: list[dict[PointID, Point3]],
+) -> tuple[Point3, Point3, tuple[float, float, float, float]]:
     """
     Compute axis bounds and limits from multiple position states.
 
@@ -60,7 +60,7 @@ def compute_bounds_from_states(
     Returns:
         Tuple of (min_bounds, max_bounds, (x_mid, y_mid, z_mid, max_range))
     """
-    all_points = np.array([p for state in states for p in state.values()])
+    all_points = np.array([p.data for state in states for p in state.values()])
     min_bounds = all_points.min(axis=0) - 100
     max_bounds = all_points.max(axis=0) + 100
 
@@ -150,7 +150,7 @@ def create_four_view_axes() -> tuple[Figure, dict[str, Axes3D]]:
 def plot_suspension_on_axis(
     ax: Axes3D,
     visualizer: SuspensionVisualizer,
-    positions: dict[PointID, Vec3],
+    positions: dict[PointID, Point3],
     view_name: str,
     show_labels: bool = True,
 ) -> None:
@@ -167,7 +167,7 @@ def plot_suspension_on_axis(
     # Plot suspension links.
     for link in visualizer.links:
         if len(link.points) > 1:
-            pts = np.array([positions[pid] for pid in link.points])
+            pts = np.array([positions[pid].data for pid in link.points])
             ax.plot(
                 pts[:, 0],
                 pts[:, 1],

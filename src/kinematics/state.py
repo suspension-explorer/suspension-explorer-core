@@ -10,7 +10,7 @@ from typing import List, Set
 import numpy as np
 
 from kinematics.core.enums import PointID
-from kinematics.core.types import Vec3
+from kinematics.core.geometry import Point3
 
 
 @dataclass
@@ -27,7 +27,7 @@ class SuspensionState:
         free_points_order: Sorted list of free point IDs for consistent ordering.
     """
 
-    positions: dict[PointID, Vec3]
+    positions: dict[PointID, Point3]
     free_points: Set[PointID]
     free_points_order: List[PointID] = field(init=False)
 
@@ -56,8 +56,8 @@ class SuspensionState:
             A flat numpy array containing [x1, y1, z1, x2, y2, z2, ...] coordinates
             for all free points in the consistent ordering.
         """
-        positions = [self.positions[pid] for pid in self.free_points_order]
-        return np.concatenate(positions)
+        arrays = [self.positions[pid].data for pid in self.free_points_order]
+        return np.concatenate(arrays)
 
     def update_from_array(self, array: np.ndarray) -> None:
         """
@@ -84,10 +84,9 @@ class SuspensionState:
 
         positions_2d = array.reshape(n_points, 3)
         for i, point_id in enumerate(self.free_points_order):
-            # Direct assignment without copy - caller owns the data.
-            self.positions[point_id] = positions_2d[i]
+            self.positions[point_id] = Point3(positions_2d[i])
 
-    def update_positions(self, new_positions: dict[PointID, Vec3]) -> None:
+    def update_positions(self, new_positions: dict[PointID, Point3]) -> None:
         """
         Replace positions dictionary in-place.
 
@@ -110,25 +109,25 @@ class SuspensionState:
             free_points=self.free_points.copy(),
         )
 
-    def get(self, point_id: PointID) -> Vec3:
+    def get(self, point_id: PointID) -> Point3:
         """
         Get position of a specific point.
         """
         return self.positions[point_id]
 
-    def set(self, point_id: PointID, position: Vec3) -> None:
+    def set(self, point_id: PointID, position: Point3) -> None:
         """
         Set position of a specific point.
         """
         self.positions[point_id] = position.copy()
 
-    def __getitem__(self, point_id: PointID) -> Vec3:
+    def __getitem__(self, point_id: PointID) -> Point3:
         """
         Allow dict-like access.
         """
         return self.positions[point_id]
 
-    def __setitem__(self, point_id: PointID, position: Vec3) -> None:
+    def __setitem__(self, point_id: PointID, position: Point3) -> None:
         """
         Allow dict-like assignment.
         """

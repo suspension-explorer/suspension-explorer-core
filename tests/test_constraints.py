@@ -1,6 +1,5 @@
 import math
 
-import numpy as np
 import pytest
 
 from kinematics.constraints import (
@@ -18,6 +17,7 @@ from kinematics.constraints import (
 )
 from kinematics.core.constants import TEST_TOLERANCE
 from kinematics.core.enums import Axis, PointID
+from kinematics.core.geometry import Direction3, Point3
 
 
 def simple_positions():
@@ -25,14 +25,14 @@ def simple_positions():
     Returns a dictionary of simple coordinate positions for testing.
     """
     return {
-        PointID.LOWER_WISHBONE_INBOARD_FRONT: np.array([0.0, 0.0, 0.0]),  # origin
-        PointID.LOWER_WISHBONE_INBOARD_REAR: np.array([1.0, 0.0, 0.0]),  # x_unit
-        PointID.LOWER_WISHBONE_OUTBOARD: np.array([0.0, 1.0, 0.0]),  # y_unit
-        PointID.UPPER_WISHBONE_INBOARD_FRONT: np.array([0.0, 0.0, 1.0]),  # z_unit
-        PointID.UPPER_WISHBONE_INBOARD_REAR: np.array([1.0, 1.0, 0.0]),  # diagonal_xy
-        PointID.UPPER_WISHBONE_OUTBOARD: np.array([1.0, 1.0, 1.0]),  # diagonal_xyz
-        PointID.PUSHROD_INBOARD: np.array([2.0, 0.0, 0.0]),  # 2x along x
-        PointID.PUSHROD_OUTBOARD: np.array([0.0, 2.0, 0.0]),  # 2x along y
+        PointID.LOWER_WISHBONE_INBOARD_FRONT: Point3([0.0, 0.0, 0.0]),  # origin
+        PointID.LOWER_WISHBONE_INBOARD_REAR: Point3([1.0, 0.0, 0.0]),  # x_unit
+        PointID.LOWER_WISHBONE_OUTBOARD: Point3([0.0, 1.0, 0.0]),  # y_unit
+        PointID.UPPER_WISHBONE_INBOARD_FRONT: Point3([0.0, 0.0, 1.0]),  # z_unit
+        PointID.UPPER_WISHBONE_INBOARD_REAR: Point3([1.0, 1.0, 0.0]),  # diagonal_xy
+        PointID.UPPER_WISHBONE_OUTBOARD: Point3([1.0, 1.0, 1.0]),  # diagonal_xyz
+        PointID.PUSHROD_INBOARD: Point3([2.0, 0.0, 0.0]),  # 2x along x
+        PointID.PUSHROD_OUTBOARD: Point3([0.0, 2.0, 0.0]),  # 2x along y
     }
 
 
@@ -126,7 +126,7 @@ def test_spherical_joint_constraint_coincident():
     # Modify to make two points coincident
     positions[PointID.LOWER_WISHBONE_INBOARD_REAR] = positions[
         PointID.LOWER_WISHBONE_INBOARD_FRONT
-    ]
+    ].copy()
 
     constraint = SphericalJointConstraint(
         PointID.LOWER_WISHBONE_INBOARD_FRONT, PointID.LOWER_WISHBONE_INBOARD_REAR
@@ -438,8 +438,8 @@ def test_point_on_line_constraint_on_line():
     positions = simple_positions()
 
     # Point y_unit (0,1,0) is on Y axis through origin
-    line_point = np.array([0.0, 0.0, 0.0])
-    line_direction = np.array([0.0, 1.0, 0.0])
+    line_point = Point3([0.0, 0.0, 0.0])
+    line_direction = Direction3([0.0, 1.0, 0.0])
 
     constraint = PointOnLineConstraint(
         PointID.LOWER_WISHBONE_OUTBOARD,  # y_unit
@@ -458,8 +458,8 @@ def test_point_on_line_constraint_off_line():
     positions = simple_positions()
 
     # Point x_unit (1,0,0) is distance 1 from Y axis
-    line_point = np.array([0.0, 0.0, 0.0])
-    line_direction = np.array([0.0, 1.0, 0.0])
+    line_point = Point3([0.0, 0.0, 0.0])
+    line_direction = Direction3([0.0, 1.0, 0.0])
 
     constraint = PointOnLineConstraint(
         PointID.LOWER_WISHBONE_INBOARD_REAR,  # x_unit
@@ -478,8 +478,8 @@ def test_point_on_line_constraint_zero_direction():
     with pytest.raises(ValueError):
         PointOnLineConstraint(
             PointID.LOWER_WISHBONE_INBOARD_FRONT,
-            np.array([0.0, 0.0, 0.0]),
-            np.array([0.0, 0.0, 0.0]),  # Zero direction
+            Point3([0.0, 0.0, 0.0]),
+            Direction3([0.0, 0.0, 0.0]),  # Zero direction
         )
 
 
@@ -490,8 +490,8 @@ def test_point_on_plane_constraint_on_plane():
     positions = simple_positions()
 
     # Point diagonal_xy (1,1,0) is on Z=0 plane
-    plane_point = np.array([0.0, 0.0, 0.0])
-    plane_normal = np.array([0.0, 0.0, 1.0])
+    plane_point = Point3([0.0, 0.0, 0.0])
+    plane_normal = Direction3([0.0, 0.0, 1.0])
 
     constraint = PointOnPlaneConstraint(
         PointID.UPPER_WISHBONE_INBOARD_REAR,  # diagonal_xy
@@ -510,8 +510,8 @@ def test_point_on_plane_constraint_above_plane():
     positions = simple_positions()
 
     # Point z_unit (0,0,1) is 1 unit above Z=0 plane
-    plane_point = np.array([0.0, 0.0, 0.0])
-    plane_normal = np.array([0.0, 0.0, 1.0])
+    plane_point = Point3([0.0, 0.0, 0.0])
+    plane_normal = Direction3([0.0, 0.0, 1.0])
 
     constraint = PointOnPlaneConstraint(
         PointID.UPPER_WISHBONE_INBOARD_FRONT,  # z_unit
@@ -529,10 +529,10 @@ def test_point_on_plane_constraint_below_plane():
     """
     positions = simple_positions()
     # Modify z_unit to be below Z=0 plane
-    positions[PointID.UPPER_WISHBONE_INBOARD_FRONT] = np.array([0.0, 0.0, -2.0])
+    positions[PointID.UPPER_WISHBONE_INBOARD_FRONT] = Point3([0.0, 0.0, -2.0])
 
-    plane_point = np.array([0.0, 0.0, 0.0])
-    plane_normal = np.array([0.0, 0.0, 1.0])
+    plane_point = Point3([0.0, 0.0, 0.0])
+    plane_normal = Direction3([0.0, 0.0, 1.0])
 
     constraint = PointOnPlaneConstraint(
         PointID.UPPER_WISHBONE_INBOARD_FRONT, plane_point, plane_normal
@@ -549,8 +549,8 @@ def test_point_on_plane_constraint_zero_normal():
     with pytest.raises(ValueError):
         PointOnPlaneConstraint(
             PointID.LOWER_WISHBONE_INBOARD_FRONT,
-            np.array([0.0, 0.0, 0.0]),
-            np.array([0.0, 0.0, 0.0]),  # Zero normal
+            Point3([0.0, 0.0, 0.0]),
+            Direction3([0.0, 0.0, 0.0]),  # Zero normal
         )
 
 

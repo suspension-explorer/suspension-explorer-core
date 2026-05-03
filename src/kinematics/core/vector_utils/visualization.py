@@ -6,7 +6,7 @@ from typing import Any, Optional, cast
 
 import numpy as np
 
-from kinematics.core.types import Vec3
+from kinematics.core.geometry import Direction3, Point3, midpoint
 
 PLOTTING_ENABLED = False
 
@@ -19,10 +19,10 @@ def should_plot() -> bool:
 
 
 def plot_plane_from_points(
-    a: Vec3,
-    b: Vec3,
-    c: Vec3,
-    normal: Optional[np.ndarray] = None,
+    a: Point3,
+    b: Point3,
+    c: Point3,
+    normal: Optional[Direction3] = None,
     d: Optional[float] = None,
     title: str = "Plane from Three Points",
 ) -> None:
@@ -33,7 +33,7 @@ def plot_plane_from_points(
         a: First point defining the plane.
         b: Second point defining the plane.
         c: Third point defining the plane.
-        normal: Optional normal vector of the plane.
+        normal: Optional unit normal direction of the plane.
         d: Optional distance parameter of the plane.
         title: Title for the plot.
     """
@@ -54,7 +54,7 @@ def plot_plane_from_points(
     ax3d = cast(Any, ax)
 
     # Plot the three points.
-    points = np.array([a, b, c])
+    points = np.array([a.data, b.data, c.data])
     ax3d.scatter(
         points[:, 0],
         points[:, 1],
@@ -70,13 +70,13 @@ def plot_plane_from_points(
     ax3d.text(c[0], c[1], c[2], "C", fontsize=12)
 
     # Draw lines between points to show the triangle.
-    triangle = np.array([a, b, c, a])  # Close the triangle.
+    triangle = np.array([a.data, b.data, c.data, a.data])  # Close the triangle.
     ax.plot(triangle[:, 0], triangle[:, 1], triangle[:, 2], "gray", alpha=0.5)
 
     if normal is not None and d is not None:
         # Plot normal vector from centroid.
-        centroid = (a + b + c) / 3
-        span = max(np.linalg.norm(b - a), np.linalg.norm(c - a), np.linalg.norm(c - b))
+        centroid = midpoint(midpoint(a, b), c)
+        span = max((b - a).norm(), (c - a).norm(), (c - b).norm())
         normal_scale = span * 0.5
 
         ax.quiver(
@@ -128,21 +128,21 @@ def plot_plane_from_points(
 
 
 def plot_plane_intersection(
-    n1: np.ndarray,
+    n1: Direction3,
     d1: float,
-    n2: np.ndarray,
+    n2: Direction3,
     d2: float,
-    line_point: Optional[np.ndarray] = None,
-    line_direction: Optional[np.ndarray] = None,
+    line_point: Optional[Point3] = None,
+    line_direction: Optional[Direction3] = None,
     title: str = "Plane Intersection",
 ) -> None:
     """
     Plot two planes and their line of intersection.
 
     Args:
-        n1: Normal vector of first plane.
+        n1: Unit normal direction of first plane.
         d1: Distance parameter of first plane.
-        n2: Normal vector of second plane.
+        n2: Unit normal direction of second plane.
         d2: Distance parameter of second plane.
         line_point: Optional point on intersection line.
         line_direction: Optional direction of intersection line.
@@ -166,7 +166,7 @@ def plot_plane_intersection(
     if line_point is not None and line_direction is not None:
         plot_range = 5.0
         t_vals = np.linspace(-plot_range, plot_range, 100)
-        line_points = line_point + t_vals[:, np.newaxis] * line_direction
+        line_points = line_point.data + t_vals[:, np.newaxis] * line_direction.data
         ax3d.plot(
             line_points[:, 0],
             line_points[:, 1],
@@ -190,11 +190,10 @@ def plot_plane_intersection(
         )
 
     # Plot normal vectors from origin.
-    origin = np.array([0.0, 0.0, 0.0])
     ax3d.quiver(
-        origin[0],
-        origin[1],
-        origin[2],
+        0.0,
+        0.0,
+        0.0,
         n1[0] * 2,
         n1[1] * 2,
         n1[2] * 2,
@@ -205,9 +204,9 @@ def plot_plane_intersection(
         label="Normal 1",
     )
     ax3d.quiver(
-        origin[0],
-        origin[1],
-        origin[2],
+        0.0,
+        0.0,
+        0.0,
         n2[0] * 2,
         n2[1] * 2,
         n2[2] * 2,
@@ -234,10 +233,10 @@ def plot_plane_intersection(
 
 
 def plot_line_plane_intersection(
-    line_point: np.ndarray,
-    line_direction: np.ndarray,
+    line_point: Point3,
+    line_direction: Direction3,
     plane_y: float,
-    intersection: Optional[np.ndarray] = None,
+    intersection: Optional[Point3] = None,
     title: str = "Line-Plane Intersection",
 ) -> None:
     """
@@ -245,7 +244,7 @@ def plot_line_plane_intersection(
 
     Args:
         line_point: Point on the line.
-        line_direction: Direction vector of the line.
+        line_direction: Direction of the line (unit vector).
         plane_y: Y-coordinate defining the vertical plane.
         intersection: Optional intersection point.
         title: Title for the plot.
@@ -267,7 +266,7 @@ def plot_line_plane_intersection(
     # Plot the line.
     plot_range = 10.0
     t_vals = np.linspace(-plot_range, plot_range, 100)
-    line_points = line_point + t_vals[:, np.newaxis] * line_direction
+    line_points = line_point.data + t_vals[:, np.newaxis] * line_direction.data
     ax3d.plot(
         line_points[:, 0],
         line_points[:, 1],
@@ -341,7 +340,7 @@ def plot_line_plane_intersection(
     # Set reasonable axis limits.
     all_points = line_points
     if intersection is not None:
-        all_points = np.vstack([all_points, intersection])
+        all_points = np.vstack([all_points, intersection.data])
 
     x_range = (all_points[:, 0].min() - 2, all_points[:, 0].max() + 2)
     y_range = (

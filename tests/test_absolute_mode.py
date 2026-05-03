@@ -8,8 +8,10 @@ from kinematics.state import SuspensionState
 
 
 def test_resolve_targets_to_absolute():
+    from kinematics.core.geometry import Point3
+
     initial_positions = {
-        PointID.WHEEL_CENTER: np.array([0.0, 0.0, 150.0]),
+        PointID.WHEEL_CENTER: Point3([0.0, 0.0, 150.0]),
     }
     initial_state = SuspensionState(positions=initial_positions, free_points=set())
 
@@ -46,10 +48,12 @@ def test_default_relative_mode():
 
 
 def test_absolute_mode_solve():
+    from kinematics.core.geometry import Point3
+
     # No derived points
     derived_manager = DerivedPointsManager(DerivedPointsSpec({}, {}))
 
-    positions = {PointID.LOWER_WISHBONE_OUTBOARD: np.array([0.0, 0.0, 0.0])}
+    positions = {PointID.LOWER_WISHBONE_OUTBOARD: Point3([0.0, 0.0, 0.0])}
     free = {PointID.LOWER_WISHBONE_OUTBOARD}
     initial_state = SuspensionState(positions=positions, free_points=free)
 
@@ -89,6 +93,6 @@ def test_absolute_mode_solve():
     assert len(states) == 1
     assert len(solver_stats) == 1
     assert np.allclose(
-        states[0].positions[PointID.LOWER_WISHBONE_OUTBOARD],
+        states[0].positions[PointID.LOWER_WISHBONE_OUTBOARD].data,
         np.array([10.0, -5.0, 100.0]),
     )

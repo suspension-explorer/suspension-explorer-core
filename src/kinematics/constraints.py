@@ -12,10 +12,9 @@ from typing import Set
 
 import numpy as np
 
-from kinematics.core.constants import EPS_GEOMETRIC
 from kinematics.core.enums import Axis, PointID
+from kinematics.core.geometry import Direction3, Point3
 from kinematics.core.soft_math import softnorm
-from kinematics.core.types import Vec3
 from kinematics.core.vector_utils.geometric import (
     compute_point_to_plane_distance,
     compute_scalar_triple_product,
@@ -41,7 +40,7 @@ class Constraint(ABC):
         pass
 
     @abstractmethod
-    def residual(self, positions: dict[PointID, Vec3]) -> float:
+    def residual(self, positions: dict[PointID, Point3]) -> float:
         """
         Calculate constraint residual.
 
@@ -85,7 +84,7 @@ class DistanceConstraint(Constraint):
     def involved_points(self) -> Set[PointID]:
         return {self.p1, self.p2}
 
-    def residual(self, positions: dict[PointID, Vec3]) -> float:
+    def residual(self, positions: dict[PointID, Point3]) -> float:
         """
         Compute the distance residual.
 
@@ -93,7 +92,7 @@ class DistanceConstraint(Constraint):
         Uses softnorm(dx^2 + dy^2 + dz^2) to match the analytical Jacobian.
         """
         delta = positions[self.p2] - positions[self.p1]
-        current_distance = softnorm(float(np.dot(delta, delta)))
+        current_distance = softnorm(delta.squared_norm())
         return float(current_distance - self.target_distance)
 
 
@@ -120,7 +119,7 @@ class SphericalJointConstraint(Constraint):
     def involved_points(self) -> Set[PointID]:
         return {self.p1, self.p2}
 
-    def residual(self, positions: dict[PointID, Vec3]) -> float:
+    def residual(self, positions: dict[PointID, Point3]) -> float:
         """
         Compute the distance between the two points.
 
@@ -128,7 +127,7 @@ class SphericalJointConstraint(Constraint):
         perfect joint). Uses softnorm to match the analytical Jacobian.
         """
         delta = positions[self.p2] - positions[self.p1]
-        return float(softnorm(float(np.dot(delta, delta))))
+        return float(softnorm(delta.squared_norm()))
 
 
 class AngleConstraint(Constraint):
@@ -159,10 +158,10 @@ class AngleConstraint(Constraint):
             target_angle: The required angle between the vectors in radians.
 
         Raises:
-            ValueError: If target_angle is outside [0, π].
+            ValueError: If target_angle is outside [0, pi].
         """
         if not (0 <= target_angle <= np.pi):
-            raise ValueError(f"Target angle must be in [0, π], got {target_angle}")
+            raise ValueError(f"Target angle must be in [0, pi], got {target_angle}")
 
         self.v1_start = v1_start
         self.v1_end = v1_end
@@ -174,7 +173,7 @@ class AngleConstraint(Constraint):
     def involved_points(self) -> Set[PointID]:
         return {self.v1_start, self.v1_end, self.v2_start, self.v2_end}
 
-    def residual(self, positions: dict[PointID, Vec3]) -> float:
+    def residual(self, positions: dict[PointID, Point3]) -> float:
         """
         Compute the angle residual.
 
@@ -190,8 +189,8 @@ class AngleConstraint(Constraint):
         cy = v1[2] * v2[0] - v1[0] * v2[2]
         cz = v1[0] * v2[1] - v1[1] * v2[0]
 
-        cross_mag = softnorm(float(cx * cx + cy * cy + cz * cz))
-        dot_raw = float(np.dot(v1, v2))
+        cross_mag = softnorm(cx * cx + cy * cy + cz * cz)
+        dot_raw = v1.dot(v2)
 
         current_angle = atan2(cross_mag, dot_raw)
         return float(current_angle - self.target_angle)
@@ -222,10 +221,10 @@ class ThreePointAngleConstraint(Constraint):
             target_angle: The required angle at p2 in radians.
 
         Raises:
-            ValueError: If target_angle is outside [0, π].
+            ValueError: If target_angle is outside [0, pi].
         """
         if not (0 <= target_angle <= np.pi):
-            raise ValueError(f"Target angle must be in [0, π], got {target_angle}")
+            raise ValueError(f"Target angle must be in [0, pi], got {target_angle}")
 
         self.p1 = p1
         self.p2 = p2  # vertex
@@ -236,7 +235,7 @@ class ThreePointAngleConstraint(Constraint):
     def involved_points(self) -> Set[PointID]:
         return {self.p1, self.p2, self.p3}
 
-    def residual(self, positions: dict[PointID, Vec3]) -> float:
+    def residual(self, positions: dict[PointID, Point3]) -> float:
         """
         Compute the angle residual at the vertex.
 
@@ -253,8 +252,8 @@ class ThreePointAngleConstraint(Constraint):
         cy = v1[2] * v2[0] - v1[0] * v2[2]
         cz = v1[0] * v2[1] - v1[1] * v2[0]
 
-        cross_mag = softnorm(float(cx * cx + cy * cy + cz * cz))
-        dot_raw = float(np.dot(v1, v2))
+        cross_mag = softnorm(cx * cx + cy * cy + cz * cz)
+        dot_raw = v1.dot(v2)
 
         current_angle = atan2(cross_mag, dot_raw)
         return float(current_angle - self.target_angle)
@@ -293,7 +292,7 @@ class VectorsParallelConstraint(Constraint):
     def involved_points(self) -> Set[PointID]:
         return {self.v1_start, self.v1_end, self.v2_start, self.v2_end}
 
-    def residual(self, positions: dict[PointID, Vec3]) -> float:
+    def residual(self, positions: dict[PointID, Point3]) -> float:
         """
         Compute the parallel vectors constraint residual.
 
@@ -309,9 +308,9 @@ class VectorsParallelConstraint(Constraint):
         cy = v1[2] * v2[0] - v1[0] * v2[2]
         cz = v1[0] * v2[1] - v1[1] * v2[0]
 
-        cross_mag = softnorm(float(cx * cx + cy * cy + cz * cz))
-        v1_mag = softnorm(float(np.dot(v1, v1)))
-        v2_mag = softnorm(float(np.dot(v2, v2)))
+        cross_mag = softnorm(cx * cx + cy * cy + cz * cz)
+        v1_mag = softnorm(v1.squared_norm())
+        v2_mag = softnorm(v2.squared_norm())
 
         return float(cross_mag / (v1_mag * v2_mag))
 
@@ -349,7 +348,7 @@ class VectorsPerpendicularConstraint(Constraint):
     def involved_points(self) -> Set[PointID]:
         return {self.v1_start, self.v1_end, self.v2_start, self.v2_end}
 
-    def residual(self, positions: dict[PointID, Vec3]) -> float:
+    def residual(self, positions: dict[PointID, Point3]) -> float:
         """
         Compute the perpendicular constraint residual.
 
@@ -360,9 +359,9 @@ class VectorsPerpendicularConstraint(Constraint):
         v1 = positions[self.v1_end] - positions[self.v1_start]
         v2 = positions[self.v2_end] - positions[self.v2_start]
 
-        dot_raw = float(np.dot(v1, v2))
-        v1_mag = softnorm(float(np.dot(v1, v1)))
-        v2_mag = softnorm(float(np.dot(v2, v2)))
+        dot_raw = v1.dot(v2)
+        v1_mag = softnorm(v1.squared_norm())
+        v2_mag = softnorm(v2.squared_norm())
 
         return float(dot_raw / (v1_mag * v2_mag))
 
@@ -399,7 +398,7 @@ class EqualDistanceConstraint(Constraint):
     def involved_points(self) -> Set[PointID]:
         return {self.p1, self.p2, self.p3, self.p4}
 
-    def residual(self, positions: dict[PointID, Vec3]) -> float:
+    def residual(self, positions: dict[PointID, Point3]) -> float:
         """
         Compute the equal distance residual.
 
@@ -408,8 +407,8 @@ class EqualDistanceConstraint(Constraint):
         """
         d1 = positions[self.p2] - positions[self.p1]
         d2 = positions[self.p4] - positions[self.p3]
-        dist1 = softnorm(float(np.dot(d1, d1)))
-        dist2 = softnorm(float(np.dot(d2, d2)))
+        dist1 = softnorm(d1.squared_norm())
+        dist2 = softnorm(d2.squared_norm())
         return float(dist1 - dist2)
 
 
@@ -439,7 +438,7 @@ class FixedAxisConstraint(Constraint):
     def involved_points(self) -> Set[PointID]:
         return {self.point_id}
 
-    def residual(self, positions: dict[PointID, Vec3]) -> float:
+    def residual(self, positions: dict[PointID, Point3]) -> float:
         """
         Compute the axis coordinate residual.
 
@@ -460,34 +459,28 @@ class PointOnLineConstraint(Constraint):
     """
 
     def __init__(
-        self, point_id: PointID, line_point: np.ndarray, line_direction: np.ndarray
+        self, point_id: PointID, line_point: Point3, line_direction: Direction3
     ):
         """
         Initialize the point-on-line constraint.
 
         Args:
             point_id: The point that must lie on the line.
-            line_point: A point on the line (3D numpy array).
-            line_direction: The direction vector of the line (3D numpy array).
+            line_point: A point on the line.
+            line_direction: The direction of the line (unit vector).
 
         Raises:
             ValueError: If line_direction has zero length.
         """
         self.point_id = point_id
         self.line_point = line_point.copy()
-
-        # Normalize and validate direction vector.
-        direction_magnitude = np.linalg.norm(line_direction)
-        if direction_magnitude < EPS_GEOMETRIC:
-            raise ValueError("Line direction vector cannot have zero length")
-
-        self.line_direction = line_direction / direction_magnitude
+        self.line_direction = line_direction
 
     @property
     def involved_points(self) -> Set[PointID]:
         return {self.point_id}
 
-    def residual(self, positions: dict[PointID, Vec3]) -> float:
+    def residual(self, positions: dict[PointID, Point3]) -> float:
         """
         Compute the point-to-line distance residual.
 
@@ -503,7 +496,7 @@ class PointOnLineConstraint(Constraint):
         cy = w[2] * ld[0] - w[0] * ld[2]
         cz = w[0] * ld[1] - w[1] * ld[0]
 
-        return float(softnorm(float(cx * cx + cy * cy + cz * cz)))
+        return float(softnorm(cx * cx + cy * cy + cz * cz))
 
 
 class PointOnPlaneConstraint(Constraint):
@@ -514,33 +507,29 @@ class PointOnPlaneConstraint(Constraint):
     modeling planar mechanisms in suspension systems.
     """
 
-    def __init__(self, point_id: PointID, plane_point: Vec3, plane_normal: Vec3):
+    def __init__(
+        self,
+        point_id: PointID,
+        plane_point: Point3,
+        plane_normal: Direction3,
+    ):
         """
         Initialize the point-on-plane constraint.
 
         Args:
             point_id: The point that must lie on the plane.
-            plane_point: A point on the plane (3D numpy array).
-            plane_normal: The normal vector of the plane (3D numpy array).
-
-        Raises:
-            ValueError: If plane_normal has zero length.
+            plane_point: A point on the plane.
+            plane_normal: The normal direction of the plane (unit vector).
         """
         self.point_id = point_id
         self.plane_point = plane_point.copy()
-
-        # Normalize and validate normal vector.
-        normal_magnitude = np.linalg.norm(plane_normal)
-        if normal_magnitude < EPS_GEOMETRIC:
-            raise ValueError("Plane normal cannot have zero length")
-
-        self.plane_normal = plane_normal / normal_magnitude
+        self.plane_normal = plane_normal
 
     @property
     def involved_points(self) -> Set[PointID]:
         return {self.point_id}
 
-    def residual(self, positions: dict[PointID, Vec3]) -> float:
+    def residual(self, positions: dict[PointID, Point3]) -> float:
         """
         Compute the signed distance from point to plane.
 
@@ -581,7 +570,7 @@ class CoplanarPointsConstraint(Constraint):
     def involved_points(self) -> Set[PointID]:
         return {self.p1, self.p2, self.p3, self.p4}
 
-    def residual(self, positions: dict[PointID, Vec3]) -> float:
+    def residual(self, positions: dict[PointID, Point3]) -> float:
         """
         Compute the coplanarity residual using scalar triple product.
 

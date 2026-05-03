@@ -16,7 +16,9 @@ def _shift_x(vec3: object, delta_x: float) -> tuple[float, float, float]:
     """
     Shift a 3D point along the world X axis by a fixed amount.
     """
-    shifted = np.asarray(vec3, dtype=np.float64).copy()
+    from kinematics.core.geometry import extract_array
+
+    shifted = extract_array(vec3).copy()
     shifted[0] += delta_x
     return (float(shifted[0]), float(shifted[1]), float(shifted[2]))
 
@@ -31,8 +33,11 @@ def _translate_double_wishbone_x(
     are shifted together so the translated suspension is geometrically
     identical to the original one.
     """
+    from kinematics.core.geometry import Vector3
+
+    translation = Vector3([delta_x, 0.0, 0.0])
     hardpoints = {
-        point_id: position.copy() + np.array([delta_x, 0.0, 0.0], dtype=np.float64)
+        point_id: position + translation
         for point_id, position in suspension.hardpoints.items()
     }
 
@@ -114,8 +119,10 @@ def test_parallel_wishbone_planes_produce_null_ic_metrics(
     suspension = load_geometry(double_wishbone_geometry_file)
     assert isinstance(suspension, DoubleWishboneSuspension)
 
+    from kinematics.core.geometry import Vector3
+
     state = suspension.initial_state().copy()
-    plane_offset = np.array([0.0, 0.0, 300.0], dtype=np.float64)
+    plane_offset = Vector3([0.0, 0.0, 300.0])
 
     # Make the upper wishbone plane a translated copy of the lower
     # wishbone plane so the planes are parallel and have no unique
@@ -155,14 +162,17 @@ def test_steering_axis_ground_intersection_uses_contact_patch_height(
     assert isinstance(suspension, DoubleWishboneSuspension)
     assert suspension.config is not None
 
+    from kinematics.core.geometry import Point3
+
     state = suspension.initial_state().copy()
 
     lower = state.get(PointID.LOWER_WISHBONE_OUTBOARD).copy()
     upper = state.get(PointID.UPPER_WISHBONE_OUTBOARD).copy()
     direction = upper - lower
 
-    contact_patch = state.get(PointID.CONTACT_PATCH_CENTER).copy()
-    contact_patch[2] = 123.456
+    contact_patch_data = state.get(PointID.CONTACT_PATCH_CENTER).data.copy()
+    contact_patch_data[2] = 123.456
+    contact_patch = Point3(contact_patch_data)
     state[PointID.CONTACT_PATCH_CENTER] = contact_patch
 
     expected_t = (contact_patch[2] - lower[2]) / direction[2]
@@ -173,8 +183,8 @@ def test_steering_axis_ground_intersection_uses_contact_patch_height(
 
     assert actual_intersection is not None
     np.testing.assert_allclose(
-        actual_intersection,
-        expected_intersection,
+        actual_intersection.data,
+        expected_intersection.data,
         atol=TEST_TOLERANCE,
         err_msg="Steering-axis intersection should use contact patch Z height",
     )
@@ -191,14 +201,15 @@ def test_scrub_radius_uses_ground_plane_wheel_lateral_direction(
     assert isinstance(suspension, DoubleWishboneSuspension)
     assert suspension.config is not None
 
+    from kinematics.core.geometry import Vector3
+
     state = suspension.initial_state().copy()
     axle_inboard = state.get(PointID.AXLE_INBOARD).copy()
 
     # Force a state with both steer and camber so the ground-plane
     # projection differs measurably from the raw 3D axle direction.
-    state[PointID.AXLE_OUTBOARD] = axle_inboard + np.array(
+    state[PointID.AXLE_OUTBOARD] = axle_inboard + Vector3(
         [120.0, 150.0, 120.0],
-        dtype=np.float64,
     )
     DerivedPointsManager(suspension.derived_spec()).update_in_place(state.positions)
 
@@ -217,13 +228,13 @@ def test_scrub_radius_uses_ground_plane_wheel_lateral_direction(
     ground_pt = ctx.steering_axis_ground_intersection
     assert ground_pt is not None
 
-    displacement = ground_pt - ctx.contact_patch_center
-    wheel_lateral_ground = ctx.wheel_axis.copy()
+    displacement = (ground_pt - ctx.contact_patch_center).data
+    wheel_lateral_ground = ctx.wheel_axis.data.copy()
     wheel_lateral_ground[2] = 0.0
     wheel_lateral_ground /= np.linalg.norm(wheel_lateral_ground)
 
     expected_scrub_radius = -float(np.dot(displacement, wheel_lateral_ground))
-    old_3d_axle_projection = -float(np.dot(displacement, ctx.wheel_axis))
+    old_3d_axle_projection = -float(np.dot(displacement, ctx.wheel_axis.data))
 
     np.testing.assert_allclose(
         scrub_radius,

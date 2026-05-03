@@ -9,12 +9,12 @@ import numpy as np
 from pydantic import BeforeValidator
 
 from kinematics.core.enums import Axis, PointID, TargetPositionMode, Units
-from kinematics.core.types import Vec3
+from kinematics.core.geometry import Point3
 
 E = TypeVar("E", bound=Enum)
 
-# Input types that can be coerced to Vec3.
-Vec3Like = Vec3 | dict[str, float] | list[float] | tuple[float, float, float]
+# Input types that can be coerced to Point3.
+Point3Like = Point3 | dict[str, float] | list[float] | tuple[float, float, float]
 
 
 def coerce_enum(enum_cls: type[E], value: str | int | E) -> E:
@@ -51,15 +51,19 @@ CITargetPositionMode = Annotated[
 ]
 
 
-def coerce_vec3(value: Any) -> Vec3:
+def coerce_point3(value: Any) -> Point3:
     """
-    Coerce various input formats to a Vec3 (3D numpy array).
+    Coerce various input formats to a Point3.
 
     Accepts:
         - [x, y, z] list/tuple
         - {x: ..., y: ..., z: ...} dict
         - numpy array
+        - Point3
     """
+    if isinstance(value, Point3):
+        return value
+
     if isinstance(value, np.ndarray):
         arr = value.astype(np.float64)
     elif isinstance(value, dict):
@@ -68,10 +72,10 @@ def coerce_vec3(value: Any) -> Vec3:
         arr = np.array(value, dtype=np.float64)
 
     if arr.shape != (3,):
-        raise ValueError(f"Vec3 must have 3 components, got shape {arr.shape}")
-    return arr
+        raise ValueError(f"Point3 must have 3 components, got shape {arr.shape}")
+    return Point3(arr)
 
 
-# Pydantic field type that accepts Vec3Like inputs and coerces to Vec3.
-# Note: Type checkers see Vec3Like, but runtime value is always Vec3 (numpy array).
-PydanticVec3 = Annotated[Vec3Like, BeforeValidator(coerce_vec3)]
+# Pydantic field type that accepts Point3Like inputs and coerces to Point3.
+# Note: Type checkers see Point3Like, but runtime value is always Point3.
+PydanticPoint3 = Annotated[Point3Like, BeforeValidator(coerce_point3)]

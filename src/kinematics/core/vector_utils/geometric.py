@@ -10,11 +10,11 @@ import numpy as np
 
 from kinematics.core.constants import EPS_GEOMETRIC, EPS_NUMERICAL
 from kinematics.core.enums import Axis
-from kinematics.core.types import Vec3
+from kinematics.core.geometry import Direction3, Point3, Vector3, midpoint
 from kinematics.core.vector_utils.generic import normalize_vector
 
 
-def compute_point_point_distance(p1: Vec3, p2: Vec3) -> float:
+def compute_point_point_distance(p1: Point3, p2: Point3) -> float:
     """
     Compute the Euclidean distance between two points.
 
@@ -25,24 +25,26 @@ def compute_point_point_distance(p1: Vec3, p2: Vec3) -> float:
     Returns:
         The Euclidean distance between the two points (always non-negative).
     """
-    return float(np.linalg.norm(p1 - p2))
+    return (p2 - p1).norm()
 
 
-def compute_point_point_midpoint(p1: Vec3, p2: Vec3) -> Vec3:
+def compute_point_point_midpoint(p1: Point3, p2: Point3) -> Point3:
     """
     Compute the midpoint between two points.
+
+    Uses the affine-correct formulation: a + (b - a) / 2.
 
     Args:
         p1: First point in 3D space.
         p2: Second point in 3D space.
 
     Returns:
-        The midpoint vector between the two points.
+        The midpoint between the two points.
     """
-    return (p1 + p2) / 2.0
+    return midpoint(p1, p2)
 
 
-def compute_vector_vector_angle(v1: Vec3, v2: Vec3) -> float:
+def compute_vector_vector_angle(v1: Vector3, v2: Vector3) -> float:
     """
     Compute the angle between two vectors in radians using atan2 for robustness.
 
@@ -56,7 +58,7 @@ def compute_vector_vector_angle(v1: Vec3, v2: Vec3) -> float:
         v2: Second vector in 3D space.
 
     Returns:
-        The angle between the vectors in radians (0 to π).
+        The angle between the vectors in radians (0 to pi).
 
     Raises:
         ValueError: If either input vector has zero length (magnitude < EPS_GEOMETRIC).
@@ -65,12 +67,12 @@ def compute_vector_vector_angle(v1: Vec3, v2: Vec3) -> float:
         Ericson, C. "Real-Time Collision Detection" (2004), Section 3.3.2, p. 39
     """
     # normalize_vector will raise ValueError if either vector is zero-length.
-    v1_norm = normalize_vector(v1)
-    v2_norm = normalize_vector(v2)
+    v1_dir = normalize_vector(v1)
+    v2_dir = normalize_vector(v2)
 
-    dot = np.dot(v1_norm, v2_norm)
-    cross = np.cross(v1_norm, v2_norm)
-    cross_magnitude = np.linalg.norm(cross)
+    dot = v1_dir.dot(v2_dir)
+    cross = v1_dir.cross(v2_dir)
+    cross_magnitude = cross.norm()
 
     # atan2 handles all edge cases gracefully (parallel, anti-parallel, perpendicular).
     theta = np.arctan2(cross_magnitude, dot)
@@ -78,7 +80,7 @@ def compute_vector_vector_angle(v1: Vec3, v2: Vec3) -> float:
     return float(theta)
 
 
-def compute_vectors_cross_product_magnitude(v1: Vec3, v2: Vec3) -> float:
+def compute_vectors_cross_product_magnitude(v1: Vector3, v2: Vector3) -> float:
     """
     Compute the magnitude of the cross product between two normalized vectors.
 
@@ -95,14 +97,13 @@ def compute_vectors_cross_product_magnitude(v1: Vec3, v2: Vec3) -> float:
     Raises:
         ValueError: If either input vector has zero length (magnitude < EPS_GEOMETRIC).
     """
-    v1_norm = normalize_vector(v1)
-    v2_norm = normalize_vector(v2)
+    v1_dir = normalize_vector(v1)
+    v2_dir = normalize_vector(v2)
 
-    cross = np.cross(v1_norm, v2_norm)
-    return float(np.linalg.norm(cross))
+    return v1_dir.cross(v2_dir).norm()
 
 
-def compute_vectors_dot_product(v1: Vec3, v2: Vec3) -> float:
+def compute_vectors_dot_product(v1: Vector3, v2: Vector3) -> float:
     """
     Compute the dot product between two normalized vectors.
 
@@ -119,67 +120,57 @@ def compute_vectors_dot_product(v1: Vec3, v2: Vec3) -> float:
     Raises:
         ValueError: If either input vector has zero length (magnitude < EPS_GEOMETRIC).
     """
-    v1_norm = normalize_vector(v1)
-    v2_norm = normalize_vector(v2)
+    v1_dir = normalize_vector(v1)
+    v2_dir = normalize_vector(v2)
 
-    return float(np.dot(v1_norm, v2_norm))
+    return v1_dir.dot(v2_dir)
 
 
 def compute_point_to_line_distance(
-    point: Vec3, line_point: Vec3, line_direction: Vec3
+    point: Point3, line_point: Point3, line_direction: Direction3
 ) -> float:
     """
     Compute the perpendicular distance from a point to a line.
 
-    The line is defined by a point on the line and a direction vector (which
-    will be normalized internally).
+    The line is defined by a point on the line and a direction.
 
     Args:
         point: The point to measure distance from.
         line_point: A point on the line.
-        line_direction: Direction vector of the line (will be normalized).
+        line_direction: Direction of the line (unit vector).
 
     Returns:
         Perpendicular distance from the point to the line (always non-negative).
-
-    Raises:
-        ValueError: If line_direction has zero length (magnitude < EPS_GEOMETRIC).
     """
-    line_dir_norm = normalize_vector(line_direction)
     point_to_line = point - line_point
 
-    cross_product = np.cross(point_to_line, line_dir_norm)
-    return float(np.linalg.norm(cross_product))
+    return point_to_line.cross(line_direction).norm()
 
 
 def compute_point_to_plane_distance(
-    point: Vec3, plane_point: Vec3, plane_normal: Vec3
+    point: Point3, plane_point: Point3, plane_normal: Direction3
 ) -> float:
     """
     Compute the signed distance from a point to a plane.
 
-    The plane is defined by a point on the plane and a normal vector (which
-    will be normalized internally). Positive distance indicates the point is
-    on the side of the plane in the direction of the normal.
+    The plane is defined by a point on the plane and a normal direction.
+    Positive distance indicates the point is on the side of the plane
+    in the direction of the normal.
 
     Args:
         point: The point to measure distance from.
         plane_point: A point on the plane.
-        plane_normal: Normal vector of the plane (will be normalized).
+        plane_normal: Normal direction of the plane (unit vector).
 
     Returns:
         Signed distance from the point to the plane.
-
-    Raises:
-        ValueError: If plane_normal has zero length (magnitude < EPS_GEOMETRIC).
     """
-    plane_norm = normalize_vector(plane_normal)
     point_to_plane = point - plane_point
 
-    return float(np.dot(point_to_plane, plane_norm))
+    return point_to_plane.dot(plane_normal)
 
 
-def compute_scalar_triple_product(v1: Vec3, v2: Vec3, v3: Vec3) -> float:
+def compute_scalar_triple_product(v1: Vector3, v2: Vector3, v3: Vector3) -> float:
     """
     Compute the scalar triple product v1 dot (v2 cross v3).
 
@@ -194,18 +185,18 @@ def compute_scalar_triple_product(v1: Vec3, v2: Vec3, v3: Vec3) -> float:
     Returns:
         The scalar triple product (can be positive, negative, or zero).
     """
-    cross = np.cross(v2, v3)
-    return float(np.dot(v1, cross))
+    cross = v2.cross(v3)
+    return v1.dot(cross)
 
 
 def plane_from_three_points(
-    a: Vec3, b: Vec3, c: Vec3
-) -> tuple[np.ndarray, float] | None:
+    a: Point3, b: Point3, c: Point3
+) -> tuple[Direction3, float] | None:
     """
     Construct a plane from three 3D points.
 
-    The plane is represented in the form n·x + d = 0, where n is the unit normal
-    vector and d is the distance offset.
+    The plane is represented in the form n.x + d = 0, where n is the unit normal
+    direction and d is the distance offset.
 
     Args:
         a: First point defining the plane.
@@ -213,7 +204,7 @@ def plane_from_three_points(
         c: Third point defining the plane.
 
     Returns:
-        A tuple containing the normal vector and distance `d`, or None if the points
+        A tuple containing the normal direction and distance `d`, or None if the points
         are degenerate and do not form a unique plane.
     """
     # Compute two edge vectors on the plane.
@@ -221,44 +212,44 @@ def plane_from_three_points(
     v2 = c - a
 
     # The normal is perpendicular to both edge vectors.
-    normal = np.cross(v1, v2)
-    normal_magnitude = np.linalg.norm(normal)
+    normal = v1.cross(v2)
+    normal_magnitude = normal.norm()
 
     # If the magnitude of the normal is near zero, the points are collinear.
     if normal_magnitude < EPS_GEOMETRIC:
         return None
 
     # Normalize the normal vector for a consistent plane representation.
-    normal /= normal_magnitude
+    normal_dir = normal.normalize()
 
-    # Compute d for the plane equation n·x + d = 0 using point a.
-    d = -float(np.dot(normal, a))
+    # Compute d for the plane equation n.x + d = 0 using point a.
+    d = -float(np.dot(normal_dir.data, a.data))
 
-    return normal, d
+    return normal_dir, d
 
 
 def intersect_two_planes(
-    n1: np.ndarray, d1: float, n2: np.ndarray, d2: float
-) -> tuple[np.ndarray, np.ndarray] | None:
+    n1: Direction3, d1: float, n2: Direction3, d2: float
+) -> tuple[Point3, Direction3] | None:
     """
     Find the 3D line of intersection between two planes.
 
-    The line is represented by a point on the line and a direction vector. This
+    The line is represented by a point on the line and a direction. This
     function handles the case where planes may be parallel.
 
     Args:
-        n1: The normal vector of the first plane.
+        n1: The normal direction of the first plane.
         d1: The distance offset of the first plane.
-        n2: The normal vector of the second plane.
+        n2: The normal direction of the second plane.
         d2: The distance offset of the second plane.
 
     Returns:
-        A tuple containing a point on the line and the line's direction vector,
+        A tuple containing a point on the line and the line's direction,
         or None if the planes are parallel and have no unique intersection.
     """
     # The direction of the intersection line is perpendicular to both plane normals.
-    direction = np.cross(n1, n2)
-    direction_magnitude_squared = float(np.dot(direction, direction))
+    direction = n1.cross(n2)
+    direction_magnitude_squared = direction.squared_norm()
 
     # If the magnitude is near zero, the normals are parallel, so the planes are.
     if direction_magnitude_squared < EPS_GEOMETRIC * EPS_GEOMETRIC:
@@ -266,16 +257,19 @@ def intersect_two_planes(
 
     # Find a specific point on the intersection line. This formula derives from
     # solving the system of linear equations for the two planes.
-    point = np.cross(d2 * n1 - d1 * n2, direction) / direction_magnitude_squared
+    point_data = np.cross(
+        d2 * n1.data - d1 * n2.data, direction.data
+    ) / direction_magnitude_squared
+    line_direction = direction.normalize()
 
-    return point, direction
+    return Point3(point_data), line_direction
 
 
 def intersect_line_with_vertical_plane(
-    line_point: np.ndarray,
-    line_direction: np.ndarray,
+    line_point: Point3,
+    line_direction: Direction3,
     plane_y: float,
-) -> np.ndarray | None:
+) -> Point3 | None:
     """
     Find where a 3D line intersects a vertical plane defined by y = constant.
 
@@ -283,7 +277,7 @@ def intersect_line_with_vertical_plane(
 
     Args:
         line_point: A point on the 3D line.
-        line_direction: The direction vector of the 3D line.
+        line_direction: The direction of the 3D line.
         plane_y: The Y-coordinate that defines the vertical plane.
 
     Returns:
@@ -295,11 +289,11 @@ def intersect_line_with_vertical_plane(
 
 
 def intersect_line_with_axis_aligned_plane(
-    line_point: np.ndarray,
-    line_direction: np.ndarray,
+    line_point: Point3,
+    line_direction: Direction3,
     axis: Axis,
     coordinate: float,
-) -> np.ndarray | None:
+) -> Point3 | None:
     """
     Find where a 3D line intersects an axis-aligned plane.
 
@@ -310,26 +304,26 @@ def intersect_line_with_axis_aligned_plane(
 
     Args:
         line_point: A point on the 3D line.
-        line_direction: The direction vector of the 3D line.
+        line_direction: The direction of the 3D line.
         axis: Which coordinate axis the plane is aligned to (X, Y, or Z).
         coordinate: The constant value along that axis.
 
     Returns:
         The 3D intersection point, or None if the line is parallel to the plane.
     """
-    direction_component = float(line_direction[axis])
+    direction_component = line_direction[axis]
 
     # If the line's direction along the chosen axis is near zero, it is parallel.
     if abs(direction_component) < EPS_GEOMETRIC:
         return None
 
     # Solve for t where line_point[axis] + t * direction[axis] = coordinate.
-    t = (coordinate - float(line_point[axis])) / direction_component
+    t = (coordinate - line_point[axis]) / direction_component
 
-    return line_point + t * line_direction
+    return Point3(line_point.data + t * line_direction.data)
 
 
-def rotate_vector_rodrigues(v: np.ndarray, rotvec: np.ndarray) -> np.ndarray:
+def rotate_vector_rodrigues(v: Vector3, rotvec: Vector3) -> Vector3:
     """
     Rotate a vector by a rotation vector using Rodrigues' formula.
 
@@ -343,7 +337,7 @@ def rotate_vector_rodrigues(v: np.ndarray, rotvec: np.ndarray) -> np.ndarray:
     Returns:
         The rotated vector. Returns a copy of v if the rotation angle is near zero.
     """
-    angle = np.linalg.norm(rotvec)
+    angle = rotvec.norm()
     if angle < EPS_NUMERICAL:
         return v.copy()
 
@@ -352,30 +346,30 @@ def rotate_vector_rodrigues(v: np.ndarray, rotvec: np.ndarray) -> np.ndarray:
     sin_a = np.sin(angle)
 
     # Rodrigues' formula: v*cos(a) + (k x v)*sin(a) + k*(k.v)*(1-cos(a))
-    return v * cos_a + np.cross(k, v) * sin_a + k * np.dot(k, v) * (1.0 - cos_a)
+    return v * cos_a + k.cross(v) * sin_a + k * (k.dot(v) * (1.0 - cos_a))
 
 
 def rotate_point_about_axis(
-    point: Vec3, pivot: Vec3, axis: Vec3, angle_rad: float
-) -> Vec3:
+    point: Point3, pivot: Point3, axis: Direction3, angle_rad: float
+) -> Point3:
     """
     Rotate a point about an arbitrary axis using Rodrigues' rotation formula.
 
     Args:
         point: Point to rotate.
         pivot: Point on the rotation axis.
-        axis: Direction vector of the rotation axis (will be normalized).
+        axis: Direction of the rotation axis (unit vector).
         angle_rad: Rotation angle in radians (right-hand rule about axis).
 
     Returns:
         Rotated point coordinates.
     """
-    k = normalize_vector(axis)
+    k = axis
     v = point - pivot
 
     cos_a = np.cos(angle_rad)
     sin_a = np.sin(angle_rad)
 
     # Rodrigues' formula: v*cos(a) + (k x v)*sin(a) + k*(k.v)*(1-cos(a))
-    rotated = v * cos_a + np.cross(k, v) * sin_a + k * np.dot(k, v) * (1.0 - cos_a)
+    rotated = v * cos_a + k.cross(v) * sin_a + k * (k.dot(v) * (1.0 - cos_a))
     return pivot + rotated

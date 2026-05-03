@@ -15,40 +15,42 @@ from kinematics.points.derived.manager import DerivedPointsManager, DerivedPoint
 
 @pytest.fixture
 def sample_positions():
+    from kinematics.core.geometry import Point3
+
     # Set up a simple configuration:
     # - Axle inboard at origin
     # - Axle outboard at x=2
     # - This makes the axle 2 units wide pointing along x-axis
     return {
-        PointID.AXLE_INBOARD: np.array([0.0, 0.0, 0.0]),
-        PointID.AXLE_OUTBOARD: np.array([2.0, 0.0, 0.0]),
+        PointID.AXLE_INBOARD: Point3([0.0, 0.0, 0.0]),
+        PointID.AXLE_OUTBOARD: Point3([2.0, 0.0, 0.0]),
     }
 
 
 def test_axle_midpoint(sample_positions):
     result = get_axle_midpoint(sample_positions)
-    np.testing.assert_array_equal(result, np.array([1.0, 0.0, 0.0]))
+    np.testing.assert_array_equal(result.data, np.array([1.0, 0.0, 0.0]))
 
 
 def test_wheel_center(sample_positions):
     # Positive wheel offset (ET) moves centerline inboard from hub face.
     # With axle outboard at x=2.0 and offset of +0.5, center should be at x=1.5.
     result = get_wheel_center(sample_positions, wheel_offset=0.5)
-    np.testing.assert_array_equal(result, np.array([1.5, 0.0, 0.0]))
+    np.testing.assert_array_equal(result.data, np.array([1.5, 0.0, 0.0]))
 
 
 def test_wheel_center_zero_offset(sample_positions):
     # Zero wheel offset leaves the centerline at the hub face (axle outboard point).
     # With axle outboard at x=2.0 and offset of 0.0, center should be at x=2.0.
     result = get_wheel_center(sample_positions, wheel_offset=0.0)
-    np.testing.assert_array_equal(result, np.array([2.0, 0.0, 0.0]))
+    np.testing.assert_array_equal(result.data, np.array([2.0, 0.0, 0.0]))
 
 
 def test_wheel_center_negative_offset(sample_positions):
     # Negative wheel offset moves centerline outboard from hub face.
     # With axle outboard at x=2.0 and offset of -0.5, center should be at x=2.5.
     result = get_wheel_center(sample_positions, wheel_offset=-0.5)
-    np.testing.assert_array_equal(result, np.array([2.5, 0.0, 0.0]))
+    np.testing.assert_array_equal(result.data, np.array([2.5, 0.0, 0.0]))
 
 
 def test_wheel_inboard_outboard(sample_positions):
@@ -59,11 +61,11 @@ def test_wheel_inboard_outboard(sample_positions):
 
     # Test inboard point (should be 0.5 units inboard of wheel center)
     inboard = get_wheel_inboard(positions_dict, wheel_width=1.0)
-    np.testing.assert_array_equal(inboard, np.array([1.0, 0.0, 0.0]))
+    np.testing.assert_array_equal(inboard.data, np.array([1.0, 0.0, 0.0]))
 
     # Test outboard point (should be 0.5 units outboard of wheel center)
     outboard = get_wheel_outboard(positions_dict, wheel_width=1.0)
-    np.testing.assert_array_equal(outboard, np.array([2.0, 0.0, 0.0]))
+    np.testing.assert_array_equal(outboard.data, np.array([2.0, 0.0, 0.0]))
 
 
 def test_dependency_manager_basic(sample_positions):
@@ -85,7 +87,7 @@ def test_dependency_manager_basic(sample_positions):
     assert len(sample_positions) == 3
     assert PointID.AXLE_MIDPOINT in sample_positions
     np.testing.assert_array_equal(
-        sample_positions[PointID.AXLE_MIDPOINT], np.array([1.0, 0.0, 0.0])
+        sample_positions[PointID.AXLE_MIDPOINT].data, np.array([1.0, 0.0, 0.0])
     )
 
 
@@ -119,16 +121,16 @@ def test_dependency_manager_complex(sample_positions):
 
     # Check values
     np.testing.assert_array_equal(
-        sample_positions[PointID.AXLE_MIDPOINT], np.array([1.0, 0.0, 0.0])
+        sample_positions[PointID.AXLE_MIDPOINT].data, np.array([1.0, 0.0, 0.0])
     )
     np.testing.assert_array_equal(
-        sample_positions[PointID.WHEEL_CENTER], np.array([1.5, 0.0, 0.0])
+        sample_positions[PointID.WHEEL_CENTER].data, np.array([1.5, 0.0, 0.0])
     )
     np.testing.assert_array_equal(
-        sample_positions[PointID.WHEEL_INBOARD], np.array([1.0, 0.0, 0.0])
+        sample_positions[PointID.WHEEL_INBOARD].data, np.array([1.0, 0.0, 0.0])
     )
     np.testing.assert_array_equal(
-        sample_positions[PointID.WHEEL_OUTBOARD], np.array([2.0, 0.0, 0.0])
+        sample_positions[PointID.WHEEL_OUTBOARD].data, np.array([2.0, 0.0, 0.0])
     )
 
 

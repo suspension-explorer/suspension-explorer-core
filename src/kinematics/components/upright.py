@@ -6,9 +6,9 @@ from typing import Mapping
 import numpy as np
 
 from kinematics.core.enums import PointID
+from kinematics.core.geometry import Direction3, Point3, midpoint
 from kinematics.core.rigid_body import LocalCoordinateSystem, RigidBody
-from kinematics.core.types import Vec3, make_vec3
-from kinematics.core.vector_utils.generic import normalize_vector
+from kinematics.core.types import make_point3
 
 
 @dataclass
@@ -26,9 +26,9 @@ class UprightHardpoints:
         trackrod_outboard: Connection to track/tie rod.
     """
 
-    upper_ball_joint: Vec3
-    lower_ball_joint: Vec3
-    trackrod_outboard: Vec3
+    upper_ball_joint: Point3
+    lower_ball_joint: Point3
+    trackrod_outboard: Point3
 
 
 @dataclass
@@ -47,8 +47,8 @@ class UprightAttachments:
         axle_outboard: Outboard end of the axle (e.g., wheel center).
     """
 
-    axle_inboard: Vec3
-    axle_outboard: Vec3
+    axle_inboard: Point3
+    axle_outboard: Point3
 
 
 class Upright(RigidBody):
@@ -89,15 +89,15 @@ class Upright(RigidBody):
 
         if hardpoints is None:
             hardpoints = UprightHardpoints(
-                upper_ball_joint=np.zeros(3),
-                lower_ball_joint=np.zeros(3),
-                trackrod_outboard=np.zeros(3),
+                upper_ball_joint=Point3(np.zeros(3)),
+                lower_ball_joint=Point3(np.zeros(3)),
+                trackrod_outboard=Point3(np.zeros(3)),
             )
 
         if attachments is None:
             attachments = UprightAttachments(
-                axle_inboard=np.zeros(3),
-                axle_outboard=np.zeros(3),
+                axle_inboard=Point3(np.zeros(3)),
+                axle_outboard=Point3(np.zeros(3)),
             )
 
         self.hardpoints = hardpoints
@@ -173,7 +173,7 @@ class Upright(RigidBody):
             self.attachments.axle_outboard
         )
 
-    def update_from_hardpoints(self, hardpoints: Mapping[str, Vec3]) -> None:
+    def update_from_hardpoints(self, hardpoints: Mapping[str, Point3]) -> None:
         """
         Update the upright's orientation from new hardpoint positions.
 
@@ -185,9 +185,11 @@ class Upright(RigidBody):
             hardpoints: Dict with ball joint and trackrod keys.
         """
         # Update hardpoint positions.
-        self.hardpoints.upper_ball_joint = make_vec3(hardpoints["upper_ball_joint"])
-        self.hardpoints.lower_ball_joint = make_vec3(hardpoints["lower_ball_joint"])
-        self.hardpoints.trackrod_outboard = make_vec3(hardpoints["trackrod_outboard"])
+        self.hardpoints.upper_ball_joint = make_point3(hardpoints["upper_ball_joint"])
+        self.hardpoints.lower_ball_joint = make_point3(hardpoints["lower_ball_joint"])
+        self.hardpoints.trackrod_outboard = make_point3(
+            hardpoints["trackrod_outboard"]
+        )
 
         # Reconstruct LCS from new hardpoint positions.
         self.lcs = self.construct_lcs()
@@ -198,8 +200,8 @@ class Upright(RigidBody):
 
     def apply_camber_shim(
         self,
-        pivot_point: Vec3,
-        rotation_axis: Vec3,
+        pivot_point: Point3,
+        rotation_axis: Direction3,
         rotation_angle_rad: float,
     ) -> None:
         """
@@ -218,13 +220,10 @@ class Upright(RigidBody):
 
         Args:
             pivot_point: Pivot point for rotation (typically lower_ball_joint).
-            rotation_axis: Normalized rotation axis vector.
+            rotation_axis: Unit direction for the rotation axis.
             rotation_angle_rad: Rotation angle in radians.
         """
         from kinematics.core.vector_utils.geometric import rotate_point_about_axis
-
-        # Ensure rotation axis is normalized.
-        rotation_axis = normalize_vector(rotation_axis)
 
         # Get current world positions of attachments.
         axle_inboard_world = self.get_world_position("axle_inboard")
@@ -247,19 +246,19 @@ class Upright(RigidBody):
         # relative to them.
         self.init_local_frame()
 
-    def get_axle_vector(self) -> Vec3:
+    def get_axle_vector(self) -> Direction3:
         """
         Get the axle direction vector (normalized).
 
         Returns:
-            Unit vector pointing from axle_inboard to axle_outboard.
+            Unit direction pointing from axle_inboard to axle_outboard.
         """
         axle_inboard = self.get_world_position("axle_inboard")
         axle_outboard = self.get_world_position("axle_outboard")
         axle_vec = axle_outboard - axle_inboard
-        return normalize_vector(axle_vec)
+        return axle_vec.normalize()
 
-    def get_axle_midpoint(self) -> Vec3:
+    def get_axle_midpoint(self) -> Point3:
         """
         Get the midpoint of the axle.
 
@@ -268,7 +267,7 @@ class Upright(RigidBody):
         """
         axle_inboard = self.get_world_position("axle_inboard")
         axle_outboard = self.get_world_position("axle_outboard")
-        return (axle_inboard + axle_outboard) / 2.0
+        return midpoint(axle_inboard, axle_outboard)
 
     # Hardpoints and attachments construction methods.
 
@@ -276,8 +275,8 @@ class Upright(RigidBody):
     def from_hardpoints_and_attachments(
         cls,
         hardpoint_point_ids: dict[str, PointID],
-        hardpoints: dict[PointID, Vec3],
-        attachments: dict[str, Vec3],
+        hardpoints: dict[PointID, Point3],
+        attachments: dict[str, Point3],
     ) -> "Upright":
         """
         Create an Upright from hardpoint references and attachment positions.
@@ -293,7 +292,7 @@ class Upright(RigidBody):
                         "trackrod_outboard": PointID.TRACKROD_OUTBOARD}
             hardpoints: The central hardpoints registry mapping PointID to coordinates
             attachments: Attachment positions in global coordinates at design
-                         {"axle_inboard": Vec3, "axle_outboard": Vec3}
+                         {"axle_inboard": Point3, "axle_outboard": Point3}
 
         Returns:
             Upright with LCS established, local offsets computed, and mount IDs stored.
@@ -316,20 +315,20 @@ class Upright(RigidBody):
 
         # Resolve mount positions from hardpoints.
         upright_hardpoints = UprightHardpoints(
-            upper_ball_joint=make_vec3(
+            upper_ball_joint=make_point3(
                 hardpoints[hardpoint_point_ids["upper_ball_joint"]]
             ),
-            lower_ball_joint=make_vec3(
+            lower_ball_joint=make_point3(
                 hardpoints[hardpoint_point_ids["lower_ball_joint"]]
             ),
-            trackrod_outboard=make_vec3(
+            trackrod_outboard=make_point3(
                 hardpoints[hardpoint_point_ids["trackrod_outboard"]]
             ),
         )
 
         upright_attachments = UprightAttachments(
-            axle_inboard=make_vec3(attachments["axle_inboard"]),
-            axle_outboard=make_vec3(attachments["axle_outboard"]),
+            axle_inboard=make_point3(attachments["axle_inboard"]),
+            axle_outboard=make_point3(attachments["axle_outboard"]),
         )
 
         upright = cls(hardpoints=upright_hardpoints, attachments=upright_attachments)
@@ -338,7 +337,7 @@ class Upright(RigidBody):
         return upright
 
     def update_from_hardpoints_registry(
-        self, hardpoints: Mapping[PointID, Vec3]
+        self, hardpoints: Mapping[PointID, Point3]
     ) -> None:
         """
         Update the upright's orientation from the hardpoints registry.

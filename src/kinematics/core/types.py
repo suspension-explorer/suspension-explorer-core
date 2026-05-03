@@ -5,26 +5,25 @@ Composite type definitions for suspension kinematics.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated, Any, Final, Literal, NamedTuple, Union
+from typing import Final, NamedTuple, Union
 
 import numpy as np
-from numpy.typing import NDArray
 
 from kinematics.core.enums import Axis, PointID, TargetPositionMode
-
-Vec3 = Annotated[NDArray[np.floating[Any]], Literal[3]]
-NAN_VEC3: Final[Vec3] = np.array([np.nan, np.nan, np.nan], dtype=np.float64)
+from kinematics.core.geometry import Direction3, Point3
 
 
-def make_vec3(data) -> NDArray[np.float64]:
+def make_point3(data) -> Point3:
     """
-    Creates a 3-element float64 numpy array from input data.
+    Creates a Point3 from input data.
+
+    Handles passthrough for dual-number types (automatic differentiation).
 
     Args:
-        data: Input data convertible to a 3-element array.
+        data: Input data convertible to a 3-element array, or a Point3.
 
     Returns:
-        A 3-element numpy array with dtype float64.
+        A Point3 instance.
 
     Raises:
         ValueError: If the input cannot be shaped into a 3-element array.
@@ -33,28 +32,31 @@ def make_vec3(data) -> NDArray[np.float64]:
     if hasattr(data, "deriv"):
         return data
 
-    if isinstance(data, np.ndarray) and data.dtype == np.float64 and data.shape == (3,):
+    if isinstance(data, Point3):
         return data
 
-    arr = np.asarray(data, dtype=np.float64)
-    if arr.shape != (3,):
-        raise ValueError(f"Vec3 must have shape (3,), got {arr.shape}")
-    return arr
+    return Point3(data)
 
 
 class WorldAxisSystem:
     """
-    World coordinate system unit axis vectors.
+    World coordinate system unit axis directions.
 
     Usage:
-        WorldAxisSystem.X  # -> np.array([1.0, 0.0, 0.0])
-        WorldAxisSystem.Y  # -> np.array([0.0, 1.0, 0.0])
-        WorldAxisSystem.Z  # -> np.array([0.0, 0.0, 1.0])
+        WorldAxisSystem.X  # -> Direction3 along [1, 0, 0]
+        WorldAxisSystem.Y  # -> Direction3 along [0, 1, 0]
+        WorldAxisSystem.Z  # -> Direction3 along [0, 0, 1]
     """
 
-    X: Final[Vec3] = np.array([1.0, 0.0, 0.0], dtype=np.float64)
-    Y: Final[Vec3] = np.array([0.0, 1.0, 0.0], dtype=np.float64)
-    Z: Final[Vec3] = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+    X: Final[Direction3] = Direction3.from_trusted(
+        np.array([1.0, 0.0, 0.0], dtype=np.float64)
+    )
+    Y: Final[Direction3] = Direction3.from_trusted(
+        np.array([0.0, 1.0, 0.0], dtype=np.float64)
+    )
+    Z: Final[Direction3] = Direction3.from_trusted(
+        np.array([0.0, 0.0, 1.0], dtype=np.float64)
+    )
 
 
 @dataclass
@@ -132,10 +134,10 @@ class PointTargetVector:
     A target direction defined by an arbitrary vector.
 
     Attributes:
-        vector (Vec3): The vector defining the target direction.
+        vector (Direction3): The direction defining the target.
     """
 
-    vector: Vec3
+    vector: Direction3
 
 
 PointTargetDirection = Union[PointTargetAxis, PointTargetVector]

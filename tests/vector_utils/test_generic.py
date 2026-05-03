@@ -237,23 +237,31 @@ class TestProjectCoordinate:
         result = project_coordinate(position, direction)
         assert isinstance(result, float)
 
-    def test_project_non_unit_direction_raises_error(self):
+    def test_project_non_unit_direction_auto_normalizes(self):
         """
-        Test that non-unit direction vector raises ValueError.
+        Test that Direction3 auto-normalizes a non-unit input vector.
+
+        The Direction3 constructor normalizes any non-zero vector, so passing
+        a vector with magnitude != 1 produces a valid unit direction.
         """
-        position = np.array([1.0, 2.0, 3.0])
-        direction = np.array([2.0, 0.0, 0.0])  # Magnitude = 2, not unit.
-        with pytest.raises(ValueError, match="Direction vector not normalized"):
-            project_coordinate(position, direction)
+        from kinematics.core.geometry import Direction3, Point3
+
+        position = Point3([1.0, 2.0, 3.0])
+        direction = Direction3([2.0, 0.0, 0.0])  # Magnitude = 2, auto-normalized.
+        result = project_coordinate(position, direction)
+        assert np.isclose(result, 1.0, atol=TEST_TOLERANCE)
 
     def test_project_zero_direction_raises_error(self):
         """
         Test that zero direction vector raises ValueError.
+
+        The Direction3 constructor rejects zero-length vectors, which prevents
+        constructing an invalid direction for projection.
         """
-        position = np.array([1.0, 2.0, 3.0])
-        direction = np.array([0.0, 0.0, 0.0])
-        with pytest.raises(ValueError, match="Direction vector not normalized"):
-            project_coordinate(position, direction)
+        from kinematics.core.geometry import Direction3
+
+        with pytest.raises(ValueError, match="zero-length vector"):
+            Direction3([0.0, 0.0, 0.0])
 
     def test_project_near_unit_direction_passes(self):
         """
@@ -267,17 +275,17 @@ class TestProjectCoordinate:
         # Should be close to projecting onto [1,0,0].
         assert np.isclose(result, 1.0, atol=1e-3)
 
-    def test_project_slightly_off_unit_direction_raises_error(self):
+    def test_project_slightly_off_unit_direction_normalizes(self):
         """
-        Test that direction vector outside tolerance raises ValueError.
+        Test that a slightly off-unit direction is auto-normalized by Direction3.
         """
-        position = np.array([1.0, 2.0, 3.0])
-        # Create a direction vector that's outside the tolerance.
-        direction = np.array(
-            [1.1, 0.0, 0.0]
-        )  # Magnitude = 1.1, clearly outside tolerance.
-        with pytest.raises(ValueError, match="Direction vector not normalized"):
-            project_coordinate(position, direction)
+        from kinematics.core.geometry import Direction3, Point3
+
+        position = Point3([1.0, 2.0, 3.0])
+        # Direction3 auto-normalizes, so 1.1 magnitude becomes unit length.
+        direction = Direction3([1.1, 0.0, 0.0])
+        result = project_coordinate(position, direction)
+        assert np.isclose(result, 1.0, atol=1e-3)
 
 
 class TestCompute2dVectorVectorIntersection:

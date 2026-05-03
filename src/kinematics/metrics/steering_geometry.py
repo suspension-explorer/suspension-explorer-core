@@ -12,10 +12,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import numpy as np
-
 from kinematics.core.enums import Axis
-from kinematics.core.vector_utils.generic import normalize_vector
+from kinematics.core.geometry import Vector3
 
 if TYPE_CHECKING:
     from kinematics.metrics.context import MetricContext
@@ -50,12 +48,10 @@ def calculate_scrub_radius(ctx: MetricContext) -> float | None:
     # inboard of the contact patch. The projected wheel axis already
     # encodes left/right handedness, so no explicit side_sign is needed.
     displacement = ground_pt - cp
-    wheel_lateral_ground = np.array(
-        [ctx.wheel_axis[Axis.X], ctx.wheel_axis[Axis.Y], 0.0],
-        dtype=np.float64,
-    )
-    wheel_lateral_ground = normalize_vector(wheel_lateral_ground)
-    return -float(np.dot(displacement, wheel_lateral_ground))
+    wheel_lateral_ground = Vector3(
+        [ctx.wheel_axis[Axis.X], ctx.wheel_axis[Axis.Y], 0.0]
+    ).normalize()
+    return -float(displacement.dot(wheel_lateral_ground))
 
 
 def calculate_mechanical_trail(ctx: MetricContext) -> float | None:

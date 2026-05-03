@@ -11,8 +11,6 @@ from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, ClassVar, Sequence
 
-import numpy as np
-
 from kinematics.constraints import (
     AngleConstraint,
     Constraint,
@@ -21,7 +19,8 @@ from kinematics.constraints import (
 )
 from kinematics.core.constants import EPS_GEOMETRIC
 from kinematics.core.enums import Axis, PointID, ShimType
-from kinematics.core.types import Vec3, WorldAxisSystem, make_vec3
+from kinematics.core.geometry import Direction3, Point3
+from kinematics.core.types import WorldAxisSystem, make_point3
 from kinematics.core.vector_utils.geometric import (
     compute_point_point_distance,
     compute_vector_vector_angle,
@@ -256,7 +255,7 @@ class DoubleWishboneSuspension(Suspension):
 
         return DerivedPointsSpec(functions=functions, dependencies=dependencies)
 
-    def compute_side_view_instant_center(self, state: SuspensionState) -> Vec3 | None:
+    def compute_side_view_instant_center(self, state: SuspensionState) -> Point3 | None:
         """
         Compute side view instant center from wishbone planes.
 
@@ -282,7 +281,9 @@ class DoubleWishboneSuspension(Suspension):
 
         return svic
 
-    def compute_instant_axis(self, state: SuspensionState) -> tuple[Vec3, Vec3] | None:
+    def compute_instant_axis(
+        self, state: SuspensionState
+    ) -> tuple[Point3, Direction3] | None:
         """Compute 3D instant axis from wishbone planes intersection."""
         upper_front = state.positions[PointID.UPPER_WISHBONE_INBOARD_FRONT]
         upper_rear = state.positions[PointID.UPPER_WISHBONE_INBOARD_REAR]
@@ -307,7 +308,9 @@ class DoubleWishboneSuspension(Suspension):
             d2=lower_plane[1],
         )
 
-    def compute_front_view_instant_center(self, state: SuspensionState) -> Vec3 | None:
+    def compute_front_view_instant_center(
+        self, state: SuspensionState
+    ) -> Point3 | None:
         """
         Compute front view instant center from wishbone planes.
 
@@ -386,7 +389,7 @@ class DoubleWishboneSuspension(Suspension):
             ),
         ]
 
-    def apply_camber_shim(self, positions: dict[PointID, np.ndarray]) -> None:
+    def apply_camber_shim(self, positions: dict[PointID, Point3]) -> None:
         """
         Apply camber shim transformation to the suspension geometry.
 
@@ -405,13 +408,13 @@ class DoubleWishboneSuspension(Suspension):
         # Add shim geometry points from config so the solver can access them
         # via PointID alongside the kinematic hardpoints. These are filtered
         # from output by OUTPUT_POINTS.
-        positions[PointID.CAMBER_SHIM_FACE_POINT_A] = make_vec3(
+        positions[PointID.CAMBER_SHIM_FACE_POINT_A] = make_point3(
             shim_config.shim_face_point_a
         )
-        positions[PointID.CAMBER_SHIM_FACE_POINT_B] = make_vec3(
+        positions[PointID.CAMBER_SHIM_FACE_POINT_B] = make_point3(
             shim_config.shim_face_point_b
         )
-        positions[PointID.CAMBER_SHIM_FACE_NORMAL] = make_vec3(
+        positions[PointID.CAMBER_SHIM_FACE_NORMAL] = make_point3(
             shim_config.shim_face_normal
         )
 
@@ -422,18 +425,21 @@ class DoubleWishboneSuspension(Suspension):
 
         # Write the solved UBJ position back. The upper wishbone arc constraint
         # means UBJ may shift slightly to accommodate the new shim thickness.
-        positions[PointID.UPPER_WISHBONE_OUTBOARD] = assembly_solution.ubj_position
+        positions[PointID.UPPER_WISHBONE_OUTBOARD] = Point3(
+            assembly_solution.ubj_position
+        )
 
         # Rotate each configured upright-mounted point about LBJ using the solved
         # upright-body rotation axis and angle.
         if assembly_solution.upright_body_rot_angle_rad > EPS_GEOMETRIC:
             lbj = positions[PointID.LOWER_WISHBONE_OUTBOARD]
+            rot_axis = Direction3(assembly_solution.upright_body_rot_axis)
             for point_name in self.config.upright_mounted_points:
                 point_id = self.UPRIGHT_MOUNTED_POINT_IDS.get(point_name)
                 if point_id is not None and point_id in positions:
                     positions[point_id] = rotate_point_about_axis(
                         positions[point_id],
                         lbj,
-                        assembly_solution.upright_body_rot_axis,
+                        rot_axis,
                         assembly_solution.upright_body_rot_angle_rad,
                     )

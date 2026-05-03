@@ -15,7 +15,8 @@ import numpy as np
 import pytest
 
 from kinematics.core.enums import PointID, ShimType, Units
-from kinematics.core.types import make_vec3
+from kinematics.core.geometry import Point3
+from kinematics.core.types import make_point3
 from kinematics.io.geometry_loader import load_geometry
 from kinematics.suspensions.base import Suspension
 from kinematics.suspensions.config.settings import (
@@ -31,21 +32,21 @@ from kinematics.suspensions.registry import get_suspension_class, list_supported
 
 
 @pytest.fixture
-def valid_hardpoints() -> dict[PointID, np.ndarray]:
+def valid_hardpoints() -> dict[PointID, Point3]:
     """
     Valid hardpoints for double wishbone suspension.
     """
     return {
-        PointID.LOWER_WISHBONE_INBOARD_FRONT: make_vec3([250, 400, 200]),
-        PointID.LOWER_WISHBONE_INBOARD_REAR: make_vec3([-250, 450, 200]),
-        PointID.LOWER_WISHBONE_OUTBOARD: make_vec3([0, 900, 200]),
-        PointID.UPPER_WISHBONE_INBOARD_FRONT: make_vec3([225, 350, 500]),
-        PointID.UPPER_WISHBONE_INBOARD_REAR: make_vec3([-275, 350, 500]),
-        PointID.UPPER_WISHBONE_OUTBOARD: make_vec3([-25, 750, 500]),
-        PointID.TRACKROD_INBOARD: make_vec3([50, 200, 250]),
-        PointID.TRACKROD_OUTBOARD: make_vec3([150, 800, 275]),
-        PointID.AXLE_INBOARD: make_vec3([-20, 800, 308.426]),
-        PointID.AXLE_OUTBOARD: make_vec3([-20, 950, 313.426]),
+        PointID.LOWER_WISHBONE_INBOARD_FRONT: make_point3([250, 400, 200]),
+        PointID.LOWER_WISHBONE_INBOARD_REAR: make_point3([-250, 450, 200]),
+        PointID.LOWER_WISHBONE_OUTBOARD: make_point3([0, 900, 200]),
+        PointID.UPPER_WISHBONE_INBOARD_FRONT: make_point3([225, 350, 500]),
+        PointID.UPPER_WISHBONE_INBOARD_REAR: make_point3([-275, 350, 500]),
+        PointID.UPPER_WISHBONE_OUTBOARD: make_point3([-25, 750, 500]),
+        PointID.TRACKROD_INBOARD: make_point3([50, 200, 250]),
+        PointID.TRACKROD_OUTBOARD: make_point3([150, 800, 275]),
+        PointID.AXLE_INBOARD: make_point3([-20, 800, 308.426]),
+        PointID.AXLE_OUTBOARD: make_point3([-20, 950, 313.426]),
     }
 
 
@@ -501,4 +502,4 @@ class TestIntegration:
         new_axle = state.positions[PointID.AXLE_OUTBOARD]
 
         # Should not be identical (shim rotates attachments)
-        assert not np.allclose(original_axle, new_axle)
+        assert not np.allclose(original_axle.data, new_axle.data)

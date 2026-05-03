@@ -14,8 +14,8 @@ import yaml
 from pydantic import ValidationError as PydanticValidationError
 
 from kinematics.core.enums import PointID, ShimType, Units
-from kinematics.core.types import Vec3
-from kinematics.io.validation import coerce_enum, coerce_vec3
+from kinematics.core.geometry import Point3
+from kinematics.io.validation import coerce_enum, coerce_point3
 from kinematics.suspensions.base import Suspension
 from kinematics.suspensions.config.settings import SuspensionConfig
 from kinematics.suspensions.registry import get_suspension_class, list_supported_types
@@ -145,7 +145,7 @@ def load_suspension(
 def parse_hardpoints(
     raw_hardpoints: dict[str, Any],
     suspension_class: type[Suspension],
-) -> tuple[dict[PointID, Vec3], list[str]]:
+) -> tuple[dict[PointID, Point3], list[str]]:
     """
     Validate and parse hardpoints from YAML data.
 
@@ -158,7 +158,7 @@ def parse_hardpoints(
     """
     errors: list[str] = []
     valid_points = suspension_class.all_valid_points()
-    hardpoints: dict[PointID, Vec3] = {}
+    hardpoints: dict[PointID, Point3] = {}
 
     for key, value in raw_hardpoints.items():
         # Case-insensitive point ID lookup.
@@ -174,7 +174,7 @@ def parse_hardpoints(
 
         # Parse vec3 value.
         try:
-            hardpoints[point_id] = coerce_vec3(value)
+            hardpoints[point_id] = coerce_point3(value)
         except (ValueError, KeyError, TypeError) as e:
             errors.append(f"'{key}': {e}")
 
