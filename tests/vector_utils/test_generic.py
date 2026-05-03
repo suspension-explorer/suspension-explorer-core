@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from kinematics.core.constants import EPS_NUMERICAL, TEST_TOLERANCE
+from kinematics.core.geometry import Direction3, Point3
 from kinematics.core.vector_utils.generic import (
     compute_2d_vector_vector_intersection,
     normalize_vector,
@@ -152,8 +153,8 @@ class TestProjectCoordinate:
         """
         Test projection along x-axis.
         """
-        position = np.array([3.0, 2.0, 1.0])
-        direction = np.array([1.0, 0.0, 0.0])
+        position = Point3([3.0, 2.0, 1.0])
+        direction = Direction3([1.0, 0.0, 0.0])
         result = project_coordinate(position, direction)
         assert np.isclose(result, 3.0, atol=TEST_TOLERANCE)
 
@@ -161,8 +162,8 @@ class TestProjectCoordinate:
         """
         Test projection along y-axis.
         """
-        position = np.array([3.0, 2.0, 1.0])
-        direction = np.array([0.0, 1.0, 0.0])
+        position = Point3([3.0, 2.0, 1.0])
+        direction = Direction3([0.0, 1.0, 0.0])
         result = project_coordinate(position, direction)
         assert np.isclose(result, 2.0, atol=TEST_TOLERANCE)
 
@@ -170,8 +171,8 @@ class TestProjectCoordinate:
         """
         Test projection along z-axis.
         """
-        position = np.array([3.0, 2.0, 1.0])
-        direction = np.array([0.0, 0.0, 1.0])
+        position = Point3([3.0, 2.0, 1.0])
+        direction = Direction3([0.0, 0.0, 1.0])
         result = project_coordinate(position, direction)
         assert np.isclose(result, 1.0, atol=TEST_TOLERANCE)
 
@@ -179,10 +180,9 @@ class TestProjectCoordinate:
         """
         Test projection along a diagonal direction.
         """
-        position = np.array([1.0, 1.0, 0.0])
-        direction = np.array(
-            [1 / np.sqrt(2), 1 / np.sqrt(2), 0.0]
-        )  # Normalized diagonal.
+        position = Point3([1.0, 1.0, 0.0])
+        # Direction3 auto-normalises; an unnormalised diagonal works fine.
+        direction = Direction3([1.0, 1.0, 0.0])
         result = project_coordinate(position, direction)
         expected = np.sqrt(2)  # ||(1,1,0)|| projected onto (1/sqrt(2), 1/sqrt(2), 0).
         assert np.isclose(result, expected, atol=TEST_TOLERANCE)
@@ -191,8 +191,8 @@ class TestProjectCoordinate:
         """
         Test projection in negative direction.
         """
-        position = np.array([3.0, 2.0, 1.0])
-        direction = np.array([-1.0, 0.0, 0.0])
+        position = Point3([3.0, 2.0, 1.0])
+        direction = Direction3([-1.0, 0.0, 0.0])
         result = project_coordinate(position, direction)
         assert np.isclose(result, -3.0, atol=TEST_TOLERANCE)
 
@@ -200,8 +200,8 @@ class TestProjectCoordinate:
         """
         Test projection of orthogonal vectors gives zero.
         """
-        position = np.array([1.0, 0.0, 0.0])
-        direction = np.array([0.0, 1.0, 0.0])
+        position = Point3([1.0, 0.0, 0.0])
+        direction = Direction3([0.0, 1.0, 0.0])
         result = project_coordinate(position, direction)
         assert np.isclose(result, 0.0, atol=TEST_TOLERANCE)
 
@@ -209,8 +209,8 @@ class TestProjectCoordinate:
         """
         Test projection of zero position vector.
         """
-        position = np.array([0.0, 0.0, 0.0])
-        direction = np.array([1.0, 0.0, 0.0])
+        position = Point3([0.0, 0.0, 0.0])
+        direction = Direction3([1.0, 0.0, 0.0])
         result = project_coordinate(position, direction)
         assert np.isclose(result, 0.0, atol=TEST_TOLERANCE)
 
@@ -218,22 +218,21 @@ class TestProjectCoordinate:
         """
         Test projection along an arbitrary unit direction.
         """
-        position = np.array([2.0, 3.0, 6.0])
-        # Create normalized direction vector.
-        direction_unnormalized = np.array([1.0, 2.0, 2.0])
-        direction = direction_unnormalized / np.linalg.norm(direction_unnormalized)
+        position = Point3([2.0, 3.0, 6.0])
+        # Direction3 auto-normalises this raw vector.
+        direction = Direction3([1.0, 2.0, 2.0])
         result = project_coordinate(position, direction)
 
-        # Manual calculation: dot product.
-        expected = np.dot(position, direction)
+        # Manual calculation: dot product against the normalised data.
+        expected = np.dot(position.data, direction.data)
         assert np.isclose(result, expected, atol=TEST_TOLERANCE)
 
     def test_project_returns_float(self):
         """
         Test that the result is a float.
         """
-        position = np.array([1.0, 2.0, 3.0])
-        direction = np.array([1.0, 0.0, 0.0])
+        position = Point3([1.0, 2.0, 3.0])
+        direction = Direction3([1.0, 0.0, 0.0])
         result = project_coordinate(position, direction)
         assert isinstance(result, float)
 
@@ -244,8 +243,6 @@ class TestProjectCoordinate:
         The Direction3 constructor normalizes any non-zero vector, so passing
         a vector with magnitude != 1 produces a valid unit direction.
         """
-        from kinematics.core.geometry import Direction3, Point3
-
         position = Point3([1.0, 2.0, 3.0])
         direction = Direction3([2.0, 0.0, 0.0])  # Magnitude = 2, auto-normalized.
         result = project_coordinate(position, direction)
@@ -258,8 +255,6 @@ class TestProjectCoordinate:
         The Direction3 constructor rejects zero-length vectors, which prevents
         constructing an invalid direction for projection.
         """
-        from kinematics.core.geometry import Direction3
-
         with pytest.raises(ValueError, match="zero-length vector"):
             Direction3([0.0, 0.0, 0.0])
 
@@ -267,10 +262,10 @@ class TestProjectCoordinate:
         """
         Test that nearly unit direction vector passes within tolerance.
         """
-        position = np.array([1.0, 2.0, 3.0])
-        # Create a direction vector that's almost but not exactly unit length.
-        direction = np.array([1.0 + EPS_NUMERICAL / 2, 0.0, 0.0])
-        # This should pass since the difference is within TEST_TOLERANCE tolerance.
+        position = Point3([1.0, 2.0, 3.0])
+        # Create a direction vector that's almost but not exactly unit length;
+        # Direction3 normalises it on construction.
+        direction = Direction3([1.0 + EPS_NUMERICAL / 2, 0.0, 0.0])
         result = project_coordinate(position, direction)
         # Should be close to projecting onto [1,0,0].
         assert np.isclose(result, 1.0, atol=1e-3)
@@ -279,8 +274,6 @@ class TestProjectCoordinate:
         """
         Test that a slightly off-unit direction is auto-normalized by Direction3.
         """
-        from kinematics.core.geometry import Direction3, Point3
-
         position = Point3([1.0, 2.0, 3.0])
         # Direction3 auto-normalizes, so 1.1 magnitude becomes unit length.
         direction = Direction3([1.1, 0.0, 0.0])

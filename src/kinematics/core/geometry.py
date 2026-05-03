@@ -20,7 +20,7 @@ Disallowed operations (raise TypeError at runtime):
 
 from __future__ import annotations
 
-from typing import Any, Final, overload
+from typing import TYPE_CHECKING, Any, Final, overload
 
 import numpy as np
 from numpy.typing import NDArray
@@ -49,8 +49,9 @@ def extract_array(x: object) -> np.ndarray:
     """
     if isinstance(x, np.ndarray):
         return x
-    if hasattr(x, "data") and isinstance(x.data, np.ndarray):
-        return x.data
+    data = getattr(x, "data", None)
+    if isinstance(data, np.ndarray):
+        return data
     return x  # type: ignore[return-value]
 
 
@@ -108,6 +109,13 @@ class Point3:
         return float(self.data[int(idx)])
 
     # -- Numpy interop ------------------------------------------------------
+
+    if TYPE_CHECKING:
+        # Type-checker-only declaration so Pyright/ty treat Point3 as ArrayLike
+        # for numpy function calls (np.asarray, etc.). At runtime the method is
+        # NOT defined, so numpy continues to dispatch via __array_function__ /
+        # __array_ufunc__ instead of falling through to a raw conversion.
+        def __array__(self, dtype: Any = None) -> np.ndarray: ...
 
     def __array_function__(self, func, types, args, kwargs):
         if not all(issubclass(t, GEOM_TYPES) for t in types):
@@ -248,6 +256,10 @@ class Vector3:
 
     # -- Numpy interop ------------------------------------------------------
 
+    if TYPE_CHECKING:
+        # Type-checker-only ArrayLike hint; see Point3 for explanation.
+        def __array__(self, dtype: Any = None) -> np.ndarray: ...
+
     def __array_function__(self, func, types, args, kwargs):
         if not all(issubclass(t, GEOM_TYPES) for t in types):
             return NotImplemented
@@ -377,6 +389,10 @@ class Direction3:
         return Vector3(self.data.copy())
 
     # -- Numpy interop ------------------------------------------------------
+
+    if TYPE_CHECKING:
+        # Type-checker-only ArrayLike hint; see Point3 for explanation.
+        def __array__(self, dtype: Any = None) -> np.ndarray: ...
 
     def __array_function__(self, func, types, args, kwargs):
         if not all(issubclass(t, GEOM_TYPES) for t in types):

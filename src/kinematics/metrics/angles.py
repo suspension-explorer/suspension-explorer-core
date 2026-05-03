@@ -35,7 +35,7 @@ def calculate_camber(ctx: MetricContext) -> float:
     # vehicle's longitudinal axis (X-axis).
     # Multiply by -side so the vector points roughly +Z (Up) for both
     # sides.
-    wheel_up = np.cross(axle, WorldAxisSystem.X) * -side
+    wheel_up = axle.cross(WorldAxisSystem.X) * -side
 
     # Project onto the front view plane (YZ plane).
     proj_y = wheel_up[Axis.Y]

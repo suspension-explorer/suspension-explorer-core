@@ -180,12 +180,14 @@ def plot_suspension_on_axis(
                 label=link.label if show_labels else None,
             )
         else:
-            # Single point.
-            pt = positions[link.points[0]]
+            # Single point. matplotlib's mplot3d scatter stubs insist on int
+            # for `zs`, even though the runtime accepts array-like; ignore
+            # the pyright complaint on the third arg.
+            pt = positions[link.points[0]].data
             ax.scatter(
-                pt[0],
-                pt[1],
-                pt[2],
+                pt[0:1],
+                pt[1:2],
+                pt[2:3],  # pyright: ignore[reportArgumentType]
                 color=link.color,
                 s=int(link.markersize**2),
                 marker=link.marker,

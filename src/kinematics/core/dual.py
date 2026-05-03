@@ -9,7 +9,7 @@ np.dot and np.linalg.norm works unmodified with dual-number inputs.
 
 from __future__ import annotations
 
-from typing import overload
+from typing import Mapping, overload
 
 import numpy as np
 
@@ -418,7 +418,7 @@ def norm(v: DualVec3) -> DualScalar:
 
 
 def seed_positions(
-    positions: dict[PointID, np.ndarray],
+    positions: Mapping[PointID, object],
     seed_point: PointID,
     seed_dim: int,
 ) -> dict[PointID, DualVec3]:
