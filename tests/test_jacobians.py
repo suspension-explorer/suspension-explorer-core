@@ -435,6 +435,7 @@ class TestFullJacobianAssembly:
     """
 
     def test_jacobian_matches_numerical_for_solver_system(self):
+        from kinematics.core.geometry import Point3
         from kinematics.core.types import (
             PointTarget,
             PointTargetAxis,
@@ -448,9 +449,9 @@ class TestFullJacobianAssembly:
         from kinematics.state import SuspensionState
 
         positions = {
-            P1: np.array([0.0, 0.0, 0.0]),
-            P2: np.array([3.0, 4.0, 0.0]),
-            P3: np.array([1.0, 5.0, 2.0]),
+            P1: Point3([0.0, 0.0, 0.0]),
+            P2: Point3([3.0, 4.0, 0.0]),
+            P3: Point3([1.0, 5.0, 2.0]),
         }
         free_points = {P1, P2, P3}
         state = SuspensionState(
@@ -504,6 +505,7 @@ class TestFullJacobianAssembly:
         np.testing.assert_allclose(analytical, numerical, atol=TOLERANCE)
 
     def test_residual_computer_rejects_target_count_changes(self):
+        from kinematics.core.geometry import Point3
         from kinematics.core.types import (
             PointTarget,
             PointTargetAxis,
@@ -517,8 +519,8 @@ class TestFullJacobianAssembly:
         from kinematics.state import SuspensionState
 
         positions = {
-            P1: np.array([0.0, 0.0, 0.0]),
-            P2: np.array([3.0, 4.0, 0.0]),
+            P1: Point3([0.0, 0.0, 0.0]),
+            P2: Point3([3.0, 4.0, 0.0]),
         }
         state = SuspensionState(
             positions={k: v.copy() for k, v in positions.items()},

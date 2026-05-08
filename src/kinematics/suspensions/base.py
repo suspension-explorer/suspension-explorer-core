@@ -12,11 +12,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, Sequence
 
-import numpy as np
-
 from kinematics.constraints import Constraint
 from kinematics.core.enums import PointID, ShimType, Units
-from kinematics.core.types import Vec3
+from kinematics.core.geometry import Point3
 from kinematics.points.derived.manager import DerivedPointsSpec
 from kinematics.state import SuspensionState
 from kinematics.suspensions.config.settings import SuspensionConfig
@@ -48,7 +46,7 @@ class Suspension(ABC):
     name: str = "unnamed"
     version: str = "0.0.0"
     units: Units = Units.MILLIMETERS
-    hardpoints: dict[PointID, Vec3] = field(default_factory=dict)
+    hardpoints: dict[PointID, Point3] = field(default_factory=dict)
     config: SuspensionConfig | None = None
 
     # Internal state cache.
@@ -110,7 +108,7 @@ class Suspension(ABC):
         ...
 
     @abstractmethod
-    def compute_side_view_instant_center(self, state: SuspensionState) -> Vec3 | None:
+    def compute_side_view_instant_center(self, state: SuspensionState) -> Point3 | None:
         """
         Compute the side view instant center.
 
@@ -123,7 +121,9 @@ class Suspension(ABC):
         ...
 
     @abstractmethod
-    def compute_front_view_instant_center(self, state: SuspensionState) -> Vec3 | None:
+    def compute_front_view_instant_center(
+        self, state: SuspensionState
+    ) -> Point3 | None:
         """
         Compute the front view instant center.
 
@@ -153,6 +153,11 @@ class Suspension(ABC):
             missing_names = sorted(p.name for p in missing)
             raise ValueError(f"Missing required hardpoints: {', '.join(missing_names)}")
 
-    def get_hardpoints_as_arrays(self) -> dict[PointID, np.ndarray]:
-        """Convert hardpoints to numpy arrays."""
-        return {pid: np.array(pos) for pid, pos in self.hardpoints.items()}
+    def get_hardpoints_copy(self) -> dict[PointID, Point3]:
+        """
+        Return a mutable copy of the hardpoints dictionary.
+
+        Each Point3 is copied so callers can modify positions without
+        affecting the stored design values.
+        """
+        return {pid: pos.copy() for pid, pos in self.hardpoints.items()}

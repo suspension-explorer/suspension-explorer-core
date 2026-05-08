@@ -11,7 +11,7 @@ import numpy as np
 
 from kinematics.core.constants import TEST_TOLERANCE
 from kinematics.core.enums import Axis, PointID
-from kinematics.core.types import make_vec3
+from kinematics.core.geometry import Direction3, Point3
 from kinematics.core.vector_utils.geometric import rotate_point_about_axis
 from kinematics.io.geometry_loader import load_geometry
 from kinematics.suspensions.base import Suspension
@@ -28,9 +28,9 @@ def test_rotate_point_about_axis_90_degrees():
     """
     Test rotation of a point 90 degrees about Z axis.
     """
-    point = make_vec3(np.array([1.0, 0.0, 0.0]))
-    pivot = make_vec3(np.array([0.0, 0.0, 0.0]))
-    axis = make_vec3(np.array([0.0, 0.0, 1.0]))
+    point = Point3([1.0, 0.0, 0.0])
+    pivot = Point3([0.0, 0.0, 0.0])
+    axis = Direction3([0.0, 0.0, 1.0])
     angle = np.pi / 2  # 90 degrees
 
     rotated = rotate_point_about_axis(point, pivot, axis, angle)
@@ -45,9 +45,9 @@ def test_rotate_point_about_axis_with_offset_pivot():
     """
     Test rotation about an axis that doesn't pass through origin.
     """
-    point = make_vec3(np.array([2.0, 0.0, 0.0]))
-    pivot = make_vec3(np.array([1.0, 0.0, 0.0]))
-    axis = make_vec3(np.array([0.0, 0.0, 1.0]))
+    point = Point3([2.0, 0.0, 0.0])
+    pivot = Point3([1.0, 0.0, 0.0])
+    axis = Direction3([0.0, 0.0, 1.0])
     angle = np.pi  # 180 degrees
 
     rotated = rotate_point_about_axis(point, pivot, axis, angle)
@@ -66,7 +66,7 @@ def test_rotate_point_about_axis_with_offset_pivot():
 def make_simple_geometry(
     design_thickness: float = 30.0,
     setup_thickness: float = 30.0,
-) -> tuple[dict[PointID, np.ndarray], CamberShimConfig]:
+) -> tuple[dict[PointID, Point3], CamberShimConfig]:
     """
     Return positions and shim config for the shim assembly solver.
 
@@ -74,20 +74,17 @@ def make_simple_geometry(
     wishbone arms, LBJ below, trackrod connecting rack to upright.
     """
     positions = {
-        PointID.UPPER_WISHBONE_OUTBOARD: make_vec3([0.0, 750.0, 500.0]),
-        PointID.LOWER_WISHBONE_OUTBOARD: make_vec3([0.0, 900.0, 200.0]),
-        PointID.UPPER_WISHBONE_INBOARD_FRONT: make_vec3([225.0, 350.0, 500.0]),
-        PointID.UPPER_WISHBONE_INBOARD_REAR: make_vec3([-275.0, 350.0, 500.0]),
-        PointID.TRACKROD_OUTBOARD: make_vec3([150.0, 800.0, 275.0]),
-        PointID.TRACKROD_INBOARD: make_vec3([50.0, 200.0, 250.0]),
-        PointID.CAMBER_SHIM_FACE_POINT_A: make_vec3([0.0, 750.0, 510.0]),
-        PointID.CAMBER_SHIM_FACE_POINT_B: make_vec3([0.0, 750.0, 490.0]),
-        PointID.CAMBER_SHIM_FACE_NORMAL: make_vec3([0.0, 1.0, 0.0]),
+        PointID.UPPER_WISHBONE_OUTBOARD: Point3([0.0, 750.0, 500.0]),
+        PointID.LOWER_WISHBONE_OUTBOARD: Point3([0.0, 900.0, 200.0]),
+        PointID.UPPER_WISHBONE_INBOARD_FRONT: Point3([225.0, 350.0, 500.0]),
+        PointID.UPPER_WISHBONE_INBOARD_REAR: Point3([-275.0, 350.0, 500.0]),
+        PointID.TRACKROD_OUTBOARD: Point3([150.0, 800.0, 275.0]),
+        PointID.TRACKROD_INBOARD: Point3([50.0, 200.0, 250.0]),
     }
     shim_config = CamberShimConfig(
-        shim_face_point_a=[0.0, 750.0, 510.0],
-        shim_face_point_b=[0.0, 750.0, 490.0],
-        shim_face_normal=[0.0, 1.0, 0.0],
+        shim_face_point_a=Point3([0.0, 750.0, 510.0]),
+        shim_face_point_b=Point3([0.0, 750.0, 490.0]),
+        shim_face_normal=Direction3([0.0, 1.0, 0.0]),
         design_thickness=design_thickness,
         setup_thickness=setup_thickness,
     )
@@ -105,7 +102,9 @@ def test_design_thickness_returns_identity():
     sol = solve_camber_shim_assembly(positions, shim_config)
 
     np.testing.assert_allclose(
-        sol.ubj_position, positions[PointID.UPPER_WISHBONE_OUTBOARD], atol=1e-10
+        sol.ubj_position,
+        positions[PointID.UPPER_WISHBONE_OUTBOARD].data,
+        atol=1e-10,
     )
     np.testing.assert_allclose(sol.camber_block_rot_vec, 0.0, atol=1e-10)
     np.testing.assert_allclose(sol.upright_body_rot_vec, 0.0, atol=1e-10)
@@ -144,14 +143,15 @@ def test_upper_arm_lengths_preserved():
 
     sol = solve_camber_shim_assembly(positions, shim_config)
 
+    solved_ubj = Point3(sol.ubj_position)
     solved_front = float(
         np.linalg.norm(
-            sol.ubj_position - positions[PointID.UPPER_WISHBONE_INBOARD_FRONT]
+            solved_ubj - positions[PointID.UPPER_WISHBONE_INBOARD_FRONT]
         )
     )
     solved_rear = float(
         np.linalg.norm(
-            sol.ubj_position - positions[PointID.UPPER_WISHBONE_INBOARD_REAR]
+            solved_ubj - positions[PointID.UPPER_WISHBONE_INBOARD_REAR]
         )
     )
 
@@ -224,7 +224,7 @@ def test_trackrod_length_preserved():
     solved_tro = rotate_point_about_axis(
         positions[PointID.TRACKROD_OUTBOARD],
         positions[PointID.LOWER_WISHBONE_OUTBOARD],
-        sol.upright_body_rot_axis,
+        Direction3(sol.upright_body_rot_axis),
         sol.upright_body_rot_angle_rad,
     )
     solved_length = float(
@@ -247,7 +247,7 @@ def test_ubj_moves_for_nonzero_shim_change():
     sol = solve_camber_shim_assembly(positions, shim_config)
 
     displacement = np.linalg.norm(
-        sol.ubj_position - positions[PointID.UPPER_WISHBONE_OUTBOARD]
+        sol.ubj_position - positions[PointID.UPPER_WISHBONE_OUTBOARD].data
     )
     assert displacement > 1e-4, (
         f"UBJ should move for non-trivial shim change, moved {displacement:.6f}mm"
@@ -267,9 +267,9 @@ def _make_shim_config(
     Build a CamberShimConfig matching the test geometry YAML datum positions.
     """
     return CamberShimConfig(
-        shim_face_point_a={"x": -25.0, "y": 750.0, "z": 510.0},
-        shim_face_point_b={"x": -25.0, "y": 750.0, "z": 490.0},
-        shim_face_normal={"x": 0.0, "y": 1.0, "z": 0.0},
+        shim_face_point_a=Point3([-25.0, 750.0, 510.0]),
+        shim_face_point_b=Point3([-25.0, 750.0, 490.0]),
+        shim_face_normal=Direction3([0.0, 1.0, 0.0]),
         design_thickness=design_thickness,
         setup_thickness=setup_thickness,
     )
@@ -339,8 +339,8 @@ def test_shim_does_not_move_lower_ball_joint(double_wishbone_geometry_file):
     shimmed_lbj = shimmed_state.positions[PointID.LOWER_WISHBONE_OUTBOARD]
 
     np.testing.assert_allclose(
-        initial_lbj,
-        shimmed_lbj,
+        initial_lbj.data,
+        shimmed_lbj.data,
         atol=1e-10,
         err_msg="Lower ball joint (pivot) should not move when shims are applied",
     )
@@ -370,8 +370,8 @@ def test_shim_does_not_move_inboard_points(double_wishbone_geometry_file):
     for point_id, initial_pos in initial_positions.items():
         shimmed_pos = shimmed_state.positions[point_id]
         np.testing.assert_allclose(
-            initial_pos,
-            shimmed_pos,
+            initial_pos.data,
+            shimmed_pos.data,
             atol=1e-10,
             err_msg=f"{point_id.name} (chassis-mounted) should not move",
         )

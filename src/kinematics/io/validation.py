@@ -9,12 +9,17 @@ import numpy as np
 from pydantic import BeforeValidator
 
 from kinematics.core.enums import Axis, PointID, TargetPositionMode, Units
-from kinematics.core.types import Vec3
+from kinematics.core.geometry import Direction3, Point3
 
 E = TypeVar("E", bound=Enum)
 
-# Input types that can be coerced to Vec3.
-Vec3Like = Vec3 | dict[str, float] | list[float] | tuple[float, float, float]
+# Input types that can be coerced to Point3.
+Point3Like = Point3 | dict[str, float] | list[float] | tuple[float, float, float]
+
+# Input types that can be coerced to Direction3.
+Direction3Like = (
+    Direction3 | Point3 | dict[str, float] | list[float] | tuple[float, float, float]
+)
 
 
 def coerce_enum(enum_cls: type[E], value: str | int | E) -> E:
@@ -51,15 +56,19 @@ CITargetPositionMode = Annotated[
 ]
 
 
-def coerce_vec3(value: Any) -> Vec3:
+def coerce_point3(value: Any) -> Point3:
     """
-    Coerce various input formats to a Vec3 (3D numpy array).
+    Coerce various input formats to a Point3.
 
     Accepts:
         - [x, y, z] list/tuple
         - {x: ..., y: ..., z: ...} dict
         - numpy array
+        - Point3
     """
+    if isinstance(value, Point3):
+        return value
+
     if isinstance(value, np.ndarray):
         arr = value.astype(np.float64)
     elif isinstance(value, dict):
@@ -68,10 +77,53 @@ def coerce_vec3(value: Any) -> Vec3:
         arr = np.array(value, dtype=np.float64)
 
     if arr.shape != (3,):
-        raise ValueError(f"Vec3 must have 3 components, got shape {arr.shape}")
-    return arr
+        raise ValueError(f"Point3 must have 3 components, got shape {arr.shape}")
+    return Point3(arr)
 
 
-# Pydantic field type that accepts Vec3Like inputs and coerces to Vec3.
-# Note: Type checkers see Vec3Like, but runtime value is always Vec3 (numpy array).
-PydanticVec3 = Annotated[Vec3Like, BeforeValidator(coerce_vec3)]
+# Pydantic field type for Point3-valued fields.
+# Static type is Point3 (so attribute access works without casts), but the
+# BeforeValidator coerces wider inputs (lists, tuples, dicts, ndarrays) at
+# runtime. Direct model construction with raw inputs requires explicit
+# Point3(...) wrapping to satisfy the type checker; YAML/dict-driven
+# `Model.model_validate(...)` is unaffected.
+PydanticPoint3 = Annotated[Point3, BeforeValidator(coerce_point3)]
+
+
+def coerce_direction3(value: Any) -> Direction3:
+    """
+    Coerce various input formats to a Direction3 (auto-normalised).
+
+    Accepts:
+        - [x, y, z] list/tuple
+        - {x: ..., y: ..., z: ...} dict
+        - numpy array
+        - Point3 (treated as a position vector)
+        - Direction3
+
+    Raises:
+        ValueError: If the input has zero length (cannot be normalised).
+    """
+    if isinstance(value, Direction3):
+        return value
+
+    if isinstance(value, Point3):
+        return Direction3(value.data)
+
+    if isinstance(value, np.ndarray):
+        arr = value.astype(np.float64)
+    elif isinstance(value, dict):
+        arr = np.array([value["x"], value["y"], value["z"]], dtype=np.float64)
+    else:
+        arr = np.array(value, dtype=np.float64)
+
+    if arr.shape != (3,):
+        raise ValueError(f"Direction3 must have 3 components, got shape {arr.shape}")
+    return Direction3(arr)
+
+
+# Pydantic field type for Direction3-valued fields.
+# Static type is Direction3 (so attribute access works without casts). The
+# BeforeValidator coerces wider inputs at runtime and normalises to unit
+# length; zero-length inputs raise ValueError.
+PydanticDirection3 = Annotated[Direction3, BeforeValidator(coerce_direction3)]

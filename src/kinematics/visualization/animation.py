@@ -11,7 +11,7 @@ import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 
 from kinematics.core.enums import PointID
-from kinematics.core.types import Vec3
+from kinematics.core.geometry import Point3
 from kinematics.visualization.main import SuspensionVisualizer
 from kinematics.visualization.plots import (
     compute_bounds_from_states,
@@ -21,8 +21,8 @@ from kinematics.visualization.plots import (
 
 
 def create_animation(
-    position_states: list[dict[PointID, Vec3]],
-    initial_positions: dict[PointID, Vec3],
+    position_states: list[dict[PointID, Point3]],
+    initial_positions: dict[PointID, Point3],
     visualizer: SuspensionVisualizer,
     output_path: Path,
     fps: int = 20,

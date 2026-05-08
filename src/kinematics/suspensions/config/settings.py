@@ -10,7 +10,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from kinematics.core.constants import MM_PER_INCH
-from kinematics.io.validation import PydanticVec3
+from kinematics.io.validation import PydanticDirection3, PydanticPoint3
 
 
 class TireConfig(BaseModel):
@@ -96,30 +96,19 @@ class CamberShimConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
-    shim_face_point_a: PydanticVec3
-    shim_face_point_b: PydanticVec3
-    shim_face_normal: PydanticVec3
+    shim_face_point_a: PydanticPoint3
+    shim_face_point_b: PydanticPoint3
+    shim_face_normal: PydanticDirection3
     design_thickness: float
     setup_thickness: float
 
     @model_validator(mode="after")
     def validate_face_definition(self) -> "CamberShimConfig":
-        import numpy as np
-
         from kinematics.core.constants import EPS_GEOMETRIC
 
-        magnitude = float(
-            np.linalg.norm(np.asarray(self.shim_face_normal, dtype=np.float64))
-        )
-        if magnitude < EPS_GEOMETRIC:
-            raise ValueError("shim_face_normal vector is near-zero")
-
-        datum_separation = float(
-            np.linalg.norm(
-                np.asarray(self.shim_face_point_b, dtype=np.float64)
-                - np.asarray(self.shim_face_point_a, dtype=np.float64)
-            )
-        )
+        # shim_face_normal is already validated as a unit Direction3 by its
+        # PydanticDirection3 coercer, so no zero-length check is needed here.
+        datum_separation = (self.shim_face_point_b - self.shim_face_point_a).norm()
         if datum_separation < EPS_GEOMETRIC:
             raise ValueError("shim_face_point_a and shim_face_point_b must be distinct")
 
@@ -144,7 +133,7 @@ class SuspensionConfig(BaseModel):
 
     steered: bool
     wheel: WheelConfig
-    cg_position: PydanticVec3
+    cg_position: PydanticPoint3
     wheelbase: float
     camber_shim: CamberShimConfig | None = None
     upright_mounted_points: list[str] = [

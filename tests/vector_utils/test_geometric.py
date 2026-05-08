@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from kinematics.core.constants import TEST_TOLERANCE
+from kinematics.core.geometry import Direction3, Point3, Vector3
 from kinematics.core.vector_utils.geometric import (
     compute_point_point_distance,
     compute_point_point_midpoint,
@@ -24,17 +25,31 @@ from kinematics.core.vector_utils.visualization import (
 )
 
 
-def simple_positions():
+def simple_points():
     """
-    Returns a dictionary of simple coordinate positions for testing.
+    Returns a dictionary of simple coordinate positions (Point3) for testing.
     """
     return {
-        "origin": np.array([0.0, 0.0, 0.0]),
-        "x_unit": np.array([1.0, 0.0, 0.0]),
-        "y_unit": np.array([0.0, 1.0, 0.0]),
-        "z_unit": np.array([0.0, 0.0, 1.0]),
-        "diagonal_xy": np.array([1.0, 1.0, 0.0]),
-        "diagonal_xyz": np.array([1.0, 1.0, 1.0]),
+        "origin": Point3([0.0, 0.0, 0.0]),
+        "x_unit": Point3([1.0, 0.0, 0.0]),
+        "y_unit": Point3([0.0, 1.0, 0.0]),
+        "z_unit": Point3([0.0, 0.0, 1.0]),
+        "diagonal_xy": Point3([1.0, 1.0, 0.0]),
+        "diagonal_xyz": Point3([1.0, 1.0, 1.0]),
+    }
+
+
+def simple_vectors():
+    """
+    Returns a dictionary of simple coordinate vectors (Vector3) for testing.
+    """
+    return {
+        "origin": Vector3([0.0, 0.0, 0.0]),
+        "x_unit": Vector3([1.0, 0.0, 0.0]),
+        "y_unit": Vector3([0.0, 1.0, 0.0]),
+        "z_unit": Vector3([0.0, 0.0, 1.0]),
+        "diagonal_xy": Vector3([1.0, 1.0, 0.0]),
+        "diagonal_xyz": Vector3([1.0, 1.0, 1.0]),
     }
 
 
@@ -42,7 +57,7 @@ def test_point_distance_unit_vectors():
     """
     Test distances between points on coordinate axes.
     """
-    pos = simple_positions()
+    pos = simple_points()
 
     # Distance from origin to unit vector offset positions should be 1.
     assert math.isclose(
@@ -80,7 +95,7 @@ def test_point_distance_zero():
     """
     Test distance from a point to itself is zero.
     """
-    pos = simple_positions()
+    pos = simple_points()
     assert math.isclose(
         compute_point_point_distance(pos["origin"], pos["origin"]),
         0.0,
@@ -92,36 +107,36 @@ def test_compute_midpoint_coordinate_axes():
     """
     Test midpoints using simple coordinate positions.
     """
-    pos = simple_positions()
+    pos = simple_points()
 
     # Midpoint between origin and x_unit should be (0.5, 0, 0).
     mid = compute_point_point_midpoint(pos["origin"], pos["x_unit"])
     expected = np.array([0.5, 0.0, 0.0])
-    np.testing.assert_allclose(mid, expected, atol=TEST_TOLERANCE)
+    np.testing.assert_allclose(mid.data, expected, atol=TEST_TOLERANCE)
 
     # Midpoint between x_unit and y_unit should be (0.5, 0.5, 0).
     mid = compute_point_point_midpoint(pos["x_unit"], pos["y_unit"])
     expected = np.array([0.5, 0.5, 0.0])
-    np.testing.assert_allclose(mid, expected, atol=TEST_TOLERANCE)
+    np.testing.assert_allclose(mid.data, expected, atol=TEST_TOLERANCE)
 
 
 def test_compute_midpoint_diagonal():
     """
     Test midpoint calculation with diagonal vectors.
     """
-    pos = simple_positions()
+    pos = simple_points()
 
     # Midpoint between origin and (1,1,1) should be (0.5, 0.5, 0.5).
     mid = compute_point_point_midpoint(pos["origin"], pos["diagonal_xyz"])
     expected = np.array([0.5, 0.5, 0.5])
-    np.testing.assert_allclose(mid, expected, atol=TEST_TOLERANCE)
+    np.testing.assert_allclose(mid.data, expected, atol=TEST_TOLERANCE)
 
 
 def test_compute_vector_angle_perpendicular():
     """
     Test angle between perpendicular vectors is pi/2.
     """
-    pos = simple_positions()
+    pos = simple_vectors()
 
     # X and Y axes are perpendicular.
     angle = compute_vector_vector_angle(pos["x_unit"], pos["y_unit"])
@@ -136,14 +151,14 @@ def test_compute_vector_angle_parallel():
     """
     Test angle between parallel vectors is 0.
     """
-    pos = simple_positions()
+    pos = simple_vectors()
 
     # Vector with itself.
     angle = compute_vector_vector_angle(pos["x_unit"], pos["x_unit"])
     assert math.isclose(angle, 0.0, abs_tol=TEST_TOLERANCE)
 
     # Parallel vectors (same direction).
-    v1 = np.array([2.0, 0.0, 0.0])  # 2x along X.
+    v1 = Vector3([2.0, 0.0, 0.0])  # 2x along X.
     angle = compute_vector_vector_angle(pos["x_unit"], v1)
     assert math.isclose(angle, 0.0, abs_tol=TEST_TOLERANCE)
 
@@ -152,10 +167,10 @@ def test_compute_vector_angle_antiparallel():
     """
     Test angle between anti-parallel vectors is pi.
     """
-    pos = simple_positions()
+    pos = simple_vectors()
 
     # Opposite directions along X axis.
-    v_neg_x = np.array([-1.0, 0.0, 0.0])
+    v_neg_x = Vector3([-1.0, 0.0, 0.0])
     angle = compute_vector_vector_angle(pos["x_unit"], v_neg_x)
     assert math.isclose(angle, math.pi, abs_tol=TEST_TOLERANCE)
 
@@ -164,7 +179,7 @@ def test_compute_vector_angle_45_degrees():
     """
     Test angle for 45-degree case.
     """
-    pos = simple_positions()
+    pos = simple_vectors()
 
     # X unit vector and diagonal (1,1,0) should form 45 degrees.
     angle = compute_vector_vector_angle(pos["x_unit"], pos["diagonal_xy"])
@@ -175,8 +190,8 @@ def test_compute_vector_angle_zero_vector():
     """
     Test that zero vectors raise ValueError.
     """
-    pos = simple_positions()
-    zero_vec = np.array([0.0, 0.0, 0.0])
+    pos = simple_vectors()
+    zero_vec = Vector3([0.0, 0.0, 0.0])
 
     with pytest.raises(ValueError):
         compute_vector_vector_angle(pos["x_unit"], zero_vec)
@@ -189,7 +204,7 @@ def test_cross_product_magnitude_perpendicular():
     """
     Test cross product magnitude for perpendicular vectors is 1.
     """
-    pos = simple_positions()
+    pos = simple_vectors()
 
     # Perpendicular unit vectors have cross product magnitude 1.
     cross_mag = compute_vectors_cross_product_magnitude(pos["x_unit"], pos["y_unit"])
@@ -200,10 +215,10 @@ def test_cross_product_magnitude_parallel():
     """
     Test cross product magnitude for parallel vectors is 0.
     """
-    pos = simple_positions()
+    pos = simple_vectors()
 
     # Parallel vectors have cross product magnitude 0.
-    v_parallel = np.array([2.0, 0.0, 0.0])  # Parallel to x_unit
+    v_parallel = Vector3([2.0, 0.0, 0.0])  # Parallel to x_unit
     cross_mag = compute_vectors_cross_product_magnitude(pos["x_unit"], v_parallel)
     assert math.isclose(cross_mag, 0.0, abs_tol=TEST_TOLERANCE)
 
@@ -212,7 +227,7 @@ def test_cross_product_magnitude_45_degrees():
     """
     Test cross product magnitude for 45-degree angle.
     """
-    pos = simple_positions()
+    pos = simple_vectors()
 
     # 45 degree angle should give cross product magnitude sin(pi/4) = sqrt(2)/2
     cross_mag = compute_vectors_cross_product_magnitude(
@@ -226,7 +241,7 @@ def test_dot_product_perpendicular():
     """
     Test dot product for perpendicular vectors is 0.
     """
-    pos = simple_positions()
+    pos = simple_vectors()
 
     # Perpendicular unit vectors have dot product 0.
     dot = compute_vectors_dot_product(pos["x_unit"], pos["y_unit"])
@@ -237,10 +252,10 @@ def test_dot_product_parallel():
     """
     Test dot product for parallel vectors is 1.
     """
-    pos = simple_positions()
+    pos = simple_vectors()
 
     # Parallel unit vectors have dot product 1.
-    v_parallel = np.array([2.0, 0.0, 0.0])  # Parallel to x_unit
+    v_parallel = Vector3([2.0, 0.0, 0.0])  # Parallel to x_unit
     dot = compute_vectors_dot_product(pos["x_unit"], v_parallel)
     assert math.isclose(dot, 1.0, abs_tol=TEST_TOLERANCE)
 
@@ -249,10 +264,10 @@ def test_dot_product_antiparallel():
     """
     Test dot product for anti-parallel vectors is -1.
     """
-    pos = simple_positions()
+    pos = simple_vectors()
 
     # Anti-parallel unit vectors have dot product -1.
-    v_antiparallel = np.array([-1.0, 0.0, 0.0])
+    v_antiparallel = Vector3([-1.0, 0.0, 0.0])
     dot = compute_vectors_dot_product(pos["x_unit"], v_antiparallel)
     assert math.isclose(dot, -1.0, abs_tol=TEST_TOLERANCE)
 
@@ -261,7 +276,7 @@ def test_dot_product_45_degrees():
     """
     Test dot product for 45-degree angle.
     """
-    pos = simple_positions()
+    pos = simple_vectors()
 
     # 45 degree angle should give dot product cos(pi/4) = sqrt(2)/2
     dot = compute_vectors_dot_product(pos["x_unit"], pos["diagonal_xy"])
@@ -273,12 +288,12 @@ def test_point_to_line_distance_on_line():
     """
     Test distance from point on line to line is 0.
     """
-    pos = simple_positions()
+    pts = simple_points()
 
     # Point on the line (Y axis) should have distance 0.
-    line_point = pos["origin"]
-    line_direction = pos["y_unit"]
-    test_point = np.array([0.0, 2.0, 0.0])  # On Y axis
+    line_point = pts["origin"]
+    line_direction = Direction3([0.0, 1.0, 0.0])
+    test_point = Point3([0.0, 2.0, 0.0])  # On Y axis
 
     distance = compute_point_to_line_distance(test_point, line_point, line_direction)
     assert math.isclose(distance, 0.0, abs_tol=TEST_TOLERANCE)
@@ -288,12 +303,12 @@ def test_point_to_line_distance_perpendicular():
     """
     Test distance from point perpendicular to line.
     """
-    pos = simple_positions()
+    pts = simple_points()
 
     # Point (1,0,0) to Y axis should have distance 1.
-    line_point = pos["origin"]
-    line_direction = pos["y_unit"]
-    test_point = pos["x_unit"]
+    line_point = pts["origin"]
+    line_direction = Direction3([0.0, 1.0, 0.0])
+    test_point = pts["x_unit"]
 
     distance = compute_point_to_line_distance(test_point, line_point, line_direction)
     assert math.isclose(distance, 1.0, abs_tol=TEST_TOLERANCE)
@@ -303,12 +318,12 @@ def test_point_to_line_distance_diagonal():
     """
     Test distance calculation with diagonal geometry.
     """
-    pos = simple_positions()
+    pts = simple_points()
 
     # Point (1,1,0) to X axis should have distance 1 (Y component).
-    line_point = pos["origin"]
-    line_direction = pos["x_unit"]
-    test_point = pos["diagonal_xy"]
+    line_point = pts["origin"]
+    line_direction = Direction3([1.0, 0.0, 0.0])
+    test_point = pts["diagonal_xy"]
 
     distance = compute_point_to_line_distance(test_point, line_point, line_direction)
     assert math.isclose(distance, 1.0, abs_tol=TEST_TOLERANCE)
@@ -318,12 +333,12 @@ def test_point_to_plane_distance_on_plane():
     """
     Test distance from point on plane to plane is 0.
     """
-    pos = simple_positions()
+    pts = simple_points()
 
     # Point on Z=0 plane should have distance 0.
-    plane_point = pos["origin"]
-    plane_normal = pos["z_unit"]
-    test_point = pos["diagonal_xy"]  # (1,1,0) - on Z=0 plane
+    plane_point = pts["origin"]
+    plane_normal = Direction3([0.0, 0.0, 1.0])
+    test_point = pts["diagonal_xy"]  # (1,1,0) - on Z=0 plane
 
     distance = compute_point_to_plane_distance(test_point, plane_point, plane_normal)
     assert math.isclose(distance, 0.0, abs_tol=TEST_TOLERANCE)
@@ -333,12 +348,12 @@ def test_point_to_plane_distance_positive():
     """
     Test positive signed distance to plane.
     """
-    pos = simple_positions()
+    pts = simple_points()
 
     # Point above Z=0 plane should have positive distance.
-    plane_point = pos["origin"]
-    plane_normal = pos["z_unit"]
-    test_point = np.array([0.0, 0.0, 2.0])  # 2 units above Z=0.
+    plane_point = pts["origin"]
+    plane_normal = Direction3([0.0, 0.0, 1.0])
+    test_point = Point3([0.0, 0.0, 2.0])  # 2 units above Z=0.
 
     distance = compute_point_to_plane_distance(test_point, plane_point, plane_normal)
     assert math.isclose(distance, 2.0, abs_tol=TEST_TOLERANCE)
@@ -348,12 +363,12 @@ def test_point_to_plane_distance_negative():
     """
     Test negative signed distance to plane.
     """
-    pos = simple_positions()
+    pts = simple_points()
 
     # Point below Z=0 plane should have negative distance.
-    plane_point = pos["origin"]
-    plane_normal = pos["z_unit"]
-    test_point = np.array([0.0, 0.0, -1.5])  # 1.5 units below Z=0
+    plane_point = pts["origin"]
+    plane_normal = Direction3([0.0, 0.0, 1.0])
+    test_point = Point3([0.0, 0.0, -1.5])  # 1.5 units below Z=0
 
     distance = compute_point_to_plane_distance(test_point, plane_point, plane_normal)
     assert math.isclose(distance, -1.5, abs_tol=TEST_TOLERANCE)
@@ -363,7 +378,7 @@ def test_scalar_triple_product_right_handed_basis():
     """
     Test scalar triple product for right-handed unit basis is 1.
     """
-    pos = simple_positions()
+    pos = simple_vectors()
 
     # X dot (Y cross Z) = 1 for right-handed coordinate system.
     triple_product = compute_scalar_triple_product(
@@ -378,7 +393,7 @@ def test_scalar_triple_product_left_handed_basis():
     """
     Test scalar triple product for left-handed basis is -1.
     """
-    pos = simple_positions()
+    pos = simple_vectors()
 
     # X dot (Z cross Y) = -1 (reversed order).
     triple_product = compute_scalar_triple_product(
@@ -393,7 +408,7 @@ def test_scalar_triple_product_coplanar():
     """
     Test scalar triple product for coplanar vectors is 0.
     """
-    pos = simple_positions()
+    pos = simple_vectors()
 
     # Three vectors in XY plane should have triple product 0.
     v1 = pos["x_unit"]
@@ -408,8 +423,8 @@ def test_zero_vector_errors():
     """
     Test that functions properly raise errors for zero-length vectors.
     """
-    zero_vec = np.array([0.0, 0.0, 0.0])
-    unit_vec = np.array([1.0, 0.0, 0.0])
+    zero_vec = Vector3([0.0, 0.0, 0.0])
+    unit_vec = Vector3([1.0, 0.0, 0.0])
 
     # These functions should raise ValueError for zero vectors.
     with pytest.raises(ValueError):
@@ -418,11 +433,9 @@ def test_zero_vector_errors():
     with pytest.raises(ValueError):
         compute_vectors_dot_product(unit_vec, zero_vec)
 
+    # Direction3 rejects zero-length vectors at construction time.
     with pytest.raises(ValueError):
-        compute_point_to_line_distance(unit_vec, unit_vec, zero_vec)
-
-    with pytest.raises(ValueError):
-        compute_point_to_plane_distance(unit_vec, unit_vec, zero_vec)
+        Direction3([0.0, 0.0, 0.0])
 
 
 # Tests for plane_from_three_points
@@ -433,9 +446,9 @@ def test_plane_from_three_points_xy_plane():
     Test plane construction from three points in XY plane.
     """
     # Three points in XY plane (Z=0)
-    a = np.array([0.0, 0.0, 0.0])
-    b = np.array([1.0, 0.0, 0.0])
-    c = np.array([0.0, 1.0, 0.0])
+    a = Point3([0.0, 0.0, 0.0])
+    b = Point3([1.0, 0.0, 0.0])
+    c = Point3([0.0, 1.0, 0.0])
 
     result = plane_from_three_points(a, b, c)
     assert result is not None
@@ -459,9 +472,9 @@ def test_plane_from_three_points_arbitrary():
     Test plane construction from three arbitrary non-collinear points.
     """
     # Three points forming a triangle
-    a = np.array([1.0, 0.0, 0.0])
-    b = np.array([0.0, 1.0, 0.0])
-    c = np.array([0.0, 0.0, 1.0])
+    a = Point3([1.0, 0.0, 0.0])
+    b = Point3([0.0, 1.0, 0.0])
+    c = Point3([0.0, 0.0, 1.0])
 
     result = plane_from_three_points(a, b, c)
     assert result is not None
@@ -472,12 +485,12 @@ def test_plane_from_three_points_arbitrary():
     plot_plane_from_points(a, b, c, normal, d, "Arbitrary Triangle Plane")
 
     # Normal should be unit length
-    assert math.isclose(np.linalg.norm(normal), 1.0, abs_tol=TEST_TOLERANCE)
+    assert math.isclose(np.linalg.norm(normal.data), 1.0, abs_tol=TEST_TOLERANCE)
 
-    # All three points should satisfy the plane equation n·x + d = 0
-    assert math.isclose(np.dot(normal, a) + d, 0.0, abs_tol=TEST_TOLERANCE)
-    assert math.isclose(np.dot(normal, b) + d, 0.0, abs_tol=TEST_TOLERANCE)
-    assert math.isclose(np.dot(normal, c) + d, 0.0, abs_tol=TEST_TOLERANCE)
+    # All three points should satisfy the plane equation n dot x + d = 0
+    assert math.isclose(np.dot(normal.data, a.data) + d, 0.0, abs_tol=TEST_TOLERANCE)
+    assert math.isclose(np.dot(normal.data, b.data) + d, 0.0, abs_tol=TEST_TOLERANCE)
+    assert math.isclose(np.dot(normal.data, c.data) + d, 0.0, abs_tol=TEST_TOLERANCE)
 
 
 def test_plane_from_three_points_collinear():
@@ -485,9 +498,9 @@ def test_plane_from_three_points_collinear():
     Test that collinear points return None (degenerate case).
     """
     # Three collinear points
-    a = np.array([0.0, 0.0, 0.0])
-    b = np.array([1.0, 1.0, 1.0])
-    c = np.array([2.0, 2.0, 2.0])
+    a = Point3([0.0, 0.0, 0.0])
+    b = Point3([1.0, 1.0, 1.0])
+    c = Point3([2.0, 2.0, 2.0])
 
     result = plane_from_three_points(a, b, c)
     assert result is None
@@ -498,9 +511,9 @@ def test_plane_from_three_points_duplicate():
     Test that duplicate points return None (degenerate case).
     """
     # Two identical points
-    a = np.array([1.0, 2.0, 3.0])
-    b = np.array([1.0, 2.0, 3.0])  # Same as a
-    c = np.array([4.0, 5.0, 6.0])
+    a = Point3([1.0, 2.0, 3.0])
+    b = Point3([1.0, 2.0, 3.0])  # Same as a
+    c = Point3([4.0, 5.0, 6.0])
 
     result = plane_from_three_points(a, b, c)
     assert result is None
@@ -511,9 +524,9 @@ def test_plane_from_three_points_offset_plane():
     Test plane construction for a plane not passing through origin.
     """
     # Three points in plane Z = 5
-    a = np.array([0.0, 0.0, 5.0])
-    b = np.array([1.0, 0.0, 5.0])
-    c = np.array([0.0, 1.0, 5.0])
+    a = Point3([0.0, 0.0, 5.0])
+    b = Point3([1.0, 0.0, 5.0])
+    c = Point3([0.0, 1.0, 5.0])
 
     result = plane_from_three_points(a, b, c)
     assert result is not None
@@ -523,7 +536,7 @@ def test_plane_from_three_points_offset_plane():
     # Normal should be pointing in Z direction
     assert math.isclose(abs(normal[2]), 1.0, abs_tol=TEST_TOLERANCE)
 
-    # Distance should be -5 (since n·x + d = 0 and points have Z = 5)
+    # Distance should be -5 (since n dot x + d = 0 and points have Z = 5)
     expected_d = -5.0 if normal[2] > 0 else 5.0
     assert math.isclose(d, expected_d, abs_tol=TEST_TOLERANCE)
 
@@ -535,12 +548,9 @@ def test_intersect_two_planes_xy_xz():
     """
     Test intersection of XY plane and XZ plane (should give X axis).
     """
-    # XY plane: normal = (0, 0, 1), d = 0
-    n1 = np.array([0.0, 0.0, 1.0])
+    n1 = Direction3([0.0, 0.0, 1.0])
     d1 = 0.0
-
-    # XZ plane: normal = (0, 1, 0), d = 0
-    n2 = np.array([0.0, 1.0, 0.0])
+    n2 = Direction3([0.0, 1.0, 0.0])
     d2 = 0.0
 
     result = intersect_two_planes(n1, d1, n2, d2)
@@ -553,11 +563,10 @@ def test_intersect_two_planes_xy_xz():
         n1, d1, n2, d2, point, direction, "XY and XZ Plane Intersection"
     )
 
-    # Direction should be along X axis
-    direction_norm = direction / np.linalg.norm(direction)
-    assert math.isclose(abs(direction_norm[0]), 1.0, abs_tol=TEST_TOLERANCE)
-    assert math.isclose(abs(direction_norm[1]), 0.0, abs_tol=TEST_TOLERANCE)
-    assert math.isclose(abs(direction_norm[2]), 0.0, abs_tol=TEST_TOLERANCE)
+    # Direction should be along X axis (Direction3 is already unit length)
+    assert math.isclose(abs(direction[0]), 1.0, abs_tol=TEST_TOLERANCE)
+    assert math.isclose(abs(direction[1]), 0.0, abs_tol=TEST_TOLERANCE)
+    assert math.isclose(abs(direction[2]), 0.0, abs_tol=TEST_TOLERANCE)
 
     # Point should be on X axis (Y = 0, Z = 0)
     assert math.isclose(point[1], 0.0, abs_tol=TEST_TOLERANCE)
@@ -568,12 +577,10 @@ def test_intersect_two_planes_parallel():
     """
     Test that parallel planes return None.
     """
-    # Two parallel planes with same normal but different d values
-    n1 = np.array([0.0, 0.0, 1.0])
+    n1 = Direction3([0.0, 0.0, 1.0])
     d1 = 0.0
-
-    n2 = np.array([0.0, 0.0, 1.0])  # Same normal
-    d2 = 5.0  # Different offset
+    n2 = Direction3([0.0, 0.0, 1.0])
+    d2 = 5.0
 
     result = intersect_two_planes(n1, d1, n2, d2)
     assert result is None
@@ -583,11 +590,9 @@ def test_intersect_two_planes_antiparallel():
     """
     Test that anti-parallel planes return None.
     """
-    # Two anti-parallel planes
-    n1 = np.array([1.0, 0.0, 0.0])
+    n1 = Direction3([1.0, 0.0, 0.0])
     d1 = 0.0
-
-    n2 = np.array([-1.0, 0.0, 0.0])  # Anti-parallel normal
+    n2 = Direction3([-1.0, 0.0, 0.0])
     d2 = 5.0
 
     result = intersect_two_planes(n1, d1, n2, d2)
@@ -598,13 +603,9 @@ def test_intersect_two_planes_arbitrary():
     """
     Test intersection of two arbitrary planes.
     """
-    # Plane 1: x + y = 0 (normal = (1, 1, 0), d = 0)
-    n1 = np.array([1.0, 1.0, 0.0])
-    n1 = n1 / np.linalg.norm(n1)  # Normalize
+    n1 = Direction3([1.0, 1.0, 0.0])
     d1 = 0.0
-
-    # Plane 2: z = 1 (normal = (0, 0, 1), d = -1)
-    n2 = np.array([0.0, 0.0, 1.0])
+    n2 = Direction3([0.0, 0.0, 1.0])
     d2 = -1.0
 
     result = intersect_two_planes(n1, d1, n2, d2)
@@ -612,24 +613,21 @@ def test_intersect_two_planes_arbitrary():
 
     point, direction = result
 
-    # The intersection line should be at Z = 1 and in direction (-1, 1, 0)
+    # The intersection line should be at Z = 1
     assert math.isclose(point[2], 1.0, abs_tol=TEST_TOLERANCE)
 
     # Direction should be perpendicular to both normals
-    assert math.isclose(np.dot(direction, n1), 0.0, abs_tol=TEST_TOLERANCE)
-    assert math.isclose(np.dot(direction, n2), 0.0, abs_tol=TEST_TOLERANCE)
+    assert math.isclose(direction.dot(n1), 0.0, abs_tol=TEST_TOLERANCE)
+    assert math.isclose(direction.dot(n2), 0.0, abs_tol=TEST_TOLERANCE)
 
 
 def test_intersect_two_planes_validation():
     """
     Test that intersection result satisfies both plane equations.
     """
-    # Two intersecting planes
-    n1 = np.array([1.0, 0.0, 0.0])  # YZ plane
-    d1 = -2.0  # x = 2
-
-    n2 = np.array([0.0, 1.0, 1.0])  # y + z = d2
-    n2 = n2 / np.linalg.norm(n2)  # Normalize
+    n1 = Direction3([1.0, 0.0, 0.0])
+    d1 = -2.0
+    n2 = Direction3([0.0, 1.0, 1.0])
     d2 = -3.0
 
     result = intersect_two_planes(n1, d1, n2, d2)
@@ -637,14 +635,22 @@ def test_intersect_two_planes_validation():
 
     point, direction = result
 
-    # Point should satisfy both plane equations
-    assert math.isclose(np.dot(n1, point) + d1, 0.0, abs_tol=TEST_TOLERANCE)
-    assert math.isclose(np.dot(n2, point) + d2, 0.0, abs_tol=TEST_TOLERANCE)
+    # Point should satisfy both plane equations: n dot p + d = 0
+    assert math.isclose(
+        np.dot(n1.data, point.data) + d1, 0.0, abs_tol=TEST_TOLERANCE
+    )
+    assert math.isclose(
+        np.dot(n2.data, point.data) + d2, 0.0, abs_tol=TEST_TOLERANCE
+    )
 
     # Another point on the line should also satisfy both equations
     test_point = point + 5.0 * direction
-    assert math.isclose(np.dot(n1, test_point) + d1, 0.0, abs_tol=TEST_TOLERANCE)
-    assert math.isclose(np.dot(n2, test_point) + d2, 0.0, abs_tol=TEST_TOLERANCE)
+    assert math.isclose(
+        np.dot(n1.data, test_point.data) + d1, 0.0, abs_tol=TEST_TOLERANCE
+    )
+    assert math.isclose(
+        np.dot(n2.data, test_point.data) + d2, 0.0, abs_tol=TEST_TOLERANCE
+    )
 
 
 # Tests for intersect_line_with_vertical_plane
@@ -654,9 +660,8 @@ def test_intersect_line_with_vertical_plane_simple():
     """
     Test line intersection with vertical plane Y = constant.
     """
-    # Line from origin along diagonal (1, 1, 1)
-    line_point = np.array([0.0, 0.0, 0.0])
-    line_direction = np.array([1.0, 1.0, 1.0])
+    line_point = Point3([0.0, 0.0, 0.0])
+    line_direction = Direction3([1.0, 1.0, 1.0])
     plane_y = 5.0
 
     intersection = intersect_line_with_vertical_plane(
@@ -675,16 +680,15 @@ def test_intersect_line_with_vertical_plane_simple():
 
     # Intersection should be at (5, 5, 5)
     expected = np.array([5.0, 5.0, 5.0])
-    np.testing.assert_allclose(intersection, expected, atol=TEST_TOLERANCE)
+    np.testing.assert_allclose(intersection.data, expected, atol=TEST_TOLERANCE)
 
 
 def test_intersect_line_with_vertical_plane_parallel():
     """
     Test that line parallel to vertical plane returns None.
     """
-    # Line along X axis (no Y component)
-    line_point = np.array([0.0, 2.0, 0.0])
-    line_direction = np.array([1.0, 0.0, 0.0])  # No Y direction
+    line_point = Point3([0.0, 2.0, 0.0])
+    line_direction = Direction3([1.0, 0.0, 0.0])  # No Y direction
     plane_y = 5.0
 
     intersection = intersect_line_with_vertical_plane(
@@ -697,9 +701,8 @@ def test_intersect_line_with_vertical_plane_negative_direction():
     """
     Test line intersection with negative Y direction.
     """
-    # Line starts at Y = 10 and goes in -Y direction
-    line_point = np.array([1.0, 10.0, 2.0])
-    line_direction = np.array([0.0, -2.0, 1.0])  # Y decreases
+    line_point = Point3([1.0, 10.0, 2.0])
+    line_direction = Direction3([0.0, -2.0, 1.0])
     plane_y = 4.0
 
     intersection = intersect_line_with_vertical_plane(
@@ -708,19 +711,17 @@ def test_intersect_line_with_vertical_plane_negative_direction():
     assert intersection is not None
 
     # Should intersect when Y decreases from 10 to 4 (difference of 6)
-    # Since direction Y component is -2, t = 6/2 = 3
-    # Point = (1, 10, 2) + 3 * (0, -2, 1) = (1, 4, 5)
+    # Direction is normalized, so t scales accordingly.
     expected = np.array([1.0, 4.0, 5.0])
-    np.testing.assert_allclose(intersection, expected, atol=TEST_TOLERANCE)
+    np.testing.assert_allclose(intersection.data, expected, atol=TEST_TOLERANCE)
 
 
 def test_intersect_line_with_vertical_plane_already_on_plane():
     """
     Test line that starts on the vertical plane.
     """
-    # Line starts exactly on the plane Y = 3
-    line_point = np.array([0.0, 3.0, 0.0])
-    line_direction = np.array([1.0, 2.0, 1.0])
+    line_point = Point3([0.0, 3.0, 0.0])
+    line_direction = Direction3([1.0, 2.0, 1.0])
     plane_y = 3.0
 
     intersection = intersect_line_with_vertical_plane(
@@ -729,16 +730,15 @@ def test_intersect_line_with_vertical_plane_already_on_plane():
     assert intersection is not None
 
     # Should return the starting point since t = 0
-    np.testing.assert_allclose(intersection, line_point, atol=TEST_TOLERANCE)
+    np.testing.assert_allclose(intersection.data, line_point.data, atol=TEST_TOLERANCE)
 
 
 def test_intersect_line_with_vertical_plane_arbitrary():
     """
     Test intersection with arbitrary line and plane values.
     """
-    # Line from (2, -1, 3) in direction (1, 3, -2)
-    line_point = np.array([2.0, -1.0, 3.0])
-    line_direction = np.array([1.0, 3.0, -2.0])
+    line_point = Point3([2.0, -1.0, 3.0])
+    line_direction = Direction3([1.0, 3.0, -2.0])
     plane_y = 8.0
 
     intersection = intersect_line_with_vertical_plane(
@@ -747,19 +747,17 @@ def test_intersect_line_with_vertical_plane_arbitrary():
     assert intersection is not None
 
     # Y changes from -1 to 8 (difference of 9)
-    # Direction Y component is 3, so t = 9/3 = 3
-    # Point = (2, -1, 3) + 3 * (1, 3, -2) = (5, 8, -3)
+    # Direction is normalized, so t scales accordingly.
     expected = np.array([5.0, 8.0, -3.0])
-    np.testing.assert_allclose(intersection, expected, atol=TEST_TOLERANCE)
+    np.testing.assert_allclose(intersection.data, expected, atol=TEST_TOLERANCE)
 
 
 def test_intersect_line_with_vertical_plane_small_direction():
     """
     Test line with very small Y direction component (near parallel).
     """
-    # Line with very small Y component (larger than EPSILON but still small)
-    line_point = np.array([0.0, 0.0, 0.0])
-    line_direction = np.array([1.0, 1e-5, 1.0])  # Small but larger than EPSILON (1e-6)
+    line_point = Point3([0.0, 0.0, 0.0])
+    line_direction = Direction3([1.0, 1e-5, 1.0])
     plane_y = 1.0
 
     intersection = intersect_line_with_vertical_plane(

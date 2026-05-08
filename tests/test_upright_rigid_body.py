@@ -12,8 +12,8 @@ import pytest
 
 from kinematics.components.upright import Upright, UprightAttachments, UprightHardpoints
 from kinematics.core.enums import PointID
+from kinematics.core.geometry import Direction3, Point3
 from kinematics.core.rigid_body import LocalCoordinateSystem
-from kinematics.core.types import Vec3, make_vec3
 
 
 class TestLocalCoordinateSystem:
@@ -26,71 +26,75 @@ class TestLocalCoordinateSystem:
         Test that a point at the origin transforms to (0,0,0) in local coords.
         """
         lcs = LocalCoordinateSystem(
-            origin=make_vec3([0, 0, 0]),
-            x_axis=make_vec3([1, 0, 0]),
-            y_axis=make_vec3([0, 1, 0]),
-            z_axis=make_vec3([0, 0, 1]),
+            origin=Point3([0, 0, 0]),
+            x_axis=Direction3([1, 0, 0]),
+            y_axis=Direction3([0, 1, 0]),
+            z_axis=Direction3([0, 0, 1]),
         )
 
-        world_point = make_vec3([0, 0, 0])
+        world_point = Point3([0, 0, 0])
         local_point = lcs.world_to_local(world_point)
 
-        np.testing.assert_allclose(local_point, [0, 0, 0], atol=1e-10)
+        np.testing.assert_allclose(local_point.data, [0, 0, 0], atol=1e-10)
 
     def test_local_to_world_identity(self):
         """
         Test that local (1,0,0) transforms to world x-axis direction.
         """
         lcs = LocalCoordinateSystem(
-            origin=make_vec3([10, 20, 30]),
-            x_axis=make_vec3([1, 0, 0]),
-            y_axis=make_vec3([0, 1, 0]),
-            z_axis=make_vec3([0, 0, 1]),
+            origin=Point3([10, 20, 30]),
+            x_axis=Direction3([1, 0, 0]),
+            y_axis=Direction3([0, 1, 0]),
+            z_axis=Direction3([0, 0, 1]),
         )
 
-        local_point = make_vec3([5, 0, 0])
+        from kinematics.core.geometry import Vector3
+
+        local_point = Vector3([5, 0, 0])
         world_point = lcs.local_to_world(local_point)
 
         # Should be origin + 5 in X direction
-        np.testing.assert_allclose(world_point, [15, 20, 30], atol=1e-10)
+        np.testing.assert_allclose(world_point.data, [15, 20, 30], atol=1e-10)
 
     def test_round_trip_transformation(self):
         """
         Test that world->local->world returns the original point.
         """
         lcs = LocalCoordinateSystem(
-            origin=make_vec3([100, 200, 300]),
-            x_axis=make_vec3([1, 0, 0]),
-            y_axis=make_vec3([0, 1, 0]),
-            z_axis=make_vec3([0, 0, 1]),
+            origin=Point3([100, 200, 300]),
+            x_axis=Direction3([1, 0, 0]),
+            y_axis=Direction3([0, 1, 0]),
+            z_axis=Direction3([0, 0, 1]),
         )
 
-        original_world = make_vec3([150, 250, 350])
+        original_world = Point3([150, 250, 350])
         local = lcs.world_to_local(original_world)
         recovered_world = lcs.local_to_world(local)
 
-        np.testing.assert_allclose(recovered_world, original_world, atol=1e-10)
+        np.testing.assert_allclose(
+            recovered_world.data, original_world.data, atol=1e-10
+        )
 
     def test_from_three_points_vertical_z(self):
         """
         Test LCS construction with Z axis pointing vertically.
         """
-        origin = make_vec3([0, 900, 200])  # Lower ball joint
-        z_point = make_vec3([0, 900, 500])  # Upper ball joint (directly above)
-        y_reference = make_vec3([150, 800, 275])  # Tie rod (forward and inboard)
+        origin = Point3([0, 900, 200])  # Lower ball joint
+        z_point = Point3([0, 900, 500])  # Upper ball joint (directly above)
+        y_reference = Point3([150, 800, 275])  # Tie rod (forward and inboard)
 
         lcs = LocalCoordinateSystem.from_three_points(origin, z_point, y_reference)
 
         # Z axis should point straight up
-        np.testing.assert_allclose(lcs.z_axis, [0, 0, 1], atol=1e-10)
+        np.testing.assert_allclose(lcs.z_axis.data, [0, 0, 1], atol=1e-10)
 
         # Y axis should be in the XY plane (no Z component) and point generally forward
         assert abs(lcs.y_axis[2]) < 1e-10, "Y axis should be in XY plane"
         assert lcs.y_axis[0] > 0, "Y axis should point forward (positive X)"
 
         # X axis should complete the right-handed system
-        x_computed = np.cross(lcs.y_axis, lcs.z_axis)
-        np.testing.assert_allclose(lcs.x_axis, x_computed, atol=1e-10)
+        x_computed = np.cross(lcs.y_axis.data, lcs.z_axis.data)
+        np.testing.assert_allclose(lcs.x_axis.data, x_computed, atol=1e-10)
 
 
 class TestUprightRigidBody:
@@ -107,14 +111,14 @@ class TestUprightRigidBody:
         Coordinate system: X=forward, Y=outboard, Z=up
         """
         hardpoints = UprightHardpoints(
-            lower_ball_joint=make_vec3([0, 900, 200]),
-            upper_ball_joint=make_vec3([-25, 750, 500]),
-            trackrod_outboard=make_vec3([150, 800, 275]),
+            lower_ball_joint=Point3([0, 900, 200]),
+            upper_ball_joint=Point3([-25, 750, 500]),
+            trackrod_outboard=Point3([150, 800, 275]),
         )
 
         attachments = UprightAttachments(
-            axle_inboard=make_vec3([-20, 800, 308.426]),
-            axle_outboard=make_vec3([-20, 950, 313.426]),
+            axle_inboard=Point3([-20, 800, 308.426]),
+            axle_outboard=Point3([-20, 950, 313.426]),
         )
 
         return hardpoints, attachments
@@ -147,10 +151,10 @@ class TestUprightRigidBody:
         axle_outboard_world = upright.get_world_position("axle_outboard")
 
         np.testing.assert_allclose(
-            axle_inboard_world, attachments.axle_inboard, atol=1e-6
+            axle_inboard_world.data, attachments.axle_inboard.data, atol=1e-6
         )
         np.testing.assert_allclose(
-            axle_outboard_world, attachments.axle_outboard, atol=1e-6
+            axle_outboard_world.data, attachments.axle_outboard.data, atol=1e-6
         )
 
     def test_camber_shim_rotates_attachments_not_hardpoints(
@@ -176,36 +180,36 @@ class TestUprightRigidBody:
         # Apply a camber shim rotation
         # Rotation about lower ball joint, rotating about X axis (fore-aft)
         pivot = upright.hardpoints.lower_ball_joint
-        rotation_axis = make_vec3([1, 0, 0])  # Rotate about X
+        rotation_axis = Direction3([1, 0, 0])  # Rotate about X
         rotation_angle = np.deg2rad(2.0)  # 2 degrees
 
         upright.apply_camber_shim(pivot, rotation_axis, rotation_angle)
 
         # VERIFY: Hardpoints have NOT moved
         np.testing.assert_allclose(
-            upright.hardpoints.upper_ball_joint,
-            original_upper_bj,
+            upright.hardpoints.upper_ball_joint.data,
+            original_upper_bj.data,
             atol=1e-10,
             err_msg="Upper ball joint MUST NOT move when shim is applied",
         )
         np.testing.assert_allclose(
-            upright.hardpoints.lower_ball_joint,
-            original_lower_bj,
+            upright.hardpoints.lower_ball_joint.data,
+            original_lower_bj.data,
             atol=1e-10,
             err_msg="Lower ball joint MUST NOT move when shim is applied",
         )
         np.testing.assert_allclose(
-            upright.hardpoints.trackrod_outboard,
-            original_trackrod,
+            upright.hardpoints.trackrod_outboard.data,
+            original_trackrod.data,
             atol=1e-10,
             err_msg="Trackrod outboard MUST NOT move when shim is applied",
         )
 
         # VERIFY: Attachments HAVE moved
         new_axle_inboard = upright.get_world_position("axle_inboard")
-        assert not np.allclose(new_axle_inboard, original_axle_inboard, atol=1e-6), (
-            "Axle attachment MUST move when shim is applied"
-        )
+        assert not np.allclose(
+            new_axle_inboard.data, original_axle_inboard.data, atol=1e-6
+        ), "Axle attachment MUST move when shim is applied"
 
     def test_camber_shim_produces_expected_camber_change(
         self, upright_design_positions
@@ -225,7 +229,7 @@ class TestUprightRigidBody:
         # Apply a small rotation about the fore-aft axis (X)
         # This should change the camber angle
         pivot = upright.hardpoints.lower_ball_joint
-        rotation_axis = make_vec3([1, 0, 0])
+        rotation_axis = Direction3([1, 0, 0])
         rotation_angle = np.deg2rad(1.0)  # 1 degree rotation
 
         upright.apply_camber_shim(pivot, rotation_axis, rotation_angle)
@@ -262,16 +266,13 @@ class TestUprightRigidBody:
         original_world_z = upright.get_world_position("axle_inboard")[2]
 
         # Simulate suspension bump: move all hardpoints up by 50mm
+        from kinematics.core.geometry import Vector3
+
+        bump = Vector3([0, 0, 50])
         new_hardpoints = {
-            "upper_ball_joint": make_vec3(
-                upright.hardpoints.upper_ball_joint + make_vec3([0, 0, 50])
-            ),
-            "lower_ball_joint": make_vec3(
-                upright.hardpoints.lower_ball_joint + make_vec3([0, 0, 50])
-            ),
-            "trackrod_outboard": make_vec3(
-                upright.hardpoints.trackrod_outboard + make_vec3([0, 0, 50])
-            ),
+            "upper_ball_joint": upright.hardpoints.upper_ball_joint + bump,
+            "lower_ball_joint": upright.hardpoints.lower_ball_joint + bump,
+            "trackrod_outboard": upright.hardpoints.trackrod_outboard + bump,
         }
 
         upright.update_from_hardpoints(new_hardpoints)
@@ -279,8 +280,8 @@ class TestUprightRigidBody:
         # VERIFY: Local offset is unchanged
         new_local_offset = upright.attachment_local_offsets["axle_inboard"]
         np.testing.assert_allclose(
-            new_local_offset,
-            original_local_offset,
+            new_local_offset.data,
+            original_local_offset.data,
             atol=1e-10,
             err_msg="Local offset must remain constant during suspension travel",
         )
@@ -302,13 +303,13 @@ class TestUprightIntegration:
         """Test the complete shim workflow from design through suspension travel."""
         # Step 1: Create upright at design
         hardpoints = UprightHardpoints(
-            lower_ball_joint=make_vec3([0, 900, 200]),
-            upper_ball_joint=make_vec3([-25, 750, 500]),
-            trackrod_outboard=make_vec3([150, 800, 275]),
+            lower_ball_joint=Point3([0, 900, 200]),
+            upper_ball_joint=Point3([-25, 750, 500]),
+            trackrod_outboard=Point3([150, 800, 275]),
         )
         attachments = UprightAttachments(
-            axle_inboard=make_vec3([-20, 800, 308.426]),
-            axle_outboard=make_vec3([-20, 950, 313.426]),
+            axle_inboard=Point3([-20, 800, 308.426]),
+            axle_outboard=Point3([-20, 950, 313.426]),
         )
 
         upright = Upright.from_global_positions(hardpoints, attachments)
@@ -316,7 +317,7 @@ class TestUprightIntegration:
         # Step 2: Apply camber shim (e.g., adding 2mm outboard shim).
         # Normally computed from shim geometry, but we'll use a direct rotation.
         pivot = upright.hardpoints.lower_ball_joint
-        rotation_axis = make_vec3([1, 0, 0])  # About fore-aft axis
+        rotation_axis = Direction3([1, 0, 0])  # About fore-aft axis
         rotation_angle = np.deg2rad(0.5)  # Small rotation
 
         upright.apply_camber_shim(pivot, rotation_axis, rotation_angle)
@@ -325,16 +326,15 @@ class TestUprightIntegration:
         shim_local_offset = upright.attachment_local_offsets["axle_inboard"].copy()
 
         # Step 3: Simulate suspension travel (50mm bump)
+        from kinematics.core.geometry import Vector3
+
+        bump_ubj = Vector3([0, 5, 50])
+        bump_lbj = Vector3([0, 3, 45])
+        bump_tro = Vector3([0, 4, 48])
         new_hardpoints = {
-            "upper_ball_joint": make_vec3(
-                upright.hardpoints.upper_ball_joint + make_vec3([0, 5, 50])
-            ),
-            "lower_ball_joint": make_vec3(
-                upright.hardpoints.lower_ball_joint + make_vec3([0, 3, 45])
-            ),
-            "trackrod_outboard": make_vec3(
-                upright.hardpoints.trackrod_outboard + make_vec3([0, 4, 48])
-            ),
+            "upper_ball_joint": upright.hardpoints.upper_ball_joint + bump_ubj,
+            "lower_ball_joint": upright.hardpoints.lower_ball_joint + bump_lbj,
+            "trackrod_outboard": upright.hardpoints.trackrod_outboard + bump_tro,
         }
 
         upright.update_from_hardpoints(new_hardpoints)
@@ -342,8 +342,8 @@ class TestUprightIntegration:
         # Step 4: Verify local offset is still the shimmed value
         final_local_offset = upright.attachment_local_offsets["axle_inboard"]
         np.testing.assert_allclose(
-            final_local_offset,
-            shim_local_offset,
+            final_local_offset.data,
+            shim_local_offset.data,
             atol=1e-10,
             err_msg="Shim effect must persist through suspension travel",
         )
@@ -355,21 +355,21 @@ class TestHardpointsArchitecture:
     """
 
     @pytest.fixture
-    def hardpoints_registry(self) -> dict[PointID, Vec3]:
+    def hardpoints_registry(self) -> dict[PointID, Point3]:
         """
         Create a hardpoints registry with typical double wishbone points.
 
         This represents the central hardpoints registry that components reference.
         """
         return {
-            PointID.LOWER_WISHBONE_INBOARD_FRONT: make_vec3([250, 400, 200]),
-            PointID.LOWER_WISHBONE_INBOARD_REAR: make_vec3([-250, 450, 200]),
-            PointID.LOWER_WISHBONE_OUTBOARD: make_vec3([0, 900, 200]),
-            PointID.UPPER_WISHBONE_INBOARD_FRONT: make_vec3([225, 350, 500]),
-            PointID.UPPER_WISHBONE_INBOARD_REAR: make_vec3([-275, 350, 500]),
-            PointID.UPPER_WISHBONE_OUTBOARD: make_vec3([-25, 750, 500]),
-            PointID.TRACKROD_INBOARD: make_vec3([50, 200, 250]),
-            PointID.TRACKROD_OUTBOARD: make_vec3([150, 800, 275]),
+            PointID.LOWER_WISHBONE_INBOARD_FRONT: Point3([250, 400, 200]),
+            PointID.LOWER_WISHBONE_INBOARD_REAR: Point3([-250, 450, 200]),
+            PointID.LOWER_WISHBONE_OUTBOARD: Point3([0, 900, 200]),
+            PointID.UPPER_WISHBONE_INBOARD_FRONT: Point3([225, 350, 500]),
+            PointID.UPPER_WISHBONE_INBOARD_REAR: Point3([-275, 350, 500]),
+            PointID.UPPER_WISHBONE_OUTBOARD: Point3([-25, 750, 500]),
+            PointID.TRACKROD_INBOARD: Point3([50, 200, 250]),
+            PointID.TRACKROD_OUTBOARD: Point3([150, 800, 275]),
         }
 
     @pytest.fixture
@@ -384,13 +384,13 @@ class TestHardpointsArchitecture:
         }
 
     @pytest.fixture
-    def attachments(self) -> dict[str, Vec3]:
+    def attachments(self) -> dict[str, Point3]:
         """
         Attachment positions (axle) in global coordinates at design.
         """
         return {
-            "axle_inboard": make_vec3([-20, 800, 308.426]),
-            "axle_outboard": make_vec3([-20, 950, 313.426]),
+            "axle_inboard": Point3([-20, 800, 308.426]),
+            "axle_outboard": Point3([-20, 950, 313.426]),
         }
 
     def test_from_hardpoints_and_attachments_creates_upright(
@@ -423,18 +423,18 @@ class TestHardpointsArchitecture:
 
         # Verify hardpoints match registry values
         np.testing.assert_allclose(
-            upright.hardpoints.upper_ball_joint,
-            hardpoints_registry[PointID.UPPER_WISHBONE_OUTBOARD],
+            upright.hardpoints.upper_ball_joint.data,
+            hardpoints_registry[PointID.UPPER_WISHBONE_OUTBOARD].data,
             atol=1e-10,
         )
         np.testing.assert_allclose(
-            upright.hardpoints.lower_ball_joint,
-            hardpoints_registry[PointID.LOWER_WISHBONE_OUTBOARD],
+            upright.hardpoints.lower_ball_joint.data,
+            hardpoints_registry[PointID.LOWER_WISHBONE_OUTBOARD].data,
             atol=1e-10,
         )
         np.testing.assert_allclose(
-            upright.hardpoints.trackrod_outboard,
-            hardpoints_registry[PointID.TRACKROD_OUTBOARD],
+            upright.hardpoints.trackrod_outboard.data,
+            hardpoints_registry[PointID.TRACKROD_OUTBOARD].data,
             atol=1e-10,
         )
 
@@ -454,13 +454,13 @@ class TestHardpointsArchitecture:
 
         # Verify world positions match input attachments
         np.testing.assert_allclose(
-            upright.get_world_position("axle_inboard"),
-            attachments["axle_inboard"],
+            upright.get_world_position("axle_inboard").data,
+            attachments["axle_inboard"].data,
             atol=1e-6,
         )
         np.testing.assert_allclose(
-            upright.get_world_position("axle_outboard"),
-            attachments["axle_outboard"],
+            upright.get_world_position("axle_outboard").data,
+            attachments["axle_outboard"].data,
             atol=1e-6,
         )
 
@@ -486,8 +486,8 @@ class TestHardpointsArchitecture:
         """
         Test that missing attachments raise ValueError.
         """
-        incomplete_attachments: dict[str, Vec3] = {
-            "axle_inboard": make_vec3([-20, 800, 308.426]),
+        incomplete_attachments: dict[str, Point3] = {
+            "axle_inboard": Point3([-20, 800, 308.426]),
             # Missing axle_outboard
         }
 
@@ -510,29 +510,31 @@ class TestHardpointsArchitecture:
         original_local_offset = upright.attachment_local_offsets["axle_inboard"].copy()
 
         # Create updated hardpoints registry (simulate 50mm bump)
+        from kinematics.core.geometry import Vector3
+
+        bump = Vector3([0, 0, 50])
         updated_hardpoints = {
-            pid: make_vec3(pos + np.array([0, 0, 50]))
-            for pid, pos in hardpoints_registry.items()
+            pid: pos + bump for pid, pos in hardpoints_registry.items()
         }
 
         upright.update_from_hardpoints_registry(updated_hardpoints)
 
         # Verify hardpoints have been updated
         np.testing.assert_allclose(
-            upright.hardpoints.upper_ball_joint,
-            updated_hardpoints[PointID.UPPER_WISHBONE_OUTBOARD],
+            upright.hardpoints.upper_ball_joint.data,
+            updated_hardpoints[PointID.UPPER_WISHBONE_OUTBOARD].data,
             atol=1e-10,
         )
         np.testing.assert_allclose(
-            upright.hardpoints.lower_ball_joint,
-            updated_hardpoints[PointID.LOWER_WISHBONE_OUTBOARD],
+            upright.hardpoints.lower_ball_joint.data,
+            updated_hardpoints[PointID.LOWER_WISHBONE_OUTBOARD].data,
             atol=1e-10,
         )
 
         # Verify local offsets are preserved
         np.testing.assert_allclose(
-            upright.attachment_local_offsets["axle_inboard"],
-            original_local_offset,
+            upright.attachment_local_offsets["axle_inboard"].data,
+            original_local_offset.data,
             atol=1e-10,
         )
 
@@ -543,19 +545,19 @@ class TestHardpointsArchitecture:
         """
         # Create upright using old-style constructor (no hardpoint_point_ids)
         hardpoints = UprightHardpoints(
-            lower_ball_joint=make_vec3([0, 900, 200]),
-            upper_ball_joint=make_vec3([-25, 750, 500]),
-            trackrod_outboard=make_vec3([150, 800, 275]),
+            lower_ball_joint=Point3([0, 900, 200]),
+            upper_ball_joint=Point3([-25, 750, 500]),
+            trackrod_outboard=Point3([150, 800, 275]),
         )
         attachments = UprightAttachments(
-            axle_inboard=make_vec3([-20, 800, 308.426]),
-            axle_outboard=make_vec3([-20, 950, 313.426]),
+            axle_inboard=Point3([-20, 800, 308.426]),
+            axle_outboard=Point3([-20, 950, 313.426]),
         )
 
         upright = Upright.from_global_positions(hardpoints, attachments)
 
         # Attempting to use hardpoints registry-based update should fail
-        dummy_hardpoints = {PointID.LOWER_WISHBONE_OUTBOARD: make_vec3([0, 0, 0])}
+        dummy_hardpoints = {PointID.LOWER_WISHBONE_OUTBOARD: Point3([0, 0, 0])}
 
         with pytest.raises(RuntimeError, match="not created with hardpoint references"):
             upright.update_from_hardpoints_registry(dummy_hardpoints)
@@ -566,13 +568,13 @@ class TestHardpointsArchitecture:
         uprights.
         """
         hardpoints = UprightHardpoints(
-            lower_ball_joint=make_vec3([0, 900, 200]),
-            upper_ball_joint=make_vec3([-25, 750, 500]),
-            trackrod_outboard=make_vec3([150, 800, 275]),
+            lower_ball_joint=Point3([0, 900, 200]),
+            upper_ball_joint=Point3([-25, 750, 500]),
+            trackrod_outboard=Point3([150, 800, 275]),
         )
         attachments = UprightAttachments(
-            axle_inboard=make_vec3([-20, 800, 308.426]),
-            axle_outboard=make_vec3([-20, 950, 313.426]),
+            axle_inboard=Point3([-20, 800, 308.426]),
+            axle_outboard=Point3([-20, 950, 313.426]),
         )
 
         upright = Upright.from_global_positions(hardpoints, attachments)
@@ -598,23 +600,25 @@ class TestHardpointsArchitecture:
 
         # Apply camber shim
         pivot = upright.hardpoints.lower_ball_joint
-        rotation_axis = make_vec3([1, 0, 0])
+        rotation_axis = Direction3([1, 0, 0])
         rotation_angle = np.deg2rad(2.0)
 
         upright.apply_camber_shim(pivot, rotation_axis, rotation_angle)
 
         # Hardpoints must NOT move
         np.testing.assert_allclose(
-            upright.hardpoints.lower_ball_joint,
-            original_lower_bj,
+            upright.hardpoints.lower_ball_joint.data,
+            original_lower_bj.data,
             atol=1e-10,
         )
         np.testing.assert_allclose(
-            upright.hardpoints.upper_ball_joint,
-            original_upper_bj,
+            upright.hardpoints.upper_ball_joint.data,
+            original_upper_bj.data,
             atol=1e-10,
         )
 
         # Attachments MUST move
         new_axle_inboard = upright.get_world_position("axle_inboard")
-        assert not np.allclose(new_axle_inboard, original_axle_inboard, atol=1e-6)
+        assert not np.allclose(
+            new_axle_inboard.data, original_axle_inboard.data, atol=1e-6
+        )

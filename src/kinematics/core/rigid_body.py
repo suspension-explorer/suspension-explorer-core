@@ -11,10 +11,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-import numpy as np
-
 from kinematics.core.constants import EPS_GEOMETRIC
-from kinematics.core.types import Vec3
+from kinematics.core.geometry import Direction3, Point3, Vector3
 from kinematics.core.vector_utils.generic import normalize_vector
 
 
@@ -25,50 +23,45 @@ class LocalCoordinateSystem:
 
     Attributes:
         origin: Origin point in world coordinates.
-        x_axis: Local X axis unit vector in world coordinates.
-        y_axis: Local Y axis unit vector in world coordinates.
-        z_axis: Local Z axis unit vector in world coordinates.
+        x_axis: Local X axis direction in world coordinates.
+        y_axis: Local Y axis direction in world coordinates.
+        z_axis: Local Z axis direction in world coordinates.
     """
 
-    origin: Vec3
-    x_axis: Vec3
-    y_axis: Vec3
-    z_axis: Vec3
+    origin: Point3
+    x_axis: Direction3
+    y_axis: Direction3
+    z_axis: Direction3
 
-    def __post_init__(self):
-        """
-        Ensure axes are unit vectors.
-        """
-        self.x_axis = normalize_vector(self.x_axis)
-        self.y_axis = normalize_vector(self.y_axis)
-        self.z_axis = normalize_vector(self.z_axis)
-
-    def world_to_local(self, world_point: Vec3) -> Vec3:
+    def world_to_local(self, world_point: Point3) -> Vector3:
         """
         Transform a point from world coordinates to local coordinates.
+
+        The result is a Vector3 representing the offset from the LCS origin
+        expressed in local axes.
 
         Args:
             world_point: Point in world coordinates.
 
         Returns:
-            Point in local coordinates.
+            Offset vector in local coordinates.
         """
         # Translate to origin.
         relative = world_point - self.origin
 
         # Project onto local axes.
-        local_x = np.dot(relative, self.x_axis)
-        local_y = np.dot(relative, self.y_axis)
-        local_z = np.dot(relative, self.z_axis)
+        local_x = relative.dot(self.x_axis)
+        local_y = relative.dot(self.y_axis)
+        local_z = relative.dot(self.z_axis)
 
-        return np.array([local_x, local_y, local_z])
+        return Vector3([local_x, local_y, local_z])
 
-    def local_to_world(self, local_point: Vec3) -> Vec3:
+    def local_to_world(self, local_offset: Vector3) -> Point3:
         """
-        Transform a point from local coordinates to world coordinates.
+        Transform a local offset back to a world-space point.
 
         Args:
-            local_point: Point in local coordinates.
+            local_offset: Offset vector in local coordinates.
 
         Returns:
             Point in world coordinates.
@@ -76,9 +69,9 @@ class LocalCoordinateSystem:
         # Construct world position from local coordinates.
         world_point = (
             self.origin
-            + local_point[0] * self.x_axis
-            + local_point[1] * self.y_axis
-            + local_point[2] * self.z_axis
+            + self.x_axis * local_offset[0]
+            + self.y_axis * local_offset[1]
+            + self.z_axis * local_offset[2]
         )
 
         return world_point
@@ -86,9 +79,9 @@ class LocalCoordinateSystem:
     @classmethod
     def from_three_points(
         cls,
-        origin: Vec3,
-        z_point: Vec3,
-        y_reference: Vec3,
+        origin: Point3,
+        z_point: Point3,
+        y_reference: Point3,
     ) -> "LocalCoordinateSystem":
         """
         Construct a local coordinate system from three points.
@@ -98,7 +91,7 @@ class LocalCoordinateSystem:
         2. Z axis points from origin to z_point.
         3. Y axis is in the plane defined by origin, z_point, and y_reference,
            orthogonal to Z.
-        4. X axis completes the right-handed system (X = Y × Z).
+        4. X axis completes the right-handed system (X = Y x Z).
 
         Args:
             origin: Origin point.
@@ -119,19 +112,19 @@ class LocalCoordinateSystem:
         y_vec = y_reference - origin
 
         # Remove component along Z to ensure orthogonality.
-        y_along_z = np.dot(y_vec, z_axis)
-        y_perpendicular = y_vec - y_along_z * z_axis
+        y_along_z = y_vec.dot(z_axis)
+        y_perpendicular = y_vec - z_axis * y_along_z
 
-        y_magnitude = np.linalg.norm(y_perpendicular)
+        y_magnitude = y_perpendicular.norm()
         if y_magnitude < EPS_GEOMETRIC:
             raise ValueError(
                 "Y reference is collinear with Z axis - cannot define unique plane."
             )
 
-        y_axis = y_perpendicular / y_magnitude
+        y_axis = y_perpendicular.normalize()
 
         # Tertiary axis (X): complete right-handed system.
-        x_axis = normalize_vector(np.cross(y_axis, z_axis))
+        x_axis = y_axis.cross(z_axis).normalize()
 
         return cls(
             origin=origin,
@@ -164,7 +157,7 @@ class RigidBody(ABC):
         """
         Initialize the rigid body with empty attachment dictionary.
         """
-        self.attachment_local_offsets: dict[str, Vec3] = {}
+        self.attachment_local_offsets: dict[str, Vector3] = {}
         self.lcs: LocalCoordinateSystem | None = None
 
     def get_lcs(self) -> LocalCoordinateSystem:
@@ -184,7 +177,7 @@ class RigidBody(ABC):
             )
         return self.lcs
 
-    def get_world_position(self, attachment_name: str) -> Vec3:
+    def get_world_position(self, attachment_name: str) -> Point3:
         """
         Get the world position of an attachment.
 
@@ -205,7 +198,7 @@ class RigidBody(ABC):
         local_offset = self.attachment_local_offsets[attachment_name]
         return self.get_lcs().local_to_world(local_offset)
 
-    def add_attachment(self, name: str, world_position: Vec3) -> None:
+    def add_attachment(self, name: str, world_position: Point3) -> None:
         """
         Add an attachment at a specific world position.
 
@@ -224,7 +217,7 @@ class RigidBody(ABC):
         self.attachment_local_offsets[name] = local_offset
 
     def set_attachment_local_offset(
-        self, attachment_name: str, local_offset: Vec3
+        self, attachment_name: str, local_offset: Vector3
     ) -> None:
         """
         Directly set the local offset for an attachment.

@@ -6,14 +6,18 @@ points in the suspension system. They are shared across different suspension typ
 avoid code duplication.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 import numpy as np
 
 from kinematics.core.enums import PointID
-from kinematics.core.types import Vec3, WorldAxisSystem
+from kinematics.core.types import WorldAxisSystem
 from kinematics.core.vector_utils.generic import normalize_vector
 
 
-def get_wheel_plane_down_vector(positions: dict[PointID, Vec3]) -> Vec3:
+def get_wheel_plane_down_vector(positions: dict[PointID, Any]) -> Any:
     """
     Calculates the 'down' direction vector in the wheel's plane of rotation.
 
@@ -53,7 +57,7 @@ def get_wheel_plane_down_vector(positions: dict[PointID, Vec3]) -> Vec3:
     return normalize_vector(wheel_down)
 
 
-def get_axle_midpoint(positions: dict[PointID, Vec3]) -> Vec3:
+def get_axle_midpoint(positions: dict[PointID, Any]) -> Any:
     """
     Computes the center point between the inboard and outboard axle positions.
 
@@ -66,10 +70,10 @@ def get_axle_midpoint(positions: dict[PointID, Vec3]) -> Vec3:
     """
     p1 = positions[PointID.AXLE_INBOARD]
     p2 = positions[PointID.AXLE_OUTBOARD]
-    return (p1 + p2) / 2
+    return p1 + (p2 - p1) / 2
 
 
-def get_wheel_center(positions: dict[PointID, Vec3], wheel_offset: float) -> Vec3:
+def get_wheel_center(positions: dict[PointID, Any], wheel_offset: float) -> Any:
     """
     Determine wheel center from hub face using ISO/SAE wheel-offset convention.
 
@@ -95,7 +99,7 @@ def get_wheel_center(positions: dict[PointID, Vec3], wheel_offset: float) -> Vec
     return p1 - v * wheel_offset
 
 
-def get_wheel_inboard(positions: dict[PointID, Vec3], wheel_width: float) -> Vec3:
+def get_wheel_inboard(positions: dict[PointID, Any], wheel_width: float) -> Any:
     """
     Determines the inboard edge position of the wheel by moving inward from the wheel
     center by half the wheel width along the axle axis.
@@ -115,7 +119,7 @@ def get_wheel_inboard(positions: dict[PointID, Vec3], wheel_width: float) -> Vec
     return p2 - v * (wheel_width / 2)
 
 
-def get_wheel_outboard(positions: dict[PointID, Vec3], wheel_width: float) -> Vec3:
+def get_wheel_outboard(positions: dict[PointID, Any], wheel_width: float) -> Any:
     """
     Determines the outboard edge position of the wheel by moving outward from the wheel
     center by half the wheel width along the axle axis.
@@ -136,8 +140,8 @@ def get_wheel_outboard(positions: dict[PointID, Vec3], wheel_width: float) -> Ve
 
 
 def get_contact_patch_center(
-    positions: dict[PointID, Vec3], tire_radius: float
-) -> Vec3:
+    positions: dict[PointID, Any], tire_radius: float
+) -> Any:
     """
     Computes the position of the geometric contact patch center.
 

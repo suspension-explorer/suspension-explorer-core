@@ -11,12 +11,9 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import TYPE_CHECKING
 
-import numpy as np
-
 from kinematics.core.constants import EPS_GEOMETRIC
 from kinematics.core.enums import Axis, PointID
-from kinematics.core.types import Vec3
-from kinematics.core.vector_utils.generic import normalize_vector
+from kinematics.core.geometry import Direction3, Point3
 from kinematics.state import SuspensionState
 from kinematics.suspensions.config.settings import SuspensionConfig
 
@@ -38,50 +35,50 @@ class MetricContext:
     config: SuspensionConfig
 
     @cached_property
-    def side_view_ic(self) -> Vec3 | None:
+    def side_view_ic(self) -> Point3 | None:
         """
         Side-view instant center from the suspension.
         """
         return self.suspension.compute_side_view_instant_center(self.state)
 
     @cached_property
-    def front_view_ic(self) -> Vec3 | None:
+    def front_view_ic(self) -> Point3 | None:
         """
         Front-view instant center from the suspension.
         """
         return self.suspension.compute_front_view_instant_center(self.state)
 
     @cached_property
-    def wheel_center(self) -> Vec3:
+    def wheel_center(self) -> Point3:
         """
         Wheel center position.
         """
         return self.state.get(PointID.WHEEL_CENTER)
 
     @cached_property
-    def contact_patch_center(self) -> Vec3:
+    def contact_patch_center(self) -> Point3:
         """
         Contact patch center position.
         """
         return self.state.get(PointID.CONTACT_PATCH_CENTER)
 
     @cached_property
-    def wheel_axis(self) -> Vec3:
+    def wheel_axis(self) -> Direction3:
         """
         Unit vector along the axle from inboard to outboard.
         """
         axle_in = self.state.get(PointID.AXLE_INBOARD)
         axle_out = self.state.get(PointID.AXLE_OUTBOARD)
-        return normalize_vector(axle_out - axle_in)
+        return (axle_out - axle_in).normalize()
 
     @cached_property
-    def steering_axis(self) -> Vec3:
+    def steering_axis(self) -> Direction3:
         """
         Unit vector along the steering axis from lower to upper pivot.
         """
         lower = self.state.get(PointID.LOWER_WISHBONE_OUTBOARD)
         upper = self.state.get(PointID.UPPER_WISHBONE_OUTBOARD)
-        return normalize_vector(upper - lower)
+        return (upper - lower).normalize()
 
     @cached_property
     def ground_z(self) -> float:
@@ -97,7 +94,7 @@ class MetricContext:
         return float(self.contact_patch_center[Axis.Z])
 
     @cached_property
-    def steering_axis_ground_intersection(self) -> Vec3 | None:
+    def steering_axis_ground_intersection(self) -> Point3 | None:
         """
         Point where the steering axis intersects the ground plane.
 
@@ -138,8 +135,8 @@ class MetricContext:
         return self.config.wheelbase
 
     @cached_property
-    def cg_position(self) -> Vec3:
+    def cg_position(self) -> Point3:
         """
         Center of gravity position from configuration.
         """
-        return np.asarray(self.config.cg_position, dtype=float)
+        return self.config.cg_position.copy()

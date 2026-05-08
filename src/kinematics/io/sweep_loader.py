@@ -21,9 +21,9 @@ from kinematics.io.validation import CIAxis, CIPointID, CITargetPositionMode
 
 # Shared axis <-> unit vector mapping.
 AXIS_VECTORS: dict[Axis, np.ndarray] = {
-    Axis.X: WorldAxisSystem.X,
-    Axis.Y: WorldAxisSystem.Y,
-    Axis.Z: WorldAxisSystem.Z,
+    Axis.X: WorldAxisSystem.X.data,
+    Axis.Y: WorldAxisSystem.Y.data,
+    Axis.Z: WorldAxisSystem.Z.data,
 }
 
 
@@ -31,8 +31,11 @@ def vector_to_axis(vec: np.ndarray) -> Axis | None:
     """
     Return the Axis if vec matches a principal axis, else None.
     """
+    from kinematics.core.geometry import extract_array
+
+    vec_data = extract_array(vec)
     for axis, axis_vec in AXIS_VECTORS.items():
-        if np.allclose(vec, axis_vec):
+        if np.allclose(vec_data, axis_vec):
             return axis
     return None
 
@@ -161,7 +164,12 @@ def parse_sweep_file(path: Path) -> SweepConfig:
     for target_spec, values in zip(file_spec.targets, target_sequences):
         unit_vec = target_spec.direction.to_unit_vector()
         axis = vector_to_axis(unit_vec)
-        direction = PointTargetAxis(axis) if axis else PointTargetVector(unit_vec)
+        if axis:
+            direction = PointTargetAxis(axis)
+        else:
+            from kinematics.core.geometry import Direction3
+
+            direction = PointTargetVector(Direction3(unit_vec))
 
         targets = [
             PointTarget(

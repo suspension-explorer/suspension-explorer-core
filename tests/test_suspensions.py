@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from kinematics.core.enums import PointID, ShimType, Units
-from kinematics.core.types import make_vec3
+from kinematics.core.geometry import Direction3, Point3
 from kinematics.io.geometry_loader import load_geometry
 from kinematics.suspensions.base import Suspension
 from kinematics.suspensions.config.settings import (
@@ -31,21 +31,21 @@ from kinematics.suspensions.registry import get_suspension_class, list_supported
 
 
 @pytest.fixture
-def valid_hardpoints() -> dict[PointID, np.ndarray]:
+def valid_hardpoints() -> dict[PointID, Point3]:
     """
     Valid hardpoints for double wishbone suspension.
     """
     return {
-        PointID.LOWER_WISHBONE_INBOARD_FRONT: make_vec3([250, 400, 200]),
-        PointID.LOWER_WISHBONE_INBOARD_REAR: make_vec3([-250, 450, 200]),
-        PointID.LOWER_WISHBONE_OUTBOARD: make_vec3([0, 900, 200]),
-        PointID.UPPER_WISHBONE_INBOARD_FRONT: make_vec3([225, 350, 500]),
-        PointID.UPPER_WISHBONE_INBOARD_REAR: make_vec3([-275, 350, 500]),
-        PointID.UPPER_WISHBONE_OUTBOARD: make_vec3([-25, 750, 500]),
-        PointID.TRACKROD_INBOARD: make_vec3([50, 200, 250]),
-        PointID.TRACKROD_OUTBOARD: make_vec3([150, 800, 275]),
-        PointID.AXLE_INBOARD: make_vec3([-20, 800, 308.426]),
-        PointID.AXLE_OUTBOARD: make_vec3([-20, 950, 313.426]),
+        PointID.LOWER_WISHBONE_INBOARD_FRONT: Point3([250, 400, 200]),
+        PointID.LOWER_WISHBONE_INBOARD_REAR: Point3([-250, 450, 200]),
+        PointID.LOWER_WISHBONE_OUTBOARD: Point3([0, 900, 200]),
+        PointID.UPPER_WISHBONE_INBOARD_FRONT: Point3([225, 350, 500]),
+        PointID.UPPER_WISHBONE_INBOARD_REAR: Point3([-275, 350, 500]),
+        PointID.UPPER_WISHBONE_OUTBOARD: Point3([-25, 750, 500]),
+        PointID.TRACKROD_INBOARD: Point3([50, 200, 250]),
+        PointID.TRACKROD_OUTBOARD: Point3([150, 800, 275]),
+        PointID.AXLE_INBOARD: Point3([-20, 800, 308.426]),
+        PointID.AXLE_OUTBOARD: Point3([-20, 950, 313.426]),
     }
 
 
@@ -64,12 +64,12 @@ def valid_config() -> SuspensionConfig:
                 rim_diameter=13,
             ),
         ),
-        cg_position={"x": 1250, "y": 0, "z": 450},
+        cg_position=Point3([1250, 0, 450]),
         wheelbase=2500.0,
         camber_shim=CamberShimConfig(
-            shim_face_point_a={"x": -25.0, "y": 750.0, "z": 510.0},
-            shim_face_point_b={"x": -25.0, "y": 750.0, "z": 490.0},
-            shim_face_normal={"x": 0.0, "y": 1.0, "z": 0.0},
+            shim_face_point_a=Point3([-25.0, 750.0, 510.0]),
+            shim_face_point_b=Point3([-25.0, 750.0, 490.0]),
+            shim_face_normal=Direction3([0.0, 1.0, 0.0]),
             design_thickness=30.0,
             setup_thickness=30.0,
         ),
@@ -246,9 +246,9 @@ class TestCamberShimConfig:
         """
         with pytest.raises(ValueError, match="must be distinct"):
             CamberShimConfig(
-                shim_face_point_a={"x": -25.0, "y": 750.0, "z": 500.0},
-                shim_face_point_b={"x": -25.0, "y": 750.0, "z": 500.0},
-                shim_face_normal={"x": 0.0, "y": 1.0, "z": 0.0},
+                shim_face_point_a=Point3([-25.0, 750.0, 500.0]),
+                shim_face_point_b=Point3([-25.0, 750.0, 500.0]),
+                shim_face_normal=Direction3([0.0, 1.0, 0.0]),
                 design_thickness=30.0,
                 setup_thickness=40.0,
             )
@@ -501,4 +501,4 @@ class TestIntegration:
         new_axle = state.positions[PointID.AXLE_OUTBOARD]
 
         # Should not be identical (shim rotates attachments)
-        assert not np.allclose(original_axle, new_axle)
+        assert not np.allclose(original_axle.data, new_axle.data)

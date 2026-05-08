@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from kinematics.core.enums import PointID
-from kinematics.core.types import Vec3
+from kinematics.core.geometry import Point3
 
 
 @dataclass
@@ -37,14 +37,14 @@ class SuspensionVisualizer:
     def draw_links(
         self,
         ax,
-        positions: dict[PointID, Vec3],
+        positions: dict[PointID, Point3],
     ) -> list:
         """
         Draws all links and returns a list of matplotlib line artists.
         """
         link_artists = []
         for link in self.links:
-            pts = np.array([positions[pid] for pid in link.points])
+            pts = np.array([positions[pid].data for pid in link.points])
             (line,) = ax.plot(
                 pts[:, 0],
                 pts[:, 1],
@@ -62,13 +62,13 @@ class SuspensionVisualizer:
     def update_links(
         self,
         artists: list,
-        positions: dict[PointID, Vec3],
+        positions: dict[PointID, Point3],
     ) -> None:
         """
         Update all link artists with new geometry for animation.
         """
         for line, link in zip(artists, self.links):
-            pts = np.array([positions[pid] for pid in link.points])
+            pts = np.array([positions[pid].data for pid in link.points])
             line.set_data(pts[:, 0], pts[:, 1])
             line.set_3d_properties(pts[:, 2])
 
@@ -110,7 +110,7 @@ class SuspensionVisualizer:
     def draw_wheel(
         self,
         ax,
-        positions: dict[PointID, Vec3],
+        positions: dict[PointID, Point3],
         num_bands: int = 48,
     ) -> dict:
         """
@@ -118,10 +118,14 @@ class SuspensionVisualizer:
 
         Returns dict with 'rims' (list of 3 lines) and 'bands' (list of lines).
         """
-        wheel_center = positions[PointID.WHEEL_CENTER]
-        wheel_inboard = positions[PointID.WHEEL_INBOARD]
-        wheel_outboard = positions[PointID.WHEEL_OUTBOARD]
-        axle_vector = positions[PointID.AXLE_OUTBOARD] - positions[PointID.AXLE_INBOARD]
+        # Extract raw arrays for matplotlib drawing math.
+        wheel_center = positions[PointID.WHEEL_CENTER].data
+        wheel_inboard = positions[PointID.WHEEL_INBOARD].data
+        wheel_outboard = positions[PointID.WHEEL_OUTBOARD].data
+        axle_vector = (
+            positions[PointID.AXLE_OUTBOARD].data
+            - positions[PointID.AXLE_INBOARD].data
+        )
 
         axle_vector = axle_vector / np.linalg.norm(axle_vector)
 
@@ -204,16 +208,20 @@ class SuspensionVisualizer:
     def update_wheel(
         self,
         artists: dict,
-        positions: dict[PointID, Vec3],
+        positions: dict[PointID, Point3],
         num_bands: int = 36,
     ) -> None:
         """
         Update the wheel artists with new geometry for animation.
         """
-        wheel_center = positions[PointID.WHEEL_CENTER]
-        wheel_inboard = positions[PointID.WHEEL_INBOARD]
-        wheel_outboard = positions[PointID.WHEEL_OUTBOARD]
-        axle_vector = positions[PointID.AXLE_OUTBOARD] - positions[PointID.AXLE_INBOARD]
+        # Extract raw arrays for matplotlib drawing math.
+        wheel_center = positions[PointID.WHEEL_CENTER].data
+        wheel_inboard = positions[PointID.WHEEL_INBOARD].data
+        wheel_outboard = positions[PointID.WHEEL_OUTBOARD].data
+        axle_vector = (
+            positions[PointID.AXLE_OUTBOARD].data
+            - positions[PointID.AXLE_INBOARD].data
+        )
 
         axle_vector = axle_vector / np.linalg.norm(axle_vector)
 

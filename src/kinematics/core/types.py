@@ -5,56 +5,44 @@ Composite type definitions for suspension kinematics.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated, Any, Final, Literal, NamedTuple, Union
+from typing import Final, NamedTuple, Union
 
 import numpy as np
-from numpy.typing import NDArray
 
 from kinematics.core.enums import Axis, PointID, TargetPositionMode
-
-Vec3 = Annotated[NDArray[np.floating[Any]], Literal[3]]
-NAN_VEC3: Final[Vec3] = np.array([np.nan, np.nan, np.nan], dtype=np.float64)
+from kinematics.core.geometry import Direction3
 
 
-def make_vec3(data) -> NDArray[np.float64]:
+def frozen_unit_axis(values: tuple[float, float, float]) -> np.ndarray:
     """
-    Creates a 3-element float64 numpy array from input data.
+    Create a frozen (immutable) unit-axis array from the given values.
 
     Args:
-        data: Input data convertible to a 3-element array.
+        values: A tuple of three floats representing the axis direction.
 
     Returns:
-        A 3-element numpy array with dtype float64.
-
-    Raises:
-        ValueError: If the input cannot be shaped into a 3-element array.
+        A numpy array with writeable flag set to False to prevent mutation.
     """
-    # Passthrough for dual-number types (automatic differentiation).
-    if hasattr(data, "deriv"):
-        return data
-
-    if isinstance(data, np.ndarray) and data.dtype == np.float64 and data.shape == (3,):
-        return data
-
-    arr = np.asarray(data, dtype=np.float64)
-    if arr.shape != (3,):
-        raise ValueError(f"Vec3 must have shape (3,), got {arr.shape}")
+    # Build a non-writeable unit-axis array so the shared WorldAxisSystem
+    # constants cannot be mutated through their .data attribute.
+    arr = np.array(values, dtype=np.float64)
+    arr.flags.writeable = False
     return arr
 
 
 class WorldAxisSystem:
     """
-    World coordinate system unit axis vectors.
+    World coordinate system unit axis directions.
 
     Usage:
-        WorldAxisSystem.X  # -> np.array([1.0, 0.0, 0.0])
-        WorldAxisSystem.Y  # -> np.array([0.0, 1.0, 0.0])
-        WorldAxisSystem.Z  # -> np.array([0.0, 0.0, 1.0])
+        WorldAxisSystem.X  # -> Direction3 along [1, 0, 0]
+        WorldAxisSystem.Y  # -> Direction3 along [0, 1, 0]
+        WorldAxisSystem.Z  # -> Direction3 along [0, 0, 1]
     """
 
-    X: Final[Vec3] = np.array([1.0, 0.0, 0.0], dtype=np.float64)
-    Y: Final[Vec3] = np.array([0.0, 1.0, 0.0], dtype=np.float64)
-    Z: Final[Vec3] = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+    X: Final[Direction3] = Direction3.from_trusted(frozen_unit_axis((1.0, 0.0, 0.0)))
+    Y: Final[Direction3] = Direction3.from_trusted(frozen_unit_axis((0.0, 1.0, 0.0)))
+    Z: Final[Direction3] = Direction3.from_trusted(frozen_unit_axis((0.0, 0.0, 1.0)))
 
 
 @dataclass
@@ -132,10 +120,10 @@ class PointTargetVector:
     A target direction defined by an arbitrary vector.
 
     Attributes:
-        vector (Vec3): The vector defining the target direction.
+        vector (Direction3): The direction defining the target.
     """
 
-    vector: Vec3
+    vector: Direction3
 
 
 PointTargetDirection = Union[PointTargetAxis, PointTargetVector]

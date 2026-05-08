@@ -9,11 +9,12 @@ np.dot and np.linalg.norm works unmodified with dual-number inputs.
 
 from __future__ import annotations
 
-from typing import overload
+from typing import Mapping, overload
 
 import numpy as np
 
 from kinematics.core.enums import PointID
+from kinematics.core.geometry import extract_array
 
 # Numpy function dispatch table: maps numpy functions to dual-aware
 # implementations.  Populated at module level and used by
@@ -102,6 +103,11 @@ class DualScalar:
         if isinstance(other, np.ndarray):
             # DualScalar * plain ndarray: derivative only from scalar.
             return DualVec3(self.val * other, self.deriv * other)
+        # Handle geometry types (Point3, Vector3, Direction3) by extracting
+        # the raw array -- they are constants in the dual sense.
+        arr = extract_array(other)
+        if isinstance(arr, np.ndarray):
+            return DualVec3(self.val * arr, self.deriv * arr)
         return NotImplemented  # type: ignore[return-value]
 
     @overload
@@ -114,6 +120,9 @@ class DualScalar:
             return DualScalar(other * self.val, other * self.deriv)
         if isinstance(other, np.ndarray):
             return DualVec3(other * self.val, other * self.deriv)
+        arr = extract_array(other)
+        if isinstance(arr, np.ndarray):
+            return DualVec3(arr * self.val, arr * self.deriv)
         return NotImplemented  # type: ignore[return-value]
 
     @overload
@@ -201,11 +210,17 @@ class DualVec3:
             return DualVec3(self.val + other.val, self.deriv + other.deriv)
         if isinstance(other, np.ndarray):
             return DualVec3(self.val + other, self.deriv.copy())
+        arr = extract_array(other)
+        if isinstance(arr, np.ndarray):
+            return DualVec3(self.val + arr, self.deriv.copy())
         return NotImplemented  # type: ignore[return-value]
 
     def __radd__(self, other: np.ndarray) -> DualVec3:
         if isinstance(other, np.ndarray):
             return DualVec3(other + self.val, self.deriv.copy())
+        arr = extract_array(other)
+        if isinstance(arr, np.ndarray):
+            return DualVec3(arr + self.val, self.deriv.copy())
         return NotImplemented  # type: ignore[return-value]
 
     def __sub__(self, other: DualVec3 | np.ndarray) -> DualVec3:
@@ -213,11 +228,17 @@ class DualVec3:
             return DualVec3(self.val - other.val, self.deriv - other.deriv)
         if isinstance(other, np.ndarray):
             return DualVec3(self.val - other, self.deriv.copy())
+        arr = extract_array(other)
+        if isinstance(arr, np.ndarray):
+            return DualVec3(self.val - arr, self.deriv.copy())
         return NotImplemented  # type: ignore[return-value]
 
     def __rsub__(self, other: np.ndarray) -> DualVec3:
         if isinstance(other, np.ndarray):
             return DualVec3(other - self.val, -self.deriv)
+        arr = extract_array(other)
+        if isinstance(arr, np.ndarray):
+            return DualVec3(arr - self.val, -self.deriv)
         return NotImplemented  # type: ignore[return-value]
 
     def __mul__(self, other: DualScalar | int | float | DualVec3) -> DualVec3:
@@ -275,9 +296,16 @@ class DualVec3:
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         # Handle numpy ufuncs that arise from ndarray op DualVec3 expressions.
         # Without this, numpy tries to broadcast DualVec3 into an ndarray.
+        # Also handles geometry types (Point3/Vector3/Direction3) by extracting
+        # their raw arrays.
         if method != "__call__" or len(inputs) != 2:
             return NotImplemented
         a, b = inputs
+        # Normalise non-dual, non-ndarray operands to raw arrays.
+        if not isinstance(a, (DualVec3, np.ndarray)):
+            a = extract_array(a)
+        if not isinstance(b, (DualVec3, np.ndarray)):
+            b = extract_array(b)
         if ufunc is np.add:
             if isinstance(a, np.ndarray) and isinstance(b, DualVec3):
                 return DualVec3(a + b.val, b.deriv.copy())
@@ -304,11 +332,21 @@ def _dual_dot(a, b, out=None):
     Dual-aware dot product.
 
     d(dot(a, b)) = dot(a', b) + dot(a, b')
+
+    Handles geometry types (Point3/Vector3/Direction3) by extracting
+    their raw arrays and treating them as constants (zero derivative).
     """
-    a_val = a.val if isinstance(a, DualVec3) else a
-    b_val = b.val if isinstance(b, DualVec3) else b
-    a_deriv = a.deriv if isinstance(a, DualVec3) else np.zeros_like(a)
-    b_deriv = b.deriv if isinstance(b, DualVec3) else np.zeros_like(b)
+    if isinstance(a, DualVec3):
+        a_val, a_deriv = a.val, a.deriv
+    else:
+        a_val = extract_array(a)
+        a_deriv = np.zeros(3, dtype=np.float64)
+
+    if isinstance(b, DualVec3):
+        b_val, b_deriv = b.val, b.deriv
+    else:
+        b_val = extract_array(b)
+        b_deriv = np.zeros(3, dtype=np.float64)
 
     val = np.dot(a_val, b_val)
     deriv = np.dot(a_deriv, b_val) + np.dot(a_val, b_deriv)
@@ -380,7 +418,7 @@ def norm(v: DualVec3) -> DualScalar:
 
 
 def seed_positions(
-    positions: dict[PointID, np.ndarray],
+    positions: Mapping[PointID, object],
     seed_point: PointID,
     seed_dim: int,
 ) -> dict[PointID, DualVec3]:
@@ -391,8 +429,10 @@ def seed_positions(
     seed_point which gets derivative = 1.0 in coordinate seed_dim.
     This sets up forward-mode AD to compute d(output)/d(seed_point[seed_dim]).
 
+    Handles both raw ndarray and Point3 positions transparently.
+
     Args:
-        positions: Current point positions (PointID -> ndarray).
+        positions: Current point positions (PointID -> ndarray or Point3).
         seed_point: The point whose coordinate we differentiate w.r.t.
         seed_dim: Which coordinate (0=x, 1=y, 2=z) to seed.
 
@@ -401,10 +441,11 @@ def seed_positions(
     """
     dual_positions: dict[PointID, DualVec3] = {}
     for pid, pos in positions.items():
+        raw = extract_array(pos)
         if pid == seed_point:
             d = np.zeros(3, dtype=np.float64)
             d[seed_dim] = 1.0
-            dual_positions[pid] = DualVec3(pos.copy(), d)
+            dual_positions[pid] = DualVec3(raw.copy(), d)
         else:
-            dual_positions[pid] = DualVec3(pos.copy())
+            dual_positions[pid] = DualVec3(raw.copy())
     return dual_positions
