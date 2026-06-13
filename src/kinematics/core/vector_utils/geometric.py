@@ -257,9 +257,10 @@ def intersect_two_planes(
 
     # Find a specific point on the intersection line. This formula derives from
     # solving the system of linear equations for the two planes.
-    point_data = np.cross(
-        d2 * n1.data - d1 * n2.data, direction.data
-    ) / direction_magnitude_squared
+    point_data = (
+        np.cross(d2 * n1.data - d1 * n2.data, direction.data)
+        / direction_magnitude_squared
+    )
     line_direction = direction.normalize()
 
     return Point3(point_data), line_direction

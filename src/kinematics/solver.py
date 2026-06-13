@@ -327,9 +327,7 @@ class ResidualComputer:
             p3 = constraint.p3
 
             def compute_three_point_angle(pos: dict[PointID, Point3]) -> np.ndarray:
-                return jac_three_point_angle(
-                    pos[p1].data, pos[p2].data, pos[p3].data
-                )
+                return jac_three_point_angle(pos[p1].data, pos[p2].data, pos[p3].data)
 
             compute_fn = compute_three_point_angle
 

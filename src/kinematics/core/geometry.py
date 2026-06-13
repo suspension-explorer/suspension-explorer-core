@@ -59,6 +59,7 @@ def extract_array(x: object) -> np.ndarray:
 # Point3
 # ---------------------------------------------------------------------------
 
+
 class Point3:
     """
     A location in 3D Euclidean space.
@@ -162,9 +163,14 @@ class Point3:
     ) -> bool:
         """
         Tolerant elementwise comparison via np.allclose with numpy defaults.
+
+        Raises:
+            TypeError: If other is not a Point3.
         """
         if not isinstance(other, Point3):
-            return NotImplemented
+            raise TypeError(
+                f"almost_equals expects a Point3, got {type(other).__name__}"
+            )
         return bool(np.allclose(self.data, other.data, rtol=rtol, atol=atol))
 
     def __repr__(self) -> str:
@@ -174,6 +180,7 @@ class Point3:
 # ---------------------------------------------------------------------------
 # Vector3
 # ---------------------------------------------------------------------------
+
 
 class Vector3:
     """
@@ -290,8 +297,10 @@ class Vector3:
         """
         Return a unit-length Direction3 in the same orientation.
 
+        Normalization is delegated to the Direction3 constructor.
+
         Raises:
-            ValueError: If the vector has zero length.
+            ValueError: If the vector has zero length (raised by Direction3).
         """
         return Direction3(self.data)
 
@@ -346,9 +355,14 @@ class Vector3:
     ) -> bool:
         """
         Tolerant elementwise comparison via np.allclose with numpy defaults.
+
+        Raises:
+            TypeError: If other is not a Vector3.
         """
         if not isinstance(other, Vector3):
-            return NotImplemented
+            raise TypeError(
+                f"almost_equals expects a Vector3, got {type(other).__name__}"
+            )
         return bool(np.allclose(self.data, other.data, rtol=rtol, atol=atol))
 
     def __repr__(self) -> str:
@@ -358,6 +372,7 @@ class Vector3:
 # ---------------------------------------------------------------------------
 # Direction3
 # ---------------------------------------------------------------------------
+
 
 class Direction3:
     """
@@ -383,9 +398,7 @@ class Direction3:
             raw = np.asarray(data, dtype=np.float64)
 
         if raw.shape != (3,):
-            raise ValueError(
-                f"Direction3 requires shape (3,), got {raw.shape}"
-            )
+            raise ValueError(f"Direction3 requires shape (3,), got {raw.shape}")
         magnitude = float(np.linalg.norm(raw))
         if magnitude < EPS_GEOMETRIC:
             raise ValueError("Cannot create Direction3 from zero-length vector")
@@ -478,9 +491,14 @@ class Direction3:
     ) -> bool:
         """
         Tolerant elementwise comparison via np.allclose with numpy defaults.
+
+        Raises:
+            TypeError: If other is not a Direction3.
         """
         if not isinstance(other, Direction3):
-            return NotImplemented
+            raise TypeError(
+                f"almost_equals expects a Direction3, got {type(other).__name__}"
+            )
         return bool(np.allclose(self.data, other.data, rtol=rtol, atol=atol))
 
     def __repr__(self) -> str:
@@ -496,6 +514,7 @@ GEOM_TYPES = (Point3, Vector3, Direction3, np.ndarray)
 # ---------------------------------------------------------------------------
 # Numpy __array_function__ implementations
 # ---------------------------------------------------------------------------
+
 
 def geom_dot(a: object, b: object, out: object = None) -> float:
     """
@@ -546,6 +565,7 @@ GEOM_IMPLEMENTATIONS[np.cross] = geom_cross
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
 
 def midpoint(a: Point3, b: Point3) -> Point3:
     """

@@ -260,8 +260,7 @@ def test_scrub_radius_uses_ground_plane_wheel_lateral_direction(
         scrub_radius,
         expected_scrub_radius,
         atol=TEST_TOLERANCE,
-        err_msg="Scrub radius should use wheel lateral direction"
-        " on the ground plane",
+        err_msg="Scrub radius should use wheel lateral direction on the ground plane",
     )
     assert not np.isclose(
         scrub_radius,

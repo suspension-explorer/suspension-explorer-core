@@ -123,8 +123,7 @@ class SuspensionVisualizer:
         wheel_inboard = positions[PointID.WHEEL_INBOARD].data
         wheel_outboard = positions[PointID.WHEEL_OUTBOARD].data
         axle_vector = (
-            positions[PointID.AXLE_OUTBOARD].data
-            - positions[PointID.AXLE_INBOARD].data
+            positions[PointID.AXLE_OUTBOARD].data - positions[PointID.AXLE_INBOARD].data
         )
 
         axle_vector = axle_vector / np.linalg.norm(axle_vector)
@@ -219,8 +218,7 @@ class SuspensionVisualizer:
         wheel_inboard = positions[PointID.WHEEL_INBOARD].data
         wheel_outboard = positions[PointID.WHEEL_OUTBOARD].data
         axle_vector = (
-            positions[PointID.AXLE_OUTBOARD].data
-            - positions[PointID.AXLE_INBOARD].data
+            positions[PointID.AXLE_OUTBOARD].data - positions[PointID.AXLE_INBOARD].data
         )
 
         axle_vector = axle_vector / np.linalg.norm(axle_vector)
