@@ -71,6 +71,14 @@ class Units(Enum):
     """
 
     MILLIMETERS = "millimeters"
+    DEGREES = "degrees"
+
+    @property
+    def symbol(self) -> str:
+        """
+        Short display symbol for the unit, e.g. "mm".
+        """
+        return {Units.MILLIMETERS: "mm", Units.DEGREES: "deg"}[self]
 
 
 class ShimType(Enum):
