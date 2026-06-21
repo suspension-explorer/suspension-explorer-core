@@ -151,6 +151,26 @@ def parse_sweep_file(path: Path) -> SweepConfig:
     except Exception as e:
         raise ValueError(f"Invalid sweep specification: {e}") from e
 
+    return build_sweep_config(file_spec)
+
+
+def build_sweep_config(file_spec: SweepFile) -> SweepConfig:
+    """
+    Expand a validated SweepFile spec into an executable SweepConfig.
+
+    This is the value-expansion half of sweep loading, split out so callers that
+    already hold a validated spec (e.g. a structured API request) can build a
+    SweepConfig without going through a YAML file.
+
+    Args:
+        file_spec: A validated sweep specification.
+
+    Returns:
+        SweepConfig ready for use with the solver.
+
+    Raises:
+        ValueError: If the targets expand to unequal lengths.
+    """
     # Expand values and verify equal lengths.
     target_sequences = [t.expand_values(file_spec.steps) for t in file_spec.targets]
     lengths = {len(seq) for seq in target_sequences}
