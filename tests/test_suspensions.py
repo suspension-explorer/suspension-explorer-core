@@ -14,9 +14,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from kinematics.core.enums import PointID, ShimType, Units
+from kinematics.core.enums import Axis, PointID, ShimType, TargetPositionMode, Units
 from kinematics.core.geometry import Direction3, Point3
+from kinematics.core.types import PointTarget, PointTargetAxis, SweepConfig
 from kinematics.io.geometry_loader import load_geometry
+from kinematics.main import apply_default_holds, solve_sweep
 from kinematics.suspensions.base import Suspension
 from kinematics.suspensions.config.settings import (
     CamberShimConfig,
@@ -133,6 +135,29 @@ class TestDoubleWishboneSuspension:
         assert PointID.TRACKROD_OUTBOARD in required
         assert PointID.AXLE_INBOARD in required
         assert PointID.AXLE_OUTBOARD in required
+
+    def test_default_hold_targets_pin_steering_rack(
+        self, valid_hardpoints, valid_config
+    ):
+        """
+        The steering rack is offered as a relative-zero hold by default so a
+        sweep that omits steering keeps the rack fixed instead of drifting.
+        """
+        suspension = DoubleWishboneSuspension(
+            name="test",
+            units=Units.MILLIMETERS,
+            hardpoints=valid_hardpoints,
+            config=valid_config,
+        )
+
+        holds = suspension.default_hold_targets()
+        assert len(holds) == 1
+        (hold,) = holds
+        assert hold.point_id == PointID.TRACKROD_INBOARD
+        assert isinstance(hold.direction, PointTargetAxis)
+        assert hold.direction.axis is Axis.Y
+        assert hold.value == 0.0
+        assert hold.mode is TargetPositionMode.RELATIVE
 
     def test_create_suspension(self, valid_hardpoints, valid_config):
         """
@@ -502,3 +527,74 @@ class TestIntegration:
 
         # Should not be identical (shim rotates attachments)
         assert not np.allclose(original_axle.data, new_axle.data)
+
+    def test_bump_sweep_holds_undriven_steering_rack(
+        self, double_wishbone_geometry_file
+    ):
+        """
+        A pure bump sweep must not steer. With no rack target, the trackrod
+        inboard point is auto-held at its initial Y rather than wandering
+        freely (the bug this guards against let it drift tens of millimetres).
+        """
+        suspension = load_geometry(double_wishbone_geometry_file)
+        initial_rack_y = float(
+            suspension.initial_state().positions[PointID.TRACKROD_INBOARD][1]
+        )
+
+        # Heave only: drive wheel-center Z, leave steering unspecified.
+        heave = [
+            PointTarget(
+                point_id=PointID.WHEEL_CENTER,
+                direction=PointTargetAxis(Axis.Z),
+                value=value,
+                mode=TargetPositionMode.RELATIVE,
+            )
+            for value in (-40.0, 0.0, 40.0, 80.0)
+        ]
+
+        states, stats = solve_sweep(suspension, SweepConfig([heave]))
+
+        assert all(info.converged for info in stats)
+        for state in states:
+            rack_y = float(state.positions[PointID.TRACKROD_INBOARD][1])
+            assert rack_y == pytest.approx(initial_rack_y, abs=1e-6)
+
+    def test_explicit_steering_sweep_is_not_double_held(
+        self, double_wishbone_geometry_file
+    ):
+        """
+        A sweep that already drives the rack is left untouched: no hold is
+        injected and the rack travels the full commanded steering range.
+        """
+        suspension = load_geometry(double_wishbone_geometry_file)
+
+        steer = [
+            PointTarget(
+                point_id=PointID.TRACKROD_INBOARD,
+                direction=PointTargetAxis(Axis.Y),
+                value=value,
+                mode=TargetPositionMode.RELATIVE,
+            )
+            for value in (-30.0, 0.0, 30.0)
+        ]
+        # Drive heave too (held at design) so the corner is fully determinate.
+        heave = [
+            PointTarget(
+                point_id=PointID.WHEEL_CENTER,
+                direction=PointTargetAxis(Axis.Z),
+                value=0.0,
+                mode=TargetPositionMode.RELATIVE,
+            )
+            for _ in steer
+        ]
+        config = SweepConfig([steer, heave])
+
+        # The rack DOF is already driven, so no extra dimension is appended.
+        augmented = apply_default_holds(suspension, config)
+        assert len(augmented.target_sweeps) == len(config.target_sweeps)
+
+        states, _ = solve_sweep(suspension, config)
+        rack_ys = [
+            float(state.positions[PointID.TRACKROD_INBOARD][1]) for state in states
+        ]
+        assert max(rack_ys) - min(rack_ys) == pytest.approx(60.0, abs=1e-3)

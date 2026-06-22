@@ -18,9 +18,9 @@ from kinematics.constraints import (
     PointOnLineConstraint,
 )
 from kinematics.core.constants import EPS_GEOMETRIC
-from kinematics.core.enums import Axis, PointID, ShimType
+from kinematics.core.enums import Axis, PointID, ShimType, TargetPositionMode
 from kinematics.core.geometry import Direction3, Point3
-from kinematics.core.types import WorldAxisSystem
+from kinematics.core.types import PointTarget, PointTargetAxis, WorldAxisSystem
 from kinematics.core.vector_utils.geometric import (
     compute_point_point_distance,
     compute_vector_vector_angle,
@@ -130,6 +130,27 @@ class DoubleWishboneSuspension(Suspension):
     def free_points(self) -> Sequence[PointID]:
         """Points that move during solving."""
         return self.FREE_POINTS
+
+    def default_hold_targets(self) -> list[PointTarget]:
+        """
+        Hold the steering rack fixed when a sweep does not drive steering.
+
+        The trackrod inboard point is constrained to slide along the world Y
+        axis (the rack travel line, see the PointOnLineConstraint in
+        `constraints`). That slide is the steering degree of freedom. If no
+        sweep target drives it, the rack is free to wander, which manifests as
+        random steering across the sweep. Holding it at its initial Y keeps the
+        corner unsteered through pure bump/heave sweeps, so steering is opted
+        into explicitly rather than suppressed with a 0-to-0 sweep dimension.
+        """
+        return [
+            PointTarget(
+                point_id=PointID.TRACKROD_INBOARD,
+                direction=PointTargetAxis(Axis.Y),
+                value=0.0,
+                mode=TargetPositionMode.RELATIVE,
+            )
+        ]
 
     def initial_state(self) -> SuspensionState:
         """Build initial state from hardpoints, applying shims if configured."""

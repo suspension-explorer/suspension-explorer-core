@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, ClassVar, Sequence
 from kinematics.constraints import Constraint
 from kinematics.core.enums import PointID, ShimType, Units
 from kinematics.core.geometry import Point3
+from kinematics.core.types import PointTarget
 from kinematics.points.derived.manager import DerivedPointsSpec
 from kinematics.state import SuspensionState
 from kinematics.suspensions.config.settings import SuspensionConfig
@@ -144,6 +145,25 @@ class Suspension(ABC):
             List of link definitions for visualisation.
         """
         ...
+
+    def default_hold_targets(self) -> list[PointTarget]:
+        """
+        Targets that hold otherwise-undriven control DOFs at their initial pose.
+
+        A mechanism needs one driving target per kinematic degree of freedom to
+        be determinate. When a sweep omits one of these DOFs, the solver is free
+        to move it arbitrarily, producing meaningless results (the classic case
+        being a steering rack that drifts during a pure bump/heave sweep).
+
+        Each target returned here is a RELATIVE, value-zero target, meaning
+        "keep this coordinate at its initial value". The orchestration layer
+        (`solve_sweep`) injects any of these whose (point, direction) is not
+        already driven by the sweep, so an unspecified DOF stays fixed rather
+        than wandering. A DOF the sweep already drives is left untouched.
+
+        Subclasses with such control DOFs override this; the default is none.
+        """
+        return []
 
     def validate_hardpoints(self) -> None:
         """Validate that required hardpoints are present."""

@@ -1,12 +1,10 @@
 version: 1
 steps: 36
 targets:
-  - point: TRACKROD_INBOARD
-    direction:
-      axis: Y
-    mode: relative
-    start: 0
-    stop: 0
+  # Pure bump sweep: only wheel-center Z is driven. The steering rack (trackrod
+  # inboard) is deliberately left undriven; the solver holds it at its design
+  # position automatically, so a 0-to-0 dummy target is no longer needed to keep
+  # the corner unsteered.
   - point: WHEEL_CENTER
     direction:
       axis: Z
