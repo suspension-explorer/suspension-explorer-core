@@ -174,13 +174,20 @@ such points = 1 more `DistanceConstraint`.
 Per corner (side-tagged): `ROCKER_AXIS_FRONT`, `ROCKER_AXIS_REAR` (chassis-fixed),
 `ROCKER_DROPLINK` (free, on rocker), plus existing `PUSHROD_INBOARD` (free, on
 rocker) and `PUSHROD_OUTBOARD` (free, upright-mounted). Shared (CENTER):
-`ARB_AXIS_FRONT`, `ARB_AXIS_REAR` (chassis-fixed). Per side on the ARB:
+`ARB_AXIS_A`, `ARB_AXIS_B` (chassis-fixed). Per side on the ARB:
 `ARB_DROPLINK` (free, on the ARB arm; the droplink connects
 `ROCKER_DROPLINK` ↔ `ARB_DROPLINK`).
 
-Note: despite the FRONT/REAR naming (mirroring the wishbone convention), axis
-points are just two distinct points defining the pivot line; direction of
-positive rotation is first-point → second-point by right-hand rule.
+Enum values (continuing after 23): `ROCKER_AXIS_FRONT = 24`,
+`ROCKER_AXIS_REAR = 25`, `ROCKER_DROPLINK = 26`, `ARB_AXIS_A = 27`,
+`ARB_AXIS_B = 28`, `ARB_DROPLINK = 29`.
+
+Naming rationale: the rocker axis keeps FRONT/REAR because it must lie parallel
+to the XZ plane (zero Y-extent), so it is naturally longitudinal. The ARB axis
+uses A/B because it need not be longitudinal — it is typically transverse (along
+Y). In both cases the two points just define the pivot line; the direction of
+positive rotation is first-point → second-point (FRONT→REAR, A→B) by right-hand
+rule.
 
 ### B2. Constraints per corner (12 new vars, 13 new residuals per side)
 
@@ -192,7 +199,7 @@ positive rotation is first-point → second-point by right-hand rule.
 | rocker droplink on rocker circle | 2 distances to ROCKER_AXIS_FRONT/REAR |
 | rocker rigidity | 1 distance PUSHROD_IN ↔ ROCKER_DROPLINK |
 | droplink length | 1 distance ROCKER_DROPLINK ↔ ARB_DROPLINK |
-| ARB arm end on ARB circle | 2 distances to ARB_AXIS_FRONT/REAR |
+| ARB arm end on ARB circle | 2 distances to ARB_AXIS_A/B |
 
 The ARB is modelled as **two independent arms** about a common axis (the bar's
 torsional compliance is what an ARB *is*); its state is fully determined by wheel
@@ -205,18 +212,41 @@ rotation from design (inboard end assumed chassis-grounded).
 ### B3. Geometry validation
 
 - Rocker axis parallel to XZ plane: `|y(ROCKER_AXIS_FRONT) - y(ROCKER_AXIS_REAR)|`
-  ≤ tolerance, else load-time error.
-- Axis points distinct; droplink/pushrod non-zero length; ARB axis distinct points.
+  ≤ `EPS_GEOMETRIC`, else load-time error.
+- Rocker group all-or-nothing ({PUSHROD_OUTBOARD, PUSHROD_INBOARD,
+  ROCKER_AXIS_FRONT, ROCKER_AXIS_REAR}); ROCKER_DROPLINK requires that group.
+- Rocker-axis points distinct; PUSHROD_INBOARD / ROCKER_DROPLINK off-axis
+  (non-zero perpendicular distance).
+- ARB group all-or-nothing across: center ARB_AXIS_A + ARB_AXIS_B, ARB_DROPLINK on
+  both sides, ROCKER_DROPLINK on both sides. ARB axis points distinct; each
+  ARB_DROPLINK off-axis. `arb_droplink` is an axle-only point — the corner class
+  rejects it (single-corner YAML with `arb_droplink` fails as an unknown key).
 
-### B4. New metrics (per side unless noted)
+### B4. New metrics (per side unless noted) — sign conventions as implemented
 
-- `rocker_angle_deg`: signed rocker rotation from design about the rocker axis
-  (right-hand rule, axis front → rear), measured via the `PUSHROD_INBOARD` radius
-  vector projected into the plane ⟂ axis.
-- `torsion_bar_twist_deg`: = rocker angle (kept as its own column for clarity).
-- `arb_arm_angle_deg`: per-side ARB arm rotation from design about the ARB axis.
-- `arb_twist_deg` (axle-level): left arm angle − right arm angle. Zero in pure
-  heave for a symmetric car; non-zero in roll.
+The signed-angle primitive is
+`signed_angle_about_axis(p_design, p_current, axis_point, axis_direction)`
+(`core/vector_utils/geometric.py`): projects both radius vectors into the plane ⟂
+the axis and returns `atan2(d·(r0×r1), r0_perp·r1_perp)` (right-hand rule about
+the axis direction).
+
+- `rocker_angle_deg` (corner): raw signed angle of `PUSHROD_INBOARD` about the
+  ROCKER_AXIS_FRONT → ROCKER_AXIS_REAR direction (design → current), **multiplied
+  by `side_sign` (+1 left, −1 right)**. Rationale: reflection negates a signed
+  angle about a mirrored axis, so the normalisation makes symmetric heave report
+  EQUAL left/right rocker angles (and roll report equal-and-opposite). Emitted in
+  `compute_metrics_for_state` when `suspension.has_rocker`, so it appears
+  `left_`/`right_`-prefixed at axle level automatically.
+- `torsion_bar_twist_deg` (corner): = `rocker_angle_deg` (the torsion bar is
+  coaxial with the pivot and grounded at its far end); kept as its own column.
+- `left_arb_arm_angle_deg` / `right_arb_arm_angle_deg` (axle): **raw** signed angle
+  of that side's `ARB_DROPLINK` about the single shared ARB_AXIS_A → ARB_AXIS_B
+  direction (design → current), with **no side normalisation** (both arms share
+  one physical axis).
+- `arb_twist_deg` (axle): `left_arb_arm_angle_deg − right_arb_arm_angle_deg` — the
+  physical relative twist of the torsion element (RH rule about A→B). Symmetric
+  heave → both raw arm angles equal → twist ≈ 0; roll → opposite → twist ≠ 0
+  (left-wheel-up gives positive twist for the mirrored transverse-axis test ARB).
 
 Motion/installation ratios are derivable from sweep output (d(angle)/d(wheel z));
 not computed per-state.
@@ -274,7 +304,7 @@ Coordinate-system and sign-convention tests are first-class:
 | 0 | Survey, plan (this file) | done |
 | 1 | Core key generalisation (`Side`, `PointRef`, annotations, `Constraint.remap`) | done |
 | 2 | Axle model + loader + sweep side-targets + metrics + writer/CLI/viz + tests | done |
-| 3 | Pushrod/rocker/torsion bar/ARB + validation + metrics + tests | pending |
+| 3 | Pushrod/rocker/torsion bar/ARB + validation + metrics + tests | done |
 | 4 | Docs (README/CHANGELOG), full verification, push | pending |
 
 ## Implementation notes (from survey)
@@ -293,6 +323,37 @@ Coordinate-system and sign-convention tests are first-class:
 
 ## Work log
 
+- 2026-07-04: Stage 3 done. Added the F1-style inboard actuation (pushrod /
+  rocker / torsion bar / inboard ARB), all expressed with existing
+  `DistanceConstraint`s — no new constraint types or Jacobian codegen. New
+  `PointID`s 24–29 (`ROCKER_AXIS_FRONT/REAR`, `ROCKER_DROPLINK`, `ARB_AXIS_A/B`,
+  `ARB_DROPLINK`). Corner (`double_wishbone.py`): rocker group added to
+  `OPTIONAL_POINTS`, `has_rocker`/`has_rocker_droplink`, all-or-nothing group
+  validation with the rocker-axis-parallel-to-XZ and off-axis checks,
+  instance-method `free_points()`/`output_points()` that include present rocker
+  points, `_rocker_constraints` (pushrod-outboard rigid-to-upright ×4, pushrod
+  length, pushrod-inboard rocker circle ×2, and droplink circle ×2 +
+  rigidity ×1 when present), plus pushrod/rocker viz links. Axle (`axle.py`):
+  optional `center:` block (`arb_axis_a/b`) and per-side `arb_droplink` parsed by
+  the axle (popped before `parse_hardpoints` so the corner class stays clean and
+  rejects `arb_droplink`), `has_arb`, all-or-nothing ARB validation,
+  `initial_state`/`free_points`/`output_points` extended with the CENTER axis
+  (fixed) and per-side ARB droplink (free), `_arb_constraints` (ARB-circle ×2 +
+  droplink length ×1 per side), and ARB/droplink/axis viz links. Metrics:
+  `signed_angle_about_axis` in `geometric.py`; `rocker_angle_deg` +
+  `torsion_bar_twist_deg` (side-sign-normalised) appended in
+  `compute_metrics_for_state` when `has_rocker`; raw `left/right_arb_arm_angle_deg`
+  + `arb_twist_deg` appended in `compute_metrics_for_axle_state` when `has_arb`.
+  `Suspension.output_points()` (base + overrides) added and wired into `cli.py`.
+  New test data (`corner_rocker_geometry.yaml`, `axle_geometry_rocker.yaml`,
+  `axle_rocker_sweep.yaml`) tuned so heave/roll/steer sweeps solve with residual
+  ~0 (rocker droplink at the +Y circle extreme and ARB droplink at the +X arc
+  extreme keep the droplink well-conditioned, avoiding a near-singular ARB arm).
+  New `tests/test_rocker_arb.py` (22 tests): signed-angle unit tests, load
+  validation, corner conservation/monotonicity + hand-verified bump sign, axle
+  heave symmetry, axle roll antisymmetry + twist sign + droplink conservation,
+  analytic-vs-FD Jacobian, CLI column smoke, and no-rocker regression. Full suite
+  359 passed (2 pre-existing mp4-animation env failures only), ruff + ty green.
 - 2026-07-04: Surveyed codebase; confirmed ISO 8855 axes; identified `PointID`
   keying as the single-corner bottleneck; established that Phase B needs no new
   constraint types or Jacobian codegen. Wrote this plan.

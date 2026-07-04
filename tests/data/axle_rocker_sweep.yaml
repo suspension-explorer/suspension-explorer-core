@@ -1,0 +1,29 @@
+version: 1
+steps: 5
+
+# Combined heave plus a steering input, for the rocker/ARB axle. Each target
+# names the side it drives; the rigid rack carries steer to the right corner.
+targets:
+  - point: WHEEL_CENTER
+    side: left
+    direction:
+      axis: Z
+    mode: relative
+    start: -20
+    stop: 20
+
+  - point: WHEEL_CENTER
+    side: right
+    direction:
+      axis: Z
+    mode: relative
+    start: -20
+    stop: 20
+
+  - point: TRACKROD_INBOARD
+    side: left
+    direction:
+      axis: Y
+    mode: relative
+    start: -8
+    stop: 8

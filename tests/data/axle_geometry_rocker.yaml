@@ -1,0 +1,63 @@
+type: double_wishbone_axle
+name: "test axle rocker"
+version: "0.0.1"
+units: MILLIMETERS
+
+# Mirror-mode axle with the full inboard actuation: pushrod, rocker (+ droplink),
+# torsion bar (coaxial with the rocker pivot), and an inboard anti-roll bar. The
+# left corner is described below; the right corner is the y-negated mirror. The
+# ARB axis lives in the shared, non-mirrored 'center' block.
+hardpoints:
+  side: left
+  mirror: true
+  points:
+    # Lower Wishbone.
+    lower_wishbone_inboard_front: {x: 250, y: 400, z: 200}
+    lower_wishbone_inboard_rear: {x: -250, y: 450, z: 200}
+    lower_wishbone_outboard: {x: 0, y: 900, z: 200}
+
+    # Upper Wishbone.
+    upper_wishbone_inboard_front: {x: 225, y: 350, z: 500}
+    upper_wishbone_inboard_rear: {x: -275, y: 350, z: 500}
+    upper_wishbone_outboard: {x: -25, y: 750, z: 500}
+
+    # Track Rod.
+    trackrod_inboard: {x: 50, y: 200, z: 250}
+    trackrod_outboard: {x: 150, y: 800, z: 275}
+
+    # Axle.
+    axle_inboard: {x: -20, y: 800, z: 308.426}
+    axle_outboard: {x: -20, y: 950, z: 313.426}
+
+    # Pushrod / rocker. Rocker axis parallel to XZ (equal Y = 340). PUSHROD_INBOARD
+    # rides 50 mm above the pivot, ROCKER_DROPLINK 50 mm below it (both off-axis).
+    pushrod_outboard: {x: 0, y: 870, z: 240}
+    pushrod_inboard: {x: 0, y: 340, z: 500}
+    rocker_axis_front: {x: 100, y: 340, z: 450}
+    rocker_axis_rear: {x: -100, y: 340, z: 450}
+    # Rocker droplink at the +Y extreme of the rocker circle (radius 50): there
+    # the circle tangent points in Z, so the droplink drives the ARB arm in its
+    # plane of motion, keeping the linkage well-conditioned.
+    rocker_droplink: {x: 0, y: 390, z: 450}
+
+    # ARB arm end (left) at the +X extreme of its arc about the transverse axis
+    # (lever 70 mm); its tangent is in Z, matching the droplink's Z throw.
+    arb_droplink: {x: 70, y: 150, z: 550}
+
+  # Shared ARB axis: transverse (along Y) through the centreline, mirror-symmetric
+  # (same x and z, equal-and-opposite y), so it is authored once and not mirrored.
+  center:
+    arb_axis_a: {x: 0, y: 150, z: 550}
+    arb_axis_b: {x: 0, y: -150, z: 550}
+
+# Configuration shared by both corners.
+config:
+  steered: true
+  wheel:
+    offset: 0
+    tire:
+      aspect_ratio: 0.55
+      section_width: 270
+      rim_diameter: 13
+  cg_position: {x: 1250, y: 0, z: 450}
+  wheelbase: 2500.0
