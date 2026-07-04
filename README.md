@@ -18,10 +18,12 @@ The tool is built around a numerical solver that determines the unique positions
 
 - Geometric Constraint Solver: Uses a numerical approach (Levenberg-Marquardt) with analytical Jacobians to solve for the kinematic state of the system based on geometric constraints.
 - Parametric Sweeps: Simulate suspension motion by sweeping through a range of inputs, such as vertical wheel travel and steering rack displacement.
-- Template-Based Suspension Models: Define suspension geometries using templates (currently double wishbone only) with simple YAML configuration files.
+- Template-Based Suspension Models: Define suspension geometries using templates (currently double wishbone, as a single corner or a full two-corner axle) with simple YAML configuration files.
+- Full-Axle Simulation: Solve left and right corners together as one coupled system (`double_wishbone_axle`), linked by a rigid steering rack. Geometry can be given for one side and mirrored, or for both sides explicitly.
+- Inboard Actuation: Optional F1-style pushrod/rocker packages per corner (rocker axes parallel to the XZ plane), with torsion bars on each rocker pivot and an inboard anti-roll bar actuated via droplinks.
 - Camber Shim Simulation: Model outboard camber shim configurations to simulate shimmed ball joint offsets.
 - Derived Points System: A dependency-aware system for calculating the position of non-kinematic points (like wheel centers) based on the solved positions of core hard points.
-- Suspension Metrics: Computes camber, caster, toe, kingpin inclination (KPI), scrub radius, mechanical trail, and side-view/front-view instant centres from the solved geometry.
+- Suspension Metrics: Computes camber, caster, toe, kingpin inclination (KPI), scrub radius, mechanical trail, and side-view/front-view instant centres from the solved geometry. Axle simulations add per-side metric columns plus roll centre position, total toe, track, rack displacement, rocker/torsion-bar angles, and anti-roll-bar twist.
 - Data Export: Save simulation results in wide-format CSV or Apache Parquet files for further analysis.
 - Visualization: Generate static plots of the design condition and create MP4/GIF animations of sweep motions.
 

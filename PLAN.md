@@ -305,7 +305,7 @@ Coordinate-system and sign-convention tests are first-class:
 | 1 | Core key generalisation (`Side`, `PointRef`, annotations, `Constraint.remap`) | done |
 | 2 | Axle model + loader + sweep side-targets + metrics + writer/CLI/viz + tests | done |
 | 3 | Pushrod/rocker/torsion bar/ARB + validation + metrics + tests | done |
-| 4 | Docs (README/CHANGELOG), full verification, push | pending |
+| 4 | Docs (README/CHANGELOG), full verification, push | done |
 
 ## Implementation notes (from survey)
 
@@ -323,6 +323,14 @@ Coordinate-system and sign-convention tests are first-class:
 
 ## Work log
 
+- 2026-07-04: Stage 4 done. Updated README features (axle simulation, inboard
+  actuation, axle metrics) and CHANGELOG (Unreleased section). Full-suite
+  verification at each stage: 359 passed; the only 2 failures are pre-existing
+  environmental mp4-animation e2e failures (no ffmpeg in the dev container,
+  reproduced identically at the pre-change commit; CI installs without the viz
+  extra and is unaffected). Ruff and `ty` clean. Design-condition renders of
+  both the plain axle and the rocker/ARB axle visually verified. All stages
+  pushed to `claude/suspension-axle-simulation-b71drh`.
 - 2026-07-04: Stage 3 done. Added the F1-style inboard actuation (pushrod /
   rocker / torsion bar / inboard ARB), all expressed with existing
   `DistanceConstraint`s — no new constraint types or Jacobian codegen. New
