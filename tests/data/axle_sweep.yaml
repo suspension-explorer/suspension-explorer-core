@@ -1,0 +1,30 @@
+version: 1
+steps: 5
+
+# Combined heave (both wheels move together in Z) plus a steering input on the
+# left trackrod (the rigid rack carries it to the right corner). Each target
+# names the side it drives.
+targets:
+  - point: WHEEL_CENTER
+    side: left
+    direction:
+      axis: Z
+    mode: relative
+    start: -30
+    stop: 30
+
+  - point: WHEEL_CENTER
+    side: right
+    direction:
+      axis: Z
+    mode: relative
+    start: -30
+    stop: 30
+
+  - point: TRACKROD_INBOARD
+    side: left
+    direction:
+      axis: Y
+    mode: relative
+    start: -10
+    stop: 10

@@ -273,7 +273,7 @@ Coordinate-system and sign-convention tests are first-class:
 |---|---|---|
 | 0 | Survey, plan (this file) | done |
 | 1 | Core key generalisation (`Side`, `PointRef`, annotations, `Constraint.remap`) | done |
-| 2 | Axle model + loader + sweep side-targets + metrics + writer/CLI/viz + tests | pending |
+| 2 | Axle model + loader + sweep side-targets + metrics + writer/CLI/viz + tests | done |
 | 3 | Pushrod/rocker/torsion bar/ARB + validation + metrics + tests | pending |
 | 4 | Docs (README/CHANGELOG), full verification, push | pending |
 
@@ -296,6 +296,30 @@ Coordinate-system and sign-convention tests are first-class:
 - 2026-07-04: Surveyed codebase; confirmed ISO 8855 axes; identified `PointID`
   keying as the single-corner bottleneck; established that Phase B needs no new
   constraint types or Jacobian codegen. Wrote this plan.
+- 2026-07-04: Stage 2 done. Added `suspensions/axle.py`
+  (`DoubleWishboneAxleSuspension`): composes two `DoubleWishboneSuspension`
+  corners, side-tags state/free-points/constraints/derived-points via
+  `PointRef`, couples them with a rigid-rack `DistanceConstraint`, and reuses
+  the corner machinery through a value-type-agnostic `_SideView`. Registered the
+  `double_wishbone_axle` type. Added a `Suspension.from_yaml_data` hook (base =
+  existing `load_suspension`; axle parses the mirror/explicit side schema and
+  mirrors camber-shim config for the RIGHT corner) and routed `load_geometry`
+  through it. Added `Suspension.compute_state_metrics` (branch-free CLI
+  dispatch) with `compute_metrics_for_axle_state` (per-side `left_`/`right_`
+  blocks plus `roll_center_{y,z}_mm`, `total_toe_deg`, `track_mm`,
+  `rack_displacement_mm`). Sweep loader gained `TargetSpec.side` and
+  suspension-aware key resolution (`Suspension.resolve_target_key`). Generalised
+  the visualizer over multiple `WheelAnchors` so the axle draws both wheels;
+  added the axle to the `visualize_geometry` whitelist with per-side ground
+  checks; kept matplotlib strictly optional. New tests in `tests/test_axle.py`
+  (loading/validation, single-corner equivalence anchor, heave symmetry,
+  steering monotonicity, roll, analytic-vs-FD Jacobian, CLI smoke) plus
+  `tests/data/axle_geometry{,_explicit}.yaml` and `axle_sweep.yaml`. Toe/
+  roadwheel sign convention: each corner's `roadwheel_angle_deg` (== toe) is
+  centreline-relative, so pure heave gives equal left/right values while
+  steering moves them with opposite sign (each monotonic in rack); `total_toe`
+  is their sum. Full suite (336 passed, 3 skipped), ruff, and `ty` green; e2e
+  goldens and single-corner path untouched; no new format drift.
 - 2026-07-04: Stage 1 done. Added `core/point_ref.py` (`Side`, `PointRef`,
   `PointKey` alias); loosened `PointID` annotations to `PointKey` in
   `state.py`, `constraints.py`, `solver.py`, `points/derived/manager.py`,
