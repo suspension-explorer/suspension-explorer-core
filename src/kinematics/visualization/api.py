@@ -66,7 +66,11 @@ def visualize_suspension_sweep(
     visualization_links = suspension.get_visualization_links()
 
     # Create visualizer.
-    visualizer = SuspensionVisualizer(visualization_links, wheel_config)
+    visualizer = SuspensionVisualizer(
+        visualization_links,
+        wheel_config,
+        wheel_anchors=suspension.wheel_visualization_anchors(),
+    )
 
     # Get initial positions for animation baseline.
     initial_state = suspension.initial_state()
@@ -111,13 +115,14 @@ def visualize_geometry(
         ) from e
 
     # Check for supported suspension types.
-    is_double_wishbone = suspension.TYPE_KEY in (
+    supported_types = (
         "double_wishbone",
         "double_wishbone_front",
         "double_wishbone_rear",
+        "double_wishbone_axle",
     )
 
-    if not is_double_wishbone:
+    if suspension.TYPE_KEY not in supported_types:
         raise NotImplementedError(
             "Geometry visualization only supported for double wishbone suspensions."
         )
@@ -127,24 +132,49 @@ def visualize_geometry(
     )
 
     state = suspension.initial_state()
-    z_offset = state.get(PointID.CONTACT_PATCH_CENTER)[Axis.Z]
 
-    # Report the final status.
-    if np.isclose(z_offset, 0.0, atol=1e-2):
-        typer.secho(
-            f"Geometry Check: OK. Contact patch at ground (Z = {z_offset:.3f} mm).",
-            fg=typer.colors.GREEN,
-        )
+    # Ground tangency: single-corner reads the corner's contact patch directly;
+    # the axle checks each side via its stripped corner state (PointRef keys).
+    if suspension.TYPE_KEY == "double_wishbone_axle":
+        from kinematics.core.point_ref import Side
+        from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
+
+        assert isinstance(suspension, DoubleWishboneAxleSuspension)
+        ground_checks = [
+            (
+                side.name.title(),
+                float(
+                    suspension.corner_state(state, side).get(
+                        PointID.CONTACT_PATCH_CENTER
+                    )[Axis.Z]
+                ),
+            )
+            for side in (Side.LEFT, Side.RIGHT)
+        ]
     else:
-        typer.secho(
-            "Geometry Check: WARNING. Contact patch center is not on the ground.",
-            fg=typer.colors.RED,
-        )
-        typer.echo("-" * 60)
-        typer.secho(
-            f"The contact patch center currently located at Z = {z_offset:.3f}mm."
-        )
-        typer.echo("-" * 60)
+        ground_checks = [("", float(state.get(PointID.CONTACT_PATCH_CENTER)[Axis.Z]))]
+
+    # Report the final status per checked corner.
+    for label, z_offset in ground_checks:
+        prefix = f"{label} " if label else ""
+        if np.isclose(z_offset, 0.0, atol=1e-2):
+            typer.secho(
+                f"Geometry Check: OK. {prefix}Contact patch at ground "
+                f"(Z = {z_offset:.3f} mm).",
+                fg=typer.colors.GREEN,
+            )
+        else:
+            typer.secho(
+                f"Geometry Check: WARNING. {prefix}Contact patch center is not "
+                "on the ground.",
+                fg=typer.colors.RED,
+            )
+            typer.echo("-" * 60)
+            typer.secho(
+                f"The {prefix.lower()}contact patch center currently located at "
+                f"Z = {z_offset:.3f}mm."
+            )
+            typer.echo("-" * 60)
 
     # Get wheel configuration from the suspension.
     if suspension.config is None:

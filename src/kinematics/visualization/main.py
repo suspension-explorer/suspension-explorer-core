@@ -4,19 +4,52 @@ import numpy as np
 
 from kinematics.core.enums import PointID
 from kinematics.core.geometry import Point3
+from kinematics.core.point_ref import PointKey
 
 
 @dataclass
 class LinkVisualization:
     """Configuration for visualizing a suspension link."""
 
-    points: list[PointID]
+    # Keyed by PointKey so axle links (PointRef) render alongside single-corner
+    # links (PointID); the drawing code only indexes state.positions.
+    points: list[PointKey]
     color: str
     label: str
     linewidth: float = 3.0
     linestyle: str = "-"
     marker: str = "o"
     markersize: float = 10.0
+
+
+@dataclass(frozen=True)
+class WheelAnchors:
+    """
+    Point keys anchoring a single drawn wheel.
+
+    A wheel is drawn from its centre/inboard/outboard rim points and the axle
+    axis. Single-corner models supply one anchor set keyed on ``PointID``; the
+    axle supplies one per side keyed on ``PointRef``.
+    """
+
+    center: PointKey
+    inboard: PointKey
+    outboard: PointKey
+    axle_inboard: PointKey
+    axle_outboard: PointKey
+
+
+def _default_wheel_anchors() -> list[WheelAnchors]:
+    """Single-corner default wheel anchor set."""
+    return [
+        WheelAnchors(
+            center=PointID.WHEEL_CENTER,
+            inboard=PointID.WHEEL_INBOARD,
+            outboard=PointID.WHEEL_OUTBOARD,
+            axle_inboard=PointID.AXLE_INBOARD,
+            axle_outboard=PointID.AXLE_OUTBOARD,
+        )
+    ]
 
 
 @dataclass
@@ -102,29 +135,51 @@ class SuspensionVisualizer:
         return band_inboard, band_outboard
 
     def __init__(
-        self, links: list[LinkVisualization], wheel_config: WheelVisualization
+        self,
+        links: list[LinkVisualization],
+        wheel_config: WheelVisualization,
+        wheel_anchors: list[WheelAnchors] | None = None,
     ):
         self.links = links
         self.wheel_config = wheel_config
+        # One anchor set per drawn wheel. Defaults to the single-corner wheel so
+        # existing callers are unaffected; the axle passes two (one per side).
+        self.wheel_anchors = (
+            wheel_anchors if wheel_anchors is not None else _default_wheel_anchors()
+        )
 
     def draw_wheel(
         self,
         ax,
-        positions: dict[PointID, Point3],
+        positions: dict[PointKey, Point3],
         num_bands: int = 48,
-    ) -> dict:
+    ) -> list[dict]:
         """
-        Draws a 3D wheel representation and returns the matplotlib artists.
+        Draw a 3D wheel per anchor set and return their matplotlib artists.
 
-        Returns dict with 'rims' (list of 3 lines) and 'bands' (list of lines).
+        Returns a list (one entry per wheel) of dicts with 'rims' (list of 3
+        lines) and 'bands' (list of lines).
         """
+        return [
+            self._draw_single_wheel(ax, positions, anchor, num_bands)
+            for anchor in self.wheel_anchors
+        ]
+
+    def _draw_single_wheel(
+        self,
+        ax,
+        positions: dict[PointKey, Point3],
+        anchor: WheelAnchors,
+        num_bands: int,
+    ) -> dict:
+        """Draw one wheel from a single anchor set and return its artists."""
         # Extract raw arrays for matplotlib drawing math.
-        wheel_center = positions[PointID.WHEEL_CENTER].data
-        wheel_inboard = positions[PointID.WHEEL_INBOARD].data
-        wheel_outboard = positions[PointID.WHEEL_OUTBOARD].data
+        wheel_center = positions[anchor.center].data
+        wheel_inboard = positions[anchor.inboard].data
+        wheel_outboard = positions[anchor.outboard].data
         axle_vector = (
-            positions[PointID.AXLE_OUTBOARD].data
-            - positions[PointID.AXLE_INBOARD].data
+            positions[anchor.axle_outboard].data
+            - positions[anchor.axle_inboard].data
         )
 
         axle_vector = axle_vector / np.linalg.norm(axle_vector)
@@ -207,20 +262,31 @@ class SuspensionVisualizer:
 
     def update_wheel(
         self,
-        artists: dict,
-        positions: dict[PointID, Point3],
+        artists: list[dict],
+        positions: dict[PointKey, Point3],
         num_bands: int = 36,
     ) -> None:
         """
-        Update the wheel artists with new geometry for animation.
+        Update every wheel's artists with new geometry for animation.
         """
+        for anchor, wheel_artists in zip(self.wheel_anchors, artists):
+            self._update_single_wheel(wheel_artists, positions, anchor, num_bands)
+
+    def _update_single_wheel(
+        self,
+        artists: dict,
+        positions: dict[PointKey, Point3],
+        anchor: WheelAnchors,
+        num_bands: int,
+    ) -> None:
+        """Update one wheel's artists from a single anchor set."""
         # Extract raw arrays for matplotlib drawing math.
-        wheel_center = positions[PointID.WHEEL_CENTER].data
-        wheel_inboard = positions[PointID.WHEEL_INBOARD].data
-        wheel_outboard = positions[PointID.WHEEL_OUTBOARD].data
+        wheel_center = positions[anchor.center].data
+        wheel_inboard = positions[anchor.inboard].data
+        wheel_outboard = positions[anchor.outboard].data
         axle_vector = (
-            positions[PointID.AXLE_OUTBOARD].data
-            - positions[PointID.AXLE_INBOARD].data
+            positions[anchor.axle_outboard].data
+            - positions[anchor.axle_inboard].data
         )
 
         axle_vector = axle_vector / np.linalg.norm(axle_vector)

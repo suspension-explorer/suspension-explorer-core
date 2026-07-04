@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Sequence
+from typing import TYPE_CHECKING, Annotated, Sequence
 
 import numpy as np
 import yaml
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from kinematics.core.enums import Axis, TargetPositionMode
+from kinematics.core.point_ref import Side
 from kinematics.core.types import (
     PointTarget,
     PointTargetAxis,
@@ -17,7 +18,15 @@ from kinematics.core.types import (
     SweepConfig,
     WorldAxisSystem,
 )
-from kinematics.io.validation import CIAxis, CIPointID, CITargetPositionMode
+from kinematics.io.validation import (
+    CIAxis,
+    CIPointID,
+    CITargetPositionMode,
+    coerce_enum,
+)
+
+if TYPE_CHECKING:
+    from kinematics.suspensions.base import Suspension
 
 # Shared axis <-> unit vector mapping.
 AXIS_VECTORS: dict[Axis, np.ndarray] = {
@@ -77,10 +86,19 @@ class TargetSpec(BaseModel):
     point: CIPointID
     direction: DirectionSpec
     name: str | None = None
+    side: Side | None = None
     mode: CITargetPositionMode = TargetPositionMode.RELATIVE
     start: float | None = None
     stop: float | None = None
     values: Sequence[float] | None = None
+
+    @field_validator("side", mode="before")
+    @classmethod
+    def coerce_side(cls, v: object) -> Side | None:
+        """Coerce a case-insensitive 'left'/'right' string to a Side."""
+        if v is None:
+            return None
+        return coerce_enum(Side, v)  # type: ignore[arg-type]
 
     def expand_values(self, default_steps: int | None) -> list[float]:
         """Expand this target into concrete values."""
@@ -121,12 +139,18 @@ class SweepFile(BaseModel):
         return v
 
 
-def parse_sweep_file(path: Path) -> SweepConfig:
+def parse_sweep_file(
+    path: Path,
+    suspension: "Suspension | None" = None,
+) -> SweepConfig:
     """
     Parse a sweep configuration file into a SweepConfig.
 
     Args:
         path: Path to the YAML sweep configuration file.
+        suspension: Optional suspension used to resolve each target's
+            ``(point, side)`` into a concrete point key. When omitted, targets
+            must not specify a ``side`` (single-corner behaviour).
 
     Returns:
         SweepConfig ready for use with the solver.
@@ -151,10 +175,13 @@ def parse_sweep_file(path: Path) -> SweepConfig:
     except Exception as e:
         raise ValueError(f"Invalid sweep specification: {e}") from e
 
-    return build_sweep_config(file_spec)
+    return build_sweep_config(file_spec, suspension)
 
 
-def build_sweep_config(file_spec: SweepFile) -> SweepConfig:
+def build_sweep_config(
+    file_spec: SweepFile,
+    suspension: "Suspension | None" = None,
+) -> SweepConfig:
     """
     Expand a validated SweepFile spec into an executable SweepConfig.
 
@@ -164,12 +191,16 @@ def build_sweep_config(file_spec: SweepFile) -> SweepConfig:
 
     Args:
         file_spec: A validated sweep specification.
+        suspension: Optional suspension used to resolve each target's
+            ``(point, side)`` into a concrete point key. When omitted, targets
+            must not specify a ``side``.
 
     Returns:
         SweepConfig ready for use with the solver.
 
     Raises:
-        ValueError: If the targets expand to unequal lengths.
+        ValueError: If the targets expand to unequal lengths, or a target sets
+            ``side`` without a suspension context.
     """
     # Expand values and verify equal lengths.
     target_sequences = [t.expand_values(file_spec.steps) for t in file_spec.targets]
@@ -191,9 +222,22 @@ def build_sweep_config(file_spec: SweepFile) -> SweepConfig:
 
             direction = PointTargetVector(Direction3(unit_vec))
 
+        # Resolve the concrete point key through the suspension when provided.
+        if suspension is not None:
+            point_key = suspension.resolve_target_key(
+                target_spec.point, target_spec.side
+            )
+        else:
+            if target_spec.side is not None:
+                raise ValueError(
+                    f"Sweep target for '{target_spec.point.name}' specifies a "
+                    "'side', which requires a suspension context to resolve."
+                )
+            point_key = target_spec.point
+
         targets = [
             PointTarget(
-                point_id=target_spec.point,
+                point_id=point_key,
                 direction=direction,
                 value=val,
                 mode=target_spec.mode,

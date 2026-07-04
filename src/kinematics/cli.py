@@ -6,7 +6,6 @@ from kinematics.io.geometry_loader import load_geometry
 from kinematics.io.results_writer import SolutionFrame, create_writer_for_path
 from kinematics.io.sweep_loader import parse_sweep_file
 from kinematics.main import solve_sweep
-from kinematics.metrics import compute_metrics_for_state
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
@@ -28,7 +27,7 @@ def sweep(
         kinematics sweep --geometry=geo.yaml --sweep=sweep.yaml --out=out.csv
     """
     suspension = load_geometry(geometry)
-    sweep_config = parse_sweep_file(sweep)
+    sweep_config = parse_sweep_file(sweep, suspension)
 
     solution_states, solver_stats = solve_sweep(suspension, sweep_config)
 
@@ -46,10 +45,12 @@ def sweep(
             if (pos := st.positions.get(pid)) is not None
         }
 
-        # Compute post-solve metrics for this state.
+        # Compute post-solve metrics for this state. Dispatch is polymorphic:
+        # single-corner models emit corner metrics, the axle emits per-side and
+        # axle-level metrics.
         metrics: dict[str, float | None] = {}
         if config is not None:
-            metrics = compute_metrics_for_state(st, suspension, config)
+            metrics = suspension.compute_state_metrics(st)
 
         frame = SolutionFrame(
             positions=positions,

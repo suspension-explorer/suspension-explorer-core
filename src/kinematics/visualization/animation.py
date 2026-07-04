@@ -10,8 +10,8 @@ from pathlib import Path
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 
-from kinematics.core.enums import PointID
 from kinematics.core.geometry import Point3
+from kinematics.core.point_ref import PointKey
 from kinematics.visualization.main import SuspensionVisualizer
 from kinematics.visualization.plots import (
     compute_bounds_from_states,
@@ -21,8 +21,8 @@ from kinematics.visualization.plots import (
 
 
 def create_animation(
-    position_states: list[dict[PointID, Point3]],
-    initial_positions: dict[PointID, Point3],
+    position_states: list[dict[PointKey, Point3]],
+    initial_positions: dict[PointKey, Point3],
     visualizer: SuspensionVisualizer,
     output_path: Path,
     fps: int = 20,
@@ -63,9 +63,9 @@ def create_animation(
     # Add legend once on iso view.
     axes["iso"].legend(loc="upper left")
 
-    # Use unified draw_wheel to create wheel artists.
+    # Use unified draw_wheel to create wheel artists (one dict per drawn wheel).
     num_bands = 36
-    wheel_artists: dict[str, dict[str, list]] = {k: {} for k in axes.keys()}
+    wheel_artists: dict[str, list[dict]] = {k: [] for k in axes.keys()}
     for view_name, ax in axes.items():
         wheel_artists[view_name] = visualizer.draw_wheel(
             ax, initial_positions, num_bands=num_bands
@@ -78,6 +78,15 @@ def create_animation(
 
     # Persistent title updated each frame (cheaper than re-creating)
     title_artist = fig.suptitle("", fontsize=16)
+
+    # The title reports travel of the first drawn wheel. Keyed via the wheel
+    # anchor so it works for both single-corner (PointID) and axle (PointRef).
+    title_center_key = visualizer.wheel_anchors[0].center
+
+    def _title_for(positions: dict[PointKey, Point3]) -> str:
+        wc_z = positions[title_center_key][2]
+        wc_z_init = initial_positions[title_center_key][2]
+        return f"Wheel Center Z: {wc_z - wc_z_init:.1f} [mm]"
 
     # Update function that only updates artist data (no clears/plots)
     def update(frame: int):
@@ -94,21 +103,14 @@ def create_animation(
             )
 
         # Update global title.
-        wc_z = positions[PointID.WHEEL_CENTER][2]
-        wc_z_init = initial_positions[PointID.WHEEL_CENTER][2]
-        tr_y = positions[PointID.TRACKROD_INBOARD][1]
-        tr_y_init = initial_positions[PointID.TRACKROD_INBOARD][1]
-        title_string = (
-            f"Wheel Center Z: {wc_z - wc_z_init:.1f} [mm]",
-            f"Rack Displacement: {tr_y - tr_y_init:.1f} [mm]",
-        )
-        title_artist.set_text("\n".join(title_string))
+        title_artist.set_text(_title_for(positions))
 
         artists = []
         for view_name in axes.keys():
             artists.extend(link_artists[view_name])
-            artists.extend(wheel_artists[view_name]["rims"])
-            artists.extend(wheel_artists[view_name]["bands"])
+            for wheel in wheel_artists[view_name]:
+                artists.extend(wheel["rims"])
+                artists.extend(wheel["bands"])
         return artists
 
     # Play forward then reverse (ping-pong).
@@ -152,15 +154,7 @@ def create_animation(
                         wheel_artists[view_name], positions, num_bands=num_bands
                     )
                 # Update global title.
-                wc_z = positions[PointID.WHEEL_CENTER][2]
-                wc_z_init = initial_positions[PointID.WHEEL_CENTER][2]
-                tr_y = positions[PointID.TRACKROD_INBOARD][1]
-                tr_y_init = initial_positions[PointID.TRACKROD_INBOARD][1]
-                title_string = (
-                    f"Wheel Center Z: {wc_z - wc_z_init:.1f} [mm]",
-                    f"Rack Displacement: {tr_y - tr_y_init:.1f} [mm]",
-                )
-                title_artist.set_text("\n".join(title_string))
+                title_artist.set_text(_title_for(positions))
                 if show_live:
                     fig.canvas.draw()
                     fig.canvas.flush_events()

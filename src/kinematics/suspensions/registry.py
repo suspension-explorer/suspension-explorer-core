@@ -21,9 +21,11 @@ def _ensure_registry_populated() -> None:
     """Import all suspension modules to populate registry."""
     if not SUSPENSION_REGISTRY:
         # Import triggers registration.
+        from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
         from kinematics.suspensions.double_wishbone import DoubleWishboneSuspension
 
         _register_class(DoubleWishboneSuspension)
+        _register_class(DoubleWishboneAxleSuspension)
 
 
 def _register_class(cls: SuspensionClass) -> None:

@@ -85,7 +85,7 @@ def load_geometry(file_path: Path) -> Suspension:
             f"Supported types: {', '.join(available)}"
         )
 
-    return load_suspension(yaml_data, suspension_class)
+    return suspension_class.from_yaml_data(yaml_data)
 
 
 def load_suspension(
