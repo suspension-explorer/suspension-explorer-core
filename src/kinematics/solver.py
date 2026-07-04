@@ -32,8 +32,8 @@ from kinematics.core.constants import (
     SOLVE_TOLERANCE_VALUE,
 )
 from kinematics.core.dual import seed_positions
-from kinematics.core.enums import PointID
 from kinematics.core.geometry import Point3
+from kinematics.core.point_ref import PointKey
 from kinematics.core.types import PointTarget, SweepConfig, TargetPositionMode
 from kinematics.core.vector_utils.generic import project_coordinate
 from kinematics.jacobians import (
@@ -286,14 +286,14 @@ class ResidualComputer:
         unwrapped via .data before being passed.
         """
         offsets = self.point_var_offsets
-        compute_fn: Callable[[dict[PointID, Point3]], np.ndarray]
+        compute_fn: Callable[[dict[PointKey, Point3]], np.ndarray]
 
         if isinstance(constraint, (DistanceConstraint, SphericalJointConstraint)):
             point_ids = (constraint.p1, constraint.p2)
             p1 = constraint.p1
             p2 = constraint.p2
 
-            def compute_distance(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_distance(pos: dict[PointKey, Point3]) -> np.ndarray:
                 return jac_distance(pos[p1].data, pos[p2].data)
 
             compute_fn = compute_distance
@@ -310,7 +310,7 @@ class ResidualComputer:
             v2_start = constraint.v2_start
             v2_end = constraint.v2_end
 
-            def compute_angle(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_angle(pos: dict[PointKey, Point3]) -> np.ndarray:
                 return jac_angle(
                     pos[v1_start].data,
                     pos[v1_end].data,
@@ -326,10 +326,8 @@ class ResidualComputer:
             p2 = constraint.p2
             p3 = constraint.p3
 
-            def compute_three_point_angle(pos: dict[PointID, Point3]) -> np.ndarray:
-                return jac_three_point_angle(
-                    pos[p1].data, pos[p2].data, pos[p3].data
-                )
+            def compute_three_point_angle(pos: dict[PointKey, Point3]) -> np.ndarray:
+                return jac_three_point_angle(pos[p1].data, pos[p2].data, pos[p3].data)
 
             compute_fn = compute_three_point_angle
 
@@ -345,7 +343,7 @@ class ResidualComputer:
             v2_start = constraint.v2_start
             v2_end = constraint.v2_end
 
-            def compute_vectors_parallel(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_vectors_parallel(pos: dict[PointKey, Point3]) -> np.ndarray:
                 return jac_vectors_parallel(
                     pos[v1_start].data,
                     pos[v1_end].data,
@@ -368,7 +366,7 @@ class ResidualComputer:
             v2_end = constraint.v2_end
 
             def compute_vectors_perpendicular(
-                pos: dict[PointID, Point3],
+                pos: dict[PointKey, Point3],
             ) -> np.ndarray:
                 return jac_vectors_perpendicular(
                     pos[v1_start].data,
@@ -391,7 +389,7 @@ class ResidualComputer:
             p3 = constraint.p3
             p4 = constraint.p4
 
-            def compute_equal_distance(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_equal_distance(pos: dict[PointKey, Point3]) -> np.ndarray:
                 return jac_equal_distance(
                     pos[p1].data, pos[p2].data, pos[p3].data, pos[p4].data
                 )
@@ -403,7 +401,7 @@ class ResidualComputer:
             fixed = np.zeros(3)
             fixed[constraint.axis.value] = 1.0
 
-            def compute_fixed_axis(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_fixed_axis(pos: dict[PointKey, Point3]) -> np.ndarray:
                 _ = pos
                 return fixed
 
@@ -415,7 +413,7 @@ class ResidualComputer:
             line_point = constraint.line_point.data
             line_direction = constraint.line_direction.data
 
-            def compute_point_on_line(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_point_on_line(pos: dict[PointKey, Point3]) -> np.ndarray:
                 return jac_point_on_line(pos[point_id].data, line_point, line_direction)
 
             compute_fn = compute_point_on_line
@@ -424,7 +422,7 @@ class ResidualComputer:
             point_ids = (constraint.point_id,)
             normal = constraint.plane_normal.data.copy()
 
-            def compute_point_on_plane(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_point_on_plane(pos: dict[PointKey, Point3]) -> np.ndarray:
                 _ = pos
                 return normal
 
@@ -442,7 +440,7 @@ class ResidualComputer:
             p3 = constraint.p3
             p4 = constraint.p4
 
-            def compute_coplanar(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_coplanar(pos: dict[PointKey, Point3]) -> np.ndarray:
                 return jac_coplanar(
                     pos[p1].data, pos[p2].data, pos[p3].data, pos[p4].data
                 )

@@ -9,8 +9,9 @@ from typing import Final, NamedTuple, Union
 
 import numpy as np
 
-from kinematics.core.enums import Axis, PointID, TargetPositionMode
+from kinematics.core.enums import Axis, TargetPositionMode
 from kinematics.core.geometry import Direction3
+from kinematics.core.point_ref import PointKey
 
 
 def frozen_unit_axis(values: tuple[float, float, float]) -> np.ndarray:
@@ -96,7 +97,7 @@ class PointTarget(NamedTuple):
         mode: Whether value is relative displacement or absolute coordinate
     """
 
-    point_id: PointID
+    point_id: PointKey
     direction: "PointTargetDirection"
     value: float
     mode: TargetPositionMode = TargetPositionMode.RELATIVE

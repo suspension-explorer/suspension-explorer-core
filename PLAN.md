@@ -272,7 +272,7 @@ Coordinate-system and sign-convention tests are first-class:
 | stage | content | status |
 |---|---|---|
 | 0 | Survey, plan (this file) | done |
-| 1 | Core key generalisation (`Side`, `PointRef`, annotations, `Constraint.remap`) | pending |
+| 1 | Core key generalisation (`Side`, `PointRef`, annotations, `Constraint.remap`) | done |
 | 2 | Axle model + loader + sweep side-targets + metrics + writer/CLI/viz + tests | pending |
 | 3 | Pushrod/rocker/torsion bar/ARB + validation + metrics + tests | pending |
 | 4 | Docs (README/CHANGELOG), full verification, push | pending |
@@ -296,3 +296,10 @@ Coordinate-system and sign-convention tests are first-class:
 - 2026-07-04: Surveyed codebase; confirmed ISO 8855 axes; identified `PointID`
   keying as the single-corner bottleneck; established that Phase B needs no new
   constraint types or Jacobian codegen. Wrote this plan.
+- 2026-07-04: Stage 1 done. Added `core/point_ref.py` (`Side`, `PointRef`,
+  `PointKey` alias); loosened `PointID` annotations to `PointKey` in
+  `state.py`, `constraints.py`, `solver.py`, `points/derived/manager.py`,
+  `core/types.py`, `core/dual.py`; added `Constraint.remap` (via per-class
+  `_POINT_ATTRS`) for re-keying constraints into side namespaces; added
+  `tests/test_point_ref.py`. No runtime/behavioural change; full suite, ruff,
+  and `ty` all green (e2e golden files untouched).

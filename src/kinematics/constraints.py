@@ -6,14 +6,16 @@ points in suspension kinematics, such as distances, angles, and positional const
 Each constraint computes a residual value that the solver attempts to drive to zero.
 """
 
+import copy
 from abc import ABC, abstractmethod
 from math import atan2
-from typing import Set
+from typing import Callable, ClassVar, Set
 
 import numpy as np
 
-from kinematics.core.enums import Axis, PointID
+from kinematics.core.enums import Axis
 from kinematics.core.geometry import Direction3, Point3
+from kinematics.core.point_ref import PointKey
 from kinematics.core.soft_math import softnorm
 from kinematics.core.vector_utils.geometric import (
     compute_point_to_plane_distance,
@@ -29,18 +31,29 @@ class Constraint(ABC):
     system. Each constraint computes a residual value representing the deviation from
     the desired condition. The solver minimizes these residuals to find valid
     configurations.
+
+    Subclasses declare their point-key attributes in the class-level
+    :attr:`_POINT_ATTRS` tuple so the generic :meth:`remap` can re-key a
+    constraint into another point namespace (e.g. side-qualifying a corner
+    constraint into an axle).
     """
+
+    # Names of the instance attributes that hold point keys. Each subclass
+    # overrides this; the base value is empty so a subclass that forgets to
+    # declare it simply remaps to an identical copy (and would fail loudly
+    # elsewhere if it actually had point attributes).
+    _POINT_ATTRS: ClassVar[tuple[str, ...]] = ()
 
     @property
     @abstractmethod
-    def involved_points(self) -> Set[PointID]:
+    def involved_points(self) -> Set[PointKey]:
         """
         Returns a set of all PointIDs that this constraint operates on.
         """
         pass
 
     @abstractmethod
-    def residual(self, positions: dict[PointID, Point3]) -> float:
+    def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Calculate constraint residual.
 
@@ -48,6 +61,29 @@ class Constraint(ABC):
         representing the constraint violation.
         """
         pass
+
+    def remap(self, mapping: Callable[[PointKey], PointKey]) -> "Constraint":
+        """
+        Return a new constraint of the same type with its point keys remapped.
+
+        Every point-key attribute named in :attr:`_POINT_ATTRS` is passed through
+        ``mapping``; all other parameters (target distances/angles, axes, line and
+        plane geometry, ...) are preserved unchanged. Used to re-key a
+        single-corner constraint into a side-qualified namespace, e.g.
+        ``constraint.remap(lambda pid: PointRef(Side.LEFT, pid))``.
+
+        The implementation shallow-copies the instance and overwrites only the
+        point-key attributes, so constraints are assumed immutable after
+        construction. Non-point members are shared with the original by
+        reference; in particular the remapped copy shares its ``line_point`` /
+        ``plane_point`` / ``plane_normal`` / ``line_direction`` objects with the
+        original. This is acceptable because those members are treated as
+        immutable (``line_point`` was already defensively copied in ``__init__``).
+        """
+        new = copy.copy(self)
+        for attr in self._POINT_ATTRS:
+            setattr(new, attr, mapping(getattr(self, attr)))
+        return new
 
 
 class DistanceConstraint(Constraint):
@@ -59,7 +95,9 @@ class DistanceConstraint(Constraint):
     suspension geometry.
     """
 
-    def __init__(self, p1: PointID, p2: PointID, target_distance: float):
+    _POINT_ATTRS: ClassVar[tuple[str, ...]] = ("p1", "p2")
+
+    def __init__(self, p1: PointKey, p2: PointKey, target_distance: float):
         """
         Initialize the distance constraint.
 
@@ -81,10 +119,10 @@ class DistanceConstraint(Constraint):
         self.target_distance = target_distance
 
     @property
-    def involved_points(self) -> Set[PointID]:
+    def involved_points(self) -> Set[PointKey]:
         return {self.p1, self.p2}
 
-    def residual(self, positions: dict[PointID, Point3]) -> float:
+    def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the distance residual.
 
@@ -104,7 +142,9 @@ class SphericalJointConstraint(Constraint):
     explicit for clarity when modeling ball joints in suspension systems.
     """
 
-    def __init__(self, p1: PointID, p2: PointID):
+    _POINT_ATTRS: ClassVar[tuple[str, ...]] = ("p1", "p2")
+
+    def __init__(self, p1: PointKey, p2: PointKey):
         """
         Initialize the spherical joint constraint.
 
@@ -116,10 +156,10 @@ class SphericalJointConstraint(Constraint):
         self.p2 = p2
 
     @property
-    def involved_points(self) -> Set[PointID]:
+    def involved_points(self) -> Set[PointKey]:
         return {self.p1, self.p2}
 
-    def residual(self, positions: dict[PointID, Point3]) -> float:
+    def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the distance between the two points.
 
@@ -139,12 +179,19 @@ class AngleConstraint(Constraint):
     geometric relationships in suspension linkages.
     """
 
+    _POINT_ATTRS: ClassVar[tuple[str, ...]] = (
+        "v1_start",
+        "v1_end",
+        "v2_start",
+        "v2_end",
+    )
+
     def __init__(
         self,
-        v1_start: PointID,
-        v1_end: PointID,
-        v2_start: PointID,
-        v2_end: PointID,
+        v1_start: PointKey,
+        v1_end: PointKey,
+        v2_start: PointKey,
+        v2_end: PointKey,
         target_angle: float,
     ):
         """
@@ -170,10 +217,10 @@ class AngleConstraint(Constraint):
         self.target_angle = target_angle
 
     @property
-    def involved_points(self) -> Set[PointID]:
+    def involved_points(self) -> Set[PointKey]:
         return {self.v1_start, self.v1_end, self.v2_start, self.v2_end}
 
-    def residual(self, positions: dict[PointID, Point3]) -> float:
+    def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the angle residual.
 
@@ -204,11 +251,13 @@ class ThreePointAngleConstraint(Constraint):
     directly specifies the angle at a joint formed by three connection points.
     """
 
+    _POINT_ATTRS: ClassVar[tuple[str, ...]] = ("p1", "p2", "p3")
+
     def __init__(
         self,
-        p1: PointID,
-        p2: PointID,  # vertex
-        p3: PointID,
+        p1: PointKey,
+        p2: PointKey,  # vertex
+        p3: PointKey,
         target_angle: float,
     ):
         """
@@ -232,10 +281,10 @@ class ThreePointAngleConstraint(Constraint):
         self.target_angle = target_angle
 
     @property
-    def involved_points(self) -> Set[PointID]:
+    def involved_points(self) -> Set[PointKey]:
         return {self.p1, self.p2, self.p3}
 
-    def residual(self, positions: dict[PointID, Point3]) -> float:
+    def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the angle residual at the vertex.
 
@@ -267,12 +316,19 @@ class VectorsParallelConstraint(Constraint):
     suspension systems.
     """
 
+    _POINT_ATTRS: ClassVar[tuple[str, ...]] = (
+        "v1_start",
+        "v1_end",
+        "v2_start",
+        "v2_end",
+    )
+
     def __init__(
         self,
-        v1_start: PointID,
-        v1_end: PointID,
-        v2_start: PointID,
-        v2_end: PointID,
+        v1_start: PointKey,
+        v1_end: PointKey,
+        v2_start: PointKey,
+        v2_end: PointKey,
     ):
         """
         Initialize the parallel vectors constraint.
@@ -289,10 +345,10 @@ class VectorsParallelConstraint(Constraint):
         self.v2_end = v2_end
 
     @property
-    def involved_points(self) -> Set[PointID]:
+    def involved_points(self) -> Set[PointKey]:
         return {self.v1_start, self.v1_end, self.v2_start, self.v2_end}
 
-    def residual(self, positions: dict[PointID, Point3]) -> float:
+    def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the parallel vectors constraint residual.
 
@@ -323,12 +379,19 @@ class VectorsPerpendicularConstraint(Constraint):
     relationships in suspension geometry.
     """
 
+    _POINT_ATTRS: ClassVar[tuple[str, ...]] = (
+        "v1_start",
+        "v1_end",
+        "v2_start",
+        "v2_end",
+    )
+
     def __init__(
         self,
-        v1_start: PointID,
-        v1_end: PointID,
-        v2_start: PointID,
-        v2_end: PointID,
+        v1_start: PointKey,
+        v1_end: PointKey,
+        v2_start: PointKey,
+        v2_end: PointKey,
     ):
         """
         Initialize the perpendicular vectors constraint.
@@ -345,10 +408,10 @@ class VectorsPerpendicularConstraint(Constraint):
         self.v2_end = v2_end
 
     @property
-    def involved_points(self) -> Set[PointID]:
+    def involved_points(self) -> Set[PointKey]:
         return {self.v1_start, self.v1_end, self.v2_start, self.v2_end}
 
-    def residual(self, positions: dict[PointID, Point3]) -> float:
+    def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the perpendicular constraint residual.
 
@@ -373,12 +436,14 @@ class EqualDistanceConstraint(Constraint):
     relationships in suspension systems.
     """
 
+    _POINT_ATTRS: ClassVar[tuple[str, ...]] = ("p1", "p2", "p3", "p4")
+
     def __init__(
         self,
-        p1: PointID,
-        p2: PointID,
-        p3: PointID,
-        p4: PointID,
+        p1: PointKey,
+        p2: PointKey,
+        p3: PointKey,
+        p4: PointKey,
     ):
         """
         Initialize the equal distance constraint.
@@ -395,10 +460,10 @@ class EqualDistanceConstraint(Constraint):
         self.p4 = p4
 
     @property
-    def involved_points(self) -> Set[PointID]:
+    def involved_points(self) -> Set[PointKey]:
         return {self.p1, self.p2, self.p3, self.p4}
 
-    def residual(self, positions: dict[PointID, Point3]) -> float:
+    def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the equal distance residual.
 
@@ -421,7 +486,9 @@ class FixedAxisConstraint(Constraint):
     system.
     """
 
-    def __init__(self, point_id: PointID, axis: Axis, value: float):
+    _POINT_ATTRS: ClassVar[tuple[str, ...]] = ("point_id",)
+
+    def __init__(self, point_id: PointKey, axis: Axis, value: float):
         """
         Initialize the fixed axis constraint.
 
@@ -435,10 +502,10 @@ class FixedAxisConstraint(Constraint):
         self.value = value
 
     @property
-    def involved_points(self) -> Set[PointID]:
+    def involved_points(self) -> Set[PointKey]:
         return {self.point_id}
 
-    def residual(self, positions: dict[PointID, Point3]) -> float:
+    def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the axis coordinate residual.
 
@@ -458,9 +525,11 @@ class PointOnLineConstraint(Constraint):
     maintaining alignment in suspension mechanisms.
     """
 
+    _POINT_ATTRS: ClassVar[tuple[str, ...]] = ("point_id",)
+
     def __init__(
         self,
-        point_id: PointID,
+        point_id: PointKey,
         line_point: Point3,
         line_direction: Direction3,
     ):
@@ -485,10 +554,10 @@ class PointOnLineConstraint(Constraint):
         self.line_direction = line_direction
 
     @property
-    def involved_points(self) -> Set[PointID]:
+    def involved_points(self) -> Set[PointKey]:
         return {self.point_id}
 
-    def residual(self, positions: dict[PointID, Point3]) -> float:
+    def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the point-to-line distance residual.
 
@@ -515,9 +584,11 @@ class PointOnPlaneConstraint(Constraint):
     modeling planar mechanisms in suspension systems.
     """
 
+    _POINT_ATTRS: ClassVar[tuple[str, ...]] = ("point_id",)
+
     def __init__(
         self,
-        point_id: PointID,
+        point_id: PointKey,
         plane_point: Point3,
         plane_normal: Direction3,
     ):
@@ -539,10 +610,10 @@ class PointOnPlaneConstraint(Constraint):
         self.plane_normal = plane_normal
 
     @property
-    def involved_points(self) -> Set[PointID]:
+    def involved_points(self) -> Set[PointKey]:
         return {self.point_id}
 
-    def residual(self, positions: dict[PointID, Point3]) -> float:
+    def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the signed distance from point to plane.
 
@@ -564,7 +635,9 @@ class CoplanarPointsConstraint(Constraint):
     in suspension systems.
     """
 
-    def __init__(self, p1: PointID, p2: PointID, p3: PointID, p4: PointID):
+    _POINT_ATTRS: ClassVar[tuple[str, ...]] = ("p1", "p2", "p3", "p4")
+
+    def __init__(self, p1: PointKey, p2: PointKey, p3: PointKey, p4: PointKey):
         """
         Initialize the coplanar points constraint.
 
@@ -580,10 +653,10 @@ class CoplanarPointsConstraint(Constraint):
         self.p4 = p4
 
     @property
-    def involved_points(self) -> Set[PointID]:
+    def involved_points(self) -> Set[PointKey]:
         return {self.p1, self.p2, self.p3, self.p4}
 
-    def residual(self, positions: dict[PointID, Point3]) -> float:
+    def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the coplanarity residual using scalar triple product.
 
