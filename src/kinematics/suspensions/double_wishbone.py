@@ -16,6 +16,7 @@ from kinematics.constraints import (
     Constraint,
     DistanceConstraint,
     PointOnLineConstraint,
+    ScalarTripleProductConstraint,
 )
 from kinematics.core.constants import EPS_GEOMETRIC
 from kinematics.core.enums import Axis, PointID, ShimType
@@ -24,6 +25,7 @@ from kinematics.core.types import WorldAxisSystem
 from kinematics.core.vector_utils.geometric import (
     compute_point_point_distance,
     compute_point_to_line_distance,
+    compute_scalar_triple_product,
     compute_vector_vector_angle,
     intersect_line_with_axis_aligned_plane,
     intersect_line_with_vertical_plane,
@@ -381,6 +383,32 @@ class DoubleWishboneSuspension(Suspension):
             add_distance(PointID.ROCKER_DROPLINK, PointID.ROCKER_AXIS_FRONT)
             add_distance(PointID.ROCKER_DROPLINK, PointID.ROCKER_AXIS_REAR)
             add_distance(PointID.PUSHROD_INBOARD, PointID.ROCKER_DROPLINK)
+
+            # Chirality pin: the droplink pickup is fixed by only distances (two
+            # to the axis points, one chord to the pushrod pickup), which admit a
+            # mirror solution -- reflecting the droplink through the plane of the
+            # axis and the pushrod pickup satisfies every distance but inverts the
+            # rigid rocker body. Hold the signed scalar triple product of
+            # (axis_front, axis_rear, pushrod_inboard, rocker_droplink) at its
+            # design value to select the correct handedness. Skipped for a
+            # degenerate planar rocker (all four points coplanar at design), where
+            # the two branches coincide and the triple product carries no sign.
+            design_triple = compute_scalar_triple_product(
+                pos[PointID.ROCKER_AXIS_REAR] - pos[PointID.ROCKER_AXIS_FRONT],
+                pos[PointID.PUSHROD_INBOARD] - pos[PointID.ROCKER_AXIS_FRONT],
+                pos[PointID.ROCKER_DROPLINK] - pos[PointID.ROCKER_AXIS_FRONT],
+            )
+            if abs(design_triple) >= 1e-6:
+                constraints.append(
+                    ScalarTripleProductConstraint(
+                        PointID.ROCKER_AXIS_FRONT,
+                        PointID.ROCKER_AXIS_REAR,
+                        PointID.PUSHROD_INBOARD,
+                        PointID.ROCKER_DROPLINK,
+                        target_volume=design_triple,
+                        scale=max(abs(design_triple), 1.0),
+                    )
+                )
 
         return constraints
 

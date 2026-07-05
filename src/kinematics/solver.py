@@ -21,12 +21,14 @@ from kinematics.constraints import (
     FixedAxisConstraint,
     PointOnLineConstraint,
     PointOnPlaneConstraint,
+    ScalarTripleProductConstraint,
     SphericalJointConstraint,
     ThreePointAngleConstraint,
     VectorsParallelConstraint,
     VectorsPerpendicularConstraint,
 )
 from kinematics.core.constants import (
+    SOLVE_ACCEPT_RESIDUAL,
     SOLVE_TOLERANCE_GRAD,
     SOLVE_TOLERANCE_STEP,
     SOLVE_TOLERANCE_VALUE,
@@ -71,6 +73,7 @@ class SolverConfig(NamedTuple):
     xtol: float = SOLVE_TOLERANCE_STEP
     gtol: float = SOLVE_TOLERANCE_GRAD
     verbose: int = 0
+    residual_tolerance: float = SOLVE_ACCEPT_RESIDUAL
 
 
 @dataclass
@@ -428,6 +431,31 @@ class ResidualComputer:
 
             compute_fn = compute_point_on_plane
 
+        elif isinstance(constraint, ScalarTripleProductConstraint):
+            # Must precede the CoplanarPointsConstraint branch (it is a
+            # subclass). The residual only shifts the coplanar residual by a
+            # constant (target_volume) and divides by a constant (scale), so the
+            # Jacobian is the coplanar row scaled by 1 / scale.
+            point_ids = (
+                constraint.p1,
+                constraint.p2,
+                constraint.p3,
+                constraint.p4,
+            )
+            p1 = constraint.p1
+            p2 = constraint.p2
+            p3 = constraint.p3
+            p4 = constraint.p4
+            scale = constraint.scale
+
+            def compute_scalar_triple(pos: dict[PointKey, Point3]) -> np.ndarray:
+                return (
+                    jac_coplanar(pos[p1].data, pos[p2].data, pos[p3].data, pos[p4].data)
+                    / scale
+                )
+
+            compute_fn = compute_scalar_triple
+
         elif isinstance(constraint, CoplanarPointsConstraint):
             point_ids = (
                 constraint.p1,
@@ -574,6 +602,43 @@ def convert_targets_to_absolute(
     return resolved
 
 
+def describe_constraint(constraint: Constraint) -> str:
+    """
+    Human-readable one-line description of a constraint for error messages.
+
+    Renders the constraint class name and the names of the points it involves,
+    e.g. ``DistanceConstraint(left_trackrod_inboard, right_trackrod_inboard)``.
+    Point keys may be plain ``PointID`` or side-qualified ``PointRef``; both
+    expose a ``.name``.
+    """
+    point_names = ", ".join(
+        sorted(getattr(p, "name", str(p)) for p in constraint.involved_points)
+    )
+    return f"{type(constraint).__name__}({point_names})"
+
+
+def describe_worst_residual(
+    residuals: np.ndarray,
+    constraints: list[Constraint],
+    step_targets: list[PointTarget],
+) -> str:
+    """
+    Describe the worst (largest-magnitude) residual row in a residual vector.
+
+    The residual vector is ordered ``[constraint residuals..., target
+    residuals...]``. If the worst row is a constraint, the description names the
+    constraint (class + involved points); if it is a target, it names the target
+    point and direction.
+    """
+    worst = int(np.argmax(np.abs(residuals)))
+    n_constraints = len(constraints)
+    if worst < n_constraints:
+        return f"constraint {describe_constraint(constraints[worst])}"
+    target = step_targets[worst - n_constraints]
+    point_name = getattr(target.point_id, "name", str(target.point_id))
+    return f"target on point '{point_name}' (direction {target.direction})"
+
+
 def solve_suspension_sweep(
     initial_state: SuspensionState,
     constraints: list[Constraint],
@@ -636,7 +701,7 @@ def solve_suspension_sweep(
     # the shared least-squares helper for LM dimension validation.
     n_residuals = residual_computer.n_residuals
 
-    for step_targets in sweep_targets:
+    for step_index, step_targets in enumerate(sweep_targets):
         result = solve_least_squares_problem(
             residual_function=residual_computer.compute,
             x_0=x_0,
@@ -650,6 +715,26 @@ def solve_suspension_sweep(
             raise RuntimeError(
                 f"Solver failed to converge for targets: {step_targets}."
                 f"\nMessage: {result.message}"
+            )
+
+        # A converged solve can still return a nonzero least-squares compromise
+        # when the requested targets are infeasible (a link topped out at its
+        # travel limit, a kinematic lock-out). SciPy reports success on that
+        # compromise, so guard the residual explicitly and fail loudly rather
+        # than emitting silent garbage.
+        step_max_residual = (
+            float(np.max(np.abs(result.fun))) if len(result.fun) > 0 else 0.0
+        )
+        if step_max_residual > solver_config.residual_tolerance:
+            worst = describe_worst_residual(result.fun, constraints, step_targets)
+            raise RuntimeError(
+                f"Solve at sweep step {step_index} did not reach an acceptable "
+                f"residual: worst residual {step_max_residual:.6g} exceeds the "
+                f"acceptance tolerance {solver_config.residual_tolerance:.6g} "
+                f"(solver ftol {solver_config.ftol:.6g}). Worst residual row: "
+                f"{worst}. The mechanism likely cannot reach the requested targets "
+                "(kinematic lock-out / infeasible target combination); reduce the "
+                "sweep range or check the linkage geometry."
             )
 
         # Synchronize working_state with the accepted solution. The solver
@@ -669,11 +754,10 @@ def solve_suspension_sweep(
         solution_states.append(working_state.copy())
 
         # Collect solver information for this step.
-        max_residual = float(np.max(np.abs(result.fun))) if len(result.fun) > 0 else 0.0
         solver_info = SolverInfo(
             converged=result.success,
             nfev=result.nfev,
-            max_residual=max_residual,
+            max_residual=step_max_residual,
         )
         solver_stats.append(solver_info)
 

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import typer
 
+from kinematics.diagnostics import diagnose_sweep
 from kinematics.io.geometry_loader import load_geometry
 from kinematics.io.results_writer import SolutionFrame, create_writer_for_path
 from kinematics.io.sweep_loader import parse_sweep_file
@@ -30,6 +31,20 @@ def sweep(
     sweep_config = parse_sweep_file(sweep, suspension)
 
     solution_states, solver_stats = solve_sweep(suspension, sweep_config)
+
+    # Post-sweep diagnostics: the solver already raised for hard infeasibility,
+    # so anything here is advisory (branch snaps, chirality inversion,
+    # transmission margin) or a belt-and-braces re-check. Data is still written.
+    diagnostics = diagnose_sweep(suspension, solution_states, solver_stats)
+    for issue in diagnostics.issues:
+        prefix = "ERROR" if issue.severity == "error" else "WARNING"
+        typer.echo(f"{prefix}: {issue.message}", err=True)
+    if diagnostics.issues:
+        typer.echo(
+            f"Diagnostics: {len(diagnostics.errors)} error(s), "
+            f"{len(diagnostics.warnings)} warning(s).",
+            err=True,
+        )
 
     # Write out in wide format.
     writer = create_writer_for_path(

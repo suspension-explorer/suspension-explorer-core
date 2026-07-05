@@ -13,6 +13,14 @@ SOLVE_TOLERANCE_VALUE = 1e-5  # 0.01um for mm units.
 SOLVE_TOLERANCE_STEP = 1e-9
 SOLVE_TOLERANCE_GRAD = 1e-9
 
+# Maximum acceptable residual (mm / radian scale) after a converged solve. A
+# converged least-squares solve on an infeasible target (e.g. a link topped out
+# at its travel limit) can still return a nonzero least-squares compromise while
+# reporting success. Any step whose worst residual exceeds this is treated as a
+# genuine failure (kinematic lock-out / infeasible target) rather than silent
+# garbage. Healthy in-range solves sit ~1e-6, far below this.
+SOLVE_ACCEPT_RESIDUAL = 1e-3
+
 # Tolerance for tests; has headroom over solve tolerances.
 TEST_TOLERANCE = 1e-3
 

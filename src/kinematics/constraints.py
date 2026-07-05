@@ -668,3 +668,69 @@ class CoplanarPointsConstraint(Constraint):
         v2 = positions[self.p3] - pos1
         v3 = positions[self.p4] - pos1
         return compute_scalar_triple_product(v1, v2, v3)
+
+
+class ScalarTripleProductConstraint(CoplanarPointsConstraint):
+    """
+    Pins the signed scalar triple product of four points to a target volume.
+
+    The residual is ``(triple(p1..p4) - target_volume) / scale`` where
+    ``triple`` is the same scalar triple product as
+    :class:`CoplanarPointsConstraint`: ``(p2 - p1) . ((p3 - p1) x (p4 - p1))``,
+    the signed volume of the parallelepiped spanned by the three edge vectors
+    from ``p1``.
+
+    This constraint exists to pin rigid-body *handedness* (chirality) that plain
+    distance constraints cannot. A point constrained only by distances to three
+    reference points admits a mirror-image solution: reflecting it through the
+    plane of the three references leaves every distance unchanged but flips the
+    sign of the triple product. In the pushrod/rocker linkage the droplink pickup
+    is fixed by two distances to the rocker-axis points plus one chord distance to
+    the pushrod pickup, so the solver can fold the rocker onto its reflected
+    branch. Holding the triple product at its design value (with the design sign)
+    selects the correct branch and keeps the rigid rocker body from inverting.
+
+    ``target_volume`` is the design triple product (with sign); ``scale`` is a
+    positive normaliser (typically ``max(abs(target_volume), 1.0)``) that keeps
+    the residual O(1)-comparable with the mm/radian-scale residuals of the other
+    constraints, so the solver weights it sensibly.
+    """
+
+    def __init__(
+        self,
+        p1: PointKey,
+        p2: PointKey,
+        p3: PointKey,
+        p4: PointKey,
+        target_volume: float,
+        scale: float = 1.0,
+    ):
+        """
+        Initialize the scalar-triple-product (chirality) constraint.
+
+        Args:
+            p1: First point (apex of the edge vectors).
+            p2: Second point.
+            p3: Third point.
+            p4: Fourth point.
+            target_volume: The design signed volume to hold the triple product at.
+            scale: Positive normaliser dividing the residual.
+
+        Raises:
+            ValueError: If scale is not strictly positive.
+        """
+        if scale <= 0:
+            raise ValueError(f"scale must be strictly positive, got {scale}")
+        super().__init__(p1, p2, p3, p4)
+        self.target_volume = target_volume
+        self.scale = scale
+
+    def residual(self, positions: dict[PointKey, Point3]) -> float:
+        """
+        Compute the normalised signed-volume residual.
+
+        Returns ``(triple(p1..p4) - target_volume) / scale``. Zero indicates the
+        four points span the design signed volume (and hence the design
+        handedness).
+        """
+        return (super().residual(positions) - self.target_volume) / self.scale

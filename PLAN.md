@@ -323,6 +323,45 @@ Coordinate-system and sign-convention tests are first-class:
 
 ## Work log
 
+- 2026-07-05: Robustness pass on the rocker/ARB axle against out-of-range
+  sweeps (three defects reproduced on `axle_geometry_rocker.yaml`).
+  1. **Chirality constraint.** Added `ScalarTripleProductConstraint`
+     (`constraints.py`), a `CoplanarPointsConstraint` subclass whose residual is
+     `(triple - target_volume) / scale`. It pins rigid-body handedness that
+     distance constraints alone cannot (the droplink pickup admits a mirror
+     branch). The solver Jacobian reuses `jac_coplanar / scale` (new branch
+     before the coplanar branch; no new codegen). `DoubleWishboneSuspension`
+     now appends this constraint over
+     `(ROCKER_AXIS_FRONT, ROCKER_AXIS_REAR, PUSHROD_INBOARD, ROCKER_DROPLINK)`
+     whenever the rocker+droplink is present (skipped if the design triple is
+     < 1e-6, i.e. a degenerate planar rocker); the axle inherits it per side via
+     `remap`. This stops the LEFT rocker folding from its design triple -540000
+     onto the +540000 mirror branch.
+  2. **Residual acceptance.** `SolverConfig` gained `residual_tolerance`
+     (default `SOLVE_ACCEPT_RESIDUAL = 1e-3`, new in `core/constants.py`).
+     `solve_suspension_sweep` now raises an informative `RuntimeError` naming
+     the step, the worst residual, the tolerance, and the offending
+     constraint/target (`describe_constraint` / `describe_worst_residual`
+     helpers) instead of returning a converged-but-garbage least-squares
+     compromise (residuals reached 0.75 mm at the extremes while `converged`
+     was True).
+  3. **Diagnostics module** (`diagnostics.py`): `diagnose_sweep(suspension,
+     states, stats) -> SweepDiagnostics` with `DiagnosticIssue` records over
+     four checks — convergence/residual (error), continuity/branch-snap jumps
+     (warning), chirality inversion (error, belt-and-braces on the constraint),
+     and transmission/topping-out margin (warning below 0.15 = ~8.6 deg from
+     toggle). Handles both `PointID` corners and `PointRef` axles via a
+     deferred-import corner iterator. Wired into `cli.py sweep` (issues echoed
+     to stderr, data still written).
+  Reproduction outcome: the original sweep starts at an out-of-range roll
+  (step 0 = left -80 / right +90), so the solver now raises the informative
+  RuntimeError at **step 0** (worst row: LEFT rocker `ScalarTripleProduct`),
+  rather than proceeding on the mirror branch. Feasible travel for this fixture
+  (bisection, chirality active): left bump ~+118 mm, left droop ~-72 mm, roll
+  ~+/-46 mm/side. In-range sweeps solve smoothly with the triple sign constant
+  on both sides. New `tests/test_diagnostics.py` (16 tests) plus the existing
+  axle FD Jacobian test now also covering the new constraint. Full suite green
+  except the 2 known ffmpeg mp4 e2e env failures; ruff + ty clean.
 - 2026-07-05: Visual-verification rework of the rocker/ARB fixture per review:
   longer rocker levers (pushrod lever ~95 mm, droplink lever 90 mm directly
   inboard of the pivot so its tangent is pure Z), ARB moved BELOW the rocker
