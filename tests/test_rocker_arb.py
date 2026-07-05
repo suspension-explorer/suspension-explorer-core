@@ -359,8 +359,20 @@ class TestAxleHeave:
         states, stats = solve_sweep(axle, _axle_sweep(heave, heave, [0.0, 0.0]))
         assert all(s.converged for s in stats)
 
+        design = axle.initial_state()
         for st in states:
             row = axle.compute_state_metrics(st)
+            # Wheel up (+Z) must drive the droplink DOWN (-Z) on both sides:
+            # the rocker's droplink lever sits on the opposite side of the pivot
+            # axis from the pushrod lever, and the ARB lives below the rocker.
+            for side in (Side.LEFT, Side.RIGHT):
+                for pid in (PointID.ROCKER_DROPLINK, PointID.ARB_DROPLINK):
+                    dz = float(st.positions[PointRef(side, pid)][Axis.Z]) - float(
+                        design.positions[PointRef(side, pid)][Axis.Z]
+                    )
+                    assert dz < 0.0, (
+                        f"{side.name} {pid.name} should move down in bump, got {dz}"
+                    )
             # Rocker angles equal on both sides (side-normalised).
             assert row["left_rocker_angle_deg"] == pytest.approx(
                 row["right_rocker_angle_deg"], abs=TEST_TOLERANCE
@@ -414,11 +426,15 @@ class TestAxleRoll:
             assert left * right < 0.0, f"rocker angles not opposite: {left}, {right}"
             assert abs(left) == pytest.approx(abs(right), rel=0.1)
 
-            # Left-wheel-up produces POSITIVE ARB twist. arb_twist = left_arm -
-            # right_arm about the authored ARB_AXIS_A(+Y) -> ARB_AXIS_B(-Y)
-            # direction; with the left arm swinging positive and the right arm
-            # negative, the difference is > 0.
-            assert twist > 0.0
+            # Left-wheel-up produces NEGATIVE ARB twist for this fixture.
+            # Derivation: the ARB axis direction is ARB_AXIS_A(+Y) ->
+            # ARB_AXIS_B(-Y), i.e. -Y; each arm end sits on an 80 mm lever in
+            # +X off the bar. An arm end moving down (-Z) at radius +X is a
+            # NEGATIVE rotation about -Y (velocity of +ω about -Y at radius +X
+            # is (0, 0, +ωr)). Left wheel up pushes the left droplink (and arm)
+            # down => left_arm < 0; right wheel down lifts the right arm =>
+            # right_arm > 0; arb_twist = left_arm - right_arm < 0.
+            assert twist < 0.0
 
             # Droplink lengths conserved on both sides.
             for side in (Side.LEFT, Side.RIGHT):

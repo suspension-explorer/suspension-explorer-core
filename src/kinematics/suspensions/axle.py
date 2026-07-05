@@ -458,35 +458,34 @@ class DoubleWishboneAxleSuspension(Suspension):
         )
 
         if self.has_arb:
-            # Shared ARB axis line.
+            # The whole ARB as one series: left arm end, in along the left lever
+            # arm to the bar end, along the bar, and out the right lever arm to
+            # the right arm end. Pair each side with its nearer bar end (at
+            # design) so the levers draw from the correct ends of the bar.
+            design = self.initial_state()
+            left_droplink = design.positions[PointRef(Side.LEFT, PointID.ARB_DROPLINK)]
+            axis_a = design.positions[PointRef(Side.CENTER, PointID.ARB_AXIS_A)]
+            axis_b = design.positions[PointRef(Side.CENTER, PointID.ARB_AXIS_B)]
+            near_left = compute_point_point_distance(left_droplink, axis_a)
+            near_right = compute_point_point_distance(left_droplink, axis_b)
+            if near_left <= near_right:
+                left_end, right_end = PointID.ARB_AXIS_A, PointID.ARB_AXIS_B
+            else:
+                left_end, right_end = PointID.ARB_AXIS_B, PointID.ARB_AXIS_A
             links.append(
                 LinkVisualization(
                     points=[
-                        PointRef(Side.CENTER, PointID.ARB_AXIS_A),
-                        PointRef(Side.CENTER, PointID.ARB_AXIS_B),
+                        PointRef(Side.LEFT, PointID.ARB_DROPLINK),
+                        PointRef(Side.CENTER, left_end),
+                        PointRef(Side.CENTER, right_end),
+                        PointRef(Side.RIGHT, PointID.ARB_DROPLINK),
                     ],
                     color="teal",
-                    label="ARB Axis",
-                    linestyle="--",
+                    label="Anti-Roll Bar",
                 )
             )
-            # Per side: the ARB arm (axis end -> arm droplink) and the droplink
-            # joining the rocker to the ARB arm.
-            arm_axis = {
-                Side.LEFT: PointID.ARB_AXIS_A,
-                Side.RIGHT: PointID.ARB_AXIS_B,
-            }
+            # Droplinks joining each rocker to its ARB arm end.
             for side in (Side.LEFT, Side.RIGHT):
-                links.append(
-                    LinkVisualization(
-                        points=[
-                            PointRef(Side.CENTER, arm_axis[side]),
-                            PointRef(side, PointID.ARB_DROPLINK),
-                        ],
-                        color="teal",
-                        label=f"{side.name.title()} ARB Arm",
-                    )
-                )
                 links.append(
                     LinkVisualization(
                         points=[

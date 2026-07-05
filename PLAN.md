@@ -323,6 +323,16 @@ Coordinate-system and sign-convention tests are first-class:
 
 ## Work log
 
+- 2026-07-05: Visual-verification rework of the rocker/ARB fixture per review:
+  longer rocker levers (pushrod lever ~95 mm, droplink lever 90 mm directly
+  inboard of the pivot so its tangent is pure Z), ARB moved BELOW the rocker
+  axis (bar at z=300 vs rocker axis z=450), near-vertical ~170 mm droplinks,
+  and wheel-up now demonstrably drives the droplinks down (-12.5 mm at +20 mm
+  heave; asserted in TestAxleHeave). The ARB is drawn as a single series
+  (left arm end -> bar end -> bar end -> right arm end), pairing each side with
+  its nearer bar end at design. The roll ARB-twist sign flipped with the new
+  layout (left-up => negative twist about the authored A->B (-Y) direction);
+  the test's hand-derivation comment was updated accordingly.
 - 2026-07-04: Stage 4 done. Updated README features (axle simulation, inboard
   actuation, axle metrics) and CHANGELOG (Unreleased section). Full-suite
   verification at each stage: 359 passed; the only 2 failures are pre-existing
