@@ -150,7 +150,7 @@ def parse_sweep_file(
         path: Path to the YAML sweep configuration file.
         suspension: Optional suspension used to resolve each target's
             ``(point, side)`` into a concrete point key. When omitted, targets
-            must not specify a ``side`` (single-corner behaviour).
+            must not specify a ``side`` (single-corner behavior).
 
     Returns:
         SweepConfig ready for use with the solver.

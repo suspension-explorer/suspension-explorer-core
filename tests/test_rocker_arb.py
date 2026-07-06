@@ -242,7 +242,7 @@ class TestValidation:
 
 
 class TestCornerRocker:
-    """Single-corner pushrod/rocker behaviour."""
+    """Single-corner pushrod/rocker behavior."""
 
     def _bump_sweep(self, corner, heave: list[float]) -> list:
         # Pin the steering DOF (trackrod inboard Y) so the rocker angle is a clean
@@ -305,7 +305,10 @@ class TestCornerRocker:
             angles.append(row["rocker_angle_deg"])
 
         # Zero at design (index 2) and strictly monotonic in wheel travel.
-        assert angles[2] == pytest.approx(0.0, abs=1e-6)
+        # The tolerance allows for solver acceptance noise: a converged
+        # solve can sit up to the residual tolerance away from the exact
+        # design position, which maps to microdegrees of rocker angle.
+        assert angles[2] == pytest.approx(0.0, abs=1e-5)
         diffs = np.diff(angles)
         assert np.all(diffs < 0.0), f"rocker angle not monotonic: {angles}"
 
@@ -543,7 +546,8 @@ class TestCliSmoke:
             assert col in headers, f"missing metric column {col}"
 
         assert all(r["solver_converged"] == "True" for r in rows)
-        assert len(rows) == 5
+        # Row count follows the steps value in axle_rocker_sweep.yaml.
+        assert len(rows) == 16
 
 
 # ----------------------------------------------------------------------

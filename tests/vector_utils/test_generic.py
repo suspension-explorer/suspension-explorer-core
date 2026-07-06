@@ -223,7 +223,7 @@ class TestProjectCoordinate:
         direction = Direction3([1.0, 2.0, 2.0])
         result = project_coordinate(position, direction)
 
-        # Manual calculation: dot product against the normalised data.
+        # Manual calculation: dot product against the normalized data.
         expected = np.dot(position.data, direction.data)
         assert np.isclose(result, expected, atol=TEST_TOLERANCE)
 
@@ -264,7 +264,7 @@ class TestProjectCoordinate:
         """
         position = Point3([1.0, 2.0, 3.0])
         # Create a direction vector that's almost but not exactly unit length;
-        # Direction3 normalises it on construction.
+        # Direction3 normalizes it on construction.
         direction = Direction3([1.0 + EPS_NUMERICAL / 2, 0.0, 0.0])
         result = project_coordinate(position, direction)
         # Should be close to projecting onto [1,0,0].

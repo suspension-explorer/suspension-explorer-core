@@ -3,7 +3,16 @@
 import numpy as np
 import pytest
 
-from kinematics.core.dual import DualScalar, DualVec3, seed_positions
+from kinematics.core.dual import (
+    DualScalar,
+    DualVec3,
+    atan2,
+    cross,
+    degrees,
+    seed_positions,
+    seed_positions_with_tangent,
+    sqrt,
+)
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.vector_utils.generic import normalize_vector
 from kinematics.points.derived.definitions import get_wheel_center
@@ -433,3 +442,189 @@ class TestWheelCenterAutodiff:
                     atol=FD_TOL,
                     err_msg=f"Mismatch for {pid.name}[{d}]",
                 )
+
+
+class TestDualCross:
+    """Tests for the dual-aware cross product."""
+
+    def test_cross_analytical(self):
+        # a and b each carry a one-parameter derivative direction.
+        # a' = e_x, b' = e_y, so by the bilinear product rule:
+        #   d(a cross b) = a' cross b + a cross b'.
+        a = DualVec3(np.array([1.0, 2.0, 3.0]), np.array([1.0, 0.0, 0.0]))
+        b = DualVec3(np.array([4.0, 5.0, 6.0]), np.array([0.0, 1.0, 0.0]))
+        result = np.cross(a, b)  # type: ignore[arg-type]  # __array_function__ protocol
+        assert isinstance(result, DualVec3)
+        # a cross b = (2*6 - 3*5, 3*4 - 1*6, 1*5 - 2*4) = (-3, 6, -3).
+        np.testing.assert_allclose(result.val, [-3.0, 6.0, -3.0])
+        # e_x cross b = (0, -6, 5); a cross e_y = (-3, 0, 1); sum = (-3, -6, 6).
+        np.testing.assert_allclose(result.deriv, [-3.0, -6.0, 6.0])
+
+    def test_cross_matches_finite_differences(self):
+        # Parameterise a(t) = a0 + t*da and b(t) = b0 + t*db, seed the dual
+        # derivatives with da/db, and compare d/dt(a cross b) at t = 0 against
+        # a central finite difference.
+        rng = np.random.default_rng(1234)
+        a0 = rng.standard_normal(3)
+        b0 = rng.standard_normal(3)
+        da = rng.standard_normal(3)
+        db = rng.standard_normal(3)
+
+        a = DualVec3(a0.copy(), da.copy())
+        b = DualVec3(b0.copy(), db.copy())
+        ad = np.cross(a, b)  # type: ignore[arg-type]  # __array_function__ protocol
+        assert isinstance(ad, DualVec3)
+
+        plus = np.cross(a0 + FD_STEP * da, b0 + FD_STEP * db)
+        minus = np.cross(a0 - FD_STEP * da, b0 - FD_STEP * db)
+        fd_deriv = (plus - minus) / (2.0 * FD_STEP)
+
+        np.testing.assert_allclose(ad.deriv, fd_deriv, atol=FD_TOL)
+
+    def test_cross_mixed_dual_and_ndarray(self):
+        # With b a plain constant ndarray, b' = 0, so d(a cross b) = a' cross b.
+        a = DualVec3(np.array([1.0, 2.0, 3.0]), np.array([1.0, 0.0, 0.0]))
+        b = np.array([4.0, 5.0, 6.0])
+        result = np.cross(a, b)  # type: ignore[arg-type]  # __array_function__ protocol
+        assert isinstance(result, DualVec3)
+        np.testing.assert_allclose(result.val, [-3.0, 6.0, -3.0])
+        # e_x cross [4,5,6] = (0*6 - 0*5, 0*4 - 1*6, 1*5 - 0*4) = (0, -6, 5).
+        np.testing.assert_allclose(result.deriv, [0.0, -6.0, 5.0])
+
+    def test_cross_typed_wrapper_dual(self):
+        a = DualVec3(np.array([1.0, 2.0, 3.0]), np.array([1.0, 0.0, 0.0]))
+        b = DualVec3(np.array([4.0, 5.0, 6.0]), np.array([0.0, 1.0, 0.0]))
+        result = cross(a, b)
+        assert isinstance(result, DualVec3)
+        np.testing.assert_allclose(result.val, [-3.0, 6.0, -3.0])
+        np.testing.assert_allclose(result.deriv, [-3.0, -6.0, 6.0])
+
+    def test_cross_typed_wrapper_ndarray(self):
+        # Both operands plain: falls back to raw np.cross returning ndarray.
+        a = np.array([1.0, 2.0, 3.0])
+        b = np.array([4.0, 5.0, 6.0])
+        result = cross(a, b)
+        assert isinstance(result, np.ndarray)
+        np.testing.assert_allclose(result, [-3.0, 6.0, -3.0])
+
+
+class TestDualScalarMath:
+    """Tests for the dual-aware scalar math functions."""
+
+    def test_sqrt_dual(self):
+        # d(sqrt(x)) = x' / (2*sqrt(x)). At x = 9, x' = 1: sqrt = 3, deriv = 1/6.
+        x = DualScalar(9.0, 1.0)
+        result = sqrt(x)
+        assert isinstance(result, DualScalar)
+        assert result.val == pytest.approx(3.0)
+        assert result.deriv == pytest.approx(1.0 / 6.0)
+
+    def test_sqrt_float(self):
+        assert sqrt(16.0) == pytest.approx(4.0)
+
+    def test_atan2_dual_analytical(self):
+        # d(atan2(y, x)) = (x*y' - y*x') / (x^2 + y^2).
+        # At y = 1 (y' = 1), x = 2 (x' = 0):
+        #   val = atan2(1, 2), deriv = (2*1 - 1*0) / (4 + 1) = 2/5.
+        y = DualScalar(1.0, 1.0)
+        x = DualScalar(2.0, 0.0)
+        result = atan2(y, x)
+        assert isinstance(result, DualScalar)
+        assert result.val == pytest.approx(np.arctan2(1.0, 2.0))
+        assert result.deriv == pytest.approx(2.0 / 5.0)
+
+    def test_atan2_mixed_dual_float(self):
+        # y dual, x plain float constant (x' = 0).
+        # At y = 3 (y' = 1), x = 4: deriv = (4*1 - 3*0) / (16 + 9) = 4/25.
+        y = DualScalar(3.0, 1.0)
+        result = atan2(y, 4.0)
+        assert isinstance(result, DualScalar)
+        assert result.val == pytest.approx(np.arctan2(3.0, 4.0))
+        assert result.deriv == pytest.approx(4.0 / 25.0)
+
+    def test_atan2_second_quadrant(self):
+        # x < 0, y > 0 must land in the second quadrant (angle in (pi/2, pi)).
+        y = DualScalar(1.0, 0.0)
+        x = DualScalar(-1.0, 0.0)
+        result = atan2(y, x)
+        assert isinstance(result, DualScalar)
+        assert result.val == pytest.approx(3.0 * np.pi / 4.0)
+
+    def test_atan2_third_quadrant(self):
+        # x < 0, y < 0 must land in the third quadrant (angle in (-pi, -pi/2)).
+        y = DualScalar(-1.0, 0.0)
+        x = DualScalar(-1.0, 0.0)
+        result = atan2(y, x)
+        assert isinstance(result, DualScalar)
+        assert result.val == pytest.approx(-3.0 * np.pi / 4.0)
+
+    def test_atan2_float(self):
+        assert atan2(1.0, 1.0) == pytest.approx(np.pi / 4.0)
+
+    def test_degrees_dual(self):
+        # Linear scaling by 180/pi applies to both value and derivative.
+        # At x = pi/2 rad (x' = 1): val = 90 deg, deriv = 180/pi.
+        x = DualScalar(np.pi / 2.0, 1.0)
+        result = degrees(x)
+        assert isinstance(result, DualScalar)
+        assert result.val == pytest.approx(90.0)
+        assert result.deriv == pytest.approx(180.0 / np.pi)
+
+    def test_degrees_float(self):
+        assert degrees(np.pi) == pytest.approx(180.0)
+
+
+class TestSeedPositionsWithTangent:
+    """Tests for the tangent-field seeding utility."""
+
+    def test_directional_derivative_of_chained_expression(self):
+        # Seed two points along a tangent field and evaluate the directional
+        # derivative of f = ||p - q||. Analytically:
+        #   df = dot(p - q, dp - dq) / ||p - q||.
+        positions = {
+            PointID.AXLE_INBOARD: np.array([1.0, 2.0, 2.0]),
+            PointID.AXLE_OUTBOARD: np.array([1.0, 2.0, 0.0]),
+        }
+        tangent = {
+            PointID.AXLE_INBOARD: np.array([0.5, 1.0, -1.0]),
+            PointID.AXLE_OUTBOARD: np.array([2.0, 0.0, 3.0]),
+        }
+        dual = seed_positions_with_tangent(positions, tangent)
+
+        delta = dual[PointID.AXLE_INBOARD] - dual[PointID.AXLE_OUTBOARD]
+        f = np.linalg.norm(delta)  # type: ignore[arg-type]  # __array_function__ protocol
+        assert isinstance(f, DualScalar)
+
+        diff_val = positions[PointID.AXLE_INBOARD] - positions[PointID.AXLE_OUTBOARD]
+        diff_tan = tangent[PointID.AXLE_INBOARD] - tangent[PointID.AXLE_OUTBOARD]
+        norm_val = np.linalg.norm(diff_val)
+        expected_deriv = np.dot(diff_val, diff_tan) / norm_val
+
+        assert f.val == pytest.approx(norm_val)
+        assert f.deriv == pytest.approx(expected_deriv)
+
+    def test_missing_key_gets_zero_derivative(self):
+        positions = {
+            PointID.AXLE_INBOARD: np.array([1.0, 2.0, 3.0]),
+            PointID.AXLE_OUTBOARD: np.array([4.0, 5.0, 6.0]),
+        }
+        # Tangent only provided for one of the two keys.
+        tangent = {PointID.AXLE_INBOARD: np.array([1.0, 1.0, 1.0])}
+        dual = seed_positions_with_tangent(positions, tangent)
+
+        np.testing.assert_allclose(dual[PointID.AXLE_INBOARD].deriv, [1.0, 1.0, 1.0])
+        np.testing.assert_allclose(dual[PointID.AXLE_OUTBOARD].deriv, [0.0, 0.0, 0.0])
+        # Values are preserved for every point.
+        np.testing.assert_allclose(dual[PointID.AXLE_INBOARD].val, [1.0, 2.0, 3.0])
+        np.testing.assert_allclose(dual[PointID.AXLE_OUTBOARD].val, [4.0, 5.0, 6.0])
+
+    def test_tangent_array_not_aliased(self):
+        # The seed must copy the tangent so later mutation of the source array
+        # does not leak into the dual derivative.
+        positions = {PointID.AXLE_INBOARD: np.array([0.0, 0.0, 0.0])}
+        source_tangent = np.array([1.0, 2.0, 3.0])
+        tangent = {PointID.AXLE_INBOARD: source_tangent}
+        dual = seed_positions_with_tangent(positions, tangent)
+
+        source_tangent[0] = 99.0
+        np.testing.assert_allclose(dual[PointID.AXLE_INBOARD].deriv, [1.0, 2.0, 3.0])

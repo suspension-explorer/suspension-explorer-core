@@ -186,9 +186,7 @@ class Upright(RigidBody):
         # Update hardpoint positions.
         self.hardpoints.upper_ball_joint = Point3(hardpoints["upper_ball_joint"])
         self.hardpoints.lower_ball_joint = Point3(hardpoints["lower_ball_joint"])
-        self.hardpoints.trackrod_outboard = Point3(
-            hardpoints["trackrod_outboard"]
-        )
+        self.hardpoints.trackrod_outboard = Point3(hardpoints["trackrod_outboard"])
 
         # Reconstruct LCS from new hardpoint positions.
         self.lcs = self.construct_lcs()

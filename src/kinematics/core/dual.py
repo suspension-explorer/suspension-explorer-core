@@ -9,6 +9,7 @@ np.dot and np.linalg.norm works unmodified with dual-number inputs.
 
 from __future__ import annotations
 
+import math
 from typing import Mapping, overload
 
 import numpy as np
@@ -301,7 +302,7 @@ class DualVec3:
         if method != "__call__" or len(inputs) != 2:
             return NotImplemented
         a, b = inputs
-        # Normalise non-dual, non-ndarray operands to raw arrays.
+        # Normalize non-dual, non-ndarray operands to raw arrays.
         if not isinstance(a, (DualVec3, np.ndarray)):
             a = extract_array(a)
         if not isinstance(b, (DualVec3, np.ndarray)):
@@ -353,6 +354,35 @@ def _dual_dot(a, b, out=None):
     return DualScalar(float(val), float(deriv))
 
 
+def _dual_cross(a, b, axisa=-1, axisb=-1, axisc=-1, axis=None):
+    """
+    Dual-aware cross product.
+
+    d(cross(a, b)) = cross(a', b) + cross(a, b')
+
+    Handles geometry types (Point3/Vector3/Direction3) and plain ndarray
+    operands by extracting their raw arrays and treating them as constants
+    (zero derivative).
+    """
+    if isinstance(a, DualVec3):
+        a_val, a_deriv = a.val, a.deriv
+    else:
+        a_val = extract_array(a)
+        a_deriv = np.zeros(3, dtype=np.float64)
+
+    if isinstance(b, DualVec3):
+        b_val, b_deriv = b.val, b.deriv
+    else:
+        b_val = extract_array(b)
+        b_deriv = np.zeros(3, dtype=np.float64)
+
+    # Value is the ordinary cross product; derivative follows the product
+    # rule, since cross is bilinear: d(a cross b) = a' cross b + a cross b'.
+    val = np.cross(a_val, b_val)
+    deriv = np.cross(a_deriv, b_val) + np.cross(a_val, b_deriv)
+    return DualVec3(val, deriv)
+
+
 def _dual_norm(x, ord=None, axis=None, keepdims=False):
     """
     Dual-aware vector norm (L2 only).
@@ -370,6 +400,7 @@ def _dual_norm(x, ord=None, axis=None, keepdims=False):
 
 
 _DUAL_IMPLEMENTATIONS[np.dot] = _dual_dot
+_DUAL_IMPLEMENTATIONS[np.cross] = _dual_cross
 _DUAL_IMPLEMENTATIONS[np.linalg.norm] = _dual_norm
 
 
@@ -402,6 +433,31 @@ def dot(a: DualVec3 | np.ndarray, b: DualVec3 | np.ndarray) -> DualScalar | np.f
     return np.dot(a, b)
 
 
+@overload
+def cross(a: np.ndarray, b: np.ndarray) -> np.ndarray: ...
+
+
+@overload
+def cross(a: DualVec3 | np.ndarray, b: DualVec3) -> DualVec3: ...
+
+
+@overload
+def cross(a: DualVec3, b: DualVec3 | np.ndarray) -> DualVec3: ...
+
+
+def cross(a: DualVec3 | np.ndarray, b: DualVec3 | np.ndarray) -> DualVec3 | np.ndarray:
+    """
+    Typed cross product that supports DualVec3 operands.
+
+    Returns a DualVec3 (with product-rule derivative) if either operand is
+    dual; otherwise falls back to a raw np.cross on the extracted arrays and
+    returns a plain ndarray.
+    """
+    if isinstance(a, DualVec3) or isinstance(b, DualVec3):
+        return _dual_cross(a, b)
+    return np.cross(extract_array(a), extract_array(b))
+
+
 def norm(v: DualVec3) -> DualScalar:
     """
     Typed vector norm for DualVec3.
@@ -411,6 +467,92 @@ def norm(v: DualVec3) -> DualScalar:
         return DualScalar(0.0, 0.0)
     deriv = float(np.dot(v.val, v.deriv)) / n
     return DualScalar(n, deriv)
+
+
+# Dual-aware scalar math functions
+# ----------------------------------------------------------------
+# These mirror the math-module functions but propagate first-order
+# derivatives when given DualScalar inputs. Plain floats fall through to
+# the standard library so callers can stay agnostic about dual vs float.
+
+
+@overload
+def sqrt(x: DualScalar) -> DualScalar: ...
+
+
+@overload
+def sqrt(x: float) -> float: ...
+
+
+def sqrt(x: DualScalar | float) -> DualScalar | float:
+    """
+    Dual-aware square root.
+
+    d(sqrt(x)) = x' / (2 * sqrt(x))
+    """
+    if isinstance(x, DualScalar):
+        root = math.sqrt(x.val)
+        # Chain rule on sqrt: derivative of sqrt(x) is 1 / (2*sqrt(x)).
+        return DualScalar(root, x.deriv / (2.0 * root))
+    return math.sqrt(x)
+
+
+@overload
+def atan2(y: DualScalar, x: DualScalar | float) -> DualScalar: ...
+
+
+@overload
+def atan2(y: DualScalar | float, x: DualScalar) -> DualScalar: ...
+
+
+@overload
+def atan2(y: float, x: float) -> float: ...
+
+
+def atan2(y: DualScalar | float, x: DualScalar | float) -> DualScalar | float:
+    """
+    Dual-aware two-argument arctangent.
+
+    Returns a DualScalar if either input is dual; plain floats fall through
+    to math.atan2.
+
+    d(atan2(y, x)) = (x * y' - y * x') / (x^2 + y^2)
+    """
+    if isinstance(y, DualScalar) or isinstance(x, DualScalar):
+        # Split each operand into value and derivative; non-dual operands are
+        # constants and contribute zero derivative.
+        y_val = y.val if isinstance(y, DualScalar) else float(y)
+        y_deriv = y.deriv if isinstance(y, DualScalar) else 0.0
+        x_val = x.val if isinstance(x, DualScalar) else float(x)
+        x_deriv = x.deriv if isinstance(x, DualScalar) else 0.0
+        # math.atan2 handles quadrant selection (including x < 0) correctly.
+        val = math.atan2(y_val, x_val)
+        # Derivative of atan2 is (x*dy - y*dx) / (x^2 + y^2).
+        denom = x_val**2 + y_val**2
+        deriv = (x_val * y_deriv - y_val * x_deriv) / denom
+        return DualScalar(val, deriv)
+    return math.atan2(y, x)
+
+
+@overload
+def degrees(x: DualScalar) -> DualScalar: ...
+
+
+@overload
+def degrees(x: float) -> float: ...
+
+
+def degrees(x: DualScalar | float) -> DualScalar | float:
+    """
+    Dual-aware radians-to-degrees conversion.
+
+    Scaling by 180/pi is linear, so both value and derivative scale by the
+    same constant factor.
+    """
+    if isinstance(x, DualScalar):
+        rad_to_deg = 180.0 / math.pi
+        return DualScalar(x.val * rad_to_deg, x.deriv * rad_to_deg)
+    return math.degrees(x)
 
 
 # Seeding utility
@@ -448,4 +590,42 @@ def seed_positions(
             dual_positions[pid] = DualVec3(raw.copy(), d)
         else:
             dual_positions[pid] = DualVec3(raw.copy())
+    return dual_positions
+
+
+def seed_positions_with_tangent(
+    positions: Mapping[PointKey, object],
+    tangent: Mapping[PointKey, np.ndarray],
+) -> dict[PointKey, DualVec3]:
+    """
+    Create dual-number positions seeded along a full tangent field.
+
+    Generalises seed_positions from a single one-hot seed to an arbitrary
+    velocity field: every position is wrapped as a DualVec3 whose derivative
+    is the supplied tangent for that key (or zeros when the key is absent).
+    This sets up directional forward-mode AD (a Jacobian-vector product),
+    propagating the directional derivative of any output along the tangent
+    field in a single evaluation.
+
+    Handles both raw ndarray and Point3 positions transparently.
+
+    Args:
+        positions: Current point positions (PointKey -> ndarray or Point3).
+        tangent: Per-point derivative directions (PointKey -> ndarray of
+            shape (3,)). Keys missing from this mapping get a zero derivative.
+
+    Returns:
+        Dictionary of DualVec3 positions ready for derived-point computation.
+    """
+    dual_positions: dict[PointKey, DualVec3] = {}
+    for pid, pos in positions.items():
+        raw = extract_array(pos)
+        tangent_vec = tangent.get(pid)
+        if tangent_vec is None:
+            # Absent keys are held constant along the tangent field.
+            deriv = np.zeros(3, dtype=np.float64)
+        else:
+            # Copy so the caller's tangent array is never aliased/mutated.
+            deriv = np.asarray(tangent_vec, dtype=np.float64).copy()
+        dual_positions[pid] = DualVec3(raw.copy(), deriv)
     return dual_positions

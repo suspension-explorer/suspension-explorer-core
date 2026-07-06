@@ -6,7 +6,7 @@ from kinematics.diagnostics import diagnose_sweep
 from kinematics.io.geometry_loader import load_geometry
 from kinematics.io.results_writer import SolutionFrame, create_writer_for_path
 from kinematics.io.sweep_loader import parse_sweep_file
-from kinematics.main import solve_sweep
+from kinematics.main import compute_sweep_tangents, solve_sweep
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
@@ -52,6 +52,11 @@ def sweep(
     )
     output_points = suspension.output_points()
     config = suspension.config
+
+    # Solution-manifold tangents per step: exact d(position)/d(target) fields
+    # feeding the derivative metrics (motion ratios, camber gain, bump steer).
+    sweep_tangents = compute_sweep_tangents(suspension, sweep_config, solution_states)
+
     for idx, (st, solver_info) in enumerate(zip(solution_states, solver_stats)):
         # Filter to the suspension type's declared output points, in order.
         positions = {
@@ -65,7 +70,7 @@ def sweep(
         # axle-level metrics.
         metrics: dict[str, float | None] = {}
         if config is not None:
-            metrics = suspension.compute_state_metrics(st)
+            metrics = suspension.compute_state_metrics(st, sweep_tangents[idx])
 
         frame = SolutionFrame(
             positions=positions,

@@ -22,6 +22,7 @@ from kinematics.suspensions.config.settings import SuspensionConfig
 
 if TYPE_CHECKING:
     from kinematics.metrics.main import MetricRow
+    from kinematics.sensitivity import TangentField
     from kinematics.visualization.main import LinkVisualization, WheelAnchors
 
 
@@ -210,7 +211,21 @@ class Suspension(ABC):
         """
         return False
 
-    def compute_state_metrics(self, state: SuspensionState) -> "MetricRow":
+    @property
+    def has_strut(self) -> bool:
+        """
+        Whether this suspension has an optional spring/damper (coilover) element.
+
+        The base implementation is ``False``. Corner models that support the
+        strut group override this.
+        """
+        return False
+
+    def compute_state_metrics(
+        self,
+        state: SuspensionState,
+        tangents: "Sequence[TangentField] | None" = None,
+    ) -> "MetricRow":
         """
         Compute the export metric row for a single solved state.
 
@@ -219,7 +234,10 @@ class Suspension(ABC):
         method is the CLI's single, branch-free metrics entry point.
 
         Args:
-            state: The solved state to analyse.
+            state: The solved state to analyze.
+            tangents: Optional solution-manifold tangents for this state
+                (from kinematics.sensitivity). When given, derivative
+                metrics (motion ratios, camber gain, ...) are appended.
 
         Returns:
             An ordered mapping of metric column names to values.
@@ -232,7 +250,7 @@ class Suspension(ABC):
 
         if self.config is None:
             raise ValueError("Suspension has no configuration")
-        return compute_metrics_for_state(state, self, self.config)
+        return compute_metrics_for_state(state, self, self.config, tangents)
 
     def resolve_target_key(self, point: PointID, side: Side | None) -> PointKey:
         """

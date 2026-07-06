@@ -45,6 +45,7 @@ from kinematics.suspensions.double_wishbone import DoubleWishboneSuspension
 
 if TYPE_CHECKING:
     from kinematics.metrics.main import MetricRow
+    from kinematics.sensitivity import TangentField
     from kinematics.visualization.main import LinkVisualization, WheelAnchors
 
 
@@ -373,7 +374,7 @@ class DoubleWishboneAxleSuspension(Suspension):
 
         The returned state is keyed on plain ``PointID`` (side tag removed), so
         it can be fed to the unchanged corner suspension for metrics, instant
-        centres, and geometry.
+        centers, and geometry.
 
         Args:
             state: The solved axle state (``PointRef``-keyed).
@@ -393,26 +394,30 @@ class DoubleWishboneAxleSuspension(Suspension):
         return SuspensionState(positions=positions, free_points=free_points)
 
     def compute_side_view_instant_center(self, state: SuspensionState) -> Point3 | None:
-        """Not defined at axle level; instant centres are per side."""
+        """Not defined at axle level; instant centers are per side."""
         raise NotImplementedError("per-side; use corner_state()/corners[side]")
 
     def compute_front_view_instant_center(
         self, state: SuspensionState
     ) -> Point3 | None:
-        """Not defined at axle level; instant centres are per side."""
+        """Not defined at axle level; instant centers are per side."""
         raise NotImplementedError("per-side; use corner_state()/corners[side]")
 
     # ------------------------------------------------------------------
     # Metrics dispatch
     # ------------------------------------------------------------------
 
-    def compute_state_metrics(self, state: SuspensionState) -> "MetricRow":
+    def compute_state_metrics(
+        self,
+        state: SuspensionState,
+        tangents: "Sequence[TangentField] | None" = None,
+    ) -> "MetricRow":
         """Compute per-side and axle-level metrics for a solved axle state."""
         from kinematics.metrics.main import compute_metrics_for_axle_state
 
         if self.config is None:
             raise ValueError("Suspension has no configuration")
-        return compute_metrics_for_axle_state(state, self, self.config)
+        return compute_metrics_for_axle_state(state, self, self.config, tangents)
 
     def resolve_target_key(self, point: PointID, side: Side | None) -> PointKey:
         """Axle sweep targets must name a side; returns a ``PointRef``."""

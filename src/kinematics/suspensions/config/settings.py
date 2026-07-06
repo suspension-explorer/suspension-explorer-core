@@ -7,6 +7,8 @@ wheel parameters, and static alignment settings.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from kinematics.core.constants import MM_PER_INCH
@@ -127,6 +129,16 @@ class SuspensionConfig(BaseModel):
         camber_shim: Optional camber shim configuration.
         upright_mounted_points: List of point names mounted to the upright that should
             move when camber shims are applied.
+        axle_position: Which end of the car this suspension is ("front" or "rear").
+            Required to disambiguate anti-dive (front) from anti-lift (rear) under
+            braking, and to know whether a driven axle produces squat or lift.
+        front_brake_bias: Fraction in [0, 1] of the total braking force reacted by
+            the front axle. Assumes outboard brakes (torque reacted by the
+            suspension links, not the driveshafts). Required for anti-dive/lift.
+        driven_axle: Which axle is driven ("front" or "rear"). Assumes
+            inboard-sprung drive (halfshafts), so tractive force reacts along the
+            wheel-centre line rather than the contact-patch line. Required for
+            anti-squat.
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
@@ -142,3 +154,17 @@ class SuspensionConfig(BaseModel):
         "pushrod_outboard",
         "trackrod_outboard",
     ]
+    # All optional so existing YAML (which omits them) keeps loading; the
+    # anti-geometry metrics simply return None when the fields they need are unset.
+    axle_position: Literal["front", "rear"] | None = None
+    front_brake_bias: float | None = None
+    driven_axle: Literal["front", "rear"] | None = None
+
+    @field_validator("front_brake_bias")
+    @classmethod
+    def check_front_brake_bias(cls, v: float | None) -> float | None:
+        # A brake bias is a fraction of the total braking force on the front
+        # axle, so it must lie in [0, 1]. The rear share is (1 - front_brake_bias).
+        if v is not None and not 0.0 <= v <= 1.0:
+            raise ValueError(f"front_brake_bias must be in [0, 1], got {v}")
+        return v

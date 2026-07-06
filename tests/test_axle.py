@@ -308,7 +308,7 @@ class TestSymmetry:
             )
             # Rack stays at its design Y.
             assert row["rack_displacement_mm"] == pytest.approx(0.0, abs=1e-3)
-            # Roll centre lies on the vehicle centreline (Y ~ 0).
+            # Roll center lies on the vehicle centreline (Y ~ 0).
             assert row["roll_center_y_mm"] is not None
             assert row["roll_center_y_mm"] == pytest.approx(0.0, abs=1e-3)
             # Track change is symmetric: both contact patches move equally in |Y|.
@@ -331,7 +331,7 @@ class TestSymmetry:
 
 
 class TestSteering:
-    """Steering (rack) sweep behaviour."""
+    """Steering (rack) sweep behavior."""
 
     def test_rack_sweep_moves_wheels_monotonically(
         self, axle_geometry_file: Path
@@ -359,9 +359,9 @@ class TestSteering:
         assert np.all(left_diffs < 0), "left roadwheel angle not monotonic"
         assert np.all(right_diffs > 0), "right roadwheel angle not monotonic"
 
-        # Total toe is a smooth, even function of rack (symmetric about centre).
-        centre = len(rack) // 2
-        assert total[centre] == pytest.approx(0.0, abs=1e-3)
+        # Total toe is a smooth, even function of rack (symmetric about center).
+        center = len(rack) // 2
+        assert total[center] == pytest.approx(0.0, abs=1e-3)
         assert total[0] == pytest.approx(total[-1], abs=1e-3)
 
 
@@ -371,7 +371,7 @@ class TestSteering:
 
 
 class TestRoll:
-    """Roll (opposite wheel heights) behaviour."""
+    """Roll (opposite wheel heights) behavior."""
 
     def test_opposite_wheel_heights_give_opposite_camber(
         self, axle_geometry_file: Path

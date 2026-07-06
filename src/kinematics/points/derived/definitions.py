@@ -139,9 +139,7 @@ def get_wheel_outboard(positions: dict[PointID, Any], wheel_width: float) -> Any
     return p1 + v * (wheel_width / 2)
 
 
-def get_contact_patch_center(
-    positions: dict[PointID, Any], tire_radius: float
-) -> Any:
+def get_contact_patch_center(positions: dict[PointID, Any], tire_radius: float) -> Any:
     """
     Computes the position of the geometric contact patch center.
 

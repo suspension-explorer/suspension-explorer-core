@@ -8,7 +8,7 @@ metrics. Returns ordered mappings ready for direct export integration.
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 from kinematics.core.constants import EPS_GEOMETRIC
 from kinematics.core.enums import Axis, PointID
@@ -20,6 +20,7 @@ from kinematics.suspensions.config.settings import SuspensionConfig
 
 if TYPE_CHECKING:
     from kinematics.core.geometry import Point3
+    from kinematics.sensitivity import TangentField
     from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
     from kinematics.suspensions.base import Suspension
 
@@ -31,6 +32,7 @@ def compute_metrics_for_state(
     state: SuspensionState,
     suspension: "Suspension",
     config: SuspensionConfig,
+    tangents: "Sequence[TangentField] | None" = None,
 ) -> MetricRow:
     """
     Compute all corner-level metrics for a single solved state.
@@ -39,6 +41,10 @@ def compute_metrics_for_state(
         state: The solved SuspensionState to analyze.
         suspension: The suspension instance for type-specific geometry.
         config: Suspension configuration with vehicle parameters.
+        tangents: Optional solution-manifold tangents for this state (from
+            kinematics.sensitivity). When given, derivative metrics (camber
+            gain, bump steer, motion ratios, ...) are appended for every
+            recognized sweep driver.
 
     Returns:
         An ordered mapping of metric column names to values. Values are
@@ -58,6 +64,11 @@ def compute_metrics_for_state(
 
     if suspension.has_rocker:
         _append_rocker_metrics(row, ctx)
+
+    if tangents:
+        from kinematics.metrics.rates import compute_corner_rate_metrics
+
+        row.update(compute_corner_rate_metrics(state, suspension, tangents))
 
     return row
 
@@ -180,11 +191,11 @@ def _axle_roll_center(
     axle: "DoubleWishboneAxleSuspension",
 ) -> tuple[float | None, float | None]:
     """
-    Front-view roll centre from the two contact-patch -> FVIC lines.
+    Front-view roll center from the two contact-patch -> FVIC lines.
 
-    For each side, the line runs from the contact patch centre to the front-view
-    instant centre (FVIC), both projected into the YZ plane. Their intersection
-    is the roll centre. Returns ``(None, None)`` if either FVIC is undefined or
+    For each side, the line runs from the contact patch center to the front-view
+    instant center (FVIC), both projected into the YZ plane. Their intersection
+    is the roll center. Returns ``(None, None)`` if either FVIC is undefined or
     the two lines are parallel.
     """
     side_lines: list[tuple[float, float, float, float]] = []
@@ -212,6 +223,7 @@ def compute_metrics_for_axle_state(
     state: SuspensionState,
     axle: "DoubleWishboneAxleSuspension",
     config: SuspensionConfig,
+    tangents: "Sequence[TangentField] | None" = None,
 ) -> MetricRow:
     """
     Compute per-side and axle-level metrics for a solved axle state.
@@ -231,7 +243,7 @@ def compute_metrics_for_axle_state(
       centreline), so their sum is the total toe-in of the axle. Positive means
       both wheels toe in.
     - ``track_mm``: absolute lateral (Y) distance between the two contact patch
-      centres.
+      centers.
     - ``rack_displacement_mm``: signed Y displacement of the LEFT inboard
       trackrod from its design position (positive = +Y = leftward).
 
@@ -239,6 +251,9 @@ def compute_metrics_for_axle_state(
         state: The solved axle state (``PointRef``-keyed).
         axle: The axle suspension.
         config: Shared vehicle configuration.
+        tangents: Optional solution-manifold tangents for this state (from
+            kinematics.sensitivity, ``PointRef``-keyed). When given, per-side
+            and modal (roll/heave) derivative metrics are appended.
 
     Returns:
         An ordered metric row.
@@ -287,6 +302,16 @@ def compute_metrics_for_axle_state(
 
     if axle.has_arb:
         _append_arb_metrics(row, state, axle)
+
+    # Axle-level per-state (non-derivative) modal metrics.
+    from kinematics.metrics.axle_metrics import append_axle_state_metrics
+
+    append_axle_state_metrics(row, state, axle, config, side_rows)
+
+    if tangents:
+        from kinematics.metrics.rates import compute_axle_rate_metrics
+
+        row.update(compute_axle_rate_metrics(state, axle, tangents))
 
     return row
 

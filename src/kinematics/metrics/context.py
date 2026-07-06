@@ -35,6 +35,31 @@ class MetricContext:
     config: SuspensionConfig
 
     @cached_property
+    def design_state(self) -> SuspensionState:
+        """
+        Design-condition reference state for this corner.
+
+        This is the suspension's initial (as-authored) state. Per-state
+        travel metrics measure displacement of the current state relative
+        to this reference (e.g. wheel travel = current WC Z - design WC Z).
+        """
+        return self.suspension.initial_state()
+
+    @cached_property
+    def design_wheel_center(self) -> Point3:
+        """
+        Wheel center position at the design condition.
+        """
+        return self.design_state.get(PointID.WHEEL_CENTER)
+
+    @cached_property
+    def design_contact_patch_center(self) -> Point3:
+        """
+        Contact patch center position at the design condition.
+        """
+        return self.design_state.get(PointID.CONTACT_PATCH_CENTER)
+
+    @cached_property
     def side_view_ic(self) -> Point3 | None:
         """
         Side-view instant center from the suspension.
@@ -87,8 +112,8 @@ class MetricContext:
 
         In a chassis-fixed reference frame the ground is not at Z=0; it
         follows the tire. We define ground level as the contact patch
-        centre Z so that all ground-plane intersections (steering axis,
-        instant centres, etc.) are evaluated at the actual tire-road
+        center Z so that all ground-plane intersections (steering axis,
+        instant centers, etc.) are evaluated at the actual tire-road
         interface.
         """
         return float(self.contact_patch_center[Axis.Z])

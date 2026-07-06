@@ -1,0 +1,53 @@
+type: double_wishbone
+name: "corner strut (inboard rocker)"
+version: "0.0.1"
+units: MILLIMETERS
+
+# Single left corner with the pushrod/rocker group AND an INBOARD spring/damper
+# (coilover) mounted on the rocker. Derived from
+# tests/data/corner_rocker_geometry.yaml. STRUT_TOP is chassis-fixed; STRUT_BOTTOM
+# rides the rocker body near the rocker plane (the three rocker reference points
+# all sit at y = 340), lifted 40 mm off that plane so its rigid distances to the
+# two rocker-axis points and PUSHROD_INBOARD pin a well-defined handedness.
+hardpoints:
+  # Lower Wishbone.
+  lower_wishbone_inboard_front: {x: 250, y: 400, z: 200}
+  lower_wishbone_inboard_rear: {x: -250, y: 450, z: 200}
+  lower_wishbone_outboard: {x: 0, y: 900, z: 200}
+
+  # Upper Wishbone.
+  upper_wishbone_inboard_front: {x: 225, y: 350, z: 500}
+  upper_wishbone_inboard_rear: {x: -275, y: 350, z: 500}
+  upper_wishbone_outboard: {x: -25, y: 750, z: 500}
+
+  # Track Rod.
+  trackrod_inboard: {x: 50, y: 200, z: 250}
+  trackrod_outboard: {x: 150, y: 800, z: 275}
+
+  # Axle.
+  axle_inboard: {x: -20, y: 800, z: 308.426}
+  axle_outboard: {x: -20, y: 950, z: 313.426}
+
+  # Pushrod / rocker (as in corner_rocker_geometry.yaml).
+  pushrod_outboard: {x: 0, y: 870, z: 240}
+  pushrod_inboard: {x: 0, y: 340, z: 500}
+  rocker_axis_front: {x: 100, y: 340, z: 450}
+  rocker_axis_rear: {x: -100, y: 340, z: 450}
+
+  # Spring/damper (coilover), inboard on the rocker. STRUT_BOTTOM is off both the
+  # rocker axis and the rocker reference plane (y = 340); STRUT_TOP is a
+  # chassis-fixed lower mount.
+  strut_bottom: {x: 0, y: 300, z: 470}
+  strut_top: {x: 0, y: 150, z: 500}
+
+# Configuration.
+config:
+  steered: true
+  wheel:
+    offset: 0
+    tire:
+      aspect_ratio: 0.55
+      section_width: 270
+      rim_diameter: 13
+  cg_position: {x: 1250, y: 0, z: 450}
+  wheelbase: 2500.0

@@ -102,7 +102,7 @@ def coerce_direction3(value: Any) -> Direction3:
         - Direction3
 
     Raises:
-        ValueError: If the input has zero length (cannot be normalised).
+        ValueError: If the input has zero length (cannot be normalized).
     """
     if isinstance(value, Direction3):
         return value
@@ -124,6 +124,6 @@ def coerce_direction3(value: Any) -> Direction3:
 
 # Pydantic field type for Direction3-valued fields.
 # Static type is Direction3 (so attribute access works without casts). The
-# BeforeValidator coerces wider inputs at runtime and normalises to unit
+# BeforeValidator coerces wider inputs at runtime and normalizes to unit
 # length; zero-length inputs raise ValueError.
 PydanticDirection3 = Annotated[Direction3, BeforeValidator(coerce_direction3)]

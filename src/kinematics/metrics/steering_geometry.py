@@ -3,7 +3,7 @@ Steering axis geometry metrics.
 
 Scrub radius and mechanical trail are measured from the point where the
 steering axis (kingpin axis) intersects the local ground reference plane
-through the contact patch centre to the contact patch centre itself.
+through the contact patch center to the contact patch center itself.
 
 Coordinate System Assumption: ISO 8855 (X-Forward, Y-Left, Z-Up).
 """
@@ -24,7 +24,7 @@ def calculate_scrub_radius(ctx: MetricContext) -> float | None:
     Scrub radius in mm.
 
     The distance from the steering axis ground intersection to the
-    contact patch centre, measured along the wheel's lateral direction
+    contact patch center, measured along the wheel's lateral direction
     in the ground plane. Projecting the wheel axis into the ground
     plane keeps the measurement correct when the wheel is both steered
     and cambered.
@@ -59,7 +59,7 @@ def calculate_mechanical_trail(ctx: MetricContext) -> float | None:
     Mechanical trail (caster trail) in mm.
 
     The longitudinal (X-axis) distance from the steering axis ground
-    intersection to the contact patch centre. Positive mechanical
+    intersection to the contact patch center. Positive mechanical
     trail means the contact patch is behind (rearward of) the steering
     axis ground intersection, which produces a self-centring moment.
 

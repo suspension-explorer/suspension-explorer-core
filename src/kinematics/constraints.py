@@ -727,7 +727,7 @@ class ScalarTripleProductConstraint(CoplanarPointsConstraint):
 
     def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
-        Compute the normalised signed-volume residual.
+        Compute the normalized signed-volume residual.
 
         Returns ``(triple(p1..p4) - target_volume) / scale``. Zero indicates the
         four points span the design signed volume (and hence the design

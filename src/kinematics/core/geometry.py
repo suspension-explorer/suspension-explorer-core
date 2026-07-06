@@ -59,6 +59,7 @@ def extract_array(x: object) -> np.ndarray:
 # Point3
 # ---------------------------------------------------------------------------
 
+
 class Point3:
     """
     A location in 3D Euclidean space.
@@ -174,6 +175,7 @@ class Point3:
 # ---------------------------------------------------------------------------
 # Vector3
 # ---------------------------------------------------------------------------
+
 
 class Vector3:
     """
@@ -359,6 +361,7 @@ class Vector3:
 # Direction3
 # ---------------------------------------------------------------------------
 
+
 class Direction3:
     """
     A unit vector representing an orientation in 3D space.
@@ -383,9 +386,7 @@ class Direction3:
             raw = np.asarray(data, dtype=np.float64)
 
         if raw.shape != (3,):
-            raise ValueError(
-                f"Direction3 requires shape (3,), got {raw.shape}"
-            )
+            raise ValueError(f"Direction3 requires shape (3,), got {raw.shape}")
         magnitude = float(np.linalg.norm(raw))
         if magnitude < EPS_GEOMETRIC:
             raise ValueError("Cannot create Direction3 from zero-length vector")
@@ -497,6 +498,7 @@ GEOM_TYPES = (Point3, Vector3, Direction3, np.ndarray)
 # Numpy __array_function__ implementations
 # ---------------------------------------------------------------------------
 
+
 def geom_dot(a: object, b: object, out: object = None) -> float:
     """
     Geometry-aware dot product.
@@ -546,6 +548,7 @@ GEOM_IMPLEMENTATIONS[np.cross] = geom_cross
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
 
 def midpoint(a: Point3, b: Point3) -> Point3:
     """

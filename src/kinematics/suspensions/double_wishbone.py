@@ -87,6 +87,8 @@ class DoubleWishboneSuspension(Suspension):
             PointID.ROCKER_AXIS_FRONT,
             PointID.ROCKER_AXIS_REAR,
             PointID.ROCKER_DROPLINK,
+            PointID.STRUT_TOP,
+            PointID.STRUT_BOTTOM,
         }
     )
 
@@ -100,6 +102,17 @@ class DoubleWishboneSuspension(Suspension):
             PointID.PUSHROD_INBOARD,
             PointID.ROCKER_AXIS_FRONT,
             PointID.ROCKER_AXIS_REAR,
+        }
+    )
+
+    # The spring/damper (coilover) group is all-or-nothing: either both ends of
+    # the strut are authored or neither is. STRUT_TOP is chassis-fixed; the strut
+    # is a variable-length spring/damper element (no distance constraint pins its
+    # length), so its extension is free to change over the sweep.
+    STRUT_GROUP: ClassVar[frozenset[PointID]] = frozenset(
+        {
+            PointID.STRUT_TOP,
+            PointID.STRUT_BOTTOM,
         }
     )
 
@@ -156,6 +169,11 @@ class DoubleWishboneSuspension(Suspension):
         """True when ROCKER_DROPLINK is present (implies the rocker group)."""
         return self.has_rocker and PointID.ROCKER_DROPLINK in self.hardpoints
 
+    @property
+    def has_strut(self) -> bool:
+        """True when both spring/damper (coilover) ends are authored."""
+        return self.STRUT_GROUP <= set(self.hardpoints)
+
     def validate_hardpoints(self) -> None:
         """
         Validate required hardpoints plus the optional pushrod/rocker group.
@@ -186,6 +204,18 @@ class DoubleWishboneSuspension(Suspension):
             raise ValueError(
                 "ROCKER_DROPLINK requires the full pushrod/rocker group "
                 f"({sorted(p.name for p in self.ROCKER_GROUP)})."
+            )
+
+        # The spring/damper (coilover) group is all-or-nothing, validated the same
+        # way as the rocker group: a partial specification (only one strut end) is
+        # a clear authoring error.
+        strut_present = self.STRUT_GROUP & present
+        if strut_present and strut_present != self.STRUT_GROUP:
+            missing = sorted(p.name for p in self.STRUT_GROUP - present)
+            raise ValueError(
+                "Incomplete strut group: the points "
+                f"{sorted(p.name for p in self.STRUT_GROUP)} are all-or-nothing; "
+                f"missing {missing}."
             )
 
         if not self.has_rocker:
@@ -235,6 +265,10 @@ class DoubleWishboneSuspension(Suspension):
             points.append(PointID.PUSHROD_INBOARD)
             if PointID.ROCKER_DROPLINK in self.hardpoints:
                 points.append(PointID.ROCKER_DROPLINK)
+        # STRUT_TOP is chassis-fixed (a hardpoint, never a solver variable); only
+        # STRUT_BOTTOM rides a body and moves during solving.
+        if self.has_strut:
+            points.append(PointID.STRUT_BOTTOM)
         return points
 
     def output_points(self) -> tuple[PointID, ...]:
@@ -245,6 +279,9 @@ class DoubleWishboneSuspension(Suspension):
             extra.append(PointID.PUSHROD_INBOARD)
             if PointID.ROCKER_DROPLINK in self.hardpoints:
                 extra.append(PointID.ROCKER_DROPLINK)
+        if self.has_strut:
+            extra.append(PointID.STRUT_TOP)
+            extra.append(PointID.STRUT_BOTTOM)
         return self.OUTPUT_POINTS + tuple(extra)
 
     def initial_state(self) -> SuspensionState:
@@ -336,6 +373,12 @@ class DoubleWishboneSuspension(Suspension):
         if self.has_rocker:
             constraints.extend(self._rocker_constraints(initial_state))
 
+        # Spring/damper (coilover): STRUT_BOTTOM is held rigid to whichever body
+        # carries it (rocker when inboard, lower wishbone when outboard). The
+        # strut length itself is unconstrained (it is the spring/damper travel).
+        if self.has_strut:
+            constraints.extend(self._strut_constraints(initial_state))
+
         return constraints
 
     def _rocker_constraints(self, initial_state: SuspensionState) -> list[Constraint]:
@@ -409,6 +452,80 @@ class DoubleWishboneSuspension(Suspension):
                         scale=max(abs(design_triple), 1.0),
                     )
                 )
+
+        return constraints
+
+    def _strut_constraints(self, initial_state: SuspensionState) -> list[Constraint]:
+        """
+        Constraints holding the spring/damper foot (STRUT_BOTTOM) rigid to a body.
+
+        Only STRUT_BOTTOM is constrained here: STRUT_TOP is chassis-fixed and the
+        strut length is deliberately left free (it is the coilover travel). The
+        carrying body depends on the layout:
+
+        - **Inboard** (``has_rocker``): the damper mounts on the rocker, so
+          STRUT_BOTTOM is rigid to the rocker body via 3 design-length distances
+          (to the two rocker-axis points and to ``PUSHROD_INBOARD``).
+        - **Outboard** (no rocker): the damper mounts on the lower wishbone, so
+          STRUT_BOTTOM is rigid to the lower-wishbone body via 3 design-length
+          distances (to the two inboard pickups and the outboard ball joint).
+
+        In both cases three distances to three reference points fix STRUT_BOTTOM
+        only up to reflection through the plane of those references, so a
+        :class:`ScalarTripleProductConstraint` pins the design handedness -- the
+        same chirality-pin pattern used for the rocker droplink. That pin gives a
+        4th residual for the 3 added variables, keeping the block well posed. The
+        pin is skipped for a degenerate (coplanar) design where the two mirror
+        branches coincide and the triple product carries no sign.
+        """
+        pos = initial_state.positions
+        constraints: list[Constraint] = []
+
+        def add_distance(p1: PointID, p2: PointID) -> None:
+            constraints.append(
+                DistanceConstraint(
+                    p1, p2, compute_point_point_distance(pos[p1], pos[p2])
+                )
+            )
+
+        if self.has_rocker:
+            # Inboard damper: STRUT_BOTTOM rigid to the rocker body.
+            reference_points = (
+                PointID.ROCKER_AXIS_FRONT,
+                PointID.ROCKER_AXIS_REAR,
+                PointID.PUSHROD_INBOARD,
+            )
+        else:
+            # Outboard damper: STRUT_BOTTOM rigid to the lower-wishbone body.
+            reference_points = (
+                PointID.LOWER_WISHBONE_INBOARD_FRONT,
+                PointID.LOWER_WISHBONE_INBOARD_REAR,
+                PointID.LOWER_WISHBONE_OUTBOARD,
+            )
+
+        ref_a, ref_b, ref_c = reference_points
+        for ref in reference_points:
+            add_distance(PointID.STRUT_BOTTOM, ref)
+
+        # Chirality pin: signed volume of (ref_a, ref_b, ref_c, STRUT_BOTTOM) at
+        # its design value selects the correct side of the reference plane, so the
+        # solver cannot fold STRUT_BOTTOM onto its mirror image.
+        design_triple = compute_scalar_triple_product(
+            pos[ref_b] - pos[ref_a],
+            pos[ref_c] - pos[ref_a],
+            pos[PointID.STRUT_BOTTOM] - pos[ref_a],
+        )
+        if abs(design_triple) >= 1e-6:
+            constraints.append(
+                ScalarTripleProductConstraint(
+                    ref_a,
+                    ref_b,
+                    ref_c,
+                    PointID.STRUT_BOTTOM,
+                    target_volume=design_triple,
+                    scale=max(abs(design_triple), 1.0),
+                )
+            )
 
         return constraints
 
@@ -603,6 +720,16 @@ class DoubleWishboneSuspension(Suspension):
                     points=rocker_points,
                     color="mediumvioletred",
                     label="Rocker",
+                )
+            )
+
+        # Spring/damper (coilover): chassis-fixed top down to the moving foot.
+        if self.has_strut:
+            links.append(
+                LinkVisualization(
+                    points=[PointID.STRUT_TOP, PointID.STRUT_BOTTOM],
+                    color="seagreen",
+                    label="Spring/Damper",
                 )
             )
 

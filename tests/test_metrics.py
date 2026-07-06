@@ -260,8 +260,7 @@ def test_scrub_radius_uses_ground_plane_wheel_lateral_direction(
         scrub_radius,
         expected_scrub_radius,
         atol=TEST_TOLERANCE,
-        err_msg="Scrub radius should use wheel lateral direction"
-        " on the ground plane",
+        err_msg="Scrub radius should use wheel lateral direction on the ground plane",
     )
     assert not np.isclose(
         scrub_radius,
@@ -413,5 +412,13 @@ def test_default_corner_metric_catalog_matches_trusted_set() -> None:
         "fvic_y_mm",
         "fvic_z_mm",
         "fvsa_length_mm",
+        "wheel_travel_mm",
+        "half_track_change_mm",
+        "wheel_recession_mm",
+        "damper_length_mm",
+        "svsa_angle_deg",
+        "anti_dive_pct",
+        "anti_lift_pct",
+        "anti_squat_pct",
     ]
     assert column_names == expected

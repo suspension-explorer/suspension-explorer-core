@@ -27,7 +27,7 @@ class WheelAnchors:
     """
     Point keys anchoring a single drawn wheel.
 
-    A wheel is drawn from its centre/inboard/outboard rim points and the axle
+    A wheel is drawn from its center/inboard/outboard rim points and the axle
     axis. Single-corner models supply one anchor set keyed on ``PointID``; the
     axle supplies one per side keyed on ``PointRef``.
     """
@@ -178,8 +178,7 @@ class SuspensionVisualizer:
         wheel_inboard = positions[anchor.inboard].data
         wheel_outboard = positions[anchor.outboard].data
         axle_vector = (
-            positions[anchor.axle_outboard].data
-            - positions[anchor.axle_inboard].data
+            positions[anchor.axle_outboard].data - positions[anchor.axle_inboard].data
         )
 
         axle_vector = axle_vector / np.linalg.norm(axle_vector)
@@ -285,8 +284,7 @@ class SuspensionVisualizer:
         wheel_inboard = positions[anchor.inboard].data
         wheel_outboard = positions[anchor.outboard].data
         axle_vector = (
-            positions[anchor.axle_outboard].data
-            - positions[anchor.axle_inboard].data
+            positions[anchor.axle_outboard].data - positions[anchor.axle_inboard].data
         )
 
         axle_vector = axle_vector / np.linalg.norm(axle_vector)
