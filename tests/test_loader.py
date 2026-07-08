@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from kinematics.io.geometry_loader import load_geometry
+from kinematics.io import load_geometry
 from kinematics.suspensions.base import Suspension
 
 
@@ -59,7 +59,7 @@ def test_load_geometry_valid(double_wishbone_geometry_file):
 
 
 def test_load_geometry_empty(empty_geometry_file):
-    with pytest.raises(ValueError, match="Geometry file is empty"):
+    with pytest.raises(ValueError, match="Geometry file must contain a YAML mapping"):
         load_geometry(empty_geometry_file)
 
 
@@ -82,7 +82,7 @@ def test_load_geometry_unsupported_type(tmp_path: Path):
     with open(file_path, "w") as f:
         yaml.dump(data, f)
 
-    with pytest.raises(ValueError, match="Unsupported geometry type"):
+    with pytest.raises(ValueError, match="Invalid geometry specification"):
         load_geometry(file_path)
 
 
@@ -106,5 +106,5 @@ def test_load_geometry_yaml_error(tmp_path: Path):
     file_path = tmp_path / "malformed.yaml"
     file_path.write_text("invalid: yaml: content: [")
 
-    with pytest.raises(ValueError, match="Error parsing geometry file"):
+    with pytest.raises(ValueError, match="Error parsing Geometry file"):
         load_geometry(file_path)

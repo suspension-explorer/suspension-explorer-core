@@ -1,4 +1,11 @@
-"""Shared Pydantic validation utilities for YAML loading."""
+"""
+Coercion utilities for structured input.
+
+These helpers turn loosely-typed structured data (parsed YAML, JSON request
+bodies, plain Python dicts) into the package's core value types. They are the
+single tolerant boundary of the package: everything inboard of the schema layer
+works with strict core types (enums, Point3, Direction3) only.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +17,7 @@ from pydantic import BeforeValidator
 
 from kinematics.core.enums import Axis, PointID, TargetPositionMode, Units
 from kinematics.core.geometry import Direction3, Point3
+from kinematics.core.point_ref import Side
 
 E = TypeVar("E", bound=Enum)
 
@@ -50,6 +58,7 @@ def coerce_enum(enum_cls: type[E], value: str | int | E) -> E:
 # Case-insensitive enum type aliases.
 CIAxis = Annotated[Axis, BeforeValidator(lambda v: coerce_enum(Axis, v))]
 CIPointID = Annotated[PointID, BeforeValidator(lambda v: coerce_enum(PointID, v))]
+CISide = Annotated[Side, BeforeValidator(lambda v: coerce_enum(Side, v))]
 CIUnits = Annotated[Units, BeforeValidator(lambda v: coerce_enum(Units, v))]
 CITargetPositionMode = Annotated[
     TargetPositionMode, BeforeValidator(lambda v: coerce_enum(TargetPositionMode, v))
@@ -85,7 +94,7 @@ def coerce_point3(value: Any) -> Point3:
 # Static type is Point3 (so attribute access works without casts), but the
 # BeforeValidator coerces wider inputs (lists, tuples, dicts, ndarrays) at
 # runtime. Direct model construction with raw inputs requires explicit
-# Point3(...) wrapping to satisfy the type checker; YAML/dict-driven
+# Point3(...) wrapping to satisfy the type checker; dict-driven
 # `Model.model_validate(...)` is unaffected.
 PydanticPoint3 = Annotated[Point3, BeforeValidator(coerce_point3)]
 

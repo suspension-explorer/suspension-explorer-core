@@ -70,7 +70,7 @@ def calculate_damper_length(ctx: "MetricContext") -> float | None:
     Installed spring/damper (coilover) length in mm.
 
     The length is the straight-line distance between the strut top mount
-    (chassis-fixed) and the strut bottom (body-mounted foot). Only defined
+    (chassis-fixed) and the strut bottom (body-mounted lower pickup). Only defined
     when the suspension actually carries a strut group; otherwise None.
 
         damper_length = |STRUT_TOP - STRUT_BOTTOM|

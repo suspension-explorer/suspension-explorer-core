@@ -39,13 +39,13 @@ hardpoints:
     pushrod_inboard: {x: 0, y: 430, z: 480}
     rocker_axis_front: {x: 100, y: 340, z: 450}
     rocker_axis_rear: {x: -100, y: 340, z: 450}
-    rocker_droplink: {x: 0, y: 250, z: 450}
+    droplink_rocker: {x: 0, y: 250, z: 450}
 
     # ARB arm end (left): 80 mm lever in +X off the bar end, so its arc tangent is
     # pure Z, matching the droplink's throw. The droplink runs 150 mm down and
     # 80 mm forward from the rocker (length ~170 mm), with the whole ARB sitting
     # BELOW the rocker axis in Z.
-    arb_droplink: {x: 80, y: 250, z: 300}
+    droplink_arb: {x: 80, y: 250, z: 300}
 
   # Shared ARB axis: transverse (along Y) through the centreline, mirror-symmetric
   # (same x and z, equal-and-opposite y), so it is authored once and not mirrored.

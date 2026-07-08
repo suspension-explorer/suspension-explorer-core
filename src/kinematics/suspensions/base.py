@@ -10,15 +10,15 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, ClassVar, Sequence
+from typing import TYPE_CHECKING, ClassVar, Sequence
 
 from kinematics.constraints import Constraint
 from kinematics.core.enums import PointID, ShimType, Units
 from kinematics.core.geometry import Point3
 from kinematics.core.point_ref import PointKey, Side
 from kinematics.points.derived.manager import DerivedPointsSpec
+from kinematics.schema.config import SuspensionConfig
 from kinematics.state import SuspensionState
-from kinematics.suspensions.config.settings import SuspensionConfig
 
 if TYPE_CHECKING:
     from kinematics.metrics.main import MetricRow
@@ -40,7 +40,6 @@ class Suspension(ABC):
     """
 
     TYPE_KEY: ClassVar[str] = ""
-    ALIASES: ClassVar[frozenset[str]] = frozenset()
     REQUIRED_POINTS: ClassVar[frozenset[PointID]] = frozenset()
     OPTIONAL_POINTS: ClassVar[frozenset[PointID]] = frozenset()
     OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = ()
@@ -65,33 +64,6 @@ class Suspension(ABC):
     def all_valid_points(cls) -> frozenset[PointID]:
         """All points valid for this suspension type."""
         return cls.REQUIRED_POINTS | cls.OPTIONAL_POINTS
-
-    @classmethod
-    def matches_type(cls, type_key: str) -> bool:
-        """Check if this class handles the given type key."""
-        key_lower = type_key.lower()
-        return key_lower == cls.TYPE_KEY or key_lower in cls.ALIASES
-
-    @classmethod
-    def from_yaml_data(cls, yaml_data: dict[str, Any]) -> "Suspension":
-        """
-        Build a suspension instance from parsed YAML data (type key removed).
-
-        The base implementation is the single-corner loader: it parses a flat
-        hardpoints block and a single config into ``cls``. Multi-corner models
-        (e.g. the axle) override this to assemble their sub-models from a
-        side-structured schema.
-
-        Args:
-            yaml_data: Parsed YAML mapping with the ``type`` key already removed.
-
-        Returns:
-            An instantiated suspension of type ``cls``.
-        """
-        # Deferred import: geometry_loader imports this module.
-        from kinematics.io.geometry_loader import load_suspension
-
-        return load_suspension(yaml_data, cls)
 
     @abstractmethod
     def initial_state(self) -> SuspensionState:

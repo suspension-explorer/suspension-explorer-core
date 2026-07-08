@@ -29,10 +29,8 @@ def _ensure_registry_populated() -> None:
 
 
 def _register_class(cls: SuspensionClass) -> None:
-    """Register a suspension class by its TYPE_KEY and ALIASES."""
+    """Register a suspension class by its TYPE_KEY."""
     SUSPENSION_REGISTRY[cls.TYPE_KEY] = cls
-    for alias in cls.ALIASES:
-        SUSPENSION_REGISTRY[alias] = cls
 
 
 def get_suspension_class(type_key: str) -> SuspensionClass | None:

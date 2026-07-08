@@ -25,6 +25,7 @@ import numpy as np
 import pytest
 import yaml
 
+from kinematics import build_suspension, parse_geometry_spec
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.types import (
     PointTarget,
@@ -32,11 +33,10 @@ from kinematics.core.types import (
     SweepConfig,
     TargetPositionMode,
 )
-from kinematics.io.geometry_loader import load_geometry
+from kinematics.io import load_geometry
 from kinematics.main import solve_sweep
 from kinematics.points.derived.manager import DerivedPointsManager
 from kinematics.solver import ResidualComputer, convert_targets_to_absolute
-from kinematics.suspensions.double_wishbone import DoubleWishboneSuspension
 
 TEST_TOLERANCE = 1e-4
 FD_STEP = 1e-7
@@ -108,7 +108,9 @@ class TestValidation:
         data = _load_yaml(corner_strut_file)
         del data["hardpoints"]["strut_top"]
         with pytest.raises(ValueError, match="Incomplete strut group"):
-            DoubleWishboneSuspension.from_yaml_data(data)
+            build_suspension(
+                parse_geometry_spec({"type": "double_wishbone", **data})
+            )
 
     def test_partial_strut_group_missing_bottom_rejected(
         self, corner_strut_file: Path
@@ -116,7 +118,9 @@ class TestValidation:
         data = _load_yaml(corner_strut_file)
         del data["hardpoints"]["strut_bottom"]
         with pytest.raises(ValueError, match="Incomplete strut group"):
-            DoubleWishboneSuspension.from_yaml_data(data)
+            build_suspension(
+                parse_geometry_spec({"type": "double_wishbone", **data})
+            )
 
     def test_has_strut_flags(
         self, corner_strut_file: Path, test_data_dir: Path

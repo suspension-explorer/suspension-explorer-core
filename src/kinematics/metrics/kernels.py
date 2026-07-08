@@ -121,17 +121,17 @@ def camber_deg(
     return degrees(camber)
 
 
-def toe_deg(
+def roadwheel_angle_deg(
     positions: Mapping[PointKey, PositionLike],
     side_sign: float,
     axle_inboard: PointKey = PointID.AXLE_INBOARD,
     axle_outboard: PointKey = PointID.AXLE_OUTBOARD,
 ) -> Scalar:
     """
-    Toe angle in degrees; mirrors metrics.angles.calculate_toe.
+    Roadwheel angle in degrees; mirrors metrics.angles.calculate_roadwheel_angle.
 
-    Positive is toe-in: the front of the wheel points towards the vehicle
-    centreline.
+    Positive is toe-in (vernacular): the front of the wheel points towards the
+    vehicle centreline.
     """
     axle = _vec(positions, axle_outboard) - _vec(positions, axle_inboard)
     proj_x = _component(axle, Axis.X)
@@ -140,10 +140,10 @@ def toe_deg(
     # Toe-in points the axle vector slightly forward (+X) on the left,
     # measured against +Y; on the right, against -Y.
     if side_sign > 0:
-        toe = atan2(proj_x, proj_y)
+        angle = atan2(proj_x, proj_y)
     else:
-        toe = atan2(proj_x, -proj_y)
-    return degrees(toe)
+        angle = atan2(proj_x, -proj_y)
+    return degrees(angle)
 
 
 def caster_deg(

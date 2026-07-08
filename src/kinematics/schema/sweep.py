@@ -1,16 +1,21 @@
-"""Parse sweep configuration files into executable sweep specifications."""
+"""
+Structured sweep specification.
+
+``SweepSpec`` is the validated, transport-agnostic description of a sweep: the
+same model backs YAML files (via ``kinematics.io``) and structured API
+requests. ``build_sweep_config`` expands a validated spec into the executable
+``SweepConfig`` consumed by the solver.
+"""
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Sequence
+from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
-import yaml
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from kinematics.core.enums import Axis, TargetPositionMode
-from kinematics.core.point_ref import Side
+from kinematics.core.geometry import Direction3, extract_array
 from kinematics.core.types import (
     PointTarget,
     PointTargetAxis,
@@ -18,11 +23,11 @@ from kinematics.core.types import (
     SweepConfig,
     WorldAxisSystem,
 )
-from kinematics.io.validation import (
+from kinematics.schema.coercion import (
     CIAxis,
     CIPointID,
+    CISide,
     CITargetPositionMode,
-    coerce_enum,
 )
 
 if TYPE_CHECKING:
@@ -40,8 +45,6 @@ def vector_to_axis(vec: np.ndarray) -> Axis | None:
     """
     Return the Axis if vec matches a principal axis, else None.
     """
-    from kinematics.core.geometry import extract_array
-
     vec_data = extract_array(vec)
     for axis, axis_vec in AXIS_VECTORS.items():
         if np.allclose(vec_data, axis_vec):
@@ -86,19 +89,11 @@ class TargetSpec(BaseModel):
     point: CIPointID
     direction: DirectionSpec
     name: str | None = None
-    side: Side | None = None
+    side: CISide | None = None
     mode: CITargetPositionMode = TargetPositionMode.RELATIVE
     start: float | None = None
     stop: float | None = None
     values: Sequence[float] | None = None
-
-    @field_validator("side", mode="before")
-    @classmethod
-    def coerce_side(cls, v: object) -> Side | None:
-        """Coerce a case-insensitive 'left'/'right' string to a Side."""
-        if v is None:
-            return None
-        return coerce_enum(Side, v)  # type: ignore[arg-type]
 
     def expand_values(self, default_steps: int | None) -> list[float]:
         """Expand this target into concrete values."""
@@ -122,75 +117,48 @@ class TargetSpec(BaseModel):
         )
 
 
-class SweepFile(BaseModel):
-    """Schema for sweep configuration files."""
+class SweepSpec(BaseModel):
+    """
+    Validated sweep specification.
+
+    This is the structured wire/file format for sweeps: a shared step count and
+    a list of target dimensions. Expand it into an executable ``SweepConfig``
+    with :func:`build_sweep_config`.
+    """
 
     model_config = ConfigDict(frozen=True)
 
-    version: Annotated[int, "Schema version (currently only 1 supported)"]
+    version: int = 1
     steps: int | None = None
     targets: list[TargetSpec]
 
-    @field_validator("version")
-    @classmethod
-    def check_version(cls, v: int) -> int:
-        if v != 1:
-            raise ValueError(f"Unsupported sweep version: {v}")
-        return v
+    @model_validator(mode="after")
+    def check_version(self) -> "SweepSpec":
+        if self.version != 1:
+            raise ValueError(f"Unsupported sweep version: {self.version}")
+        return self
 
+    @property
+    def n_steps(self) -> int:
+        """
+        Number of solved steps this spec expands to.
 
-def parse_sweep_file(
-    path: Path,
-    suspension: "Suspension | None" = None,
-) -> SweepConfig:
-    """
-    Parse a sweep configuration file into a SweepConfig.
-
-    Args:
-        path: Path to the YAML sweep configuration file.
-        suspension: Optional suspension used to resolve each target's
-            ``(point, side)`` into a concrete point key. When omitted, targets
-            must not specify a ``side`` (single-corner behavior).
-
-    Returns:
-        SweepConfig ready for use with the solver.
-
-    Raises:
-        FileNotFoundError: If the file doesn't exist.
-        ValueError: If the file format is invalid or contains errors.
-    """
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            raw_data = yaml.safe_load(f)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Sweep file not found: {path}")
-    except yaml.YAMLError as e:
-        raise ValueError(f"Error parsing YAML: {e}") from e
-
-    if not isinstance(raw_data, dict):
-        raise ValueError("Sweep file must contain a YAML mapping")
-
-    try:
-        file_spec = SweepFile.model_validate(raw_data)
-    except Exception as e:
-        raise ValueError(f"Invalid sweep specification: {e}") from e
-
-    return build_sweep_config(file_spec, suspension)
+        Each target expands independently (explicit values win over the
+        shared step count); the sweep runs for the longest expansion.
+        """
+        lengths = [len(target.expand_values(self.steps)) for target in self.targets]
+        return max(lengths) if lengths else 0
 
 
 def build_sweep_config(
-    file_spec: SweepFile,
+    spec: SweepSpec,
     suspension: "Suspension | None" = None,
 ) -> SweepConfig:
     """
-    Expand a validated SweepFile spec into an executable SweepConfig.
-
-    This is the value-expansion half of sweep loading, split out so callers that
-    already hold a validated spec (e.g. a structured API request) can build a
-    SweepConfig without going through a YAML file.
+    Expand a validated SweepSpec into an executable SweepConfig.
 
     Args:
-        file_spec: A validated sweep specification.
+        spec: A validated sweep specification.
         suspension: Optional suspension used to resolve each target's
             ``(point, side)`` into a concrete point key. When omitted, targets
             must not specify a ``side``.
@@ -203,23 +171,22 @@ def build_sweep_config(
             ``side`` without a suspension context.
     """
     # Expand values and verify equal lengths.
-    target_sequences = [t.expand_values(file_spec.steps) for t in file_spec.targets]
+    target_sequences = [t.expand_values(spec.steps) for t in spec.targets]
     lengths = {len(seq) for seq in target_sequences}
-    if len(lengths) != 1:
+    if len(lengths) > 1:
         raise ValueError(
             f"All targets must have the same length, got: {sorted(lengths)}"
         )
 
     # Build per-dimension target lists.
     sweep_dimensions: list[list[PointTarget]] = []
-    for target_spec, values in zip(file_spec.targets, target_sequences):
+    for target_spec, values in zip(spec.targets, target_sequences):
         unit_vec = target_spec.direction.to_unit_vector()
         axis = vector_to_axis(unit_vec)
+        direction: PointTargetAxis | PointTargetVector
         if axis:
             direction = PointTargetAxis(axis)
         else:
-            from kinematics.core.geometry import Direction3
-
             direction = PointTargetVector(Direction3(unit_vec))
 
         # Resolve the concrete point key through the suspension when provided.

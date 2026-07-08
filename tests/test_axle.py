@@ -19,8 +19,8 @@ Sign conventions (derived and asserted here):
   symmetry). Under STEERING they move with OPPOSITE sign but each is monotonic
   in rack displacement, because steering the axle one way is toe-in for one
   wheel and toe-out for the other in the per-side convention.
-- ``total_toe_deg`` = left + right roadwheel angle, so it is the axle total
-  toe-in and is an even (symmetric) function of rack displacement.
+- ``total_roadwheel_angle_deg`` = left + right roadwheel angle, so it is the
+  axle total toe-in and is an even (symmetric) function of rack displacement.
 """
 
 from __future__ import annotations
@@ -30,6 +30,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from kinematics import (
+    SweepSpec,
+    build_suspension,
+    build_sweep_config,
+    parse_geometry_spec,
+)
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.point_ref import PointRef, Side
 from kinematics.core.types import (
@@ -38,8 +44,7 @@ from kinematics.core.types import (
     SweepConfig,
     TargetPositionMode,
 )
-from kinematics.io.geometry_loader import load_geometry
-from kinematics.io.sweep_loader import SweepFile, build_sweep_config
+from kinematics.io import load_geometry
 from kinematics.main import solve_sweep
 from kinematics.points.derived.manager import DerivedPointsManager
 from kinematics.solver import ResidualComputer, convert_targets_to_absolute
@@ -153,7 +158,9 @@ class TestLoading:
         # Declare the +Y (left) points as the right side.
         data["hardpoints"]["side"] = "right"
         with pytest.raises(ValueError, match="requires AXLE_OUTBOARD Y"):
-            DoubleWishboneAxleSuspension.from_yaml_data(data)
+            build_suspension(
+                parse_geometry_spec({"type": "double_wishbone_axle", **data})
+            )
 
     def test_explicit_missing_side_rejected(self, test_data_dir: Path) -> None:
         import yaml
@@ -162,7 +169,9 @@ class TestLoading:
         data.pop("type")
         del data["hardpoints"]["right"]
         with pytest.raises(ValueError, match="both 'left' and 'right'"):
-            DoubleWishboneAxleSuspension.from_yaml_data(data)
+            build_suspension(
+                parse_geometry_spec({"type": "double_wishbone_axle", **data})
+            )
 
     def test_explicit_same_sign_sides_rejected(self, test_data_dir: Path) -> None:
         import yaml
@@ -172,13 +181,15 @@ class TestLoading:
         # Make the 'right' block a copy of the 'left' (+Y) block.
         data["hardpoints"]["right"] = data["hardpoints"]["left"]
         with pytest.raises(ValueError, match="requires AXLE_OUTBOARD Y"):
-            DoubleWishboneAxleSuspension.from_yaml_data(data)
+            build_suspension(
+                parse_geometry_spec({"type": "double_wishbone_axle", **data})
+            )
 
     def test_side_on_single_corner_target_rejected(
         self, single_geometry_file: Path
     ) -> None:
         single = load_geometry(single_geometry_file)
-        spec = SweepFile.model_validate(
+        spec = SweepSpec.model_validate(
             {
                 "version": 1,
                 "steps": 2,
@@ -197,7 +208,7 @@ class TestLoading:
             build_sweep_config(spec, single)
 
     def test_side_without_suspension_rejected(self) -> None:
-        spec = SweepFile.model_validate(
+        spec = SweepSpec.model_validate(
             {
                 "version": 1,
                 "steps": 2,
@@ -347,7 +358,7 @@ class TestSteering:
         rows = [axle.compute_state_metrics(st) for st in states]
         left = [r["left_roadwheel_angle_deg"] for r in rows]
         right = [r["right_roadwheel_angle_deg"] for r in rows]
-        total = [r["total_toe_deg"] for r in rows]
+        total = [r["total_roadwheel_angle_deg"] for r in rows]
 
         # Both are well-defined at every step.
         assert all(v is not None for v in left + right + total)
@@ -411,8 +422,8 @@ class TestRoll:
             assert np.isfinite(rc_y)
             assert np.isfinite(rc_z)
             # Total toe is well-defined.
-            assert row["total_toe_deg"] is not None
-            assert np.isfinite(row["total_toe_deg"])
+            assert row["total_roadwheel_angle_deg"] is not None
+            assert np.isfinite(row["total_roadwheel_angle_deg"])
 
 
 # ----------------------------------------------------------------------
@@ -505,7 +516,7 @@ class TestCliSmoke:
         for col in (
             "roll_center_y_mm",
             "roll_center_z_mm",
-            "total_toe_deg",
+            "total_roadwheel_angle_deg",
             "track_mm",
             "rack_displacement_mm",
         ):

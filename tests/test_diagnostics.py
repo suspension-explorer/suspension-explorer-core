@@ -47,7 +47,7 @@ from kinematics.diagnostics import (
     SweepDiagnostics,
     diagnose_sweep,
 )
-from kinematics.io.geometry_loader import load_geometry
+from kinematics.io import load_geometry
 from kinematics.jacobians import jac_coplanar
 from kinematics.main import solve_sweep
 from kinematics.state import SuspensionState
@@ -105,7 +105,7 @@ class TestScalarTripleProductConstraint:
     P1 = PointID.ROCKER_AXIS_FRONT
     P2 = PointID.ROCKER_AXIS_REAR
     P3 = PointID.PUSHROD_INBOARD
-    P4 = PointID.ROCKER_DROPLINK
+    P4 = PointID.DROPLINK_ROCKER
 
     def _design_positions(self) -> dict[PointID, Point3]:
         return {
@@ -257,7 +257,7 @@ class TestChiralityInRange:
         af = pos[PointRef(side, PointID.ROCKER_AXIS_FRONT)]
         ar = pos[PointRef(side, PointID.ROCKER_AXIS_REAR)]
         pin = pos[PointRef(side, PointID.PUSHROD_INBOARD)]
-        dl = pos[PointRef(side, PointID.ROCKER_DROPLINK)]
+        dl = pos[PointRef(side, PointID.DROPLINK_ROCKER)]
         return compute_scalar_triple_product(ar - af, pin - af, dl - af)
 
     def test_in_range_reproduction_sign_constant(self, axle_rocker_file: Path) -> None:
@@ -358,8 +358,8 @@ class TestTransmissionMargin:
         )
         assert any(
             ("PUSHROD_INBOARD" in i.message)
-            or ("ROCKER_DROPLINK" in i.message)
-            or ("ARB_DROPLINK" in i.message)
+            or ("DROPLINK_ROCKER" in i.message)
+            or ("DROPLINK_ARB" in i.message)
             for i in trans
         )
 

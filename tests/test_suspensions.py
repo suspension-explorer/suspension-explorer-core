@@ -16,14 +16,14 @@ import pytest
 
 from kinematics.core.enums import PointID, ShimType, Units
 from kinematics.core.geometry import Direction3, Point3
-from kinematics.io.geometry_loader import load_geometry
-from kinematics.suspensions.base import Suspension
-from kinematics.suspensions.config.settings import (
+from kinematics.io import load_geometry
+from kinematics.schema.config import (
     CamberShimConfig,
     SuspensionConfig,
     TireConfig,
     WheelConfig,
 )
+from kinematics.suspensions.base import Suspension
 from kinematics.suspensions.double_wishbone import DoubleWishboneSuspension
 from kinematics.suspensions.registry import get_suspension_class, list_supported_types
 
@@ -95,15 +95,6 @@ class TestSuspensionBase:
         # Check optional points are included
         assert PointID.PUSHROD_OUTBOARD in valid
 
-    def test_matches_type(self):
-        """
-        Test type matching with aliases.
-        """
-        assert DoubleWishboneSuspension.matches_type("double_wishbone")
-        assert DoubleWishboneSuspension.matches_type("DOUBLE_WISHBONE")
-        assert DoubleWishboneSuspension.matches_type("double_wishbone_front")
-        assert not DoubleWishboneSuspension.matches_type("macpherson_strut")
-
 
 # Test DoubleWishboneSuspension
 
@@ -118,7 +109,6 @@ class TestDoubleWishboneSuspension:
         Test class-level attributes are correctly defined.
         """
         assert DoubleWishboneSuspension.TYPE_KEY == "double_wishbone"
-        assert "double_wishbone_front" in DoubleWishboneSuspension.ALIASES
         assert ShimType.OUTBOARD_CAMBER in DoubleWishboneSuspension.SUPPORTED_SHIMS
 
         # Check required points
@@ -268,7 +258,7 @@ class TestRegistry:
         """
         types = list_supported_types()
         assert "double_wishbone" in types
-        assert "double_wishbone_front" in types  # Alias
+        assert "double_wishbone_axle" in types
 
     def test_get_suspension_class(self):
         """
@@ -407,7 +397,7 @@ config:
         yaml_file = tmp_path / "unknown.yaml"
         yaml_file.write_text(yaml_content)
 
-        with pytest.raises(ValueError, match="Unsupported geometry type"):
+        with pytest.raises(ValueError, match="Invalid geometry specification"):
             load_geometry(yaml_file)
 
     def test_load_rejects_missing_hardpoints(self, tmp_path):

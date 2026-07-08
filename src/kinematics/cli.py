@@ -3,10 +3,13 @@ from pathlib import Path
 import typer
 
 from kinematics.diagnostics import diagnose_sweep
-from kinematics.io.geometry_loader import load_geometry
-from kinematics.io.results_writer import SolutionFrame, create_writer_for_path
-from kinematics.io.sweep_loader import parse_sweep_file
-from kinematics.main import compute_sweep_tangents, solve_sweep
+from kinematics.io import (
+    SolutionFrame,
+    create_writer_for_path,
+    load_geometry,
+    load_sweep,
+)
+from kinematics.main import compute_sweep_metrics, solve_sweep
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
@@ -28,7 +31,7 @@ def sweep(
         kinematics sweep --geometry=geo.yaml --sweep=sweep.yaml --out=out.csv
     """
     suspension = load_geometry(geometry)
-    sweep_config = parse_sweep_file(sweep, suspension)
+    sweep_config = load_sweep(sweep, suspension)
 
     solution_states, solver_stats = solve_sweep(suspension, sweep_config)
 
@@ -51,11 +54,11 @@ def sweep(
         out, geometry_path=str(geometry), sweep_path=str(sweep)
     )
     output_points = suspension.output_points()
-    config = suspension.config
 
-    # Solution-manifold tangents per step: exact d(position)/d(target) fields
-    # feeding the derivative metrics (motion ratios, camber gain, bump steer).
-    sweep_tangents = compute_sweep_tangents(suspension, sweep_config, solution_states)
+    # Full metric rows per state (per-state metrics plus derivative metrics
+    # such as motion ratios and camber gain), computed by the package's single
+    # high-level metrics entry point.
+    metric_rows = compute_sweep_metrics(suspension, sweep_config, solution_states)
 
     for idx, (st, solver_info) in enumerate(zip(solution_states, solver_stats)):
         # Filter to the suspension type's declared output points, in order.
@@ -65,17 +68,10 @@ def sweep(
             if (pos := st.positions.get(pid)) is not None
         }
 
-        # Compute post-solve metrics for this state. Dispatch is polymorphic:
-        # single-corner models emit corner metrics, the axle emits per-side and
-        # axle-level metrics.
-        metrics: dict[str, float | None] = {}
-        if config is not None:
-            metrics = suspension.compute_state_metrics(st, sweep_tangents[idx])
-
         frame = SolutionFrame(
             positions=positions,
             solver_info=solver_info,
-            metrics=metrics,
+            metrics=dict(metric_rows[idx]),
         )
 
         writer.add_frame(idx, frame)

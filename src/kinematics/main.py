@@ -5,7 +5,8 @@ This module provides high-level functions to coordinate the solving of suspensio
 geometries.
 """
 
-from typing import List
+from collections import OrderedDict
+from typing import TYPE_CHECKING, List
 
 from kinematics.core.types import SweepConfig
 from kinematics.points.derived.manager import DerivedPointsManager
@@ -17,6 +18,9 @@ from kinematics.solver import (
 )
 from kinematics.state import SuspensionState
 from kinematics.suspensions.base import Suspension
+
+if TYPE_CHECKING:
+    from kinematics.metrics.main import MetricRow
 
 
 def solve_sweep(
@@ -88,3 +92,48 @@ def compute_sweep_tangents(
             compute_state_tangents(state, constraints, derived_manager, step_targets)
         )
     return tangents_per_step
+
+
+def compute_sweep_metrics(
+    suspension: Suspension,
+    sweep_config: SweepConfig,
+    states: List[SuspensionState],
+) -> list["MetricRow"]:
+    """
+    Compute the full metric row for every solved state of a sweep.
+
+    This is the single high-level metrics entry point for sweep consumers
+    (CLI, API adapters): it computes the solution-manifold tangents internally
+    and feeds them to the per-state metric dispatch, so every consumer gets
+    the complete column set -- per-state metrics plus the derivative metrics
+    (motion ratios, camber gain, bump steer, modal roll/heave rates) -- without
+    knowing anything about tangents or automatic differentiation.
+
+    The tangent computation is best-effort: if it fails (e.g. a pathological
+    configuration), the per-state metrics are still returned and only the
+    derivative columns are omitted, consistently across all rows.
+
+    Args:
+        suspension: The suspension the states were solved for.
+        sweep_config: The sweep configuration that produced the states.
+        states: The solved states, one per sweep step.
+
+    Returns:
+        One ordered metric row per state. Empty rows when the suspension has
+        no configuration (metrics need vehicle parameters).
+    """
+    if suspension.config is None:
+        return [OrderedDict() for _ in states]
+
+    tangents: list[list[TangentField]] | None
+    try:
+        tangents = compute_sweep_tangents(suspension, sweep_config, states)
+    except Exception:  # noqa: BLE001 - derivative metrics degrade gracefully
+        tangents = None
+
+    return [
+        suspension.compute_state_metrics(
+            state, tangents[index] if tangents is not None else None
+        )
+        for index, state in enumerate(states)
+    ]

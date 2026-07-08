@@ -17,7 +17,7 @@ from kinematics.core.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.geometry import extract_array
 from kinematics.core.point_ref import PointRef, Side
 from kinematics.core.types import PointTarget, PointTargetAxis, SweepConfig
-from kinematics.io.geometry_loader import load_geometry
+from kinematics.io import load_geometry
 from kinematics.main import solve_sweep
 from kinematics.metrics.context import MetricContext
 from kinematics.metrics.main import compute_metrics_for_state
@@ -159,7 +159,7 @@ class TestCornerTangents:
 
         expected = {
             "camber_gain_deg_per_mm": fd("camber_deg"),
-            "bump_steer_deg_per_mm": fd("roadwheel_angle_deg"),
+            "roadwheel_angle_vs_bump_deg_per_mm": fd("roadwheel_angle_deg"),
             "caster_gain_deg_per_mm": fd("caster_deg"),
             "kpi_gain_deg_per_mm": fd("kpi_deg"),
         }
@@ -192,7 +192,7 @@ class TestCornerTangents:
             calculate_camber,
             calculate_caster,
             calculate_kpi,
-            calculate_toe,
+            calculate_roadwheel_angle,
         )
 
         design_z = float(corner.initial_state().positions[PointID.WHEEL_CENTER][Axis.Z])
@@ -216,8 +216,8 @@ class TestCornerTangents:
         assert kernels.camber_deg(positions, side) == pytest.approx(
             calculate_camber(ctx), abs=1e-9
         )
-        assert kernels.toe_deg(positions, side) == pytest.approx(
-            calculate_toe(ctx), abs=1e-9
+        assert kernels.roadwheel_angle_deg(positions, side) == pytest.approx(
+            calculate_roadwheel_angle(ctx), abs=1e-9
         )
         assert kernels.caster_deg(positions) == pytest.approx(
             calculate_caster(ctx), abs=1e-9
@@ -376,7 +376,7 @@ class TestAxleTangents:
             assert hi is not None and lo is not None
             return (hi - lo) / (2.0 * roll_step_deg)
 
-        assert rates["left_toe_vs_roll_deg_per_deg"] == pytest.approx(
+        assert rates["left_roadwheel_angle_vs_roll_deg_per_deg"] == pytest.approx(
             fd("roadwheel_angle_deg"), rel=5e-3, abs=1e-5
         )
         assert rates["left_camber_vs_roll_deg_per_deg"] == pytest.approx(

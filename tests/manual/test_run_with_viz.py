@@ -7,7 +7,7 @@ from kinematics.constraints import DistanceConstraint
 from kinematics.core.constants import TEST_TOLERANCE
 from kinematics.core.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.types import PointTargetAxis, SweepConfig
-from kinematics.io.geometry_loader import load_geometry
+from kinematics.io import load_geometry
 from kinematics.main import solve_sweep
 from kinematics.points.derived.manager import DerivedPointsManager
 from kinematics.solver import PointTarget

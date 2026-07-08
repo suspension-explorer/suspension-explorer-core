@@ -53,15 +53,15 @@ class PointID(IntEnum):
     # bar is coaxial with this pivot, so its twist equals the rocker rotation.
     ROCKER_AXIS_FRONT = 24
     ROCKER_AXIS_REAR = 25
-    ROCKER_DROPLINK = 26
+    DROPLINK_ROCKER = 26
 
     # Anti-roll-bar axis points. Named A/B (not FRONT/REAR) because the ARB axis
     # need not be longitudinal -- it is typically transverse. Positive rotation
-    # is right-hand-rule about the authored A -> B direction. ARB_DROPLINK is the
-    # per-side point on the ARB arm; the droplink joins ROCKER_DROPLINK to it.
+    # is right-hand-rule about the authored A -> B direction. DROPLINK_ARB is the
+    # per-side point on the ARB arm; the droplink joins DROPLINK_ROCKER to it.
     ARB_AXIS_A = 27
     ARB_AXIS_B = 28
-    ARB_DROPLINK = 29
+    DROPLINK_ARB = 29
 
 
 class Axis(IntEnum):

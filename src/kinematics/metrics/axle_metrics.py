@@ -18,12 +18,13 @@ from typing import TYPE_CHECKING
 from kinematics.core.constants import EPS_GEOMETRIC
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.point_ref import PointRef, Side
+from kinematics.metrics import registry
 
 if TYPE_CHECKING:
     from kinematics.metrics.main import MetricRow
+    from kinematics.schema.config import SuspensionConfig
     from kinematics.state import SuspensionState
     from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
-    from kinematics.suspensions.config.settings import SuspensionConfig
 
 
 # Below this steer magnitude (degrees) Ackermann is dominated by parallel-steer
@@ -73,23 +74,23 @@ def append_axle_state_metrics(
 
     # Heave: mean vertical wheel-centre displacement. Positive = both wheels up
     # in the chassis frame.
-    row["heave_mm"] = 0.5 * (dz_left + dz_right)
+    row[registry.HEAVE.key] = 0.5 * (dz_left + dz_right)
 
     # Suspension roll of the wheel pair relative to the chassis. The lever is
     # the current contact-patch track; the numerator is the left-minus-right
     # wheel-centre rise. atan2 keeps it well-defined at large angles. Positive
     # = LEFT wheel in bump relative to right (right-hand rule about +X).
     track = abs(contact_y[Side.LEFT] - contact_y[Side.RIGHT])
-    row["roll_deg"] = degrees(atan2(dz_left - dz_right, track))
+    row[registry.ROLL.key] = degrees(atan2(dz_left - dz_right, track))
 
     # Ride-height change: the ground follows the contact patches, so the mean
     # upward contact-patch displacement is negated to give the chassis's change
     # in ride height (wheels up -> chassis lower -> negative).
-    row["ride_height_change_mm"] = -0.5 * (
+    row[registry.RIDE_HEIGHT_CHANGE.key] = -0.5 * (
         dz_contact[Side.LEFT] + dz_contact[Side.RIGHT]
     )
 
-    row["ackermann_pct"] = _ackermann_pct(axle, config, side_rows, track)
+    row[registry.ACKERMANN.key] = _ackermann_pct(axle, config, side_rows, track)
 
 
 def _design_roadwheel_angle(
@@ -122,8 +123,8 @@ def _ackermann_pct(
     design. Toe-in is positive toward the centreline on each side, so to get a
     consistent yaw sign (positive = steering to the left) we fold the signs:
 
-        delta_left  = -(toe_left  - toe_left_design)
-        delta_right = +(toe_right - toe_right_design)
+        delta_left  = -(roadwheel_angle_left  - roadwheel_angle_left_design)
+        delta_right = +(roadwheel_angle_right - roadwheel_angle_right_design)
 
     mean_steer = (delta_left + delta_right) / 2. If the mean steer magnitude is
     below the parallel-steer threshold the percentage is ill-conditioned -> None.
@@ -139,23 +140,24 @@ def _ackermann_pct(
         ackermann_pct = 100 * (delta_i - delta_o) / (delta_i_ideal - delta_o)
 
     where 100 = perfect Ackermann, 0 = parallel steer, negative = anti-Ackermann.
-    Returns None if any toe value is undefined or a denominator is degenerate.
+    Returns None if any roadwheel angle value is undefined or a denominator is
+    degenerate.
     """
-    toe_left = side_rows[Side.LEFT].get("roadwheel_angle_deg")
-    toe_right = side_rows[Side.RIGHT].get("roadwheel_angle_deg")
-    toe_left_design = _design_roadwheel_angle(axle, config, Side.LEFT)
-    toe_right_design = _design_roadwheel_angle(axle, config, Side.RIGHT)
+    roadwheel_angle_left = side_rows[Side.LEFT].get("roadwheel_angle_deg")
+    roadwheel_angle_right = side_rows[Side.RIGHT].get("roadwheel_angle_deg")
+    roadwheel_angle_left_design = _design_roadwheel_angle(axle, config, Side.LEFT)
+    roadwheel_angle_right_design = _design_roadwheel_angle(axle, config, Side.RIGHT)
     if (
-        toe_left is None
-        or toe_right is None
-        or toe_left_design is None
-        or toe_right_design is None
+        roadwheel_angle_left is None
+        or roadwheel_angle_right is None
+        or roadwheel_angle_left_design is None
+        or roadwheel_angle_right_design is None
     ):
         return None
 
     # Yaw-steer per side, positive = steering to the left (see docstring).
-    delta_left = -(toe_left - toe_left_design)
-    delta_right = toe_right - toe_right_design
+    delta_left = -(roadwheel_angle_left - roadwheel_angle_left_design)
+    delta_right = roadwheel_angle_right - roadwheel_angle_right_design
     mean_steer = 0.5 * (delta_left + delta_right)
     if abs(mean_steer) < _MIN_ACKERMANN_STEER_DEG:
         # Parallel-steer noise: geometry too close to straight-ahead.

@@ -13,10 +13,11 @@ from typing import TYPE_CHECKING, Sequence
 from kinematics.core.constants import EPS_GEOMETRIC
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.point_ref import PointRef, Side
+from kinematics.metrics import registry
 from kinematics.metrics.catalog import get_default_corner_metrics
 from kinematics.metrics.context import MetricContext
+from kinematics.schema.config import SuspensionConfig
 from kinematics.state import SuspensionState
-from kinematics.suspensions.config.settings import SuspensionConfig
 
 if TYPE_CHECKING:
     from kinematics.core.geometry import Point3
@@ -75,7 +76,7 @@ def compute_metrics_for_state(
 
 def _append_rocker_metrics(row: MetricRow, ctx: MetricContext) -> None:
     """
-    Append rocker rotation and torsion-bar twist columns for a corner.
+    Append the rocker rotation column for a corner.
 
     The rocker angle is the signed rotation of ``PUSHROD_INBOARD`` about the
     rocker axis (measured about the authored ROCKER_AXIS_FRONT -> ROCKER_AXIS_REAR
@@ -89,9 +90,9 @@ def _append_rocker_metrics(row: MetricRow, ctx: MetricContext) -> None:
     makes symmetric heave report EQUAL rocker angles on both sides, and antisymmetric
     roll report equal-and-opposite ones, which is the physically intuitive reading.
 
-    ``torsion_bar_twist_deg`` is identical to ``rocker_angle_deg``: the torsion bar
-    is coaxial with the rocker pivot and grounded at its far end, so its twist is
-    exactly the rocker rotation. It is kept as its own column for clarity.
+    ``torsion_bar_twist_deg`` is a declared alias: the torsion bar (when
+    fitted) is coaxial with the rocker pivot and grounded at its far end, so
+    its twist is exactly this rocker rotation.
     """
     from math import degrees
 
@@ -108,9 +109,9 @@ def _append_rocker_metrics(row: MetricRow, ctx: MetricContext) -> None:
         axis_front,
         axis_direction,
     )
-    rocker_angle_deg = degrees(raw) * ctx.side_sign
-    row["rocker_angle_deg"] = rocker_angle_deg
-    row["torsion_bar_twist_deg"] = rocker_angle_deg
+    rocker_angle = degrees(raw) * ctx.side_sign
+    row[registry.ROCKER_ANGLE.key] = rocker_angle
+    row[registry.TORSION_BAR_TWIST.key] = rocker_angle
 
 
 def compute_metrics_for_sweep(
@@ -237,11 +238,11 @@ def compute_metrics_for_axle_state(
 
     - ``roll_center_y_mm`` / ``roll_center_z_mm``: front-view intersection of the
       two contact-patch -> FVIC lines (``None`` if undefined or parallel).
-    - ``total_toe_deg``: sum of the two per-side toe-in angles. Each corner's
-      ``roadwheel_angle_deg`` already encodes toe-in as positive via the corner
-      ``side_sign`` convention (front of the wheel toward the vehicle
-      centreline), so their sum is the total toe-in of the axle. Positive means
-      both wheels toe in.
+    - ``total_roadwheel_angle_deg``: sum of the two per-side roadwheel angles.
+      Each corner's ``roadwheel_angle_deg`` already encodes toe-in (vernacular)
+      as positive via the corner ``side_sign`` convention (front of the wheel
+      toward the vehicle centreline), so their sum is the axle's total toe-in.
+      Positive means both wheels toe in.
     - ``track_mm``: absolute lateral (Y) distance between the two contact patch
       centers.
     - ``rack_displacement_mm``: signed Y displacement of the LEFT inboard
@@ -272,15 +273,17 @@ def compute_metrics_for_axle_state(
 
     # Axle-level metrics.
     roll_center_y, roll_center_z = _axle_roll_center(state, axle)
-    row["roll_center_y_mm"] = roll_center_y
-    row["roll_center_z_mm"] = roll_center_z
+    row[registry.ROLL_CENTER_Y.key] = roll_center_y
+    row[registry.ROLL_CENTER_Z.key] = roll_center_z
 
-    left_toe = side_rows[Side.LEFT]["roadwheel_angle_deg"]
-    right_toe = side_rows[Side.RIGHT]["roadwheel_angle_deg"]
-    if left_toe is None or right_toe is None:
-        row["total_toe_deg"] = None
+    left_roadwheel_angle = side_rows[Side.LEFT]["roadwheel_angle_deg"]
+    right_roadwheel_angle = side_rows[Side.RIGHT]["roadwheel_angle_deg"]
+    if left_roadwheel_angle is None or right_roadwheel_angle is None:
+        row[registry.TOTAL_ROADWHEEL_ANGLE.key] = None
     else:
-        row["total_toe_deg"] = left_toe + right_toe
+        row[registry.TOTAL_ROADWHEEL_ANGLE.key] = (
+            left_roadwheel_angle + right_roadwheel_angle
+        )
 
     left_cp_y = float(
         state.positions[PointRef(Side.LEFT, PointID.CONTACT_PATCH_CENTER)][Axis.Y]
@@ -288,7 +291,7 @@ def compute_metrics_for_axle_state(
     right_cp_y = float(
         state.positions[PointRef(Side.RIGHT, PointID.CONTACT_PATCH_CENTER)][Axis.Y]
     )
-    row["track_mm"] = abs(left_cp_y - right_cp_y)
+    row[registry.TRACK.key] = abs(left_cp_y - right_cp_y)
 
     design_rack_y = float(
         axle.corners[Side.LEFT]
@@ -298,7 +301,7 @@ def compute_metrics_for_axle_state(
     current_rack_y = float(
         state.positions[PointRef(Side.LEFT, PointID.TRACKROD_INBOARD)][Axis.Y]
     )
-    row["rack_displacement_mm"] = current_rack_y - design_rack_y
+    row[registry.RACK_DISPLACEMENT.key] = current_rack_y - design_rack_y
 
     if axle.has_arb:
         _append_arb_metrics(row, state, axle)
@@ -328,7 +331,7 @@ def _append_arb_metrics(
     ``ARB_AXIS_B``). Unlike the rocker angle, the arm angles use RAW signed
     angles about that single authored direction with NO side normalisation,
     because both arms rotate about the same physical axis. Each arm angle is the
-    signed rotation of that side's ``ARB_DROPLINK`` about the axis, from design to
+    signed rotation of that side's ``DROPLINK_ARB`` about the axis, from design to
     current.
 
     ``arb_twist_deg = left - right`` is the physical relative twist of the
@@ -347,7 +350,7 @@ def _append_arb_metrics(
 
     angles: dict[Side, float] = {}
     for side in (Side.LEFT, Side.RIGHT):
-        key = PointRef(side, PointID.ARB_DROPLINK)
+        key = PointRef(side, PointID.DROPLINK_ARB)
         raw = signed_angle_about_axis(
             design.positions[key],
             state.positions[key],
@@ -356,6 +359,6 @@ def _append_arb_metrics(
         )
         angles[side] = degrees(raw)
 
-    row["left_arb_arm_angle_deg"] = angles[Side.LEFT]
-    row["right_arb_arm_angle_deg"] = angles[Side.RIGHT]
-    row["arb_twist_deg"] = angles[Side.LEFT] - angles[Side.RIGHT]
+    row["left_" + registry.ARB_ARM_ANGLE.key] = angles[Side.LEFT]
+    row["right_" + registry.ARB_ARM_ANGLE.key] = angles[Side.RIGHT]
+    row[registry.ARB_TWIST.key] = angles[Side.LEFT] - angles[Side.RIGHT]

@@ -47,7 +47,7 @@ from kinematics.core.dual import DualScalar, seed_positions_with_tangent
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.geometry import extract_array
 from kinematics.core.point_ref import PointKey, PointRef, Side
-from kinematics.metrics import kernels
+from kinematics.metrics import kernels, registry
 from kinematics.sensitivity import TangentField, combine_tangents
 from kinematics.targets import resolve_target
 
@@ -172,10 +172,12 @@ def _corner_bump_rates(
     duals = seed_positions_with_tangent(positions, bump_velocities)
     row: RateRow = OrderedDict()
 
-    row["camber_gain_deg_per_mm"] = _rate(kernels.camber_deg(duals, side_sign))
-    row["bump_steer_deg_per_mm"] = _rate(kernels.toe_deg(duals, side_sign))
-    row["caster_gain_deg_per_mm"] = _rate(kernels.caster_deg(duals))
-    row["kpi_gain_deg_per_mm"] = _rate(kernels.kpi_deg(duals, side_sign))
+    row[registry.CAMBER_GAIN.key] = _rate(kernels.camber_deg(duals, side_sign))
+    row[registry.ROADWHEEL_ANGLE_VS_BUMP.key] = _rate(
+        kernels.roadwheel_angle_deg(duals, side_sign)
+    )
+    row[registry.CASTER_GAIN.key] = _rate(kernels.caster_deg(duals))
+    row[registry.KPI_GAIN.key] = _rate(kernels.kpi_deg(duals, side_sign))
 
     # Half-track rate: outward-positive lateral speed of the contact patch.
     # The lateral coordinate is |y|, so the outward direction is +Y on the
@@ -183,19 +185,19 @@ def _corner_bump_rates(
     contact_patch_lateral = _rate(
         kernels.coordinate(duals, PointID.CONTACT_PATCH_CENTER, Axis.Y)
     )
-    row["half_track_rate_mm_per_mm"] = side_sign * contact_patch_lateral
+    row[registry.HALF_TRACK_RATE.key] = side_sign * contact_patch_lateral
 
     # Recession: rearward-positive longitudinal speed of the contact patch.
     contact_patch_longitudinal = _rate(
         kernels.coordinate(duals, PointID.CONTACT_PATCH_CENTER, Axis.X)
     )
-    row["wheel_recession_rate_mm_per_mm"] = -contact_patch_longitudinal
+    row[registry.WHEEL_RECESSION_RATE.key] = -contact_patch_longitudinal
 
     if suspension.has_strut:
         # Installation ratio: damper compression per mm of bump. The length
         # derivative is negative for a damper that shortens in bump, so the
         # ratio is its negation.
-        row["damper_motion_ratio"] = -_rate(kernels.strut_length_mm(duals))
+        row[registry.DAMPER_MOTION_RATIO.key] = -_rate(kernels.strut_length_mm(duals))
 
     if suspension.has_rocker:
         design = suspension.initial_state()
@@ -215,10 +217,9 @@ def _corner_bump_rates(
                 axis_direction,
             )
         )
-        row["rocker_motion_ratio_deg_per_mm"] = rocker_rate
-        # The torsion bar is coaxial with the rocker pivot; kept as its own
-        # column for clarity, mirroring the angle metrics.
-        row["torsion_bar_motion_ratio_deg_per_mm"] = rocker_rate
+        row[registry.ROCKER_MOTION_RATIO.key] = rocker_rate
+        # Declared alias: the torsion bar is coaxial with the rocker pivot.
+        row[registry.TORSION_BAR_MOTION_RATIO.key] = rocker_rate
 
     return row
 
@@ -234,8 +235,10 @@ def _corner_rack_rates(
     """
     duals = seed_positions_with_tangent(positions, rack_velocities)
     row: RateRow = OrderedDict()
-    row["toe_vs_rack_deg_per_mm"] = _rate(kernels.toe_deg(duals, side_sign))
-    row["camber_vs_rack_deg_per_mm"] = _rate(kernels.camber_deg(duals, side_sign))
+    row[registry.ROADWHEEL_ANGLE_VS_RACK.key] = _rate(
+        kernels.roadwheel_angle_deg(duals, side_sign)
+    )
+    row[registry.CAMBER_VS_RACK.key] = _rate(kernels.camber_deg(duals, side_sign))
     return row
 
 
@@ -347,6 +350,17 @@ def compute_axle_rate_metrics(
             ).items():
                 row[prefix + column] = value
 
+            # ARB motion ratio: arm rotation about the shared chassis-fixed
+            # axis per mm of this corner's bump. Evaluated on the full axle
+            # state (the droplink ARB end and the axis are axle-level points),
+            # side-sign normalised like the rocker ratio so mirrored corners
+            # report equal ratios in symmetric heave.
+            if axle.has_arb:
+                full_velocities = _scaled(field.velocities, alignment)
+                row[prefix + registry.ARB_MOTION_RATIO.key] = side_signs[
+                    side
+                ] * _arb_arm_rate(state, axle, full_velocities, side)
+
         if rack is not None:
             field, alignment = rack
             velocities = _scaled(_corner_velocities(field.velocities, side), alignment)
@@ -392,42 +406,45 @@ def compute_axle_rate_metrics(
             roll_duals = seed_positions_with_tangent(
                 corner_state.positions, _corner_velocities(roll_velocities, side)
             )
-            row[prefix + "toe_vs_roll_deg_per_deg"] = _rate(
-                kernels.toe_deg(roll_duals, sign)
+            row[prefix + registry.ROADWHEEL_ANGLE_VS_ROLL.key] = _rate(
+                kernels.roadwheel_angle_deg(roll_duals, sign)
             )
-            row[prefix + "camber_vs_roll_deg_per_deg"] = _rate(
+            row[prefix + registry.CAMBER_VS_ROLL.key] = _rate(
                 kernels.camber_deg(roll_duals, sign)
             )
 
             heave_duals = seed_positions_with_tangent(
                 corner_state.positions, _corner_velocities(heave_velocities, side)
             )
-            row[prefix + "toe_vs_heave_deg_per_mm"] = _rate(
-                kernels.toe_deg(heave_duals, sign)
+            row[prefix + registry.ROADWHEEL_ANGLE_VS_HEAVE.key] = _rate(
+                kernels.roadwheel_angle_deg(heave_duals, sign)
             )
-            row[prefix + "camber_vs_heave_deg_per_mm"] = _rate(
+            row[prefix + registry.CAMBER_VS_HEAVE.key] = _rate(
                 kernels.camber_deg(heave_duals, sign)
             )
 
         if axle.has_arb:
-            row["arb_twist_vs_roll_deg_per_deg"] = _arb_twist_rate(
-                state, axle, roll_velocities
-            )
+            row[registry.ARB_TWIST_VS_ROLL.key] = _arb_arm_rate(
+                state, axle, roll_velocities, Side.LEFT
+            ) - _arb_arm_rate(state, axle, roll_velocities, Side.RIGHT)
 
     return row
 
 
-def _arb_twist_rate(
+def _arb_arm_rate(
     state: "SuspensionState",
     axle: "DoubleWishboneAxleSuspension",
-    modal_velocities: Mapping[PointKey, np.ndarray],
+    velocities: Mapping[PointKey, np.ndarray],
+    side: Side,
 ) -> float:
     """
-    Rate of ARB twist along a modal tangent (degrees of twist per unit of
-    the mode; for the roll mode, deg/deg).
+    Rate of one ARB arm's rotation along a tangent field (degrees per unit
+    of the driving input).
 
-    Twist is left arm angle minus right arm angle, both measured raw about
-    the shared authored A -> B axis, mirroring the ARB angle metrics.
+    The arm angle is the RAW signed rotation of the side's ``DROPLINK_ARB``
+    about the shared authored A -> B axis (no side normalisation), mirroring
+    the ARB angle metrics; the ARB twist rate is the left rate minus the
+    right rate along the same tangent.
     """
     design = axle.initial_state()
     axis_a = extract_array(design.positions[PointRef(Side.CENTER, PointID.ARB_AXIS_A)])
@@ -435,18 +452,15 @@ def _arb_twist_rate(
     axis_direction = axis_b - axis_a
     axis_direction = axis_direction / np.linalg.norm(axis_direction)
 
-    duals = seed_positions_with_tangent(state.positions, modal_velocities)
+    duals = seed_positions_with_tangent(state.positions, velocities)
 
-    arm_rates: dict[Side, float] = {}
-    for side in (Side.LEFT, Side.RIGHT):
-        key = PointRef(side, PointID.ARB_DROPLINK)
-        arm_rates[side] = _rate(
-            kernels.rotation_about_fixed_axis_deg(
-                duals,
-                key,
-                extract_array(design.positions[key]),
-                axis_a,
-                axis_direction,
-            )
+    key = PointRef(side, PointID.DROPLINK_ARB)
+    return _rate(
+        kernels.rotation_about_fixed_axis_deg(
+            duals,
+            key,
+            extract_array(design.positions[key]),
+            axis_a,
+            axis_direction,
         )
-    return arm_rates[Side.LEFT] - arm_rates[Side.RIGHT]
+    )

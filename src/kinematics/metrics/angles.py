@@ -98,23 +98,10 @@ def calculate_roadwheel_angle(ctx: MetricContext) -> float:
     """
     Roadwheel angle in degrees.
 
-    The angle of the wheel's longitudinal axis relative to the
-    vehicle X-axis, viewed from the top (XY plane). Positive means
-    the front of the wheel is turned towards the vehicle centerline.
-    This is the same measurement as toe but uses the clearer
-    vehicle-dynamics-facing name.
-    """
-    return calculate_toe(ctx)
-
-
-def calculate_toe(ctx: MetricContext) -> float:
-    """
-    Toe angle in degrees.
-
-    Toe is the angle of the wheel's longitudinal axis with respect to
-    the vehicle's longitudinal axis (X-axis), viewed from the top
-    (XY plane). Positive toe (toe-in) means the front of the wheel
-    points inwards.
+    The angle of the wheel's longitudinal axis with respect to the
+    vehicle's longitudinal axis (X-axis), viewed from the top (XY
+    plane). Positive means the front of the wheel is turned towards
+    the vehicle centerline (vernacular: toe-in).
     """
     side = ctx.side_sign
     axle = ctx.wheel_axis
@@ -125,8 +112,8 @@ def calculate_toe(ctx: MetricContext) -> float:
 
     # Toe-in results in the axle vector pointing slightly forward (+X).
     if side > 0:  # Left side
-        toe_rad = np.arctan2(proj_x, proj_y)
+        angle_rad = np.arctan2(proj_x, proj_y)
     else:  # Right side: measure relative to -Y axis
-        toe_rad = np.arctan2(proj_x, -proj_y)
+        angle_rad = np.arctan2(proj_x, -proj_y)
 
-    return float(np.rad2deg(toe_rad))
+    return float(np.rad2deg(angle_rad))

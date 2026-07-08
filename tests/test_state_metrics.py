@@ -19,7 +19,7 @@ from kinematics.core.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.geometry import Point3
 from kinematics.core.point_ref import PointRef, Side
 from kinematics.core.types import PointTarget, PointTargetAxis, SweepConfig
-from kinematics.io.geometry_loader import load_geometry
+from kinematics.io import load_geometry
 from kinematics.main import solve_sweep
 from kinematics.metrics.anti_geometry import (
     calculate_anti_dive_pct,
@@ -512,16 +512,18 @@ class TestAxleStateMetrics:
         assert ackermann is not None
         assert np.isfinite(ackermann)
 
-        # The per-side yaw-steer angles (change in toe folded to a common yaw
-        # sign) point the same way under a rack displacement.
+        # The per-side yaw-steer angles (change in roadwheel angle folded to a
+        # common yaw sign) point the same way under a rack displacement.
         initial = axle.initial_state()
         design_left = compute_metrics_for_axle_state(initial, axle, axle.config)
-        toe_left = metrics["left_roadwheel_angle_deg"]
-        toe_right = metrics["right_roadwheel_angle_deg"]
-        toe_left_d = design_left["left_roadwheel_angle_deg"]
-        toe_right_d = design_left["right_roadwheel_angle_deg"]
-        assert toe_left is not None and toe_right is not None
-        assert toe_left_d is not None and toe_right_d is not None
-        delta_left = -(toe_left - toe_left_d)
-        delta_right = toe_right - toe_right_d
+        roadwheel_angle_left = metrics["left_roadwheel_angle_deg"]
+        roadwheel_angle_right = metrics["right_roadwheel_angle_deg"]
+        roadwheel_angle_left_d = design_left["left_roadwheel_angle_deg"]
+        roadwheel_angle_right_d = design_left["right_roadwheel_angle_deg"]
+        assert roadwheel_angle_left is not None and roadwheel_angle_right is not None
+        assert (
+            roadwheel_angle_left_d is not None and roadwheel_angle_right_d is not None
+        )
+        delta_left = -(roadwheel_angle_left - roadwheel_angle_left_d)
+        delta_right = roadwheel_angle_right - roadwheel_angle_right_d
         assert delta_left * delta_right > 0

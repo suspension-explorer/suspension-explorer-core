@@ -258,7 +258,7 @@ def _check_chirality(
 
     The rocker droplink is fixed by distances alone, which admit a mirror-image
     (reflected) branch. Recompute the signed scalar triple product
-    ``(axis_front, axis_rear, pushrod_inboard, rocker_droplink)`` per state; a
+    ``(axis_front, axis_rear, pushrod_inboard, droplink_rocker)`` per state; a
     sign different from the design sign means the rigid rocker body has inverted.
     Error severity. This is belt-and-braces on top of the
     ``ScalarTripleProductConstraint`` now built into the rocker.
@@ -267,7 +267,7 @@ def _check_chirality(
     design = suspension.initial_state()
 
     for label, key_of, corner in _iter_rocker_corners(suspension):
-        if not corner.has_rocker_droplink:
+        if not corner.has_droplink:
             continue
         design_triple = _rocker_triple(design.positions, key_of)
         design_sign = np.sign(design_triple)
@@ -304,7 +304,7 @@ def _rocker_triple(
     axis_front = positions[key_of(PointID.ROCKER_AXIS_FRONT)]
     axis_rear = positions[key_of(PointID.ROCKER_AXIS_REAR)]
     pushrod_in = positions[key_of(PointID.PUSHROD_INBOARD)]
-    droplink = positions[key_of(PointID.ROCKER_DROPLINK)]
+    droplink = positions[key_of(PointID.DROPLINK_ROCKER)]
     return compute_scalar_triple_product(
         axis_rear - axis_front,
         pushrod_in - axis_front,
@@ -331,9 +331,9 @@ def _check_transmission(
 
     - pushrod vs the tangent at ``PUSHROD_INBOARD`` about the rocker axis
       (whenever a rocker is present);
-    - the rocker->ARB droplink vs the tangent at ``ROCKER_DROPLINK`` about the
+    - the rocker->ARB droplink vs the tangent at ``DROPLINK_ROCKER`` about the
       rocker axis (axle with ARB only);
-    - the rocker->ARB droplink vs the tangent at ``ARB_DROPLINK`` about the ARB
+    - the rocker->ARB droplink vs the tangent at ``DROPLINK_ARB`` about the ARB
       axis (axle with ARB only).
 
     Each sub-threshold state is a warning naming the joint, side, step, and
@@ -371,37 +371,37 @@ def _check_transmission(
                 )
             )
 
-            if has_arb and corner.has_rocker_droplink and arb_axis_keys is not None:
+            if has_arb and corner.has_droplink and arb_axis_keys is not None:
                 droplink = (
-                    pos[key_of(PointID.ARB_DROPLINK)].data
-                    - pos[key_of(PointID.ROCKER_DROPLINK)].data
+                    pos[key_of(PointID.DROPLINK_ARB)].data
+                    - pos[key_of(PointID.DROPLINK_ROCKER)].data
                 )
-                # (b) Droplink vs tangent at ROCKER_DROPLINK about the rocker axis.
+                # (b) Droplink vs tangent at DROPLINK_ROCKER about the rocker axis.
                 margin_b = _transmission_margin(
-                    pos[key_of(PointID.ROCKER_DROPLINK)].data,
+                    pos[key_of(PointID.DROPLINK_ROCKER)].data,
                     axis_front.data,
                     axis_dir,
                     droplink,
                 )
                 issues.extend(
                     _maybe_transmission_issue(
-                        margin_b, step, f"{prefix}droplink @ ROCKER_DROPLINK"
+                        margin_b, step, f"{prefix}droplink @ DROPLINK_ROCKER"
                     )
                 )
 
-                # (c) Droplink vs tangent at ARB_DROPLINK about the ARB axis.
+                # (c) Droplink vs tangent at DROPLINK_ARB about the ARB axis.
                 arb_a_key, arb_b_key = arb_axis_keys
                 arb_axis_a = pos[arb_a_key].data
                 arb_axis_dir = pos[arb_b_key].data - arb_axis_a
                 margin_c = _transmission_margin(
-                    pos[key_of(PointID.ARB_DROPLINK)].data,
+                    pos[key_of(PointID.DROPLINK_ARB)].data,
                     arb_axis_a,
                     arb_axis_dir,
                     droplink,
                 )
                 issues.extend(
                     _maybe_transmission_issue(
-                        margin_c, step, f"{prefix}droplink @ ARB_DROPLINK"
+                        margin_c, step, f"{prefix}droplink @ DROPLINK_ARB"
                     )
                 )
     return issues
@@ -482,7 +482,7 @@ def _iter_rocker_corners(
     model's state -- identity for a single corner, ``PointRef(side, pid)`` for the
     axle. ``label`` is the side name for the axle, empty for a single corner.
     ``corner`` is the corner suspension exposing ``has_rocker`` /
-    ``has_rocker_droplink``.
+    ``has_droplink``.
 
     Axle types are imported lazily here to avoid an import cycle.
     """

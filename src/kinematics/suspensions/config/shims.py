@@ -33,8 +33,8 @@ from kinematics.core.enums import PointID
 from kinematics.core.geometry import Point3, Vector3, extract_array
 from kinematics.core.vector_utils.generic import normalize_vector
 from kinematics.core.vector_utils.geometric import rotate_vector_rodrigues
+from kinematics.schema.config import CamberShimConfig
 from kinematics.solver import SolverConfig, solve_least_squares_problem
-from kinematics.suspensions.config.settings import CamberShimConfig
 
 CAMBER_SHIM_N_VARS = 7
 CAMBER_SHIM_N_RESIDUALS = 10

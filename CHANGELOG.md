@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- High-level front-end API so that adapters (API servers, notebooks) stay transport-thin and CLI users see identical data:
+  - `kinematics.analysis.analyze_sweep(suspension, sweep_config)` returns the complete `SweepAnalysis` -- per-step frames (name-keyed display positions, full metric rows, solver info), metric display metadata, swept-parameter descriptors, the solved "setup" reference condition, advisory diagnostics, and the display topology. `initial_pose(suspension)` returns the static preview pose.
+  - `kinematics.main.compute_sweep_metrics(suspension, sweep_config, states)` is the single metrics entry point for sweep consumers: it orchestrates the solution-manifold tangents internally (best-effort) so callers get derivative metrics without knowing about tangents or AD. The CLI now uses it.
+  - `kinematics.metrics.metadata` is the single source of truth for display labels/units of every exported column (catalog, rocker/ARB, axle, rate columns), with `left_`/`right_` prefix resolution; a test guards that every emitted column resolves.
+  - `kinematics.visualization.display` owns the interactive display topology: name-keyed links, the rocker fan replaced by axis + perpendicular lever arms (with synthetic `*_AXIS_FOOT` positions), display point sets extended with link-referenced points, wheel dimensions and anchors.
+  - `SweepFile.n_steps` reports the expanded step count of a sweep spec.
 - Analytical motion ratios and kinematic rate metrics, computed exactly via the implicit function theorem plus forward-mode dual-number propagation -- no finite differencing across sweep steps.
   - New `sensitivity` module: at each converged sweep step the analytical residual Jacobian is reused to solve for the solution-manifold tangent d(position)/d(target) per sweep target; derived-point velocities follow from one dual-number Jacobian-vector-product pass. Constraints whose scalar residual is a norm (e.g. point-on-line) are pinned with equivalent smooth rows so the tangent system stays full rank at the solution.
   - Dual-number layer extended with `np.cross`, `sqrt`, `atan2`, and `degrees`, plus `seed_positions_with_tangent` for directional (tangent-field) seeding.

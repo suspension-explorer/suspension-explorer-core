@@ -34,6 +34,7 @@ import numpy as np
 import pytest
 import yaml
 
+from kinematics import build_suspension, parse_geometry_spec
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.geometry import Direction3, Point3
 from kinematics.core.point_ref import PointRef, Side
@@ -47,7 +48,7 @@ from kinematics.core.vector_utils.geometric import (
     rotate_point_about_axis,
     signed_angle_about_axis,
 )
-from kinematics.io.geometry_loader import load_geometry
+from kinematics.io import load_geometry
 from kinematics.main import solve_sweep
 from kinematics.points.derived.manager import DerivedPointsManager
 from kinematics.solver import ResidualComputer, convert_targets_to_absolute
@@ -99,6 +100,22 @@ def corner_rocker_file(test_data_dir: Path) -> Path:
 @pytest.fixture
 def axle_rocker_file(test_data_dir: Path) -> Path:
     return test_data_dir / "axle_geometry_rocker.yaml"
+
+
+def _build_corner(data: dict) -> DoubleWishboneSuspension:
+    suspension = build_suspension(
+        parse_geometry_spec({"type": "double_wishbone", **data})
+    )
+    assert isinstance(suspension, DoubleWishboneSuspension)
+    return suspension
+
+
+def _build_axle(data: dict) -> DoubleWishboneAxleSuspension:
+    suspension = build_suspension(
+        parse_geometry_spec({"type": "double_wishbone_axle", **data})
+    )
+    assert isinstance(suspension, DoubleWishboneAxleSuspension)
+    return suspension
 
 
 def _load_yaml(path: Path) -> dict:
@@ -185,55 +202,55 @@ class TestValidation:
         data = _load_yaml(corner_rocker_file)
         data["hardpoints"]["rocker_axis_rear"]["y"] = 341.0  # break XZ parallelism
         with pytest.raises(ValueError, match="parallel to the XZ plane"):
-            DoubleWishboneSuspension.from_yaml_data(data)
+            _build_corner(data)
 
     def test_partial_rocker_group_rejected(self, corner_rocker_file: Path) -> None:
         data = _load_yaml(corner_rocker_file)
         del data["hardpoints"]["rocker_axis_rear"]
         with pytest.raises(ValueError, match="pushrod/rocker group"):
-            DoubleWishboneSuspension.from_yaml_data(data)
+            _build_corner(data)
 
-    def test_rocker_droplink_without_group_rejected(self, test_data_dir: Path) -> None:
-        # geometry.yaml has no rocker group; adding only ROCKER_DROPLINK is invalid.
+    def test_droplink_rocker_without_group_rejected(self, test_data_dir: Path) -> None:
+        # geometry.yaml has no rocker group; adding only DROPLINK_ROCKER is invalid.
         data = _load_yaml(test_data_dir / "geometry.yaml")
-        data["hardpoints"]["rocker_droplink"] = {"x": 0, "y": 340, "z": 400}
-        with pytest.raises(ValueError, match="ROCKER_DROPLINK requires"):
-            DoubleWishboneSuspension.from_yaml_data(data)
+        data["hardpoints"]["droplink_rocker"] = {"x": 0, "y": 340, "z": 400}
+        with pytest.raises(ValueError, match="DROPLINK_ROCKER requires"):
+            _build_corner(data)
 
     def test_arb_missing_center_rejected(self, axle_rocker_file: Path) -> None:
         data = _load_yaml(axle_rocker_file)
         del data["hardpoints"]["center"]
         with pytest.raises(ValueError, match="center 'arb_axis_a' and 'arb_axis_b'"):
-            DoubleWishboneAxleSuspension.from_yaml_data(data)
+            _build_axle(data)
 
     def test_arb_missing_droplink_rejected(self, axle_rocker_file: Path) -> None:
         data = _load_yaml(axle_rocker_file)
-        del data["hardpoints"]["points"]["arb_droplink"]
-        with pytest.raises(ValueError, match="'arb_droplink' must be given on both"):
-            DoubleWishboneAxleSuspension.from_yaml_data(data)
+        del data["hardpoints"]["points"]["droplink_arb"]
+        with pytest.raises(ValueError, match="'droplink_arb' must be given on both"):
+            _build_axle(data)
 
-    def test_explicit_partial_arb_droplink_rejected(self, test_data_dir: Path) -> None:
+    def test_explicit_partial_droplink_arb_rejected(self, test_data_dir: Path) -> None:
         # Explicit mode with the rocker/ARB group only on the left corner.
         data = _load_yaml(test_data_dir / "axle_geometry_rocker.yaml")
         left = data["hardpoints"]["points"]
         right = {k: {**v, "y": -v["y"]} for k, v in copy.deepcopy(left).items()}
         # Drop the right ARB droplink to make the ARB group partial.
-        right.pop("arb_droplink")
+        right.pop("droplink_arb")
         data["hardpoints"] = {
             "left": left,
             "right": right,
             "center": data["hardpoints"]["center"],
         }
         with pytest.raises(ValueError, match="ARB"):
-            DoubleWishboneAxleSuspension.from_yaml_data(data)
+            _build_axle(data)
 
-    def test_single_corner_yaml_with_arb_droplink_rejected(
+    def test_single_corner_yaml_with_droplink_arb_rejected(
         self, corner_rocker_file: Path
     ) -> None:
         data = _load_yaml(corner_rocker_file)
-        data["hardpoints"]["arb_droplink"] = {"x": 0, "y": 150, "z": 490}
-        with pytest.raises(ValueError, match="Unknown hardpoint key"):
-            DoubleWishboneSuspension.from_yaml_data(data)
+        data["hardpoints"]["droplink_arb"] = {"x": 0, "y": 150, "z": 490}
+        with pytest.raises(ValueError, match="Invalid hardpoints for double_wishbone"):
+            _build_corner(data)
 
 
 # ----------------------------------------------------------------------
@@ -369,7 +386,7 @@ class TestAxleHeave:
             # the rocker's droplink lever sits on the opposite side of the pivot
             # axis from the pushrod lever, and the ARB lives below the rocker.
             for side in (Side.LEFT, Side.RIGHT):
-                for pid in (PointID.ROCKER_DROPLINK, PointID.ARB_DROPLINK):
+                for pid in (PointID.DROPLINK_ROCKER, PointID.DROPLINK_ARB):
                     dz = float(st.positions[PointRef(side, pid)][Axis.Z]) - float(
                         design.positions[PointRef(side, pid)][Axis.Z]
                     )
@@ -403,8 +420,8 @@ class TestAxleRoll:
         design = axle.initial_state()
         droplink0 = {
             side: (
-                design.positions[PointRef(side, PointID.ROCKER_DROPLINK)]
-                - design.positions[PointRef(side, PointID.ARB_DROPLINK)]
+                design.positions[PointRef(side, PointID.DROPLINK_ROCKER)]
+                - design.positions[PointRef(side, PointID.DROPLINK_ARB)]
             ).norm()
             for side in (Side.LEFT, Side.RIGHT)
         }
@@ -442,8 +459,8 @@ class TestAxleRoll:
             # Droplink lengths conserved on both sides.
             for side in (Side.LEFT, Side.RIGHT):
                 length = (
-                    st.positions[PointRef(side, PointID.ROCKER_DROPLINK)]
-                    - st.positions[PointRef(side, PointID.ARB_DROPLINK)]
+                    st.positions[PointRef(side, PointID.DROPLINK_ROCKER)]
+                    - st.positions[PointRef(side, PointID.DROPLINK_ARB)]
                 ).norm()
                 assert length == pytest.approx(droplink0[side], abs=TEST_TOLERANCE)
 
@@ -529,8 +546,8 @@ class TestCliSmoke:
         for col in (
             "LEFT_PUSHROD_INBOARD_x",
             "LEFT_PUSHROD_OUTBOARD_z",
-            "LEFT_ROCKER_DROPLINK_y",
-            "RIGHT_ARB_DROPLINK_x",
+            "LEFT_DROPLINK_ROCKER_y",
+            "RIGHT_DROPLINK_ARB_x",
         ):
             assert col in headers, f"missing position column {col}"
 

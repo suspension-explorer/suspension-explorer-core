@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING
 from kinematics.core.constants import EPS_GEOMETRIC
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.geometry import Direction3, Point3
+from kinematics.schema.config import SuspensionConfig
 from kinematics.state import SuspensionState
-from kinematics.suspensions.config.settings import SuspensionConfig
 
 if TYPE_CHECKING:
     from kinematics.suspensions.base import Suspension

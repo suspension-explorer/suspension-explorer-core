@@ -12,7 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from kinematics.core.constants import MM_PER_INCH
-from kinematics.io.validation import PydanticDirection3, PydanticPoint3
+from kinematics.schema.coercion import PydanticDirection3, PydanticPoint3
 
 
 class TireConfig(BaseModel):
