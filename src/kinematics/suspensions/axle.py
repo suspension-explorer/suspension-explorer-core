@@ -43,7 +43,7 @@ from kinematics.suspensions.base import Suspension
 from kinematics.suspensions.double_wishbone import DoubleWishboneSuspension
 
 if TYPE_CHECKING:
-    from kinematics.metrics.main import MetricRow
+    from kinematics.metrics.main import AxleMetricRows
     from kinematics.sensitivity import TangentField
     from kinematics.visualization.main import LinkVisualization, WheelAnchors
 
@@ -410,8 +410,8 @@ class DoubleWishboneAxleSuspension(Suspension):
         self,
         state: SuspensionState,
         tangents: "Sequence[TangentField] | None" = None,
-    ) -> "MetricRow":
-        """Compute per-side and axle-level metrics for a solved axle state."""
+    ) -> "AxleMetricRows":
+        """Compute per-corner and axle-level metric rows for a solved axle state."""
         from kinematics.metrics.main import compute_metrics_for_axle_state
 
         if self.config is None:

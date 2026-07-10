@@ -300,15 +300,15 @@ def compute_axle_rate_metrics(
     state: "SuspensionState",
     axle: "DoubleWishboneAxleSuspension",
     tangents: Sequence[TangentField],
-) -> RateRow:
+) -> tuple[RateRow, dict[Side, RateRow]]:
     """
-    Rate metrics for an axle model: per-side corner rates plus modal (roll
-    and heave) rates.
+    Rate metrics for an axle model: per-corner rates plus modal (roll and
+    heave) rates.
 
     Per-side bump and rack rates reuse the corner machinery on side-stripped
-    positions and velocities, prefixed left_/right_. When both wheel centers
-    are driven in Z, modal roll/heave tangents are formed as linear
-    combinations of the two bump tangents:
+    positions and velocities, written into per-corner rows (location-less
+    column keys). When both wheel centers are driven in Z, modal roll/heave
+    tangents are formed as linear combinations of the two bump tangents:
 
         heave: both wheels +1 mm            -> v_heave = v_left + v_right
         roll:  left +track/2 * d(phi),
@@ -322,9 +322,14 @@ def compute_axle_rate_metrics(
         tangents: Tangent fields for this state (PointRef-keyed velocities).
 
     Returns:
-        Ordered mapping of rate column names to values.
+        The (axle-level row, per-corner rows) pair, each an ordered mapping
+        of location-less rate column names to values.
     """
-    row: RateRow = OrderedDict()
+    axle_row: RateRow = OrderedDict()
+    corner_rows: dict[Side, RateRow] = {
+        Side.LEFT: OrderedDict(),
+        Side.RIGHT: OrderedDict(),
+    }
 
     side_signs = {Side.LEFT: 1.0, Side.RIGHT: -1.0}
     bump_fields: dict[Side, tuple[TangentField, float]] = {}
@@ -338,17 +343,18 @@ def compute_axle_rate_metrics(
 
     # Per-side corner rates on side-stripped positions and velocities.
     for side in (Side.LEFT, Side.RIGHT):
-        prefix = f"{side.name.lower()}_"
+        corner_row = corner_rows[side]
         corner_state = axle.corner_state(state, side)
         corner = axle.corners[side]
 
         if side in bump_fields:
             field, alignment = bump_fields[side]
             velocities = _scaled(_corner_velocities(field.velocities, side), alignment)
-            for column, value in _corner_bump_rates(
-                corner_state.positions, velocities, side_signs[side], corner
-            ).items():
-                row[prefix + column] = value
+            corner_row.update(
+                _corner_bump_rates(
+                    corner_state.positions, velocities, side_signs[side], corner
+                )
+            )
 
             # ARB motion ratio: arm rotation about the shared chassis-fixed
             # axis per mm of this corner's bump. Evaluated on the full axle
@@ -357,17 +363,18 @@ def compute_axle_rate_metrics(
             # report equal ratios in symmetric heave.
             if axle.has_arb:
                 full_velocities = _scaled(field.velocities, alignment)
-                row[prefix + registry.ARB_MOTION_RATIO.key] = side_signs[
+                corner_row[registry.ARB_MOTION_RATIO.key] = side_signs[
                     side
                 ] * _arb_arm_rate(state, axle, full_velocities, side)
 
         if rack is not None:
             field, alignment = rack
             velocities = _scaled(_corner_velocities(field.velocities, side), alignment)
-            for column, value in _corner_rack_rates(
-                corner_state.positions, velocities, side_signs[side]
-            ).items():
-                row[prefix + column] = value
+            corner_row.update(
+                _corner_rack_rates(
+                    corner_state.positions, velocities, side_signs[side]
+                )
+            )
 
     # Modal rates need both bump drivers.
     if len(bump_fields) == 2:
@@ -399,36 +406,36 @@ def compute_axle_rate_metrics(
         )
 
         for side in (Side.LEFT, Side.RIGHT):
-            prefix = f"{side.name.lower()}_"
+            corner_row = corner_rows[side]
             corner_state = axle.corner_state(state, side)
             sign = side_signs[side]
 
             roll_duals = seed_positions_with_tangent(
                 corner_state.positions, _corner_velocities(roll_velocities, side)
             )
-            row[prefix + registry.ROADWHEEL_ANGLE_VS_ROLL.key] = _rate(
+            corner_row[registry.ROADWHEEL_ANGLE_VS_ROLL.key] = _rate(
                 kernels.roadwheel_angle_deg(roll_duals, sign)
             )
-            row[prefix + registry.CAMBER_VS_ROLL.key] = _rate(
+            corner_row[registry.CAMBER_VS_ROLL.key] = _rate(
                 kernels.camber_deg(roll_duals, sign)
             )
 
             heave_duals = seed_positions_with_tangent(
                 corner_state.positions, _corner_velocities(heave_velocities, side)
             )
-            row[prefix + registry.ROADWHEEL_ANGLE_VS_HEAVE.key] = _rate(
+            corner_row[registry.ROADWHEEL_ANGLE_VS_HEAVE.key] = _rate(
                 kernels.roadwheel_angle_deg(heave_duals, sign)
             )
-            row[prefix + registry.CAMBER_VS_HEAVE.key] = _rate(
+            corner_row[registry.CAMBER_VS_HEAVE.key] = _rate(
                 kernels.camber_deg(heave_duals, sign)
             )
 
         if axle.has_arb:
-            row[registry.ARB_TWIST_VS_ROLL.key] = _arb_arm_rate(
+            axle_row[registry.ARB_TWIST_VS_ROLL.key] = _arb_arm_rate(
                 state, axle, roll_velocities, Side.LEFT
             ) - _arb_arm_rate(state, axle, roll_velocities, Side.RIGHT)
 
-    return row
+    return axle_row, corner_rows
 
 
 def _arb_arm_rate(

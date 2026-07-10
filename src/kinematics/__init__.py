@@ -34,10 +34,12 @@ from kinematics.analysis import (
     initial_pose,
 )
 from kinematics.main import compute_sweep_metrics, compute_sweep_tangents, solve_sweep
+from kinematics.metrics.main import AxleMetricRows, flatten_metric_rows
 from kinematics.metrics.metadata import MetricDisplay, metric_display_for_keys
 from kinematics.metrics.registry import (
     MetricSpec,
     all_metric_specs,
+    flat_key,
     motion_ratio_specs,
 )
 from kinematics.schema import (
@@ -57,6 +59,7 @@ except PackageNotFoundError:  # pragma: no cover - package not installed
 
 __all__ = [
     "AnalyzedFrame",
+    "AxleMetricRows",
     "GeometrySpec",
     "MetricDisplay",
     "MetricSpec",
@@ -71,6 +74,8 @@ __all__ = [
     "build_sweep_config",
     "compute_sweep_metrics",
     "compute_sweep_tangents",
+    "flat_key",
+    "flatten_metric_rows",
     "get_suspension_class",
     "initial_pose",
     "list_supported_types",

@@ -444,8 +444,8 @@ class TestAxleStateMetrics:
         )[0]
         metrics = compute_metrics_for_axle_state(state, axle, axle.config)
 
-        assert metrics["heave_mm"] == pytest.approx(delta, abs=1e-4)
-        assert metrics["roll_deg"] == pytest.approx(0.0, abs=1e-6)
+        assert metrics.axle["heave_mm"] == pytest.approx(delta, abs=1e-4)
+        assert metrics.axle["roll_deg"] == pytest.approx(0.0, abs=1e-6)
 
         # Ride-height change equals minus the mean contact-patch rise.
         initial = axle.initial_state()
@@ -456,7 +456,7 @@ class TestAxleStateMetrics:
             design = float(initial.positions[ref][Axis.Z])
             cp_dz.append(now - design)
         expected_rhc = -0.5 * (cp_dz[0] + cp_dz[1])
-        rhc = metrics["ride_height_change_mm"]
+        rhc = metrics.axle["ride_height_change_mm"]
         assert rhc is not None
         assert rhc == pytest.approx(expected_rhc, abs=1e-6)
         assert rhc < 0
@@ -477,7 +477,7 @@ class TestAxleStateMetrics:
         )[0]
         metrics = compute_metrics_for_axle_state(state, axle, axle.config)
 
-        assert metrics["heave_mm"] == pytest.approx(0.0, abs=1e-4)
+        assert metrics.axle["heave_mm"] == pytest.approx(0.0, abs=1e-4)
 
         # roll_deg = atan2(dz_left - dz_right, track) with the current track.
         left_cp = float(
@@ -488,7 +488,7 @@ class TestAxleStateMetrics:
         )
         track = abs(left_cp - right_cp)
         expected_roll = degrees(atan2(2.0 * delta, track))
-        roll = metrics["roll_deg"]
+        roll = metrics.axle["roll_deg"]
         assert roll is not None
         assert roll == pytest.approx(expected_roll, abs=1e-4)
         assert roll > 0  # left wheel in bump
@@ -508,7 +508,7 @@ class TestAxleStateMetrics:
         )[0]
         metrics = compute_metrics_for_axle_state(state, axle, axle.config)
 
-        ackermann = metrics["ackermann_pct"]
+        ackermann = metrics.axle["ackermann_pct"]
         assert ackermann is not None
         assert np.isfinite(ackermann)
 
@@ -516,10 +516,10 @@ class TestAxleStateMetrics:
         # common yaw sign) point the same way under a rack displacement.
         initial = axle.initial_state()
         design_left = compute_metrics_for_axle_state(initial, axle, axle.config)
-        roadwheel_angle_left = metrics["left_roadwheel_angle_deg"]
-        roadwheel_angle_right = metrics["right_roadwheel_angle_deg"]
-        roadwheel_angle_left_d = design_left["left_roadwheel_angle_deg"]
-        roadwheel_angle_right_d = design_left["right_roadwheel_angle_deg"]
+        roadwheel_angle_left = metrics.corners["left"]["roadwheel_angle_deg"]
+        roadwheel_angle_right = metrics.corners["right"]["roadwheel_angle_deg"]
+        roadwheel_angle_left_d = design_left.corners["left"]["roadwheel_angle_deg"]
+        roadwheel_angle_right_d = design_left.corners["right"]["roadwheel_angle_deg"]
         assert roadwheel_angle_left is not None and roadwheel_angle_right is not None
         assert (
             roadwheel_angle_left_d is not None and roadwheel_angle_right_d is not None

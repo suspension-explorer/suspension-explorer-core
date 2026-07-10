@@ -21,7 +21,7 @@ from kinematics.schema.config import SuspensionConfig
 from kinematics.state import SuspensionState
 
 if TYPE_CHECKING:
-    from kinematics.metrics.main import MetricRow
+    from kinematics.metrics.main import AxleMetricRows, MetricRow
     from kinematics.sensitivity import TangentField
     from kinematics.visualization.main import LinkVisualization, WheelAnchors
 
@@ -197,13 +197,15 @@ class Suspension(ABC):
         self,
         state: SuspensionState,
         tangents: "Sequence[TangentField] | None" = None,
-    ) -> "MetricRow":
+    ) -> "MetricRow | AxleMetricRows":
         """
-        Compute the export metric row for a single solved state.
+        Compute the metric rows for a single solved state.
 
-        The base implementation computes the corner-level metric catalog. The
-        axle model overrides this to emit per-side and axle-level metrics. This
-        method is the CLI's single, branch-free metrics entry point.
+        The base implementation computes the corner-level metric catalog as a
+        single row. The axle model overrides this to return structured
+        per-corner plus axle-level rows (AxleMetricRows). Flat consumers
+        render canonical column names via
+        kinematics.metrics.main.flatten_metric_rows.
 
         Args:
             state: The solved state to analyze.
@@ -212,7 +214,8 @@ class Suspension(ABC):
                 metrics (motion ratios, camber gain, ...) are appended.
 
         Returns:
-            An ordered mapping of metric column names to values.
+            An ordered mapping of metric column names to values, or the
+            structured per-corner rows for an axle model.
 
         Raises:
             ValueError: If the suspension has no configuration.

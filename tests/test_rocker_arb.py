@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import copy
 import math
+from collections import OrderedDict
 from pathlib import Path
 
 import numpy as np
@@ -315,6 +316,7 @@ class TestCornerRocker:
             assert rr == pytest.approx(radius_rear0, abs=TEST_TOLERANCE)
 
             row = corner.compute_state_metrics(st)
+            assert isinstance(row, OrderedDict)  # corner model: flat row
             # Torsion-bar twist mirrors the rocker angle exactly.
             assert row["torsion_bar_twist_deg"] == pytest.approx(
                 row["rocker_angle_deg"], abs=1e-9
@@ -357,7 +359,9 @@ class TestCornerRocker:
         )
         assert dy < 0.0
 
-        bump_angle = corner.compute_state_metrics(states[1])["rocker_angle_deg"]
+        bump_row = corner.compute_state_metrics(states[1])
+        assert isinstance(bump_row, OrderedDict)  # corner model: flat row
+        bump_angle = bump_row["rocker_angle_deg"]
         assert bump_angle is not None
         assert bump_angle < 0.0
 
@@ -394,15 +398,15 @@ class TestAxleHeave:
                         f"{side.name} {pid.name} should move down in bump, got {dz}"
                     )
             # Rocker angles equal on both sides (side-normalised).
-            assert row["left_rocker_angle_deg"] == pytest.approx(
-                row["right_rocker_angle_deg"], abs=TEST_TOLERANCE
+            assert row.corners["left"]["rocker_angle_deg"] == pytest.approx(
+                row.corners["right"]["rocker_angle_deg"], abs=TEST_TOLERANCE
             )
             # Raw ARB arm angles equal on both sides.
-            assert row["left_arb_arm_angle_deg"] == pytest.approx(
-                row["right_arb_arm_angle_deg"], abs=TEST_TOLERANCE
+            assert row.corners["left"]["arb_arm_angle_deg"] == pytest.approx(
+                row.corners["right"]["arb_arm_angle_deg"], abs=TEST_TOLERANCE
             )
             # No relative twist of the ARB in pure heave.
-            assert row["arb_twist_deg"] == pytest.approx(0.0, abs=TEST_TOLERANCE)
+            assert row.axle["arb_twist_deg"] == pytest.approx(0.0, abs=TEST_TOLERANCE)
 
 
 # ----------------------------------------------------------------------
@@ -435,9 +439,9 @@ class TestAxleRoll:
 
         for st in states:
             row = axle.compute_state_metrics(st)
-            left = row["left_rocker_angle_deg"]
-            right = row["right_rocker_angle_deg"]
-            twist = row["arb_twist_deg"]
+            left = row.corners["left"]["rocker_angle_deg"]
+            right = row.corners["right"]["rocker_angle_deg"]
+            twist = row.axle["arb_twist_deg"]
             assert left is not None and right is not None and twist is not None
 
             # Side-normalised rocker angles are equal-and-opposite. Exact equality
@@ -553,11 +557,11 @@ class TestCliSmoke:
 
         # New metric columns.
         for col in (
-            "left_rocker_angle_deg",
-            "right_rocker_angle_deg",
-            "left_torsion_bar_twist_deg",
-            "left_arb_arm_angle_deg",
-            "right_arb_arm_angle_deg",
+            "rocker_angle_deg_left",
+            "rocker_angle_deg_right",
+            "torsion_bar_twist_deg_left",
+            "arb_arm_angle_deg_left",
+            "arb_arm_angle_deg_right",
             "arb_twist_deg",
         ):
             assert col in headers, f"missing metric column {col}"
@@ -581,7 +585,7 @@ class TestRegressionNoRocker:
         assert not axle.has_arb
         states, _ = solve_sweep(axle, _axle_sweep([0.0], [0.0], [0.0]))
         row = axle.compute_state_metrics(states[0])
-        for col in row:
+        for col in row.flat_row():
             assert "rocker" not in col
             assert "torsion" not in col
             assert "arb" not in col
@@ -592,5 +596,6 @@ class TestRegressionNoRocker:
         cfg = SweepConfig([[_rel(PointID.WHEEL_CENTER, Axis.Z, 0.0)]])
         states, _ = solve_sweep(corner, cfg)
         row = corner.compute_state_metrics(states[0])
+        assert isinstance(row, OrderedDict)  # corner model: flat row
         assert "rocker_angle_deg" not in row
         assert "torsion_bar_twist_deg" not in row

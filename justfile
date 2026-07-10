@@ -28,6 +28,10 @@ clean:
 test:
     uv run pytest tests/ --cov=. --cov-report=term --durations=0
 
+# Run performance benchmarks (deselected from the default suite).
+bench:
+    uv run pytest tests/benchmarks -m benchmark --benchmark-only
+
 # Regenerate e2e test reference files after geometry.yaml changes.
 regen-refs:
     @echo "Regenerating e2e test reference files..."

@@ -13,6 +13,7 @@ import pytest
 from kinematics.analysis import analyze_sweep, initial_pose
 from kinematics.io import load_geometry, load_sweep
 from kinematics.main import compute_sweep_metrics, solve_sweep
+from kinematics.metrics.main import AxleMetricRows
 from kinematics.metrics.metadata import metric_display, metric_display_for_keys
 from kinematics.visualization.display import AXIS_FOOT_SUFFIX
 
@@ -44,7 +45,11 @@ class TestMetricDisplayMetadata:
         states, _ = solve_sweep(suspension, sweep_config)
         rows = compute_sweep_metrics(suspension, sweep_config, states)
 
-        missing = [key for key in rows[0] if metric_display(key) is None]
+        row = rows[0]
+        # A corner model's row is already the flat rendering (location-less
+        # keys); an axle model flattens to location-suffixed columns.
+        flat = row.flat_row() if isinstance(row, AxleMetricRows) else row
+        missing = [key for key in flat if metric_display(key) is None]
         assert missing == [], f"Columns without display metadata: {missing}"
 
     def test_every_emitted_axle_column_resolves(self):
@@ -53,11 +58,13 @@ class TestMetricDisplayMetadata:
         states, _ = solve_sweep(suspension, sweep_config)
         rows = compute_sweep_metrics(suspension, sweep_config, states)
 
-        missing = [key for key in rows[0] if metric_display(key) is None]
+        row = rows[0]
+        assert isinstance(row, AxleMetricRows)
+        missing = [key for key in row.flat_row() if metric_display(key) is None]
         assert missing == [], f"Columns without display metadata: {missing}"
 
-    def test_side_prefix_resolution(self):
-        display = metric_display("left_camber_gain_deg_per_mm")
+    def test_side_suffix_resolution(self):
+        display = metric_display("camber_gain_deg_per_mm_left")
         assert display is not None
         assert display.label == "Left Camber Gain"
         assert display.unit == "deg/mm"
@@ -152,10 +159,25 @@ class TestAxleAnalysis:
 
     def test_axle_metrics_and_display(self, axle_analysis):
         analysis = axle_analysis
+        # Axle-level base keys in metric_keys; per-corner base keys and the
+        # locations present are carried separately (structural, not mangled).
         for key in ("heave_mm", "roll_deg", "arb_twist_vs_roll_deg_per_deg"):
             assert key in analysis.metric_keys, key
+        for key in ("camber_deg", "rocker_motion_ratio_deg_per_mm"):
+            assert key in analysis.corner_metric_keys, key
+        assert analysis.locations == ["left", "right"]
         covered = {display.key for display in analysis.metric_display}
-        assert covered == set(analysis.metric_keys)
+        assert covered == set(analysis.metric_keys) | set(
+            analysis.corner_metric_keys
+        )
+
+    def test_frames_carry_structured_corner_metrics(self, axle_analysis):
+        frame = axle_analysis.frames[0]
+        assert set(frame.corner_metrics) == {"left", "right"}
+        assert "camber_deg" in frame.corner_metrics["left"]
+        assert "arb_twist_deg" in frame.metrics
+        setup = axle_analysis.references["setup"]
+        assert set(setup.corner_metrics) == {"left", "right"}
 
     def test_center_arb_axis_points_exported(self, axle_analysis):
         # The display point set extends output_points with link-referenced

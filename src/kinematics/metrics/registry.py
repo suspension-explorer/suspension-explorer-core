@@ -9,9 +9,19 @@ this table rather than mirrored by hand.
 
 Scope semantics:
 
-- ``scope="corner"``: emitted un-prefixed by corner models, and ``left_`` /
-  ``right_`` prefixed by the axle model (one column per side).
-- ``scope="axle"``: emitted un-prefixed, once per axle state.
+- ``scope="corner"``: emitted once per corner. A corner model emits it in its
+  own (location-less) row; an axle model emits it in each corner's row, tagged
+  with that corner's location ("left" / "right").
+- ``scope="axle"``: emitted once per axle state, in the axle-level row.
+
+Locations are structural everywhere inside the package (rows are grouped per
+corner, never key-mangled); the canonical flat column names seen by export
+boundaries (result files, JSON payloads) are rendered exclusively by
+:func:`flat_key`, which appends the location as a suffix
+(``camber_deg_left``). Metric base keys never change when the location
+vocabulary grows: a future full-car model adds corner locations (e.g.
+``front_left``) to ``LOCATIONS`` and every metric picks up the new suffixed
+variants for free.
 
 Kind semantics:
 
@@ -27,6 +37,59 @@ from typing import Literal
 
 from kinematics.metrics.catalog import get_default_corner_metrics
 
+# Where a metric row was measured. None means the row belongs to the model
+# itself: a corner model's own row, or the axle-level row of an axle model.
+# The vocabulary is deliberately open-ended strings at the transport surface:
+# a full-car model extends it with corner names like "front_left" without
+# touching any metric key (locations only ever appear as flat_key suffixes).
+Location = Literal["left", "right"] | None
+
+# Every non-None location the package currently emits, in display order.
+LOCATIONS: tuple[str, ...] = ("left", "right")
+
+
+def flat_key(spec_key: str, location: str | None) -> str:
+    """
+    Render the canonical flat column name for a metric at a location.
+
+    This is the ONLY place a location is folded into a column name; every
+    flat consumer (result-file columns, JSON payloads, display-metadata
+    resolution) goes through it. The location is rendered as a suffix:
+    ``flat_key("camber_deg", "left") == "camber_deg_left"``. A ``None``
+    location (corner-model rows, axle-level rows) renders the bare key.
+
+    Args:
+        spec_key: The metric's base column key (MetricSpec.key).
+        location: The row's location, or None for a location-less row.
+
+    Returns:
+        The canonical flat column name.
+    """
+    if location is None:
+        return spec_key
+    return f"{spec_key}_{location}"
+
+
+def split_flat_key(key: str) -> tuple[str, str | None]:
+    """
+    Invert :func:`flat_key`: split a flat column name into (base key, location).
+
+    Keys that end in a known location suffix split; anything else is returned
+    unchanged with a None location. The caller decides whether the base key
+    actually names a spec (and whether that spec's scope admits a location).
+
+    Args:
+        key: A flat column name.
+
+    Returns:
+        The (base key, location) pair.
+    """
+    for location in LOCATIONS:
+        suffix = f"_{location}"
+        if key.endswith(suffix):
+            return key[: -len(suffix)], location
+    return key, None
+
 
 @dataclass(frozen=True)
 class MetricSpec:
@@ -34,13 +97,14 @@ class MetricSpec:
     Declarative description of one exported metric column family.
 
     Attributes:
-        key: Stable base column key, un-prefixed (e.g. "camber_gain_deg_per_mm").
+        key: Stable base column key, location-less (e.g.
+            "camber_gain_deg_per_mm"); locations are rendered by flat_key().
         label: Human-readable display name (e.g. "Camber Gain").
         unit: Physical unit symbol ("deg", "mm", "deg/mm", "mm/mm", "%", "-").
         kind: "state" for per-state quantities, "rate" for tangent-derived
             derivatives.
-        scope: "corner" for per-corner columns (side-prefixed on axles),
-            "axle" for axle-level columns.
+        scope: "corner" for per-corner columns (location-suffixed at flat
+            export boundaries on axles), "axle" for axle-level columns.
         component: Optional physical component this metric belongs to
             ("damper", "rocker", "arb", ...). Used for grouping in front-ends.
         motion_ratio: True for installation-ratio metrics quoted relative to

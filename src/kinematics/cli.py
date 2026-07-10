@@ -10,6 +10,7 @@ from kinematics.io import (
     load_sweep,
 )
 from kinematics.main import compute_sweep_metrics, solve_sweep
+from kinematics.metrics.main import AxleMetricRows
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
@@ -68,10 +69,15 @@ def sweep(
             if (pos := st.positions.get(pid)) is not None
         }
 
+        # Structured axle rows render to canonical flat column names (corner
+        # columns location-suffixed) at this export boundary only.
+        rows = metric_rows[idx]
+        flat_metrics = rows.flat_row() if isinstance(rows, AxleMetricRows) else rows
+
         frame = SolutionFrame(
             positions=positions,
             solver_info=solver_info,
-            metrics=dict(metric_rows[idx]),
+            metrics=dict(flat_metrics),
         )
 
         writer.add_frame(idx, frame)

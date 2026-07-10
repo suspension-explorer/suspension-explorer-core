@@ -20,7 +20,7 @@ from kinematics.state import SuspensionState
 from kinematics.suspensions.base import Suspension
 
 if TYPE_CHECKING:
-    from kinematics.metrics.main import MetricRow
+    from kinematics.metrics.main import AxleMetricRows, MetricRow
 
 
 def solve_sweep(
@@ -98,9 +98,9 @@ def compute_sweep_metrics(
     suspension: Suspension,
     sweep_config: SweepConfig,
     states: List[SuspensionState],
-) -> list["MetricRow"]:
+) -> list["MetricRow | AxleMetricRows"]:
     """
-    Compute the full metric row for every solved state of a sweep.
+    Compute the full metric rows for every solved state of a sweep.
 
     This is the single high-level metrics entry point for sweep consumers
     (CLI, API adapters): it computes the solution-manifold tangents internally
@@ -119,8 +119,10 @@ def compute_sweep_metrics(
         states: The solved states, one per sweep step.
 
     Returns:
-        One ordered metric row per state. Empty rows when the suspension has
-        no configuration (metrics need vehicle parameters).
+        One entry per state: an ordered metric row for corner models, or
+        structured per-corner plus axle-level rows (AxleMetricRows) for axle
+        models. Empty rows when the suspension has no configuration (metrics
+        need vehicle parameters).
     """
     if suspension.config is None:
         return [OrderedDict() for _ in states]

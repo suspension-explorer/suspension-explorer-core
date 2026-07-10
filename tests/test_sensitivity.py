@@ -341,7 +341,7 @@ class TestAxleTangents:
         fields = compute_state_tangents(
             state, axle.constraints(), derived_manager, targets(0.0, 0.0)
         )
-        rates = compute_axle_rate_metrics(state, axle, fields)
+        _axle_rates, corner_rates = compute_axle_rate_metrics(state, axle, fields)
 
         # Finite-difference roll: displace the wheel pair antisymmetrically
         # by the same half-track lever the modal combination uses.
@@ -376,12 +376,12 @@ class TestAxleTangents:
             assert hi is not None and lo is not None
             return (hi - lo) / (2.0 * roll_step_deg)
 
-        assert rates["left_roadwheel_angle_vs_roll_deg_per_deg"] == pytest.approx(
-            fd("roadwheel_angle_deg"), rel=5e-3, abs=1e-5
-        )
-        assert rates["left_camber_vs_roll_deg_per_deg"] == pytest.approx(
-            fd("camber_deg"), rel=5e-3, abs=1e-5
-        )
+        assert corner_rates[Side.LEFT][
+            "roadwheel_angle_vs_roll_deg_per_deg"
+        ] == pytest.approx(fd("roadwheel_angle_deg"), rel=5e-3, abs=1e-5)
+        assert corner_rates[Side.LEFT][
+            "camber_vs_roll_deg_per_deg"
+        ] == pytest.approx(fd("camber_deg"), rel=5e-3, abs=1e-5)
 
 
 class TestCombineTangents:

@@ -8,7 +8,8 @@ metrics. Returns ordered mappings ready for direct export integration.
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Sequence
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Mapping, Sequence
 
 from kinematics.core.constants import EPS_GEOMETRIC
 from kinematics.core.enums import Axis, PointID
@@ -27,6 +28,60 @@ if TYPE_CHECKING:
 
 
 MetricRow = OrderedDict[str, float | None]
+
+
+@dataclass(frozen=True)
+class AxleMetricRows:
+    """
+    Structured metric rows for one solved axle state.
+
+    Locations are structural inside the package: per-corner metrics live in
+    per-corner rows keyed by location ("left" / "right"), never mangled into
+    column names. Flat consumers render canonical column names with
+    :func:`flatten_metric_rows`.
+
+    Attributes:
+        axle: The axle-level row (scope="axle" columns).
+        corners: Location -> that corner's row (scope="corner" columns,
+            location-less keys).
+    """
+
+    axle: MetricRow
+    corners: dict[str, MetricRow]
+
+    def flat_row(self) -> MetricRow:
+        """
+        The canonical flat export row for this state.
+        """
+        return flatten_metric_rows(self.axle, self.corners)
+
+
+def flatten_metric_rows(
+    metrics: MetricRow,
+    corner_metrics: Mapping[str, MetricRow],
+) -> MetricRow:
+    """
+    Render structured metric rows into one canonical flat row.
+
+    Corner rows come first (each column suffixed with its location via the
+    registry's ``flat_key``), then the model-level row un-suffixed. This is
+    the single flattening path for every export boundary (result-file
+    columns, JSON payloads).
+
+    Args:
+        metrics: The model-level row (a corner model's own row, or the
+            axle-level row).
+        corner_metrics: Location -> per-corner row; empty for corner models.
+
+    Returns:
+        The flat ordered row with canonical column names.
+    """
+    flat: MetricRow = OrderedDict()
+    for location, corner_row in corner_metrics.items():
+        for column, value in corner_row.items():
+            flat[registry.flat_key(column, location)] = value
+    flat.update(metrics)
+    return flat
 
 
 def compute_metrics_for_state(
@@ -225,14 +280,15 @@ def compute_metrics_for_axle_state(
     axle: "DoubleWishboneAxleSuspension",
     config: SuspensionConfig,
     tangents: "Sequence[TangentField] | None" = None,
-) -> MetricRow:
+) -> AxleMetricRows:
     """
-    Compute per-side and axle-level metrics for a solved axle state.
+    Compute per-corner and axle-level metrics for a solved axle state.
 
     Per side, the solved axle state is stripped to a plain corner state
-    (``axle.corner_state``) and the standard corner metrics are computed against
-    that side's corner suspension, with every column prefixed ``left_`` /
-    ``right_``. Axle-level metrics are appended afterwards.
+    (``axle.corner_state``) and the standard corner metrics are computed
+    against that side's corner suspension, into that corner's own row
+    (location-keyed, column names location-less). Axle-level metrics form
+    their own row.
 
     Axle metrics:
 
@@ -257,31 +313,29 @@ def compute_metrics_for_axle_state(
             and modal (roll/heave) derivative metrics are appended.
 
     Returns:
-        An ordered metric row.
+        The structured rows: one axle-level row plus one row per corner.
     """
-    row: MetricRow = OrderedDict()
+    axle_row: MetricRow = OrderedDict()
 
-    # Per-side corner metrics, prefixed.
+    # Per-corner metrics, into location-keyed rows.
     side_rows: dict[Side, MetricRow] = {}
     for side in (Side.LEFT, Side.RIGHT):
         corner_state = axle.corner_state(state, side)
-        side_row = compute_metrics_for_state(corner_state, axle.corners[side], config)
-        side_rows[side] = side_row
-        prefix = f"{side.name.lower()}_"
-        for column, value in side_row.items():
-            row[prefix + column] = value
+        side_rows[side] = compute_metrics_for_state(
+            corner_state, axle.corners[side], config
+        )
 
     # Axle-level metrics.
     roll_center_y, roll_center_z = _axle_roll_center(state, axle)
-    row[registry.ROLL_CENTER_Y.key] = roll_center_y
-    row[registry.ROLL_CENTER_Z.key] = roll_center_z
+    axle_row[registry.ROLL_CENTER_Y.key] = roll_center_y
+    axle_row[registry.ROLL_CENTER_Z.key] = roll_center_z
 
     left_roadwheel_angle = side_rows[Side.LEFT]["roadwheel_angle_deg"]
     right_roadwheel_angle = side_rows[Side.RIGHT]["roadwheel_angle_deg"]
     if left_roadwheel_angle is None or right_roadwheel_angle is None:
-        row[registry.TOTAL_ROADWHEEL_ANGLE.key] = None
+        axle_row[registry.TOTAL_ROADWHEEL_ANGLE.key] = None
     else:
-        row[registry.TOTAL_ROADWHEEL_ANGLE.key] = (
+        axle_row[registry.TOTAL_ROADWHEEL_ANGLE.key] = (
             left_roadwheel_angle + right_roadwheel_angle
         )
 
@@ -291,7 +345,7 @@ def compute_metrics_for_axle_state(
     right_cp_y = float(
         state.positions[PointRef(Side.RIGHT, PointID.CONTACT_PATCH_CENTER)][Axis.Y]
     )
-    row[registry.TRACK.key] = abs(left_cp_y - right_cp_y)
+    axle_row[registry.TRACK.key] = abs(left_cp_y - right_cp_y)
 
     design_rack_y = float(
         axle.corners[Side.LEFT]
@@ -301,31 +355,38 @@ def compute_metrics_for_axle_state(
     current_rack_y = float(
         state.positions[PointRef(Side.LEFT, PointID.TRACKROD_INBOARD)][Axis.Y]
     )
-    row[registry.RACK_DISPLACEMENT.key] = current_rack_y - design_rack_y
+    axle_row[registry.RACK_DISPLACEMENT.key] = current_rack_y - design_rack_y
 
     if axle.has_arb:
-        _append_arb_metrics(row, state, axle)
+        _append_arb_metrics(axle_row, side_rows, state, axle)
 
     # Axle-level per-state (non-derivative) modal metrics.
     from kinematics.metrics.axle_metrics import append_axle_state_metrics
 
-    append_axle_state_metrics(row, state, axle, config, side_rows)
+    append_axle_state_metrics(axle_row, state, axle, config, side_rows)
 
     if tangents:
         from kinematics.metrics.rates import compute_axle_rate_metrics
 
-        row.update(compute_axle_rate_metrics(state, axle, tangents))
+        axle_rates, corner_rates = compute_axle_rate_metrics(state, axle, tangents)
+        axle_row.update(axle_rates)
+        for side, rates in corner_rates.items():
+            side_rows[side].update(rates)
 
-    return row
+    return AxleMetricRows(
+        axle=axle_row,
+        corners={side.name.lower(): row for side, row in side_rows.items()},
+    )
 
 
 def _append_arb_metrics(
-    row: MetricRow,
+    axle_row: MetricRow,
+    side_rows: dict[Side, MetricRow],
     state: SuspensionState,
     axle: "DoubleWishboneAxleSuspension",
 ) -> None:
     """
-    Append per-side ARB arm angles and the axle-level ARB twist.
+    Append the per-corner ARB arm angles and the axle-level ARB twist.
 
     The anti-roll bar shares a single chassis-fixed axis (``ARB_AXIS_A`` ->
     ``ARB_AXIS_B``). Unlike the rocker angle, the arm angles use RAW signed
@@ -359,6 +420,6 @@ def _append_arb_metrics(
         )
         angles[side] = degrees(raw)
 
-    row["left_" + registry.ARB_ARM_ANGLE.key] = angles[Side.LEFT]
-    row["right_" + registry.ARB_ARM_ANGLE.key] = angles[Side.RIGHT]
-    row[registry.ARB_TWIST.key] = angles[Side.LEFT] - angles[Side.RIGHT]
+    side_rows[Side.LEFT][registry.ARB_ARM_ANGLE.key] = angles[Side.LEFT]
+    side_rows[Side.RIGHT][registry.ARB_ARM_ANGLE.key] = angles[Side.RIGHT]
+    axle_row[registry.ARB_TWIST.key] = angles[Side.LEFT] - angles[Side.RIGHT]

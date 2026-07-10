@@ -308,20 +308,20 @@ class TestSymmetry:
             row = axle.compute_state_metrics(state)
 
             # Camber equal on both sides.
-            assert row["left_camber_deg"] == pytest.approx(
-                row["right_camber_deg"], abs=1e-4
+            assert row.corners["left"]["camber_deg"] == pytest.approx(
+                row.corners["right"]["camber_deg"], abs=1e-4
             )
             # Roadwheel angle EQUAL (same sign) in pure heave: the per-side toe
             # convention is centreline-relative, and the two corners are exact
             # mirror images, so the values coincide.
-            assert row["left_roadwheel_angle_deg"] == pytest.approx(
-                row["right_roadwheel_angle_deg"], abs=1e-4
+            assert row.corners["left"]["roadwheel_angle_deg"] == pytest.approx(
+                row.corners["right"]["roadwheel_angle_deg"], abs=1e-4
             )
             # Rack stays at its design Y.
-            assert row["rack_displacement_mm"] == pytest.approx(0.0, abs=1e-3)
+            assert row.axle["rack_displacement_mm"] == pytest.approx(0.0, abs=1e-3)
             # Roll center lies on the vehicle centreline (Y ~ 0).
-            assert row["roll_center_y_mm"] is not None
-            assert row["roll_center_y_mm"] == pytest.approx(0.0, abs=1e-3)
+            assert row.axle["roll_center_y_mm"] is not None
+            assert row.axle["roll_center_y_mm"] == pytest.approx(0.0, abs=1e-3)
             # Track change is symmetric: both contact patches move equally in |Y|.
             left_cp_y = float(
                 state.positions[PointRef(Side.LEFT, PointID.CONTACT_PATCH_CENTER)][
@@ -356,9 +356,9 @@ class TestSteering:
         assert all(s.converged for s in stats)
 
         rows = [axle.compute_state_metrics(st) for st in states]
-        left = [r["left_roadwheel_angle_deg"] for r in rows]
-        right = [r["right_roadwheel_angle_deg"] for r in rows]
-        total = [r["total_roadwheel_angle_deg"] for r in rows]
+        left = [r.corners["left"]["roadwheel_angle_deg"] for r in rows]
+        right = [r.corners["right"]["roadwheel_angle_deg"] for r in rows]
+        total = [r.axle["total_roadwheel_angle_deg"] for r in rows]
 
         # Both are well-defined at every step.
         assert all(v is not None for v in left + right + total)
@@ -393,8 +393,8 @@ class TestRoll:
         # Design reference (zero roll).
         ref_states, _ = solve_sweep(axle, _axle_sweep([0.0], [0.0], [0.0]))
         ref = axle.compute_state_metrics(ref_states[0])
-        left0 = ref["left_camber_deg"]
-        right0 = ref["right_camber_deg"]
+        left0 = ref.corners["left"]["camber_deg"]
+        right0 = ref.corners["right"]["camber_deg"]
         assert left0 is not None and right0 is not None
 
         # Roll: left up, right down.
@@ -406,8 +406,8 @@ class TestRoll:
 
         for state in states:
             row = axle.compute_state_metrics(state)
-            left_camber = row["left_camber_deg"]
-            right_camber = row["right_camber_deg"]
+            left_camber = row.corners["left"]["camber_deg"]
+            right_camber = row.corners["right"]["camber_deg"]
             assert left_camber is not None and right_camber is not None
             d_left = left_camber - left0
             d_right = right_camber - right0
@@ -416,14 +416,14 @@ class TestRoll:
                 f"camber deviations not opposite: {d_left} vs {d_right}"
             )
             # Roll-centre metrics remain finite and well-defined.
-            rc_y = row["roll_center_y_mm"]
-            rc_z = row["roll_center_z_mm"]
+            rc_y = row.axle["roll_center_y_mm"]
+            rc_z = row.axle["roll_center_z_mm"]
             assert rc_y is not None and rc_z is not None
             assert np.isfinite(rc_y)
             assert np.isfinite(rc_z)
             # Total toe is well-defined.
-            assert row["total_roadwheel_angle_deg"] is not None
-            assert np.isfinite(row["total_roadwheel_angle_deg"])
+            assert row.axle["total_roadwheel_angle_deg"] is not None
+            assert np.isfinite(row.axle["total_roadwheel_angle_deg"])
 
 
 # ----------------------------------------------------------------------
@@ -510,8 +510,8 @@ class TestCliSmoke:
         assert "LEFT_WHEEL_CENTER_x" in headers
         assert "RIGHT_WHEEL_CENTER_z" in headers
         # Per-side metric columns.
-        assert "left_camber_deg" in headers
-        assert "right_camber_deg" in headers
+        assert "camber_deg_left" in headers
+        assert "camber_deg_right" in headers
         # Axle-level metric columns.
         for col in (
             "roll_center_y_mm",

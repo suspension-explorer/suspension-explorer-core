@@ -23,7 +23,7 @@ from kinematics.core.point_ref import PointRef, Side
 from kinematics.core.types import PointTarget, SweepConfig
 from kinematics.diagnostics import DiagnosticIssue, diagnose_sweep
 from kinematics.main import compute_sweep_metrics, solve_sweep
-from kinematics.metrics.main import MetricRow
+from kinematics.metrics.main import AxleMetricRows, MetricRow
 from kinematics.metrics.metadata import MetricDisplay, metric_display_for_keys
 from kinematics.solver import SolverInfo
 from kinematics.suspensions.base import Suspension
@@ -79,13 +79,19 @@ class AnalyzedFrame:
         index: Step index within the sweep.
         positions: Name-keyed positions, including synthetic display points
             (rocker lever-arm feet).
-        metrics: Full ordered metric row (per-state plus derivative metrics).
+        metrics: The model-level metric row: a corner model's full row, or
+            the axle-level row of an axle model (location-less keys).
+        corner_metrics: Location ("left" / "right") -> that corner's metric
+            row; empty for corner models. Keys within each row are
+            location-less; canonical flat names are rendered only at export
+            boundaries via kinematics.metrics.main.flatten_metric_rows.
         solver: Solver convergence info for the step.
     """
 
     index: int
     positions: Positions
     metrics: MetricRow
+    corner_metrics: dict[str, MetricRow]
     solver: SolverInfo
 
 
@@ -93,11 +99,15 @@ class AnalyzedFrame:
 class ReferenceCondition:
     """
     A reference pose the sweep can be compared against.
+
+    ``metrics`` / ``corner_metrics`` follow the same structured shape as
+    :class:`AnalyzedFrame`.
     """
 
     label: str
     positions: Positions
     metrics: MetricRow
+    corner_metrics: dict[str, MetricRow]
 
 
 @dataclass(frozen=True)
@@ -118,11 +128,22 @@ class StaticPose:
 class SweepAnalysis:
     """
     The complete result of analyzing a sweep, ready for any front-end.
+
+    Metric structure mirrors the frames: locations are structural, never
+    key-mangled. ``metric_keys`` lists the model-level row's base keys (the
+    axle-level row for an axle, the corner's own row for a corner model);
+    ``corner_metric_keys`` lists the base keys of the per-corner rows and
+    ``locations`` the corner locations present (both empty for corner
+    models). ``metric_display`` carries display metadata for every base key
+    (corner keys first, then model keys). Flat column names exist only in
+    result files, rendered by kinematics.metrics.main.flatten_metric_rows.
     """
 
     suspension: SuspensionInfo
     point_keys: list[str]
     metric_keys: list[str]
+    corner_metric_keys: list[str]
+    locations: list[str]
     metric_display: list[MetricDisplay]
     sweep_parameters: list[SweepParameter]
     references: dict[str, ReferenceCondition]
@@ -226,15 +247,31 @@ def _setup_reference(
         states, _stats = solve_sweep(suspension, hold_config)
         if not states:
             return None
-        metrics = compute_sweep_metrics(suspension, hold_config, states)[0]
+        rows = compute_sweep_metrics(suspension, hold_config, states)[0]
     except Exception:  # noqa: BLE001 - the reference is optional
         return None
 
+    metrics, corner_metrics = _split_metric_rows(rows)
     return ReferenceCondition(
         label="Setup",
         positions=display_positions(states[0].positions, point_keys, rocker_groups),
         metrics=metrics,
+        corner_metrics=corner_metrics,
     )
+
+
+def _split_metric_rows(
+    rows: "MetricRow | AxleMetricRows",
+) -> tuple[MetricRow, dict[str, MetricRow]]:
+    """
+    Normalize a per-state metrics result into (model row, corner rows).
+
+    Corner models produce a single row and no corner map; axle models carry
+    an axle-level row plus one row per corner location.
+    """
+    if isinstance(rows, AxleMetricRows):
+        return rows.axle, rows.corners
+    return rows, {}
 
 
 def analyze_sweep(suspension: Suspension, sweep_config: SweepConfig) -> SweepAnalysis:
@@ -260,21 +297,38 @@ def analyze_sweep(suspension: Suspension, sweep_config: SweepConfig) -> SweepAna
     point_keys = display_point_keys(suspension)
     rocker_groups = rocker_display_groups(suspension)
 
-    frames = [
-        AnalyzedFrame(
-            index=index,
-            positions=display_positions(state.positions, point_keys, rocker_groups),
-            metrics=metric_rows[index],
-            solver=info,
+    frames: list[AnalyzedFrame] = []
+    for index, (state, info) in enumerate(zip(states, solver_stats)):
+        metrics, corner_metrics = _split_metric_rows(metric_rows[index])
+        frames.append(
+            AnalyzedFrame(
+                index=index,
+                positions=display_positions(state.positions, point_keys, rocker_groups),
+                metrics=metrics,
+                corner_metrics=corner_metrics,
+                solver=info,
+            )
         )
-        for index, (state, info) in enumerate(zip(states, solver_stats))
-    ]
 
+    # Base-key lists from the first non-empty frame: the model-level row's
+    # keys, the per-corner rows' keys, and the corner locations present.
+    # Display metadata covers every base key, corner keys first.
     metric_keys: list[str] = []
-    for row in metric_rows:
-        if row:
-            metric_keys = list(row.keys())
+    corner_metric_keys: list[str] = []
+    locations: list[str] = []
+    for frame in frames:
+        if not frame.metrics and not frame.corner_metrics:
+            continue
+        metric_keys = list(frame.metrics.keys())
+        locations = list(frame.corner_metrics.keys())
+        for row in frame.corner_metrics.values():
+            corner_metric_keys = list(row.keys())
             break
+        break
+
+    display_keys = corner_metric_keys + [
+        key for key in metric_keys if key not in corner_metric_keys
+    ]
 
     references: dict[str, ReferenceCondition] = {}
     setup = _setup_reference(suspension, sweep_config, point_keys, rocker_groups)
@@ -292,7 +346,9 @@ def analyze_sweep(suspension: Suspension, sweep_config: SweepConfig) -> SweepAna
         suspension=_suspension_info(suspension),
         point_keys=[key.name for key in point_keys],
         metric_keys=metric_keys,
-        metric_display=metric_display_for_keys(metric_keys),
+        corner_metric_keys=corner_metric_keys,
+        locations=locations,
+        metric_display=metric_display_for_keys(display_keys),
         sweep_parameters=sweep_parameters(sweep_config),
         references=references,
         wheel=wheel_display_dimensions(suspension.config),
