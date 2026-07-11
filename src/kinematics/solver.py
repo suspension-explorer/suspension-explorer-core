@@ -21,19 +21,21 @@ from kinematics.constraints import (
     FixedAxisConstraint,
     PointOnLineConstraint,
     PointOnPlaneConstraint,
+    ScalarTripleProductConstraint,
     SphericalJointConstraint,
     ThreePointAngleConstraint,
     VectorsParallelConstraint,
     VectorsPerpendicularConstraint,
 )
 from kinematics.core.constants import (
+    SOLVE_ACCEPT_RESIDUAL,
     SOLVE_TOLERANCE_GRAD,
     SOLVE_TOLERANCE_STEP,
     SOLVE_TOLERANCE_VALUE,
 )
 from kinematics.core.dual import seed_positions
-from kinematics.core.enums import PointID
 from kinematics.core.geometry import Point3
+from kinematics.core.point_ref import PointKey
 from kinematics.core.types import PointTarget, SweepConfig, TargetPositionMode
 from kinematics.core.vector_utils.generic import project_coordinate
 from kinematics.jacobians import (
@@ -71,6 +73,7 @@ class SolverConfig(NamedTuple):
     xtol: float = SOLVE_TOLERANCE_STEP
     gtol: float = SOLVE_TOLERANCE_GRAD
     verbose: int = 0
+    residual_tolerance: float = SOLVE_ACCEPT_RESIDUAL
 
 
 @dataclass
@@ -286,14 +289,14 @@ class ResidualComputer:
         unwrapped via .data before being passed.
         """
         offsets = self.point_var_offsets
-        compute_fn: Callable[[dict[PointID, Point3]], np.ndarray]
+        compute_fn: Callable[[dict[PointKey, Point3]], np.ndarray]
 
         if isinstance(constraint, (DistanceConstraint, SphericalJointConstraint)):
             point_ids = (constraint.p1, constraint.p2)
             p1 = constraint.p1
             p2 = constraint.p2
 
-            def compute_distance(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_distance(pos: dict[PointKey, Point3]) -> np.ndarray:
                 return jac_distance(pos[p1].data, pos[p2].data)
 
             compute_fn = compute_distance
@@ -310,7 +313,7 @@ class ResidualComputer:
             v2_start = constraint.v2_start
             v2_end = constraint.v2_end
 
-            def compute_angle(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_angle(pos: dict[PointKey, Point3]) -> np.ndarray:
                 return jac_angle(
                     pos[v1_start].data,
                     pos[v1_end].data,
@@ -326,10 +329,8 @@ class ResidualComputer:
             p2 = constraint.p2
             p3 = constraint.p3
 
-            def compute_three_point_angle(pos: dict[PointID, Point3]) -> np.ndarray:
-                return jac_three_point_angle(
-                    pos[p1].data, pos[p2].data, pos[p3].data
-                )
+            def compute_three_point_angle(pos: dict[PointKey, Point3]) -> np.ndarray:
+                return jac_three_point_angle(pos[p1].data, pos[p2].data, pos[p3].data)
 
             compute_fn = compute_three_point_angle
 
@@ -345,7 +346,7 @@ class ResidualComputer:
             v2_start = constraint.v2_start
             v2_end = constraint.v2_end
 
-            def compute_vectors_parallel(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_vectors_parallel(pos: dict[PointKey, Point3]) -> np.ndarray:
                 return jac_vectors_parallel(
                     pos[v1_start].data,
                     pos[v1_end].data,
@@ -368,7 +369,7 @@ class ResidualComputer:
             v2_end = constraint.v2_end
 
             def compute_vectors_perpendicular(
-                pos: dict[PointID, Point3],
+                pos: dict[PointKey, Point3],
             ) -> np.ndarray:
                 return jac_vectors_perpendicular(
                     pos[v1_start].data,
@@ -391,7 +392,7 @@ class ResidualComputer:
             p3 = constraint.p3
             p4 = constraint.p4
 
-            def compute_equal_distance(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_equal_distance(pos: dict[PointKey, Point3]) -> np.ndarray:
                 return jac_equal_distance(
                     pos[p1].data, pos[p2].data, pos[p3].data, pos[p4].data
                 )
@@ -403,7 +404,7 @@ class ResidualComputer:
             fixed = np.zeros(3)
             fixed[constraint.axis.value] = 1.0
 
-            def compute_fixed_axis(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_fixed_axis(pos: dict[PointKey, Point3]) -> np.ndarray:
                 _ = pos
                 return fixed
 
@@ -415,7 +416,7 @@ class ResidualComputer:
             line_point = constraint.line_point.data
             line_direction = constraint.line_direction.data
 
-            def compute_point_on_line(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_point_on_line(pos: dict[PointKey, Point3]) -> np.ndarray:
                 return jac_point_on_line(pos[point_id].data, line_point, line_direction)
 
             compute_fn = compute_point_on_line
@@ -424,11 +425,37 @@ class ResidualComputer:
             point_ids = (constraint.point_id,)
             normal = constraint.plane_normal.data.copy()
 
-            def compute_point_on_plane(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_point_on_plane(pos: dict[PointKey, Point3]) -> np.ndarray:
                 _ = pos
                 return normal
 
             compute_fn = compute_point_on_plane
+
+        elif isinstance(constraint, ScalarTripleProductConstraint):
+            point_ids = (
+                constraint.p1,
+                constraint.p2,
+                constraint.p3,
+                constraint.p4,
+            )
+            p1 = constraint.p1
+            p2 = constraint.p2
+            p3 = constraint.p3
+            p4 = constraint.p4
+            scale = constraint.scale
+
+            def compute_scalar_triple(pos: dict[PointKey, Point3]) -> np.ndarray:
+                return (
+                    jac_coplanar(
+                        pos[p1].data,
+                        pos[p2].data,
+                        pos[p3].data,
+                        pos[p4].data,
+                    )
+                    / scale
+                )
+
+            compute_fn = compute_scalar_triple
 
         elif isinstance(constraint, CoplanarPointsConstraint):
             point_ids = (
@@ -442,7 +469,7 @@ class ResidualComputer:
             p3 = constraint.p3
             p4 = constraint.p4
 
-            def compute_coplanar(pos: dict[PointID, Point3]) -> np.ndarray:
+            def compute_coplanar(pos: dict[PointKey, Point3]) -> np.ndarray:
                 return jac_coplanar(
                     pos[p1].data, pos[p2].data, pos[p3].data, pos[p4].data
                 )
@@ -576,6 +603,30 @@ def convert_targets_to_absolute(
     return resolved
 
 
+def describe_constraint(constraint: Constraint) -> str:
+    """Return a compact description of a constraint and its points."""
+    point_names = ", ".join(
+        sorted(
+            getattr(point, "name", str(point)) for point in constraint.involved_points
+        )
+    )
+    return f"{type(constraint).__name__}({point_names})"
+
+
+def describe_worst_residual(
+    residuals: np.ndarray,
+    constraints: list[Constraint],
+    step_targets: list[PointTarget],
+) -> str:
+    """Describe the constraint or target owning the largest residual row."""
+    worst_index = int(np.argmax(np.abs(residuals)))
+    if worst_index < len(constraints):
+        return f"constraint {describe_constraint(constraints[worst_index])}"
+    target = step_targets[worst_index - len(constraints)]
+    point_name = getattr(target.point_id, "name", str(target.point_id))
+    return f"target on point '{point_name}' (direction {target.direction})"
+
+
 def solve_suspension_sweep(
     initial_state: SuspensionState,
     constraints: list[Constraint],
@@ -638,7 +689,7 @@ def solve_suspension_sweep(
     # the shared least-squares helper for LM dimension validation.
     n_residuals = residual_computer.n_residuals
 
-    for step_targets in sweep_targets:
+    for step_index, step_targets in enumerate(sweep_targets):
         result = solve_least_squares_problem(
             residual_function=residual_computer.compute,
             x_0=x_0,
@@ -652,6 +703,23 @@ def solve_suspension_sweep(
             raise RuntimeError(
                 f"Solver failed to converge for targets: {step_targets}."
                 f"\nMessage: {result.message}"
+            )
+
+        # Optimizer convergence does not prove feasibility: least squares can
+        # converge to a compromise when the requested mechanism state is
+        # unreachable. Reject that state before it enters the sweep history.
+        step_max_residual = (
+            float(np.max(np.abs(result.fun))) if len(result.fun) > 0 else 0.0
+        )
+        if step_max_residual > solver_config.residual_tolerance:
+            worst = describe_worst_residual(result.fun, constraints, step_targets)
+            raise RuntimeError(
+                f"Solve at sweep step {step_index} did not reach an acceptable "
+                f"residual: worst residual {step_max_residual:.6g} exceeds the "
+                f"acceptance tolerance {solver_config.residual_tolerance:.6g}. "
+                f"Worst residual row: {worst}. The mechanism likely cannot reach "
+                "the requested targets (kinematic lock-out / infeasible target "
+                "combination)."
             )
 
         # Synchronize working_state with the accepted solution. The solver
@@ -671,11 +739,10 @@ def solve_suspension_sweep(
         solution_states.append(working_state.copy())
 
         # Collect solver information for this step.
-        max_residual = float(np.max(np.abs(result.fun))) if len(result.fun) > 0 else 0.0
         solver_info = SolverInfo(
             converged=result.success,
             nfev=result.nfev,
-            max_residual=max_residual,
+            max_residual=step_max_residual,
         )
         solver_stats.append(solver_info)
 

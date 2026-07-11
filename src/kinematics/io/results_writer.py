@@ -23,6 +23,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from kinematics.main import SolverInfo
+from kinematics.metrics.registry import MetricSpec
 
 
 class MetadataKey(Enum):
@@ -36,6 +37,7 @@ class MetadataKey(Enum):
     SWEEP_PATH = "sweep_path"
     GEOMETRY_HASH = "geometry_hash"
     SWEEP_HASH = "sweep_hash"
+    COLUMN_UNITS = "column_units"
 
 
 class StandardColumn(Enum):
@@ -58,7 +60,7 @@ class SupportedFormat(Enum):
     CSV = ".csv"
 
 
-FORMAT_VERSION = "2"
+FORMAT_VERSION = "3"
 PACKAGE_NAME = "kinematics"
 METADATA_KEY = b"kinematics_meta"  # Need bytes for pyarrow.
 
@@ -95,6 +97,7 @@ class SolutionFrame:
     positions: dict[str, tuple[float, float, float]]
     solver_info: SolverInfo
     metrics: dict[str, float | None] = field(default_factory=dict)
+    metric_specs: dict[str, MetricSpec] = field(default_factory=dict)
 
 
 class BaseResultsWriter(ABC):
@@ -123,6 +126,7 @@ class BaseResultsWriter(ABC):
         """
         self.output_path = Path(output_path)
         self.frames: list[dict[str, Any]] = []
+        self.column_units: dict[str, str] = {}
 
         # Build standard metadata.
         self.metadata: dict[str, str] = {
@@ -161,14 +165,28 @@ class BaseResultsWriter(ABC):
         # Metric columns (between solver and position columns).
         for metric_name, metric_value in frame.metrics.items():
             row[metric_name] = metric_value
+            spec = frame.metric_specs.get(metric_name)
+            if spec is not None:
+                self._record_column_unit(metric_name, spec.unit.symbol)
 
         # Flatten position data into separate x/y/z columns.
         for point_id, (x, y, z) in frame.positions.items():
             row[f"{point_id}_x"] = float(x)
             row[f"{point_id}_y"] = float(y)
             row[f"{point_id}_z"] = float(z)
+            for axis in ("x", "y", "z"):
+                self._record_column_unit(f"{point_id}_{axis}", "mm")
 
         self.frames.append(row)
+
+    def _record_column_unit(self, column: str, unit: str) -> None:
+        """Record one consistent physical unit for an output column."""
+        existing = self.column_units.get(column)
+        if existing is not None and existing != unit:
+            raise ValueError(
+                f"Conflicting units for column '{column}': {existing} and {unit}"
+            )
+        self.column_units[column] = unit
 
     def build_column_list(self) -> list[str]:
         """
@@ -224,7 +242,7 @@ class ParquetWriter(BaseResultsWriter):
 
         for frame_idx, solution in enumerate(solutions):
             frame = SolutionFrame(
-                positions={"WHEEL_CENTER": (0.0, 100.0, 50.0), ...},
+                positions={"wheel_center": (0.0, 100.0, 50.0), ...},
                 solver_info=SolverInfo(converged=True, nfev=12, max_residual=0.001)
             )
             writer.add_frame(frame_idx, frame)
@@ -320,7 +338,19 @@ class ParquetWriter(BaseResultsWriter):
             names.append(col)
 
         # Build table and attach metadata.
-        table = pa.Table.from_arrays(arrays, names=names)
+        fields = [
+            pa.field(
+                name,
+                array.type,
+                metadata=(
+                    {b"unit": self.column_units[name].encode("utf-8")}
+                    if name in self.column_units
+                    else None
+                ),
+            )
+            for name, array in zip(names, arrays)
+        ]
+        table = pa.Table.from_arrays(arrays, schema=pa.schema(fields))
 
         existing_meta = table.schema.metadata or {}
         metadata_bytes = {
@@ -349,7 +379,7 @@ class CsvWriter(BaseResultsWriter):
 
         for frame_idx, solution in enumerate(solutions):
             frame = SolutionFrame(
-                positions={"WHEEL_CENTER": (0.0, 100.0, 50.0), ...},
+                positions={"wheel_center": (0.0, 100.0, 50.0), ...},
                 solver_info=SolverInfo(converged=True, nfev=12, max_residual=0.001)
             )
             writer.add_frame(frame_idx, frame)
@@ -409,10 +439,18 @@ class CsvWriter(BaseResultsWriter):
             # Write metadata to top.
             for key, value in self.metadata.items():
                 csvfile.write(f"# {key}: {value}\n")
+            csvfile.write(
+                f"# {MetadataKey.COLUMN_UNITS.value}: "
+                f"{json.dumps(self.column_units, sort_keys=True)}\n"
+            )
             csvfile.write("#\n")
 
             # Write data using DictWriter.
-            writer = csv.DictWriter(csvfile, fieldnames=all_columns)
+            writer = csv.DictWriter(
+                csvfile,
+                fieldnames=all_columns,
+                lineterminator="\n",
+            )
             writer.writeheader()
 
             for frame in self.frames:

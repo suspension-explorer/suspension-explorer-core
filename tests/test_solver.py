@@ -147,3 +147,27 @@ def test_solve_least_squares_problem_rejects_underdetermined_lm():
             x_0=np.zeros(2),
             n_residuals=1,
         )
+
+
+def test_solve_sweep_rejects_converged_infeasible_target(
+    simple_positions,
+    simple_constraints,
+):
+    initial_state = SuspensionState(
+        positions=simple_positions,
+        free_points={PointID.LOWER_WISHBONE_OUTBOARD},
+    )
+    infeasible_target = PointTarget(
+        point_id=PointID.LOWER_WISHBONE_OUTBOARD,
+        direction=PointTargetAxis(Axis.Z),
+        value=10.0,
+        mode=TargetPositionMode.ABSOLUTE,
+    )
+
+    with pytest.raises(RuntimeError, match="sweep step 0.*Worst residual row"):
+        solve_suspension_sweep(
+            initial_state=initial_state,
+            constraints=simple_constraints,
+            sweep_config=SweepConfig([[infeasible_target]]),
+            derived_manager=make_noop_derived_manager(),
+        )

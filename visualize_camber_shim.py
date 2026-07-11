@@ -12,9 +12,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
+from kinematics import load_geometry
 from kinematics.core.enums import PointID
-from kinematics.io.geometry_loader import load_geometry
-from kinematics.suspensions.config.settings import CamberShimConfig
+from kinematics.core.geometry import extract_array
+from kinematics.schema import CamberShimConfig
 from kinematics.visualization.api import visualize_geometry
 from kinematics.visualization.main import SuspensionVisualizer, WheelVisualization
 from kinematics.visualization.plots import (
@@ -130,7 +131,9 @@ def plot_front_view_comparison(
         # Draw links.
         first = True
         for link in vis.links:
-            pts = np.array([state.positions[pid] for pid in link.points])
+            pts = np.stack(
+                [extract_array(state.positions[pid]) for pid in link.points]
+            )
             if len(link.points) > 1:
                 ax.plot(
                     pts[:, 0],
@@ -157,10 +160,12 @@ def plot_front_view_comparison(
 
         # Draw the wheel (rim circles and cross-tyre bands) in the same colour.
         positions = state.positions
-        wheel_center = positions[PointID.WHEEL_CENTER]
-        wheel_inboard = positions[PointID.WHEEL_INBOARD]
-        wheel_outboard = positions[PointID.WHEEL_OUTBOARD]
-        axle_vec = positions[PointID.AXLE_OUTBOARD] - positions[PointID.AXLE_INBOARD]
+        wheel_center = extract_array(positions[PointID.WHEEL_CENTER])
+        wheel_inboard = extract_array(positions[PointID.WHEEL_INBOARD])
+        wheel_outboard = extract_array(positions[PointID.WHEEL_OUTBOARD])
+        axle_vec = extract_array(
+            positions[PointID.AXLE_OUTBOARD] - positions[PointID.AXLE_INBOARD]
+        )
         axle_vec = axle_vec / np.linalg.norm(axle_vec)
 
         # Build a local frame perpendicular to the axle.
@@ -201,7 +206,7 @@ def plot_front_view_comparison(
 
         # Contact patch marker.
         if PointID.CONTACT_PATCH_CENTER in positions:
-            cp = positions[PointID.CONTACT_PATCH_CENTER]
+            cp = extract_array(positions[PointID.CONTACT_PATCH_CENTER])
             ax.scatter(cp[0], cp[1], cp[2], color=color, s=100, marker="o")
 
     _draw_suspension(design_suspension, design_state, "#1f77b4", "Design [Shim = 30mm]")

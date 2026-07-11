@@ -1,0 +1,31 @@
+type: double_wishbone_pushrod_rocker
+side: left
+name: corner rocker coilover
+version: 0.0.1
+units: MILLIMETERS
+spring:
+  type: coilover
+hardpoints:
+  lower_wishbone_inboard_front: {x: 250, y: 400, z: 200}
+  lower_wishbone_inboard_rear: {x: -250, y: 450, z: 200}
+  lower_wishbone_outboard: {x: 0, y: 900, z: 200}
+  upper_wishbone_inboard_front: {x: 225, y: 350, z: 500}
+  upper_wishbone_inboard_rear: {x: -275, y: 350, z: 500}
+  upper_wishbone_outboard: {x: -25, y: 750, z: 500}
+  trackrod_inboard: {x: 50, y: 200, z: 250}
+  trackrod_outboard: {x: 150, y: 800, z: 275}
+  axle_inboard: {x: -20, y: 800, z: 308.426}
+  axle_outboard: {x: -20, y: 950, z: 313.426}
+  pushrod_outboard: {x: 0, y: 870, z: 240}
+  pushrod_inboard: {x: 0, y: 340, z: 500}
+  rocker_axis_front: {x: 100, y: 340, z: 450}
+  rocker_axis_rear: {x: -100, y: 340, z: 450}
+  strut_bottom: {x: 0, y: 300, z: 470}
+  strut_top: {x: 0, y: 150, z: 500}
+config:
+  steered: true
+  wheel:
+    offset: 0
+    tire: {aspect_ratio: 0.55, section_width: 270, rim_diameter: 13}
+  cg_position: {x: 1250, y: 0, z: 450}
+  wheelbase: 2500.0

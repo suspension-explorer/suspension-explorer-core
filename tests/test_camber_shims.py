@@ -289,6 +289,7 @@ def _make_shimmed_suspension(
         name=base_suspension.name,
         version=base_suspension.version,
         units=base_suspension.units,
+        side=base_suspension.side,
         hardpoints=base_suspension.hardpoints.copy(),
         config=new_config,
     )

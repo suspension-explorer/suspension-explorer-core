@@ -6,7 +6,7 @@
 
 `open-kinematics` is a Python-based geometric constraint solver for simulating the kinematic behaviour of vehicle suspension systems. It allows users to analyse suspension geometries by running parametric sweeps, then offering exports of solved system positions alongside visualisations of suspension state.
 
-The tool is built around a numerical solver that determines the unique positions of all suspension components for a given set of boundary conditions (e.g., a specific wheel height or steering rack position).
+The tool is built around a numerical solver that determines the positions of all suspension components for a given set of boundary conditions, such as wheel height or trackrod inboard position.
 
 <p align="center">
   <img src="/images/plot.png" alt="Design Condition Visualisation" width="80%">
@@ -17,32 +17,38 @@ The tool is built around a numerical solver that determines the unique positions
 ## Features
 
 - Geometric Constraint Solver: Uses a numerical approach (Levenberg-Marquardt) with analytical Jacobians to solve for the kinematic state of the system based on geometric constraints.
-- Parametric Sweeps: Simulate suspension motion by sweeping through a range of inputs, such as vertical wheel travel and steering rack displacement.
-- Template-Based Suspension Models: Define suspension geometries using templates (currently double wishbone only) with simple YAML configuration files.
+- Parametric Sweeps: Simulate suspension motion by sweeping through a range of inputs, such as vertical wheel travel and trackrod inboard displacement.
+- Explicit Suspension Models: Define double-wishbone corners and coupled axles with validated YAML. Supported topologies include direct and inboard coilovers, pushrod-rocker actuation, torsion bars, and a shared anti-roll bar.
+- Full-Axle Simulation: Solve left and right corners together with a fixed separation between their trackrod inboard points. Geometry can provide one explicitly sided corner to mirror or both sides independently.
 - Camber Shim Simulation: Model outboard camber shim configurations to simulate shimmed ball joint offsets.
 - Derived Points System: A dependency-aware system for calculating the position of non-kinematic points (like wheel centers) based on the solved positions of core hard points.
-- Suspension Metrics: Computes camber, caster, toe, kingpin inclination (KPI), scrub radius, mechanical trail, and side-view/front-view instant centres from the solved geometry.
-- Data Export: Save simulation results in wide-format CSV or Apache Parquet files for further analysis.
+- Suspension Metrics: Compute roadwheel angle, camber, caster, kingpin inclination, scrub radius, mechanical trail, instant-centre geometry, wheel travel, half-track, damper length, and anti-pitch geometry. Axle models add track, roll centre, heave, roll, ride-height change, trackrod inboard displacement, and anti-roll-bar metrics.
+- Exact Derivatives: Evaluate declarative `d(response) / d(driver)` metrics, including wheel-centre X with respect to wheel-centre Z, camber, roadwheel angle, damper, rocker, torsion-bar, and anti-roll-bar ratios, using analytical constraint Jacobians and forward-mode automatic differentiation.
+- Sweep Diagnostics: Report convergence, residual acceptance, branch continuity, derivative availability, mechanism chirality, and transmission-margin issues without discarding otherwise available results.
+- Structured Analysis API: Use `analyze_sweep()` and `initial_pose()` to obtain name-keyed positions, structural corner locations, metric metadata, display topology, diagnostics, and solved frames.
+- Data Export: Save wide-format CSV or Apache Parquet results with lowercase `snake_case` columns. Units are metadata rather than part of metric names.
 - Visualization: Generate static plots of the design condition and create MP4/GIF animations of sweep motions.
 
 ## How it works
 
 The core of the tool is a numerical solver that treats the suspension as a collection of rigid bodies connected by ideal spherical joints. The geometric relationships, such as the fixed length of a wishbone or a track rod, are defined as a system of nonlinear equations.
 
-For each step in a simulation sweep, the solver's objective is to find the 3D coordinates for all free-moving points that will drive the residuals of these constraint equations to zero. Though really a root-finding problem, it is approached as nonlinear least squares problem using SciPy's `least_squares` implementation of the Levenberg-Marquardt algorithm.
+For each step in a simulation sweep, the solver's objective is to find the 3D coordinates for all free-moving points that will drive the residuals of these constraint equations to zero. Though really a root-finding problem, it is approached as a nonlinear least squares problem using SciPy's `least_squares` implementation of the Levenberg-Marquardt algorithm.
 
-This numerical approach is highly flexible, allowing the system to be "driven" by various targets (e.g., wheel center height, rack position), hard or derived, without needing to derive new analytical equations for each case.
+This numerical approach is highly flexible, allowing the system to be "driven" by various targets (e.g., wheel center height or trackrod inboard position), hard or derived, without needing to derive new analytical equations for each case.
 
 ## Installation
 
 Use of a virtual environment is recommended. [uv](https://github.com/astral-sh/uv) is used in the examples below.
+
+The package is not published to PyPI; install it from this repository.
 
 ### Basic Installation
 
 For core kinematics functionality without visualisation dependencies:
 
 ```bash
-uv pip install kinematics
+uv pip install "kinematics @ git+https://github.com/nickmccleery/open-kinematics.git"
 ```
 
 ### Full Installation (with Visualization)
@@ -50,7 +56,7 @@ uv pip install kinematics
 To generate plots and animations, you need to install the `[viz]` extra, which includes `matplotlib`.
 
 ```bash
-uv pip install "kinematics[viz]"
+uv pip install "kinematics[viz] @ git+https://github.com/nickmccleery/open-kinematics.git"
 ```
 
 ## Usage
@@ -78,7 +84,7 @@ A typical sweep file defines the targets, range, and number of steps:
 version: 1
 steps: 41
 targets:
-  - point: TRACKROD_INBOARD # Drive steering rack position.
+  - point: TRACKROD_INBOARD # Drive trackrod inboard position.
     direction:
       axis: Y
     mode: relative
@@ -106,7 +112,7 @@ This command will generate both a Parquet data file and an MP4 animation of the 
 uv run kinematics sweep --geometry tests/data/geometry.yaml --sweep tests/data/sweep.yaml --out results.parquet --animation-out animation.mp4
 ```
 
-This will produce a video like the one below, showing the suspension articulating through a range of bump, droop, and rack travel.
+This will produce a video like the one below, showing the suspension articulating through a range of bump, droop, and steering travel.
 
 <p align="center">
   <img src="/images/animation.gif" alt="Kinematic Sweep Animation" width="80%">

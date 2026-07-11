@@ -1,5 +1,6 @@
 # Template-based double wishbone geometry.
 type: double_wishbone
+side: LEFT
 name: "Template Format Test"
 version: "1.0.0"
 units: MILLIMETERS

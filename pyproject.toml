@@ -28,17 +28,21 @@ cli = ["typer>=0.12"]
 dev = [
     "codespell>=2.3.0",
     "pytest>=8.3.4",
+    "pytest-benchmark>=5.2.3",
     "pytest-cov>=7.0.0",
     "ruff>=0.13.3",
     "sympy>=1.13",
     "ty>=0.0.1a21",
 ]
 
-# Pytest settings to exclude manual tests by default.
+# Pytest settings to exclude manual tests and benchmarks by default.
 # --------------------------------------------------------------------------------------
 [tool.pytest.ini_options]
-addopts = "-m 'not manual'"
-markers = ["manual: marks tests as manual (deselected by default)"]
+addopts = "-m 'not manual and not benchmark'"
+markers = [
+    "manual: marks tests as manual (deselected by default)",
+    "benchmark: marks performance benchmarks (deselected by default)",
+]
 
 # Ruff linter and formatter settings.
 # --------------------------------------------------------------------------------------

@@ -8,13 +8,13 @@ from dataclasses import dataclass
 from typing import Callable, Set, TypeAlias, TypeVar, cast
 
 from kinematics.core.dual import DualVec3
-from kinematics.core.enums import PointID
 from kinematics.core.geometry import Point3
+from kinematics.core.point_ref import PointKey
 
 PositionValue: TypeAlias = Point3 | DualVec3
 
 # Function signature for computing a derived point position.
-PositionFn = Callable[[dict[PointID, PositionValue]], PositionValue]
+PositionFn = Callable[[dict[PointKey, PositionValue]], PositionValue]
 
 _V = TypeVar("_V", bound=PositionValue)
 
@@ -28,10 +28,10 @@ class DerivedPointsSpec:
     describing format that can be validated and sorted.
     """
 
-    functions: dict[PointID, PositionFn]
-    dependencies: dict[PointID, Set[PointID]]
+    functions: dict[PointKey, PositionFn]
+    dependencies: dict[PointKey, Set[PointKey]]
 
-    def all_points(self) -> Set[PointID]:
+    def all_points(self) -> Set[PointKey]:
         """
         Get all derived point IDs defined in this spec.
 
@@ -89,7 +89,7 @@ class DerivedPointsManager:
         self.update_order = self.get_topological_sort()
 
     def detect_cycles_util(
-        self, node: PointID, visited: set, recursion_stack: set
+        self, node: PointKey, visited: set, recursion_stack: set
     ) -> bool:
         """
         Depth-first search utility for cycle detection in dependency graph.
@@ -122,7 +122,7 @@ class DerivedPointsManager:
         recursion_stack.remove(node)
         return False
 
-    def get_topological_sort(self) -> list[PointID]:
+    def get_topological_sort(self) -> list[PointKey]:
         """
         Performs a topological sort of the derived points to determine the correct
         calculation order.
@@ -144,7 +144,7 @@ class DerivedPointsManager:
         visited.clear()
         order = []
 
-        def dfs(node: PointID):
+        def dfs(node: PointKey):
             if node in visited:
                 return
             visited.add(node)
@@ -162,7 +162,7 @@ class DerivedPointsManager:
 
         return order
 
-    def update_in_place(self, positions: dict[PointID, _V]) -> None:
+    def update_in_place(self, positions: dict[PointKey, _V]) -> None:
         """
         Compute derived points and add them to positions dict in-place.
 
@@ -172,5 +172,5 @@ class DerivedPointsManager:
         """
         for point_id in self.update_order:
             update_func = self.spec.functions[point_id]
-            update_positions = cast(dict[PointID, PositionValue], positions)
+            update_positions = cast(dict[PointKey, PositionValue], positions)
             positions[point_id] = cast(_V, update_func(update_positions))

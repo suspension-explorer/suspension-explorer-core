@@ -45,6 +45,13 @@ class PointID(IntEnum):
     CAMBER_SHIM_FACE_POINT_B = 22
     CAMBER_SHIM_FACE_NORMAL = 23
 
+    ROCKER_AXIS_FRONT = 24
+    ROCKER_AXIS_REAR = 25
+    DROPLINK_ROCKER = 26
+    ARB_AXIS_A = 27
+    ARB_AXIS_B = 28
+    DROPLINK_ARB = 29
+
 
 class Axis(IntEnum):
     """

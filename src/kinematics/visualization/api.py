@@ -66,7 +66,11 @@ def visualize_suspension_sweep(
     visualization_links = suspension.get_visualization_links()
 
     # Create visualizer.
-    visualizer = SuspensionVisualizer(visualization_links, wheel_config)
+    visualizer = SuspensionVisualizer(
+        visualization_links,
+        wheel_config,
+        suspension.wheel_visualization_anchors(),
+    )
 
     # Get initial positions for animation baseline.
     initial_state = suspension.initial_state()
