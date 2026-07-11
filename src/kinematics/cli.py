@@ -2,7 +2,7 @@ from pathlib import Path
 
 import typer
 
-from kinematics.io.geometry_loader import load_geometry
+from kinematics.io import load_geometry
 from kinematics.io.results_writer import SolutionFrame, create_writer_for_path
 from kinematics.io.sweep_loader import parse_sweep_file
 from kinematics.main import solve_sweep

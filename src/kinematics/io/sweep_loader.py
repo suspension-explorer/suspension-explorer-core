@@ -17,7 +17,7 @@ from kinematics.core.types import (
     SweepConfig,
     WorldAxisSystem,
 )
-from kinematics.io.validation import CIAxis, CIPointID, CITargetPositionMode
+from kinematics.schema.coercion import CIAxis, CIPointID, CITargetPositionMode
 
 # Shared axis <-> unit vector mapping.
 AXIS_VECTORS: dict[Axis, np.ndarray] = {

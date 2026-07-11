@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING
 
 from kinematics.metrics.catalog import get_default_corner_metrics
 from kinematics.metrics.context import MetricContext
+from kinematics.schema.config import SuspensionConfig
 from kinematics.state import SuspensionState
-from kinematics.suspensions.config.settings import SuspensionConfig
 
 if TYPE_CHECKING:
     from kinematics.suspensions.base import Suspension
