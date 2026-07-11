@@ -10,8 +10,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
+from kinematics.metrics.derivatives import DerivativeMetricDefinition
+
 if TYPE_CHECKING:
     from kinematics.metrics.context import MetricContext
+    from kinematics.suspensions.base import Suspension
 
 
 @dataclass(frozen=True)
@@ -127,3 +130,110 @@ def get_default_corner_metrics() -> tuple[MetricDefinition, ...]:
     Return the default ordered corner metric catalog.
     """
     return _build_default_corner_metrics()
+
+
+def get_default_corner_derivative_metrics(
+    suspension: "Suspension",
+) -> tuple[DerivativeMetricDefinition, ...]:
+    """Declare derivative metrics common to every supported corner."""
+    from kinematics.core.dual import DualScalar
+    from kinematics.core.enums import Axis, PointID
+    from kinematics.metrics import kernels
+    from kinematics.metrics.derivatives import (
+        CallableScalarResponse,
+        DerivativeMetricDefinition,
+        DualPositions,
+        PointCoordinateResponse,
+    )
+
+    side_sign = (
+        -1.0
+        if float(
+            suspension.initial_state().positions[PointID.AXLE_OUTBOARD][Axis.Y]
+        )
+        < 0.0
+        else 1.0
+    )
+    bump_driver = PointCoordinateResponse.from_world_axis(
+        PointID.WHEEL_CENTER,
+        Axis.Z,
+    )
+    rack_driver = PointCoordinateResponse.from_world_axis(
+        PointID.TRACKROD_INBOARD,
+        Axis.Y,
+    )
+
+    def response(
+        function: Callable[[DualPositions], object],
+    ) -> CallableScalarResponse:
+        def evaluate(positions: DualPositions) -> DualScalar:
+            result = function(positions)
+            assert isinstance(result, DualScalar)
+            return result
+
+        return CallableScalarResponse(evaluate)
+
+    return (
+        DerivativeMetricDefinition(
+            column_name="camber_gain_deg_per_mm",
+            unit="deg/mm",
+            response=response(
+                lambda positions: kernels.camber_deg(positions, side_sign)
+            ),
+            driver=bump_driver,
+        ),
+        DerivativeMetricDefinition(
+            column_name="bump_steer_deg_per_mm",
+            unit="deg/mm",
+            response=response(
+                lambda positions: kernels.toe_deg(positions, side_sign)
+            ),
+            driver=bump_driver,
+        ),
+        DerivativeMetricDefinition(
+            column_name="caster_gain_deg_per_mm",
+            unit="deg/mm",
+            response=response(kernels.caster_deg),
+            driver=bump_driver,
+        ),
+        DerivativeMetricDefinition(
+            column_name="kpi_gain_deg_per_mm",
+            unit="deg/mm",
+            response=response(lambda positions: kernels.kpi_deg(positions, side_sign)),
+            driver=bump_driver,
+        ),
+        DerivativeMetricDefinition(
+            column_name="half_track_rate_mm_per_mm",
+            unit="mm/mm",
+            response=PointCoordinateResponse.from_axis(
+                PointID.CONTACT_PATCH_CENTER,
+                (0.0, side_sign, 0.0),
+            ),
+            driver=bump_driver,
+        ),
+        DerivativeMetricDefinition(
+            column_name="wheel_recession_rate_mm_per_mm",
+            unit="mm/mm",
+            response=PointCoordinateResponse.from_axis(
+                PointID.CONTACT_PATCH_CENTER,
+                (-1.0, 0.0, 0.0),
+            ),
+            driver=bump_driver,
+        ),
+        DerivativeMetricDefinition(
+            column_name="toe_vs_rack_deg_per_mm",
+            unit="deg/mm",
+            response=response(
+                lambda positions: kernels.toe_deg(positions, side_sign)
+            ),
+            driver=rack_driver,
+        ),
+        DerivativeMetricDefinition(
+            column_name="camber_vs_rack_deg_per_mm",
+            unit="deg/mm",
+            response=response(
+                lambda positions: kernels.camber_deg(positions, side_sign)
+            ),
+            driver=rack_driver,
+        ),
+    )

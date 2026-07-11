@@ -10,7 +10,10 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Sequence
 
-from kinematics.metrics.catalog import get_default_corner_metrics
+from kinematics.metrics.catalog import (
+    get_default_corner_derivative_metrics,
+    get_default_corner_metrics,
+)
 from kinematics.metrics.context import MetricContext
 from kinematics.schema.config import SuspensionConfig
 from kinematics.state import SuspensionState
@@ -55,9 +58,13 @@ def compute_metrics_for_state(
     for metric in catalog:
         row[metric.column_name] = metric.compute(ctx)
     if tangents:
-        from kinematics.metrics.rates import compute_corner_rate_metrics
+        from kinematics.metrics.derivatives import evaluate_derivative_metrics
 
-        row.update(compute_corner_rate_metrics(state, suspension, tangents))
+        definitions = (
+            *get_default_corner_derivative_metrics(suspension),
+            *suspension.derivative_metric_definitions(),
+        )
+        row.update(evaluate_derivative_metrics(definitions, state, tangents))
     return row
 
 

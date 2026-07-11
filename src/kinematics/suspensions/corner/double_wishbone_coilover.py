@@ -5,6 +5,7 @@ from typing import ClassVar, Sequence
 
 from kinematics.constraints import Constraint
 from kinematics.core.enums import PointID
+from kinematics.metrics.derivatives import DerivativeMetricDefinition
 from kinematics.suspensions.corner.attachments import rigid_point_constraints
 from kinematics.suspensions.corner.double_wishbone import DoubleWishboneSuspension
 
@@ -49,6 +50,32 @@ class DoubleWishboneCoiloverSuspension(DoubleWishboneSuspension):
             )
         )
         return constraints
+
+    def derivative_metric_definitions(
+        self,
+    ) -> tuple[DerivativeMetricDefinition, ...]:
+        """Declare damper travel relative to hub vertical travel."""
+        from kinematics.core.enums import Axis
+        from kinematics.metrics.derivatives import (
+            PointCoordinateResponse,
+            PointDistanceResponse,
+        )
+
+        return (
+            DerivativeMetricDefinition(
+                column_name="damper_mr",
+                unit="mm/mm",
+                response=PointDistanceResponse(
+                    PointID.STRUT_TOP,
+                    PointID.STRUT_BOTTOM,
+                ),
+                driver=PointCoordinateResponse.from_world_axis(
+                    PointID.WHEEL_CENTER,
+                    Axis.Z,
+                ),
+                scale=-1.0,
+            ),
+        )
 
     def get_visualization_links(self):
         """Base corner links plus the coilover."""

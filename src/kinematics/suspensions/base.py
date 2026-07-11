@@ -20,6 +20,7 @@ from kinematics.schema.config import SuspensionConfig
 from kinematics.state import SuspensionState
 
 if TYPE_CHECKING:
+    from kinematics.metrics.derivatives import DerivativeMetricDefinition
     from kinematics.metrics.main import MetricRow
     from kinematics.sensitivity import TangentField
     from kinematics.visualization.main import LinkVisualization
@@ -180,3 +181,9 @@ class Suspension(ABC):
         if self.config is None:
             raise ValueError("Suspension has no configuration")
         return compute_metrics_for_state(state, self, self.config, tangents)
+
+    def derivative_metric_definitions(
+        self,
+    ) -> "tuple[DerivativeMetricDefinition, ...]":
+        """Topology-specific declarative derivative metrics."""
+        return ()

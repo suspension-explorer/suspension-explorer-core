@@ -101,8 +101,8 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     assert result.tangent_solve_infos is not None
     for state, row in zip(states, result.rows):
         assert "camber_gain_deg_per_mm" in row
-        assert "damper_motion_ratio" in row
-        assert row["damper_motion_ratio"] is not None
+        assert "damper_mr" in row
+        assert row["damper_mr"] is not None
         non_derivative = compute_metrics_for_state(
             state,
             suspension,
@@ -167,9 +167,9 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     )
 
     damper_difference = right_damper - left_damper
-    expected_motion_ratio = -damper_difference / travel_delta
-    assert result.rows[midpoint]["damper_motion_ratio"] == pytest.approx(
-        expected_motion_ratio,
+    expected_damper_mr = -damper_difference / travel_delta
+    assert result.rows[midpoint]["damper_mr"] == pytest.approx(
+        expected_damper_mr,
         rel=2e-3,
     )
 
