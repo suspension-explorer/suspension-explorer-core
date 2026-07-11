@@ -10,6 +10,9 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Sequence
 
+from kinematics.core.constants import EPS_GEOMETRIC
+from kinematics.core.enums import Axis, PointID
+from kinematics.core.point_ref import PointRef, Side
 from kinematics.metrics.catalog import (
     get_default_corner_derivative_metrics,
     get_default_corner_metrics,
@@ -20,10 +23,80 @@ from kinematics.state import SuspensionState
 
 if TYPE_CHECKING:
     from kinematics.sensitivity import TangentField
+    from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
     from kinematics.suspensions.base import Suspension
 
 
 MetricRow = OrderedDict[str, float | None]
+
+
+def compute_metrics_for_axle_state(
+    state: SuspensionState,
+    axle: DoubleWishboneAxleSuspension,
+    config: SuspensionConfig,
+) -> MetricRow:
+    """Compute suffixed per-corner rows followed by axle-level metrics."""
+    row: MetricRow = OrderedDict()
+    for side in (Side.LEFT, Side.RIGHT):
+        corner_state = axle.corner_state(state, side)
+        side_row = compute_metrics_for_state(
+            corner_state,
+            axle.corners[side],
+            config,
+        )
+        suffix = f"_{side.name.lower()}"
+        for column, value in side_row.items():
+            row[f"{column}{suffix}"] = value
+
+    roll_center_y, roll_center_z = _axle_roll_center(state, axle)
+    row["roll_center_y_mm"] = roll_center_y
+    row["roll_center_z_mm"] = roll_center_z
+
+    design_trackrod_y = float(
+        axle.corners[Side.LEFT].initial_state().get(PointID.TRACKROD_INBOARD)[Axis.Y]
+    )
+    current_trackrod_y = float(
+        state.get(PointRef(Side.LEFT, PointID.TRACKROD_INBOARD))[Axis.Y]
+    )
+    row["trackrod_inboard_displacement_mm"] = current_trackrod_y - design_trackrod_y
+
+    from kinematics.metrics.axle_metrics import append_axle_state_metrics
+
+    append_axle_state_metrics(row, state, axle)
+    return row
+
+
+def _axle_roll_center(
+    state: SuspensionState,
+    axle: DoubleWishboneAxleSuspension,
+) -> tuple[float | None, float | None]:
+    """Intersect the two contact-patch-to-FVIC lines in the YZ plane."""
+    lines: list[tuple[float, float, float, float]] = []
+    for side in (Side.LEFT, Side.RIGHT):
+        corner_state = axle.corner_state(state, side)
+        fvic = axle.corners[side].compute_front_view_instant_center(corner_state)
+        if fvic is None:
+            return None, None
+        contact = corner_state.get(PointID.CONTACT_PATCH_CENTER)
+        contact_y = float(contact[Axis.Y])
+        contact_z = float(contact[Axis.Z])
+        lines.append(
+            (
+                contact_y,
+                contact_z,
+                float(fvic[Axis.Y]) - contact_y,
+                float(fvic[Axis.Z]) - contact_z,
+            )
+        )
+
+    left, right = lines
+    denominator = left[2] * right[3] - left[3] * right[2]
+    if abs(denominator) < EPS_GEOMETRIC:
+        return None, None
+    parameter = (
+        (right[0] - left[0]) * right[3] - (right[1] - left[1]) * right[2]
+    ) / denominator
+    return left[0] + parameter * left[2], left[1] + parameter * left[3]
 
 
 def compute_metrics_for_state(

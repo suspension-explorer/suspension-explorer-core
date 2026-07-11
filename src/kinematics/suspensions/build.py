@@ -3,13 +3,16 @@
 from typing import cast
 
 from kinematics.core.enums import PointID, ShimType
-from kinematics.core.geometry import Point3
+from kinematics.core.geometry import Direction3, Point3
+from kinematics.core.point_ref import Side
 from kinematics.schema.config import SuspensionConfig
 from kinematics.schema.geometry import (
+    DoubleWishboneAxleGeometrySpec,
     DoubleWishboneCoiloverGeometrySpec,
     DoubleWishboneGeometrySpec,
     GeometrySpecBase,
 )
+from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
 from kinematics.suspensions.base import Suspension
 from kinematics.suspensions.corner import (
     DoubleWishboneCoiloverSuspension,
@@ -44,6 +47,60 @@ def build_double_wishbone_coilover(spec: GeometrySpecBase) -> Suspension:
     return _build_corner(typed, DoubleWishboneCoiloverSuspension)
 
 
+def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
+    """Build a basic two-corner double-wishbone axle."""
+    typed = cast(DoubleWishboneAxleGeometrySpec, spec)
+    _check_shim_support(typed.config, DoubleWishboneSuspension)
+    blocks = typed.hardpoints
+
+    if blocks.is_explicit:
+        assert blocks.left is not None and blocks.right is not None
+        side_points = {
+            Side.LEFT: _copy_points(blocks.left),
+            Side.RIGHT: _copy_points(blocks.right),
+        }
+        for side, points in side_points.items():
+            _validate_side_signs(points, side)
+    else:
+        assert blocks.points is not None
+        source_side = blocks.side
+        source_points = _copy_points(blocks.points)
+        _validate_side_signs(source_points, source_side)
+        other_side = Side.RIGHT if source_side is Side.LEFT else Side.LEFT
+        side_points = {
+            source_side: source_points,
+            other_side: _mirror_hardpoints(source_points),
+        }
+
+    for points in side_points.values():
+        _check_valid_points(points, DoubleWishboneSuspension)
+
+    side_configs = {
+        Side.LEFT: typed.config,
+        Side.RIGHT: _mirror_config(typed.config),
+    }
+    corners = {
+        side: DoubleWishboneSuspension(
+            name=f"{typed.name}_{side.name.lower()}",
+            version=typed.version,
+            units=typed.units,
+            side=side,
+            hardpoints=points,
+            config=side_configs[side],
+        )
+        for side, points in side_points.items()
+    }
+    return DoubleWishboneAxleSuspension(
+        name=typed.name,
+        version=typed.version,
+        units=typed.units,
+        side=None,
+        hardpoints={},
+        config=typed.config,
+        corners=corners,
+    )
+
+
 def _build_corner(
     spec: DoubleWishboneGeometrySpec | DoubleWishboneCoiloverGeometrySpec,
     cls: type[DoubleWishboneSuspension],
@@ -61,6 +118,60 @@ def _build_corner(
         },
         config=spec.config,
     )
+
+
+def _copy_points(points: dict[PointID, Point3]) -> dict[PointID, Point3]:
+    """Copy a point map so built suspensions do not alias schema data."""
+    return {point: position.copy() for point, position in points.items()}
+
+
+def _validate_side_signs(points: dict[PointID, Point3], side: Side) -> None:
+    """Require the axle-outboard Y sign to match the declared side."""
+    axle_outboard = points.get(PointID.AXLE_OUTBOARD)
+    if axle_outboard is None:
+        return
+    lateral_position = float(axle_outboard.data[1])
+    if side is Side.LEFT and lateral_position <= 0.0:
+        raise ValueError(
+            "Side 'left' requires AXLE_OUTBOARD Y > 0 "
+            f"(got {lateral_position}); check the hardpoint handedness."
+        )
+    if side is Side.RIGHT and lateral_position >= 0.0:
+        raise ValueError(
+            "Side 'right' requires AXLE_OUTBOARD Y < 0 "
+            f"(got {lateral_position}); check the hardpoint handedness."
+        )
+
+
+def _mirror_point(point: Point3) -> Point3:
+    """Reflect a point through the vehicle XZ plane."""
+    x, y, z = point.data
+    return Point3([float(x), -float(y), float(z)])
+
+
+def _mirror_hardpoints(
+    hardpoints: dict[PointID, Point3],
+) -> dict[PointID, Point3]:
+    """Reflect every hardpoint through the vehicle XZ plane."""
+    return {point: _mirror_point(position) for point, position in hardpoints.items()}
+
+
+def _mirror_config(config: SuspensionConfig) -> SuspensionConfig:
+    """Mirror side-dependent camber-shim geometry for the right corner."""
+    if config.camber_shim is None:
+        return config
+    shim = config.camber_shim
+    normal = shim.shim_face_normal.data
+    mirrored_shim = shim.model_copy(
+        update={
+            "shim_face_point_a": _mirror_point(shim.shim_face_point_a),
+            "shim_face_point_b": _mirror_point(shim.shim_face_point_b),
+            "shim_face_normal": Direction3(
+                [float(normal[0]), -float(normal[1]), float(normal[2])]
+            ),
+        }
+    )
+    return config.model_copy(update={"camber_shim": mirrored_shim})
 
 
 def _check_valid_points(points: dict[PointID, Point3], cls: type[Suspension]) -> None:

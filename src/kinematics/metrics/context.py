@@ -132,6 +132,8 @@ class MetricContext:
         """
         Explicit vehicle-side sign: 1.0 for left, -1.0 for right.
         """
+        if self.suspension.side is None:
+            raise ValueError("Corner metrics require an explicit side")
         return self.suspension.side.lateral_sign
 
     @cached_property
