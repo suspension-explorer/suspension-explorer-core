@@ -184,12 +184,16 @@ class DoubleWishboneAxleSuspension(Suspension):
         tangents: "Sequence[TangentField] | None" = None,
     ) -> "MetricRow":
         """Compute suffixed corner metrics and basic axle-level metrics."""
-        _ = tangents
         if self.config is None:
             raise ValueError("Suspension has no configuration")
         from kinematics.metrics.main import compute_metrics_for_axle_state
 
-        return compute_metrics_for_axle_state(state, self, self.config)
+        return compute_metrics_for_axle_state(
+            state,
+            self,
+            self.config,
+            tangents,
+        )
 
     def get_visualization_links(self) -> list["LinkVisualization"]:
         """Return side-qualified corner links and the trackrod coupling."""

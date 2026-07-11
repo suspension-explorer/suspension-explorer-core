@@ -7,17 +7,28 @@ from kinematics.schema.geometry import (
     DoubleWishboneAxleGeometrySpec,
     DoubleWishboneCoiloverGeometrySpec,
     DoubleWishboneGeometrySpec,
+    DoubleWishbonePushrodRockerArbGeometrySpec,
+    DoubleWishbonePushrodRockerAxleGeometrySpec,
+    DoubleWishbonePushrodRockerGeometrySpec,
     GeometrySpecBase,
 )
-from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
+from kinematics.suspensions.axle import (
+    DoubleWishboneAxleSuspension,
+    DoubleWishbonePushrodRockerAxleSuspension,
+)
 from kinematics.suspensions.base import Suspension
 from kinematics.suspensions.build import (
     build_double_wishbone,
     build_double_wishbone_axle,
     build_double_wishbone_coilover,
+    build_double_wishbone_pushrod_rocker,
+    build_double_wishbone_pushrod_rocker_arb,
+    build_double_wishbone_pushrod_rocker_axle,
 )
 from kinematics.suspensions.corner import (
     DoubleWishboneCoiloverSuspension,
+    DoubleWishbonePushrodRockerArbSuspension,
+    DoubleWishbonePushrodRockerSuspension,
     DoubleWishboneSuspension,
 )
 
@@ -51,10 +62,28 @@ SUSPENSION_DEFINITIONS = (
         DoubleWishboneCoiloverSuspension,
     ),
     SuspensionDefinition(
+        "double_wishbone_pushrod_rocker",
+        DoubleWishbonePushrodRockerGeometrySpec,
+        build_double_wishbone_pushrod_rocker,
+        DoubleWishbonePushrodRockerSuspension,
+    ),
+    SuspensionDefinition(
+        "double_wishbone_pushrod_rocker_arb",
+        DoubleWishbonePushrodRockerArbGeometrySpec,
+        build_double_wishbone_pushrod_rocker_arb,
+        DoubleWishbonePushrodRockerArbSuspension,
+    ),
+    SuspensionDefinition(
         "double_wishbone_axle",
         DoubleWishboneAxleGeometrySpec,
         build_double_wishbone_axle,
         DoubleWishboneAxleSuspension,
+    ),
+    SuspensionDefinition(
+        "double_wishbone_pushrod_rocker_axle",
+        DoubleWishbonePushrodRockerAxleGeometrySpec,
+        build_double_wishbone_pushrod_rocker_axle,
+        DoubleWishbonePushrodRockerAxleSuspension,
     ),
 )
 

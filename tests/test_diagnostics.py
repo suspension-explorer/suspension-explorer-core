@@ -20,7 +20,10 @@ def _state(x: float) -> SuspensionState:
 
 
 def _suspension():
-    return SimpleNamespace(free_points=lambda: (PointID.WHEEL_CENTER,))
+    return SimpleNamespace(
+        free_points=lambda: (PointID.WHEEL_CENTER,),
+        topology_diagnostics=lambda _states: [],
+    )
 
 
 def test_sweep_diagnostics_groups_issues_by_severity() -> None:

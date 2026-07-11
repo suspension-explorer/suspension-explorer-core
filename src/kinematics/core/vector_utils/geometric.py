@@ -28,6 +28,30 @@ def compute_point_point_distance(p1: Point3, p2: Point3) -> float:
     return (p2 - p1).norm()
 
 
+def signed_angle_about_axis(
+    design: Point3,
+    current: Point3,
+    axis_point: Point3,
+    axis_direction: Direction3,
+) -> float:
+    """Return the signed rotation from design to current about a fixed axis."""
+    direction = axis_direction.data
+    design_radius = design - axis_point
+    current_radius = current - axis_point
+    design_perpendicular = design_radius - direction * design_radius.dot(axis_direction)
+    current_perpendicular = current_radius - direction * current_radius.dot(
+        axis_direction
+    )
+    sine = axis_direction.dot(design_radius.cross(current_radius))
+    cosine = design_perpendicular.dot(current_perpendicular)
+    if (
+        design_perpendicular.norm() < EPS_GEOMETRIC
+        or current_perpendicular.norm() < EPS_GEOMETRIC
+    ):
+        raise ValueError("Rotation is undefined for a point on the rotation axis")
+    return float(np.arctan2(sine, cosine))
+
+
 def compute_point_point_midpoint(p1: Point3, p2: Point3) -> Point3:
     """
     Compute the midpoint between two points.
@@ -257,9 +281,10 @@ def intersect_two_planes(
 
     # Find a specific point on the intersection line. This formula derives from
     # solving the system of linear equations for the two planes.
-    point_data = np.cross(
-        d2 * n1.data - d1 * n2.data, direction.data
-    ) / direction_magnitude_squared
+    point_data = (
+        np.cross(d2 * n1.data - d1 * n2.data, direction.data)
+        / direction_magnitude_squared
+    )
     line_direction = direction.normalize()
 
     return Point3(point_data), line_direction

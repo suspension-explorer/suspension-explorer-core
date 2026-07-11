@@ -21,6 +21,7 @@ from kinematics.constraints import (
     FixedAxisConstraint,
     PointOnLineConstraint,
     PointOnPlaneConstraint,
+    ScalarTripleProductConstraint,
     SphericalJointConstraint,
     ThreePointAngleConstraint,
     VectorsParallelConstraint,
@@ -429,6 +430,32 @@ class ResidualComputer:
                 return normal
 
             compute_fn = compute_point_on_plane
+
+        elif isinstance(constraint, ScalarTripleProductConstraint):
+            point_ids = (
+                constraint.p1,
+                constraint.p2,
+                constraint.p3,
+                constraint.p4,
+            )
+            p1 = constraint.p1
+            p2 = constraint.p2
+            p3 = constraint.p3
+            p4 = constraint.p4
+            scale = constraint.scale
+
+            def compute_scalar_triple(pos: dict[PointKey, Point3]) -> np.ndarray:
+                return (
+                    jac_coplanar(
+                        pos[p1].data,
+                        pos[p2].data,
+                        pos[p3].data,
+                        pos[p4].data,
+                    )
+                    / scale
+                )
+
+            compute_fn = compute_scalar_triple
 
         elif isinstance(constraint, CoplanarPointsConstraint):
             point_ids = (

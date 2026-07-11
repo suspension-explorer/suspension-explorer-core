@@ -668,3 +668,27 @@ class CoplanarPointsConstraint(Constraint):
         v2 = positions[self.p3] - pos1
         v3 = positions[self.p4] - pos1
         return compute_scalar_triple_product(v1, v2, v3)
+
+
+class ScalarTripleProductConstraint(CoplanarPointsConstraint):
+    """Hold four points at an authored signed volume to preserve handedness."""
+
+    def __init__(
+        self,
+        p1: PointKey,
+        p2: PointKey,
+        p3: PointKey,
+        p4: PointKey,
+        target_volume: float,
+        scale: float = 1.0,
+    ):
+        """Initialize a normalized signed-volume constraint."""
+        if scale <= 0.0:
+            raise ValueError(f"scale must be strictly positive, got {scale}")
+        super().__init__(p1, p2, p3, p4)
+        self.target_volume = target_volume
+        self.scale = scale
+
+    def residual(self, positions: dict[PointKey, Point3]) -> float:
+        """Return signed-volume error normalized by the authored magnitude."""
+        return (super().residual(positions) - self.target_volume) / self.scale

@@ -92,6 +92,7 @@ def diagnose_sweep(
     """
     issues = _check_convergence_and_residual(stats)
     issues.extend(_check_continuity(suspension, states))
+    issues.extend(suspension.topology_diagnostics(states))
     return SweepDiagnostics(issues=issues)
 
 

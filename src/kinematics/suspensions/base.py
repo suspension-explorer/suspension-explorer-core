@@ -21,6 +21,7 @@ from kinematics.schema.config import SuspensionConfig
 from kinematics.state import SuspensionState
 
 if TYPE_CHECKING:
+    from kinematics.diagnostics import DiagnosticIssue
     from kinematics.metrics.derivatives import DerivativeMetricDefinition
     from kinematics.metrics.main import MetricRow
     from kinematics.sensitivity import TangentField
@@ -189,6 +190,19 @@ class Suspension(ABC):
     ) -> "tuple[DerivativeMetricDefinition, ...]":
         """Topology-specific declarative derivative metrics."""
         return ()
+
+    def topology_metric_values(self, state: SuspensionState) -> "MetricRow":
+        """Return non-derivative metrics owned by this topology."""
+        from collections import OrderedDict
+
+        return OrderedDict()
+
+    def topology_diagnostics(
+        self,
+        states: "list[SuspensionState]",
+    ) -> "list[DiagnosticIssue]":
+        """Return advisory checks owned by this concrete topology."""
+        return []
 
     def output_points(self) -> tuple[PointKey, ...]:
         """Return the points exported for a solved state."""

@@ -8,6 +8,9 @@ EPS_NUMERICAL = 1e-15
 # Appropriate for mm-scale coordinates.
 EPS_GEOMETRIC = 1e-6
 
+# Minimum reliable signed volume for an authored handedness constraint.
+MIN_CHIRALITY_VOLUME = 1e-6
+
 # Solve tolerances.
 SOLVE_TOLERANCE_VALUE = 1e-5  # 0.01um for mm units.
 SOLVE_TOLERANCE_STEP = 1e-9

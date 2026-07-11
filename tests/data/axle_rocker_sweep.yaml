@@ -1,0 +1,21 @@
+version: 1
+steps: 7
+targets:
+  - point: WHEEL_CENTER
+    side: left
+    direction: {axis: Z}
+    mode: relative
+    start: -20
+    stop: 20
+  - point: WHEEL_CENTER
+    side: right
+    direction: {axis: Z}
+    mode: relative
+    start: 20
+    stop: -20
+  - point: TRACKROD_INBOARD
+    side: left
+    direction: {axis: Y}
+    mode: relative
+    start: 0
+    stop: 0

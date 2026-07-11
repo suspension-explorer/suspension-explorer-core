@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Sequence
 
-from kinematics.core.point_ref import Side
+from kinematics.core.point_ref import PointRef, Side
 from kinematics.metrics.catalog import (
     get_default_corner_derivative_metrics,
     get_default_corner_metrics,
@@ -32,6 +32,7 @@ def compute_metrics_for_axle_state(
     state: SuspensionState,
     axle: DoubleWishboneAxleSuspension,
     config: SuspensionConfig,
+    tangents: "Sequence[TangentField] | None" = None,
 ) -> MetricRow:
     """Compute suffixed per-corner rows followed by axle-level metrics."""
     row: MetricRow = OrderedDict()
@@ -41,6 +42,7 @@ def compute_metrics_for_axle_state(
             corner_state,
             axle.corners[side],
             config,
+            _corner_tangents(tangents, side) if tangents else None,
         )
         suffix = f"_{side.name.lower()}"
         for column, value in side_row.items():
@@ -49,7 +51,44 @@ def compute_metrics_for_axle_state(
     from kinematics.metrics.axle_metrics import append_axle_state_metrics
 
     append_axle_state_metrics(row, state, axle)
+    row.update(axle.topology_metric_values(state))
+    if tangents:
+        from kinematics.metrics.derivatives import evaluate_derivative_metrics
+
+        row.update(
+            evaluate_derivative_metrics(
+                axle.derivative_metric_definitions(),
+                state,
+                tangents,
+            )
+        )
     return row
+
+
+def _corner_tangents(
+    tangents: "Sequence[TangentField]",
+    side: Side,
+) -> list["TangentField"]:
+    """Strip one side's PointRef qualifiers from axle tangent fields."""
+    from kinematics.sensitivity import TangentField
+
+    result: list[TangentField] = []
+    for tangent in tangents:
+        target_key = tangent.target.point_id
+        if not isinstance(target_key, PointRef) or target_key.side is not side:
+            continue
+        result.append(
+            TangentField(
+                target_index=tangent.target_index,
+                target=tangent.target._replace(point_id=target_key.point),
+                velocities={
+                    key.point: velocity
+                    for key, velocity in tangent.velocities.items()
+                    if isinstance(key, PointRef) and key.side is side
+                },
+            )
+        )
+    return result
 
 
 def compute_metrics_for_state(
@@ -83,6 +122,7 @@ def compute_metrics_for_state(
     row: MetricRow = OrderedDict()
     for metric in catalog:
         row[metric.column_name] = metric.compute(ctx)
+    row.update(suspension.topology_metric_values(state))
     if tangents:
         from kinematics.metrics.derivatives import evaluate_derivative_metrics
 

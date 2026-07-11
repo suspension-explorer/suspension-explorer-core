@@ -92,11 +92,17 @@ def test_corner_registry_has_one_complete_definition_per_type() -> None:
         "double_wishbone_rear",
         "double_wishbone_coilover",
         "double_wishbone_axle",
+        "double_wishbone_pushrod_rocker",
+        "double_wishbone_pushrod_rocker_arb",
+        "double_wishbone_pushrod_rocker_axle",
     }
     canonical_types = {
         "double_wishbone",
         "double_wishbone_coilover",
         "double_wishbone_axle",
+        "double_wishbone_pushrod_rocker",
+        "double_wishbone_pushrod_rocker_arb",
+        "double_wishbone_pushrod_rocker_axle",
     }
 
     assert set(list_supported_types()) == expected_types

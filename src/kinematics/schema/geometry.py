@@ -57,6 +57,31 @@ class DoubleWishboneCoiloverGeometrySpec(CornerGeometrySpecBase):
     hardpoints: HardpointMap
 
 
+class RockerSpringSpec(BaseModel):
+    """Explicit spring medium for a pushrod-rocker corner."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    type: Literal["torsion_bar", "coilover"]
+
+
+class DoubleWishbonePushrodRockerGeometrySpec(CornerGeometrySpecBase):
+    """A double-wishbone corner with pushrod and rocker actuation."""
+
+    type: Literal["double_wishbone_pushrod_rocker"] = "double_wishbone_pushrod_rocker"
+    spring: RockerSpringSpec
+    hardpoints: HardpointMap
+
+
+class DoubleWishbonePushrodRockerArbGeometrySpec(CornerGeometrySpecBase):
+    """A pushrod-rocker corner with an explicit rocker-side ARB pickup."""
+
+    type: Literal["double_wishbone_pushrod_rocker_arb"] = (
+        "double_wishbone_pushrod_rocker_arb"
+    )
+    spring: RockerSpringSpec
+    hardpoints: HardpointMap
+
+
 class AxleHardpointsSpec(BaseModel):
     """Either one mirrored corner map or explicit left and right maps."""
 
@@ -67,7 +92,7 @@ class AxleHardpointsSpec(BaseModel):
     )
 
     points: HardpointMap | None = None
-    side: CISide = Side.LEFT
+    side: CISide | None = None
     left: HardpointMap | None = None
     right: HardpointMap | None = None
 
@@ -86,12 +111,16 @@ class AxleHardpointsSpec(BaseModel):
                     "Explicit-mode axle hardpoints require both 'left' and "
                     "'right' blocks."
                 )
+            if self.side is not None:
+                raise ValueError("Explicit axle hardpoints do not accept 'side'.")
         else:
             if self.points is None:
                 raise ValueError(
                     "Axle hardpoints require a mirror-mode 'points' block "
                     "or explicit 'left'/'right' blocks."
                 )
+            if self.side is None:
+                raise ValueError("Mirror-mode axle hardpoints require 'side'.")
             if self.side == Side.CENTER:
                 raise ValueError("Mirror source side must be 'left' or 'right'.")
         return self
@@ -109,10 +138,29 @@ class DoubleWishboneAxleGeometrySpec(GeometrySpecBase):
     hardpoints: AxleHardpointsSpec
 
 
+class RockerAxleHardpointsSpec(AxleHardpointsSpec):
+    """Mirrored or explicit rocker corners plus axle-owned ARB axis points."""
+
+    center: HardpointMap
+
+
+class DoubleWishbonePushrodRockerAxleGeometrySpec(GeometrySpecBase):
+    """A rocker axle with a shared anti-roll bar."""
+
+    type: Literal["double_wishbone_pushrod_rocker_axle"] = (
+        "double_wishbone_pushrod_rocker_axle"
+    )
+    spring: RockerSpringSpec
+    hardpoints: RockerAxleHardpointsSpec
+
+
 GeometrySpec = (
     DoubleWishboneGeometrySpec
     | DoubleWishboneCoiloverGeometrySpec
     | DoubleWishboneAxleGeometrySpec
+    | DoubleWishbonePushrodRockerGeometrySpec
+    | DoubleWishbonePushrodRockerArbGeometrySpec
+    | DoubleWishbonePushrodRockerAxleGeometrySpec
 )
 
 
@@ -140,10 +188,15 @@ __all__ = [
     "DoubleWishboneCoiloverGeometrySpec",
     "DoubleWishboneAxleGeometrySpec",
     "DoubleWishboneGeometrySpec",
+    "DoubleWishbonePushrodRockerGeometrySpec",
+    "DoubleWishbonePushrodRockerArbGeometrySpec",
+    "DoubleWishbonePushrodRockerAxleGeometrySpec",
     "AxleHardpointsSpec",
     "CornerGeometrySpecBase",
     "GeometrySpec",
     "GeometrySpecBase",
     "HardpointMap",
+    "RockerSpringSpec",
+    "RockerAxleHardpointsSpec",
     "parse_geometry_spec",
 ]

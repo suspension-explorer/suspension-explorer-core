@@ -37,6 +37,7 @@ from kinematics.core.dual import (
     atan2,
     cross,
     degrees,
+    dot,
     norm,
 )
 from kinematics.core.enums import Axis, PointID
@@ -61,6 +62,27 @@ def _vec(positions: Mapping[PointKey, PositionLike], point_id: PointKey):
     if isinstance(value, DualVec3):
         return value
     return extract_array(value)
+
+
+def rotation_about_fixed_axis_deg(
+    positions: Mapping[PointKey, PositionLike],
+    point: PointKey,
+    design_position: np.ndarray,
+    axis_point: np.ndarray,
+    axis_direction: np.ndarray,
+) -> Scalar:
+    """Return dual-safe signed rotation of a point about a fixed axis."""
+    design_radius = np.asarray(design_position) - axis_point
+    current_radius = _vec(positions, point) - axis_point
+    design_perpendicular = (
+        design_radius - np.dot(design_radius, axis_direction) * axis_direction
+    )
+    current_perpendicular = (
+        current_radius - dot(current_radius, axis_direction) * axis_direction
+    )
+    sine = dot(axis_direction, cross(design_radius, current_radius))
+    cosine = dot(design_perpendicular, current_perpendicular)
+    return degrees(atan2(sine, cosine))
 
 
 def _norm(vector) -> Scalar:

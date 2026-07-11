@@ -39,9 +39,12 @@ def test_mirror_flag_is_not_part_of_axle_schema() -> None:
 
 def test_mirror_source_must_be_a_physical_side() -> None:
     with pytest.raises(ValueError, match="Mirror source side"):
-        AxleHardpointsSpec.model_validate(
-            {"points": {}, "side": "center"}
-        )
+        AxleHardpointsSpec.model_validate({"points": {}, "side": "center"})
+
+
+def test_mirror_source_side_is_required() -> None:
+    with pytest.raises(ValueError, match="require 'side'"):
+        AxleHardpointsSpec.model_validate({"points": {}})
 
 
 def test_side_target_requires_suspension_context() -> None:
