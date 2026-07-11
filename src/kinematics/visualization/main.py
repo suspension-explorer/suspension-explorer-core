@@ -4,19 +4,42 @@ import numpy as np
 
 from kinematics.core.enums import PointID
 from kinematics.core.geometry import Point3
+from kinematics.core.point_ref import PointKey
 
 
 @dataclass
 class LinkVisualization:
     """Configuration for visualizing a suspension link."""
 
-    points: list[PointID]
+    points: list[PointKey]
     color: str
     label: str
     linewidth: float = 3.0
     linestyle: str = "-"
     marker: str = "o"
     markersize: float = 10.0
+
+
+@dataclass(frozen=True)
+class WheelAnchors:
+    """Point keys used to draw one wheel."""
+
+    center: PointKey
+    inboard: PointKey
+    outboard: PointKey
+    axle_inboard: PointKey
+    axle_outboard: PointKey
+
+    @classmethod
+    def for_corner(cls) -> "WheelAnchors":
+        """Return the conventional single-corner wheel anchors."""
+        return cls(
+            center=PointID.WHEEL_CENTER,
+            inboard=PointID.WHEEL_INBOARD,
+            outboard=PointID.WHEEL_OUTBOARD,
+            axle_inboard=PointID.AXLE_INBOARD,
+            axle_outboard=PointID.AXLE_OUTBOARD,
+        )
 
 
 @dataclass
@@ -37,7 +60,7 @@ class SuspensionVisualizer:
     def draw_links(
         self,
         ax,
-        positions: dict[PointID, Point3],
+        positions: dict[PointKey, Point3],
     ) -> list:
         """
         Draws all links and returns a list of matplotlib line artists.
@@ -62,7 +85,7 @@ class SuspensionVisualizer:
     def update_links(
         self,
         artists: list,
-        positions: dict[PointID, Point3],
+        positions: dict[PointKey, Point3],
     ) -> None:
         """
         Update all link artists with new geometry for animation.
@@ -102,16 +125,33 @@ class SuspensionVisualizer:
         return band_inboard, band_outboard
 
     def __init__(
-        self, links: list[LinkVisualization], wheel_config: WheelVisualization
+        self,
+        links: list[LinkVisualization],
+        wheel_config: WheelVisualization,
+        wheel_anchors: list[WheelAnchors] | None = None,
     ):
         self.links = links
         self.wheel_config = wheel_config
+        self.wheel_anchors = wheel_anchors or [WheelAnchors.for_corner()]
 
     def draw_wheel(
         self,
         ax,
-        positions: dict[PointID, Point3],
+        positions: dict[PointKey, Point3],
         num_bands: int = 48,
+    ) -> list[dict]:
+        """Draw every configured wheel and return their artists."""
+        return [
+            self._draw_single_wheel(ax, positions, anchors, num_bands)
+            for anchors in self.wheel_anchors
+        ]
+
+    def _draw_single_wheel(
+        self,
+        ax,
+        positions: dict[PointKey, Point3],
+        anchors: WheelAnchors,
+        num_bands: int,
     ) -> dict:
         """
         Draws a 3D wheel representation and returns the matplotlib artists.
@@ -119,12 +159,11 @@ class SuspensionVisualizer:
         Returns dict with 'rims' (list of 3 lines) and 'bands' (list of lines).
         """
         # Extract raw arrays for matplotlib drawing math.
-        wheel_center = positions[PointID.WHEEL_CENTER].data
-        wheel_inboard = positions[PointID.WHEEL_INBOARD].data
-        wheel_outboard = positions[PointID.WHEEL_OUTBOARD].data
+        wheel_center = positions[anchors.center].data
+        wheel_inboard = positions[anchors.inboard].data
+        wheel_outboard = positions[anchors.outboard].data
         axle_vector = (
-            positions[PointID.AXLE_OUTBOARD].data
-            - positions[PointID.AXLE_INBOARD].data
+            positions[anchors.axle_outboard].data - positions[anchors.axle_inboard].data
         )
 
         axle_vector = axle_vector / np.linalg.norm(axle_vector)
@@ -207,20 +246,30 @@ class SuspensionVisualizer:
 
     def update_wheel(
         self,
-        artists: dict,
-        positions: dict[PointID, Point3],
+        artists: list[dict],
+        positions: dict[PointKey, Point3],
         num_bands: int = 36,
+    ) -> None:
+        """Update every configured wheel's artists."""
+        for wheel_artists, anchors in zip(artists, self.wheel_anchors):
+            self._update_single_wheel(wheel_artists, positions, anchors, num_bands)
+
+    def _update_single_wheel(
+        self,
+        artists: dict,
+        positions: dict[PointKey, Point3],
+        anchors: WheelAnchors,
+        num_bands: int,
     ) -> None:
         """
         Update the wheel artists with new geometry for animation.
         """
         # Extract raw arrays for matplotlib drawing math.
-        wheel_center = positions[PointID.WHEEL_CENTER].data
-        wheel_inboard = positions[PointID.WHEEL_INBOARD].data
-        wheel_outboard = positions[PointID.WHEEL_OUTBOARD].data
+        wheel_center = positions[anchors.center].data
+        wheel_inboard = positions[anchors.inboard].data
+        wheel_outboard = positions[anchors.outboard].data
         axle_vector = (
-            positions[PointID.AXLE_OUTBOARD].data
-            - positions[PointID.AXLE_INBOARD].data
+            positions[anchors.axle_outboard].data - positions[anchors.axle_inboard].data
         )
 
         axle_vector = axle_vector / np.linalg.norm(axle_vector)

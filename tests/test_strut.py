@@ -91,8 +91,13 @@ def test_corner_registry_has_one_complete_definition_per_type() -> None:
         "double_wishbone_front",
         "double_wishbone_rear",
         "double_wishbone_coilover",
+        "double_wishbone_axle",
     }
-    canonical_types = {"double_wishbone", "double_wishbone_coilover"}
+    canonical_types = {
+        "double_wishbone",
+        "double_wishbone_coilover",
+        "double_wishbone_axle",
+    }
 
     assert set(list_supported_types()) == expected_types
     assert {definition.type_key for definition in SUSPENSION_DEFINITIONS} == (

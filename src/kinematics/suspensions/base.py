@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, ClassVar, Sequence
 from kinematics.constraints import Constraint
 from kinematics.core.enums import PointID, ShimType, Units
 from kinematics.core.geometry import Point3
-from kinematics.core.point_ref import Side
+from kinematics.core.point_ref import PointKey, Side
 from kinematics.points.derived.manager import DerivedPointsSpec
 from kinematics.schema.config import SuspensionConfig
 from kinematics.state import SuspensionState
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from kinematics.metrics.derivatives import DerivativeMetricDefinition
     from kinematics.metrics.main import MetricRow
     from kinematics.sensitivity import TangentField
-    from kinematics.visualization.main import LinkVisualization
+    from kinematics.visualization.main import LinkVisualization, WheelAnchors
 
 
 @dataclass
@@ -44,13 +44,13 @@ class Suspension(ABC):
     ALIASES: ClassVar[frozenset[str]] = frozenset()
     REQUIRED_POINTS: ClassVar[frozenset[PointID]] = frozenset()
     OPTIONAL_POINTS: ClassVar[frozenset[PointID]] = frozenset()
-    OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = ()
+    OUTPUT_POINTS: ClassVar[tuple[PointKey, ...]] = ()
     SUPPORTED_SHIMS: ClassVar[frozenset[ShimType]] = frozenset()
 
     name: str = "unnamed"
     version: str = "0.0.0"
     units: Units = Units.MILLIMETERS
-    hardpoints: dict[PointID, Point3] = field(default_factory=dict)
+    hardpoints: dict[PointKey, Point3] = field(default_factory=dict)
     config: SuspensionConfig | None = None
     side: Side = field(kw_only=True)
 
@@ -83,7 +83,7 @@ class Suspension(ABC):
         ...
 
     @abstractmethod
-    def free_points(self) -> Sequence[PointID]:
+    def free_points(self) -> Sequence[PointKey]:
         """
         Get the points that can move during solving.
 
@@ -158,7 +158,7 @@ class Suspension(ABC):
             missing_names = sorted(p.name for p in missing)
             raise ValueError(f"Missing required hardpoints: {', '.join(missing_names)}")
 
-    def get_hardpoints_copy(self) -> dict[PointID, Point3]:
+    def get_hardpoints_copy(self) -> dict[PointKey, Point3]:
         """
         Return a mutable copy of the hardpoints dictionary.
 
@@ -189,3 +189,23 @@ class Suspension(ABC):
     ) -> "tuple[DerivativeMetricDefinition, ...]":
         """Topology-specific declarative derivative metrics."""
         return ()
+
+    def output_points(self) -> tuple[PointKey, ...]:
+        """Return the points exported for a solved state."""
+        return self.OUTPUT_POINTS
+
+    def resolve_target_key(self, point: PointID, side: Side | None) -> PointKey:
+        """Resolve a sweep target for a single-corner suspension."""
+        if side is not None:
+            raise ValueError(
+                f"Sweep target for '{point.name}' specifies side "
+                f"'{side.name.lower()}', but suspension type '{self.TYPE_KEY}' "
+                "is a single corner and does not accept a side."
+            )
+        return point
+
+    def wheel_visualization_anchors(self) -> "list[WheelAnchors]":
+        """Return the point keys used to draw this suspension's wheel."""
+        from kinematics.visualization.main import WheelAnchors
+
+        return [WheelAnchors.for_corner()]

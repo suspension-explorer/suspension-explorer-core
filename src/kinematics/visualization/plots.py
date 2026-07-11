@@ -229,7 +229,11 @@ def create_four_view_plot(
     visualization_links = suspension.get_visualization_links()
 
     # Create visualizer.
-    visualizer = SuspensionVisualizer(visualization_links, wheel_config)
+    visualizer = SuspensionVisualizer(
+        visualization_links,
+        wheel_config,
+        suspension.wheel_visualization_anchors(),
+    )
 
     # Create figure with four subplots.
     fig, axes = create_four_view_axes()
@@ -293,7 +297,11 @@ def create_single_view_plot(
     visualization_links = suspension.get_visualization_links()
 
     # Create visualizer.
-    visualizer = SuspensionVisualizer(visualization_links, wheel_config)
+    visualizer = SuspensionVisualizer(
+        visualization_links,
+        wheel_config,
+        suspension.wheel_visualization_anchors(),
+    )
 
     # Create single plot.
     fig = plt.figure(figsize=(12, 8))

@@ -28,7 +28,7 @@ def sweep(
         kinematics sweep --geometry=geo.yaml --sweep=sweep.yaml --out=out.csv
     """
     suspension = load_geometry(geometry)
-    sweep_config = parse_sweep_file(sweep)
+    sweep_config = parse_sweep_file(sweep, suspension)
 
     solution_states, solver_stats = solve_sweep(suspension, sweep_config)
     diagnostics = diagnose_sweep(suspension, solution_states, solver_stats)
@@ -48,7 +48,7 @@ def sweep(
     writer = create_writer_for_path(
         out, geometry_path=str(geometry), sweep_path=str(sweep)
     )
-    output_points = suspension.OUTPUT_POINTS
+    output_points = suspension.output_points()
     for idx, (st, solver_info) in enumerate(zip(solution_states, solver_stats)):
         # Filter to the suspension type's declared output points, in order.
         positions = {

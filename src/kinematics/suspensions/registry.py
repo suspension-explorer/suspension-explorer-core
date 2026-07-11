@@ -4,13 +4,16 @@ from dataclasses import dataclass
 from typing import Callable
 
 from kinematics.schema.geometry import (
+    DoubleWishboneAxleGeometrySpec,
     DoubleWishboneCoiloverGeometrySpec,
     DoubleWishboneGeometrySpec,
     GeometrySpecBase,
 )
+from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
 from kinematics.suspensions.base import Suspension
 from kinematics.suspensions.build import (
     build_double_wishbone,
+    build_double_wishbone_axle,
     build_double_wishbone_coilover,
 )
 from kinematics.suspensions.corner import (
@@ -46,6 +49,12 @@ SUSPENSION_DEFINITIONS = (
         DoubleWishboneCoiloverGeometrySpec,
         build_double_wishbone_coilover,
         DoubleWishboneCoiloverSuspension,
+    ),
+    SuspensionDefinition(
+        "double_wishbone_axle",
+        DoubleWishboneAxleGeometrySpec,
+        build_double_wishbone_axle,
+        DoubleWishboneAxleSuspension,
     ),
 )
 

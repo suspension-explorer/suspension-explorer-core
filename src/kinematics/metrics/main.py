@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Sequence
 
+from kinematics.core.point_ref import Side
 from kinematics.metrics.catalog import (
     get_default_corner_derivative_metrics,
     get_default_corner_metrics,
@@ -20,10 +21,35 @@ from kinematics.state import SuspensionState
 
 if TYPE_CHECKING:
     from kinematics.sensitivity import TangentField
+    from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
     from kinematics.suspensions.base import Suspension
 
 
 MetricRow = OrderedDict[str, float | None]
+
+
+def compute_metrics_for_axle_state(
+    state: SuspensionState,
+    axle: DoubleWishboneAxleSuspension,
+    config: SuspensionConfig,
+) -> MetricRow:
+    """Compute suffixed per-corner rows followed by axle-level metrics."""
+    row: MetricRow = OrderedDict()
+    for side in (Side.LEFT, Side.RIGHT):
+        corner_state = axle.corner_state(state, side)
+        side_row = compute_metrics_for_state(
+            corner_state,
+            axle.corners[side],
+            config,
+        )
+        suffix = f"_{side.name.lower()}"
+        for column, value in side_row.items():
+            row[f"{column}{suffix}"] = value
+
+    from kinematics.metrics.axle_metrics import append_axle_state_metrics
+
+    append_axle_state_metrics(row, state, axle)
+    return row
 
 
 def compute_metrics_for_state(
