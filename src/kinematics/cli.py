@@ -2,6 +2,7 @@ from pathlib import Path
 
 import typer
 
+from kinematics.diagnostics import diagnose_sweep
 from kinematics.io import load_geometry
 from kinematics.io.results_writer import SolutionFrame, create_writer_for_path
 from kinematics.io.sweep_loader import parse_sweep_file
@@ -30,6 +31,11 @@ def sweep(
     sweep_config = parse_sweep_file(sweep)
 
     solution_states, solver_stats = solve_sweep(suspension, sweep_config)
+    diagnostics = diagnose_sweep(suspension, solution_states, solver_stats)
+    if diagnostics.issues:
+        typer.echo("Diagnostics:", err=True)
+        for issue in diagnostics.issues:
+            typer.echo(f"{issue.severity.upper()}: {issue.message}", err=True)
     metric_result = compute_sweep_metrics(suspension, sweep_config, solution_states)
     if metric_result.derivative_error is not None:
         typer.echo(
