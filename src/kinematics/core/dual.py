@@ -13,8 +13,8 @@ from typing import Mapping, overload
 
 import numpy as np
 
-from kinematics.core.enums import PointID
 from kinematics.core.geometry import extract_array
+from kinematics.core.point_ref import PointKey
 
 # Numpy function dispatch table: maps numpy functions to dual-aware
 # implementations.  Populated at module level and used by
@@ -418,10 +418,10 @@ def norm(v: DualVec3) -> DualScalar:
 
 
 def seed_positions(
-    positions: Mapping[PointID, object],
-    seed_point: PointID,
+    positions: Mapping[PointKey, object],
+    seed_point: PointKey,
     seed_dim: int,
-) -> dict[PointID, DualVec3]:
+) -> dict[PointKey, DualVec3]:
     """
     Create dual-number positions seeded for differentiation.
 
@@ -432,14 +432,14 @@ def seed_positions(
     Handles both raw ndarray and Point3 positions transparently.
 
     Args:
-        positions: Current point positions (PointID -> ndarray or Point3).
+        positions: Current point positions (PointKey -> ndarray or Point3).
         seed_point: The point whose coordinate we differentiate w.r.t.
         seed_dim: Which coordinate (0=x, 1=y, 2=z) to seed.
 
     Returns:
         Dictionary of DualVec3 positions ready for derived-point computation.
     """
-    dual_positions: dict[PointID, DualVec3] = {}
+    dual_positions: dict[PointKey, DualVec3] = {}
     for pid, pos in positions.items():
         raw = extract_array(pos)
         if pid == seed_point:

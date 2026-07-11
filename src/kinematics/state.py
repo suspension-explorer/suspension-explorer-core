@@ -9,8 +9,8 @@ from typing import List, Set
 
 import numpy as np
 
-from kinematics.core.enums import PointID
 from kinematics.core.geometry import Point3
+from kinematics.core.point_ref import PointKey
 
 
 @dataclass
@@ -21,15 +21,20 @@ class SuspensionState:
     This class manages point positions and solver metadata, providing methods
     for state manipulation, solver integration, and coordinate transformations.
 
+    The point-key type is generic (:data:`~kinematics.core.point_ref.PointKey`):
+    single-corner models key on ``PointID``, axle models key on ``PointRef``. The
+    keys of a single state must be homogeneous so that ``free_points`` can be
+    sorted for a stable variable ordering.
+
     Attributes:
-        positions: Dictionary mapping point IDs to 3D positions.
-        free_points: Set of point IDs that are free to move during solving.
-        free_points_order: Sorted list of free point IDs for consistent ordering.
+        positions: Dictionary mapping point keys to 3D positions.
+        free_points: Set of point keys that are free to move during solving.
+        free_points_order: Sorted list of free point keys for consistent ordering.
     """
 
-    positions: dict[PointID, Point3]
-    free_points: Set[PointID]
-    free_points_order: List[PointID] = field(init=False)
+    positions: dict[PointKey, Point3]
+    free_points: Set[PointKey]
+    free_points_order: List[PointKey] = field(init=False)
 
     def __post_init__(self) -> None:
         """
@@ -38,7 +43,7 @@ class SuspensionState:
         self.free_points_order = sorted(list(self.free_points))
 
     @property
-    def fixed_points(self) -> Set[PointID]:
+    def fixed_points(self) -> Set[PointKey]:
         """
         Points that are fixed (not free to move).
         """
@@ -90,7 +95,7 @@ class SuspensionState:
             # explicit opt-in to this aliasing.
             self.positions[point_id] = Point3.from_trusted(positions_2d[i])
 
-    def update_positions(self, new_positions: dict[PointID, Point3]) -> None:
+    def update_positions(self, new_positions: dict[PointKey, Point3]) -> None:
         """
         Replace positions dictionary in-place.
 
@@ -113,31 +118,31 @@ class SuspensionState:
             free_points=self.free_points.copy(),
         )
 
-    def get(self, point_id: PointID) -> Point3:
+    def get(self, point_id: PointKey) -> Point3:
         """
         Get position of a specific point.
         """
         return self.positions[point_id]
 
-    def set(self, point_id: PointID, position: Point3) -> None:
+    def set(self, point_id: PointKey, position: Point3) -> None:
         """
         Set position of a specific point.
         """
         self.positions[point_id] = position.copy()
 
-    def __getitem__(self, point_id: PointID) -> Point3:
+    def __getitem__(self, point_id: PointKey) -> Point3:
         """
         Allow dict-like access.
         """
         return self.positions[point_id]
 
-    def __setitem__(self, point_id: PointID, position: Point3) -> None:
+    def __setitem__(self, point_id: PointKey, position: Point3) -> None:
         """
         Allow dict-like assignment.
         """
         self.positions[point_id] = position.copy()
 
-    def __contains__(self, point_id: PointID) -> bool:
+    def __contains__(self, point_id: PointKey) -> bool:
         """
         Check if point exists.
         """
