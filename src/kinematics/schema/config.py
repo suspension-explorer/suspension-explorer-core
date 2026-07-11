@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from kinematics.core.constants import MM_PER_INCH
@@ -88,6 +90,17 @@ class SuspensionConfig(BaseModel):
             "trackrod_outboard",
         ]
     )
+    axle_position: Literal["front", "rear"] | None = None
+    front_brake_bias: float | None = None
+    driven_axle: Literal["front", "rear"] | None = None
+
+    @field_validator("front_brake_bias")
+    @classmethod
+    def check_front_brake_bias(cls, value: float | None) -> float | None:
+        """Require front brake bias to be a fraction of total braking force."""
+        if value is not None and not 0.0 <= value <= 1.0:
+            raise ValueError(f"front_brake_bias must be in [0, 1], got {value}")
+        return value
 
 
 __all__ = [

@@ -35,6 +35,21 @@ class MetricContext:
     config: SuspensionConfig
 
     @cached_property
+    def design_state(self) -> SuspensionState:
+        """Return the as-authored state used as the travel reference."""
+        return self.suspension.initial_state()
+
+    @cached_property
+    def design_wheel_center(self) -> Point3:
+        """Wheel-center position at the design condition."""
+        return self.design_state.get(PointID.WHEEL_CENTER)
+
+    @cached_property
+    def design_contact_patch_center(self) -> Point3:
+        """Contact-patch position at the design condition."""
+        return self.design_state.get(PointID.CONTACT_PATCH_CENTER)
+
+    @cached_property
     def side_view_ic(self) -> Point3 | None:
         """
         Side-view instant center from the suspension.

@@ -45,6 +45,12 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
         calculate_kpi,
         calculate_roadwheel_angle,
     )
+    from kinematics.metrics.anti_geometry import (
+        calculate_anti_dive_pct,
+        calculate_anti_lift_pct,
+        calculate_anti_squat_pct,
+        calculate_svsa_angle,
+    )
     from kinematics.metrics.steering_geometry import (
         calculate_mechanical_trail,
         calculate_scrub_radius,
@@ -52,6 +58,12 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
     from kinematics.metrics.swing_arms import (
         calculate_fvsa_length,
         calculate_svsa_length,
+    )
+    from kinematics.metrics.travel import (
+        calculate_damper_length,
+        calculate_half_track_change,
+        calculate_wheel_recession,
+        calculate_wheel_travel,
     )
 
     def _ic_coord(attr: str, axis: Axis) -> Callable[["MetricContext"], float | None]:
@@ -88,6 +100,25 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
             "fvic_z_mm", _ic_coord("front_view_ic", Axis.Z), "FVIC Z", "mm"
         ),
         MetricDefinition("fvsa_length_mm", calculate_fvsa_length, "FVSA Length", "mm"),
+        MetricDefinition(
+            "wheel_travel_mm", calculate_wheel_travel, "Wheel Travel", "mm"
+        ),
+        MetricDefinition(
+            "half_track_change_mm",
+            calculate_half_track_change,
+            "Half-Track Change",
+            "mm",
+        ),
+        MetricDefinition(
+            "wheel_recession_mm", calculate_wheel_recession, "Wheel Recession", "mm"
+        ),
+        MetricDefinition(
+            "damper_length_mm", calculate_damper_length, "Damper Length", "mm"
+        ),
+        MetricDefinition("svsa_angle_deg", calculate_svsa_angle, "SVSA Angle", "deg"),
+        MetricDefinition("anti_dive_pct", calculate_anti_dive_pct, "Anti-Dive", "%"),
+        MetricDefinition("anti_lift_pct", calculate_anti_lift_pct, "Anti-Lift", "%"),
+        MetricDefinition("anti_squat_pct", calculate_anti_squat_pct, "Anti-Squat", "%"),
     )
 
 

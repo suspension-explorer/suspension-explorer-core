@@ -20,6 +20,8 @@ from kinematics.schema.config import SuspensionConfig
 from kinematics.state import SuspensionState
 
 if TYPE_CHECKING:
+    from kinematics.metrics.main import MetricRow
+    from kinematics.sensitivity import TangentField
     from kinematics.visualization.main import LinkVisualization
 
 
@@ -166,3 +168,15 @@ class Suspension(ABC):
     def has_strut(self) -> bool:
         """Whether this explicit topology includes a spring/damper element."""
         return False
+
+    def compute_state_metrics(
+        self,
+        state: SuspensionState,
+        tangents: "Sequence[TangentField] | None" = None,
+    ) -> "MetricRow":
+        """Compute one metric row, including derivatives when tangents exist."""
+        from kinematics.metrics.main import compute_metrics_for_state
+
+        if self.config is None:
+            raise ValueError("Suspension has no configuration")
+        return compute_metrics_for_state(state, self, self.config, tangents)

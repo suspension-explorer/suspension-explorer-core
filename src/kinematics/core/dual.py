@@ -9,6 +9,7 @@ np.dot and np.linalg.norm works unmodified with dual-number inputs.
 
 from __future__ import annotations
 
+import math
 from typing import Mapping, overload
 
 import numpy as np
@@ -353,6 +354,30 @@ def _dual_dot(a, b, out=None):
     return DualScalar(float(val), float(deriv))
 
 
+def _dual_cross(a, b, axisa=-1, axisb=-1, axisc=-1, axis=None):
+    """
+    Dual-aware cross product.
+
+    d(cross(a, b)) = cross(a', b) + cross(a, b')
+    """
+    if isinstance(a, DualVec3):
+        a_val, a_deriv = a.val, a.deriv
+    else:
+        a_val = extract_array(a)
+        a_deriv = np.zeros(3, dtype=np.float64)
+
+    if isinstance(b, DualVec3):
+        b_val, b_deriv = b.val, b.deriv
+    else:
+        b_val = extract_array(b)
+        b_deriv = np.zeros(3, dtype=np.float64)
+
+    # Cross is bilinear, so its derivative follows the product rule.
+    val = np.cross(a_val, b_val)
+    deriv = np.cross(a_deriv, b_val) + np.cross(a_val, b_deriv)
+    return DualVec3(val, deriv)
+
+
 def _dual_norm(x, ord=None, axis=None, keepdims=False):
     """
     Dual-aware vector norm (L2 only).
@@ -370,6 +395,7 @@ def _dual_norm(x, ord=None, axis=None, keepdims=False):
 
 
 _DUAL_IMPLEMENTATIONS[np.dot] = _dual_dot
+_DUAL_IMPLEMENTATIONS[np.cross] = _dual_cross
 _DUAL_IMPLEMENTATIONS[np.linalg.norm] = _dual_norm
 
 
@@ -402,6 +428,25 @@ def dot(a: DualVec3 | np.ndarray, b: DualVec3 | np.ndarray) -> DualScalar | np.f
     return np.dot(a, b)
 
 
+@overload
+def cross(a: np.ndarray, b: np.ndarray) -> np.ndarray: ...
+
+
+@overload
+def cross(a: DualVec3 | np.ndarray, b: DualVec3) -> DualVec3: ...
+
+
+@overload
+def cross(a: DualVec3, b: DualVec3 | np.ndarray) -> DualVec3: ...
+
+
+def cross(a: DualVec3 | np.ndarray, b: DualVec3 | np.ndarray) -> DualVec3 | np.ndarray:
+    """Typed cross product supporting dual-vector operands."""
+    if isinstance(a, DualVec3) or isinstance(b, DualVec3):
+        return _dual_cross(a, b)
+    return np.cross(extract_array(a), extract_array(b))
+
+
 def norm(v: DualVec3) -> DualScalar:
     """
     Typed vector norm for DualVec3.
@@ -411,6 +456,72 @@ def norm(v: DualVec3) -> DualScalar:
         return DualScalar(0.0, 0.0)
     deriv = float(np.dot(v.val, v.deriv)) / n
     return DualScalar(n, deriv)
+
+
+# Dual-aware scalar math functions.
+
+
+@overload
+def sqrt(x: DualScalar) -> DualScalar: ...
+
+
+@overload
+def sqrt(x: float) -> float: ...
+
+
+def sqrt(x: DualScalar | float) -> DualScalar | float:
+    """Dual-aware square root."""
+    if isinstance(x, DualScalar):
+        root = math.sqrt(x.val)
+        # d(sqrt(x)) = x' / (2 * sqrt(x)).
+        return DualScalar(root, x.deriv / (2.0 * root))
+    return math.sqrt(x)
+
+
+@overload
+def atan2(y: DualScalar, x: DualScalar | float) -> DualScalar: ...
+
+
+@overload
+def atan2(y: DualScalar | float, x: DualScalar) -> DualScalar: ...
+
+
+@overload
+def atan2(y: float, x: float) -> float: ...
+
+
+def atan2(y: DualScalar | float, x: DualScalar | float) -> DualScalar | float:
+    """Dual-aware two-argument arctangent."""
+    if isinstance(y, DualScalar) or isinstance(x, DualScalar):
+        y_val = y.val if isinstance(y, DualScalar) else float(y)
+        y_deriv = y.deriv if isinstance(y, DualScalar) else 0.0
+        x_val = x.val if isinstance(x, DualScalar) else float(x)
+        x_deriv = x.deriv if isinstance(x, DualScalar) else 0.0
+        value = math.atan2(y_val, x_val)
+        # d(atan2(y, x)) = (x * y' - y * x') / (x^2 + y^2).
+        denominator = x_val**2 + y_val**2
+        derivative = (x_val * y_deriv - y_val * x_deriv) / denominator
+        return DualScalar(value, derivative)
+    return math.atan2(y, x)
+
+
+@overload
+def degrees(x: DualScalar) -> DualScalar: ...
+
+
+@overload
+def degrees(x: float) -> float: ...
+
+
+def degrees(x: DualScalar | float) -> DualScalar | float:
+    """Dual-aware radians-to-degrees conversion."""
+    if isinstance(x, DualScalar):
+        radians_to_degrees = 180.0 / math.pi
+        return DualScalar(
+            x.val * radians_to_degrees,
+            x.deriv * radians_to_degrees,
+        )
+    return math.degrees(x)
 
 
 # Seeding utility
@@ -448,4 +559,26 @@ def seed_positions(
             dual_positions[pid] = DualVec3(raw.copy(), d)
         else:
             dual_positions[pid] = DualVec3(raw.copy())
+    return dual_positions
+
+
+def seed_positions_with_tangent(
+    positions: Mapping[PointKey, object],
+    tangent: Mapping[PointKey, np.ndarray],
+) -> dict[PointKey, DualVec3]:
+    """
+    Seed every position along an arbitrary tangent field.
+
+    Missing tangent keys are held constant. This evaluates a
+    Jacobian-vector product in one forward dual-number pass.
+    """
+    dual_positions: dict[PointKey, DualVec3] = {}
+    for point_id, position in positions.items():
+        raw = extract_array(position)
+        tangent_vector = tangent.get(point_id)
+        if tangent_vector is None:
+            derivative = np.zeros(3, dtype=np.float64)
+        else:
+            derivative = np.asarray(tangent_vector, dtype=np.float64).copy()
+        dual_positions[point_id] = DualVec3(raw.copy(), derivative)
     return dual_positions

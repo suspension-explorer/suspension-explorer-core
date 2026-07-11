@@ -3,7 +3,16 @@
 import numpy as np
 import pytest
 
-from kinematics.core.dual import DualScalar, DualVec3, seed_positions
+from kinematics.core.dual import (
+    DualScalar,
+    DualVec3,
+    atan2,
+    cross,
+    degrees,
+    seed_positions,
+    seed_positions_with_tangent,
+    sqrt,
+)
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.vector_utils.generic import normalize_vector
 from kinematics.points.derived.definitions import get_wheel_center
@@ -433,3 +442,52 @@ class TestWheelCenterAutodiff:
                     atol=FD_TOL,
                     err_msg=f"Mismatch for {pid.name}[{d}]",
                 )
+
+
+def test_dual_cross_product_rule() -> None:
+    a = DualVec3(np.array([1.0, 2.0, 3.0]), np.array([1.0, 0.0, 0.0]))
+    b = DualVec3(np.array([4.0, 5.0, 6.0]), np.array([0.0, 1.0, 0.0]))
+
+    result = cross(a, b)
+
+    np.testing.assert_allclose(result.val, [-3.0, 6.0, -3.0])
+    np.testing.assert_allclose(result.deriv, [-3.0, -6.0, 6.0])
+
+
+def test_dual_scalar_math() -> None:
+    root = sqrt(DualScalar(9.0, 1.0))
+    angle = atan2(DualScalar(1.0, 1.0), DualScalar(2.0, 0.0))
+    angle_degrees = degrees(DualScalar(np.pi / 2.0, 1.0))
+
+    assert isinstance(root, DualScalar)
+    assert root.val == pytest.approx(3.0)
+    assert root.deriv == pytest.approx(1.0 / 6.0)
+    assert isinstance(angle, DualScalar)
+    assert angle.val == pytest.approx(np.arctan2(1.0, 2.0))
+    assert angle.deriv == pytest.approx(2.0 / 5.0)
+    assert isinstance(angle_degrees, DualScalar)
+    assert angle_degrees.val == pytest.approx(90.0)
+    assert angle_degrees.deriv == pytest.approx(180.0 / np.pi)
+
+
+def test_seed_positions_with_tangent_copies_derivatives() -> None:
+    source_derivative = np.array([1.0, 2.0, 3.0])
+    positions = {
+        PointID.AXLE_INBOARD: np.array([1.0, 2.0, 3.0]),
+        PointID.AXLE_OUTBOARD: np.array([4.0, 5.0, 6.0]),
+    }
+
+    dual_positions = seed_positions_with_tangent(
+        positions,
+        {PointID.AXLE_INBOARD: source_derivative},
+    )
+    source_derivative[0] = 99.0
+
+    np.testing.assert_allclose(
+        dual_positions[PointID.AXLE_INBOARD].deriv,
+        [1.0, 2.0, 3.0],
+    )
+    np.testing.assert_allclose(
+        dual_positions[PointID.AXLE_OUTBOARD].deriv,
+        [0.0, 0.0, 0.0],
+    )
