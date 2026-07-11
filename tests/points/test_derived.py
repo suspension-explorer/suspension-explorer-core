@@ -91,6 +91,31 @@ def test_dependency_manager_basic(sample_positions):
     )
 
 
+def test_dependency_manager_computes_relevant_point_jacobian(sample_positions):
+    """
+    Test that point Jacobians include only requested variable dependencies.
+    """
+    spec = DerivedPointsSpec(
+        functions={PointID.AXLE_MIDPOINT: get_axle_midpoint},
+        dependencies={
+            PointID.AXLE_MIDPOINT: {
+                PointID.AXLE_INBOARD,
+                PointID.AXLE_OUTBOARD,
+            }
+        },
+    )
+    manager = DerivedPointsManager(spec)
+
+    blocks = manager.compute_point_jacobian(
+        PointID.AXLE_MIDPOINT,
+        sample_positions,
+        variable_points={PointID.AXLE_OUTBOARD},
+    )
+
+    assert set(blocks) == {PointID.AXLE_OUTBOARD}
+    np.testing.assert_allclose(blocks[PointID.AXLE_OUTBOARD], 0.5 * np.eye(3))
+
+
 def test_dependency_manager_complex(sample_positions):
     """
     Test that the DerivedPointsManager can handle dependencies between derived points.
