@@ -33,7 +33,7 @@ from kinematics.core.constants import (
     SOLVE_TOLERANCE_STEP,
     SOLVE_TOLERANCE_VALUE,
 )
-from kinematics.core.dual import seed_positions
+from kinematics.core.dual import DualVec3
 from kinematics.core.geometry import Point3
 from kinematics.core.point_ref import PointKey
 from kinematics.core.types import PointTarget, SweepConfig, TargetPositionMode
@@ -542,17 +542,41 @@ class ResidualComputer:
                 # We use forward-mode autodiff with dual numbers to get exact
                 # derivatives: seed one input coordinate at a time and read
                 # the derivative of the output.
-                for pid in self.state_buffer.free_points_order:
-                    col = self.point_var_offsets[pid]
+                #
+                # Only the target's transitive dependencies matter: partials
+                # w.r.t. any other free point are structurally zero (the row
+                # was zeroed above), and only the target's own chain of
+                # derived functions needs re-evaluating per seed.
+                chain, base_deps = self.derived_manager.get_computation_plan(
+                    target.point_id
+                )
+
+                # Dual inputs for the chain, all with zero derivative. The
+                # values alias the state buffer arrays, which do not change
+                # within this Jacobian evaluation.
+                dual_pos: dict[PointKey, DualVec3] = {
+                    pid: DualVec3(positions[pid].data) for pid in base_deps
+                }
+
+                for pid in base_deps:
+                    col = self.point_var_offsets.get(pid)
+                    if col is None:
+                        # Fixed hardpoint: not a solver variable.
+                        continue
+                    seed_deriv = dual_pos[pid].deriv
                     for d in range(3):
-                        dual_pos = seed_positions(positions, pid, d)
-                        self.derived_manager.update_in_place(dual_pos)
+                        # Seed d(input)/d(input[d]) = basis vector e_d.
+                        seed_deriv[:] = 0.0
+                        seed_deriv[d] = 1.0
+                        self.derived_manager.update_chain_in_place(dual_pos, chain)
                         target_dual = dual_pos[target.point_id]
                         # d(dot(pos, direction)) / d(pid[d]) =
                         #     dot(direction, d(pos)/d(pid[d]))
                         jac[row, col + d] = float(
                             np.dot(direction.data, target_dual.deriv)
                         )
+                    # Clear the seed so the next point starts unseeded.
+                    seed_deriv[:] = 0.0
 
         return jac.copy()
 

@@ -88,6 +88,12 @@ class DerivedPointsManager:
         # This will raise an error if cycles are detected.
         self.update_order = self.get_topological_sort()
 
+        # Cache of single-point computation plans, built lazily by
+        # get_computation_plan().
+        self._computation_plans: dict[
+            PointKey, tuple[tuple[PointKey, ...], tuple[PointKey, ...]]
+        ] = {}
+
     def detect_cycles_util(
         self, node: PointKey, visited: set, recursion_stack: set
     ) -> bool:
@@ -174,3 +180,75 @@ class DerivedPointsManager:
             update_func = self.spec.functions[point_id]
             update_positions = cast(dict[PointKey, PositionValue], positions)
             positions[point_id] = cast(_V, update_func(update_positions))
+
+    def get_computation_plan(
+        self, point_id: PointKey
+    ) -> tuple[tuple[PointKey, ...], tuple[PointKey, ...]]:
+        """
+        Return the minimal plan needed to compute a single derived point.
+
+        The plan is the transitive dependency closure of point_id, split into
+        the derived functions that must be re-evaluated and the base (non-
+        derived) points those functions read. This lets callers recompute one
+        derived point without evaluating the full derived-point set.
+
+        Args:
+            point_id: The derived point to plan for.
+
+        Returns:
+            Tuple of (chain, base_dependencies) where:
+            - chain: Derived points to evaluate, in dependency order, ending
+              with point_id itself.
+            - base_dependencies: Non-derived points the chain reads as inputs
+              (free points and fixed hardpoints).
+
+        Raises:
+            KeyError: If point_id is not a derived point in this spec.
+        """
+        plan = self._computation_plans.get(point_id)
+        if plan is not None:
+            return plan
+
+        if point_id not in self.spec.functions:
+            raise KeyError(f"Point '{point_id}' is not a derived point in this spec.")
+
+        # Walk the dependency graph from point_id, partitioning the closure
+        # into derived nodes (which need evaluation) and base inputs.
+        derived_needed: set[PointKey] = set()
+        base_dependencies: set[PointKey] = set()
+        stack = [point_id]
+        while stack:
+            node = stack.pop()
+            if node in self.spec.functions:
+                if node in derived_needed:
+                    continue
+                derived_needed.add(node)
+                stack.extend(self.dependency_graph[node])
+            else:
+                base_dependencies.add(node)
+
+        # Restrict the global topological order to the needed subset so the
+        # chain evaluates dependencies before their dependents.
+        chain = tuple(p for p in self.update_order if p in derived_needed)
+
+        plan = (chain, tuple(base_dependencies))
+        self._computation_plans[point_id] = plan
+        return plan
+
+    def update_chain_in_place(
+        self, positions: dict[PointKey, _V], chain: tuple[PointKey, ...]
+    ) -> None:
+        """
+        Evaluate a pre-planned subset of derived points in-place.
+
+        Args:
+            positions: Dictionary to mutate in-place. Must contain the base
+                       dependencies reported by get_computation_plan().
+            chain: Derived points in dependency order, as returned by
+                   get_computation_plan().
+        """
+        update_positions = cast(dict[PointKey, PositionValue], positions)
+        for point_id in chain:
+            positions[point_id] = cast(
+                _V, self.spec.functions[point_id](update_positions)
+            )
