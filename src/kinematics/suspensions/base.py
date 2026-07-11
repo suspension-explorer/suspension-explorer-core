@@ -15,11 +15,15 @@ from typing import TYPE_CHECKING, ClassVar, Sequence
 from kinematics.constraints import Constraint
 from kinematics.core.enums import PointID, ShimType, Units
 from kinematics.core.geometry import Point3
+from kinematics.core.point_ref import Side
 from kinematics.points.derived.manager import DerivedPointsSpec
 from kinematics.schema.config import SuspensionConfig
 from kinematics.state import SuspensionState
 
 if TYPE_CHECKING:
+    from kinematics.metrics.derivatives import DerivativeMetricDefinition
+    from kinematics.metrics.main import MetricRow
+    from kinematics.sensitivity import TangentField
     from kinematics.visualization.main import LinkVisualization
 
 
@@ -48,6 +52,7 @@ class Suspension(ABC):
     units: Units = Units.MILLIMETERS
     hardpoints: dict[PointID, Point3] = field(default_factory=dict)
     config: SuspensionConfig | None = None
+    side: Side = field(kw_only=True)
 
     # Internal state cache.
     _initial_state: SuspensionState | None = field(default=None, repr=False)
@@ -166,3 +171,21 @@ class Suspension(ABC):
     def has_strut(self) -> bool:
         """Whether this explicit topology includes a spring/damper element."""
         return False
+
+    def compute_state_metrics(
+        self,
+        state: SuspensionState,
+        tangents: "Sequence[TangentField] | None" = None,
+    ) -> "MetricRow":
+        """Compute one metric row, including derivatives when tangents exist."""
+        from kinematics.metrics.main import compute_metrics_for_state
+
+        if self.config is None:
+            raise ValueError("Suspension has no configuration")
+        return compute_metrics_for_state(state, self, self.config, tangents)
+
+    def derivative_metric_definitions(
+        self,
+    ) -> "tuple[DerivativeMetricDefinition, ...]":
+        """Topology-specific declarative derivative metrics."""
+        return ()

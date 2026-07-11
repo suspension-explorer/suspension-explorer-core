@@ -7,7 +7,7 @@ from typing import Any, Literal, Mapping
 from pydantic import BaseModel, ConfigDict
 
 from kinematics.core.enums import Units
-from kinematics.schema.coercion import CIPointID, CIUnits, PydanticPoint3
+from kinematics.schema.coercion import CIPointID, CISide, CIUnits, PydanticPoint3
 from kinematics.schema.config import SuspensionConfig
 
 HardpointMap = dict[CIPointID, PydanticPoint3]
@@ -25,6 +25,7 @@ class GeometrySpecBase(BaseModel):
     name: str = "unnamed"
     version: str = "0.0.0"
     units: CIUnits = Units.MILLIMETERS
+    side: CISide
     type: str
     config: SuspensionConfig
 

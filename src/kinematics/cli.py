@@ -5,8 +5,7 @@ import typer
 from kinematics.io import load_geometry
 from kinematics.io.results_writer import SolutionFrame, create_writer_for_path
 from kinematics.io.sweep_loader import parse_sweep_file
-from kinematics.main import solve_sweep
-from kinematics.metrics import compute_metrics_for_state
+from kinematics.main import compute_sweep_metrics, solve_sweep
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
@@ -31,13 +30,19 @@ def sweep(
     sweep_config = parse_sweep_file(sweep)
 
     solution_states, solver_stats = solve_sweep(suspension, sweep_config)
+    metric_result = compute_sweep_metrics(suspension, sweep_config, solution_states)
+    if metric_result.derivative_error is not None:
+        typer.echo(
+            f"Warning: derivative metrics unavailable: "
+            f"{metric_result.derivative_error}",
+            err=True,
+        )
 
     # Write out in wide format.
     writer = create_writer_for_path(
         out, geometry_path=str(geometry), sweep_path=str(sweep)
     )
     output_points = suspension.OUTPUT_POINTS
-    config = suspension.config
     for idx, (st, solver_info) in enumerate(zip(solution_states, solver_stats)):
         # Filter to the suspension type's declared output points, in order.
         positions = {
@@ -47,9 +52,7 @@ def sweep(
         }
 
         # Compute post-solve metrics for this state.
-        metrics: dict[str, float | None] = {}
-        if config is not None:
-            metrics = compute_metrics_for_state(st, suspension, config)
+        metrics = metric_result.rows[idx]
 
         frame = SolutionFrame(
             positions=positions,

@@ -35,6 +35,21 @@ class MetricContext:
     config: SuspensionConfig
 
     @cached_property
+    def design_state(self) -> SuspensionState:
+        """Return the as-authored state used as the travel reference."""
+        return self.suspension.initial_state()
+
+    @cached_property
+    def design_wheel_center(self) -> Point3:
+        """Wheel-center position at the design condition."""
+        return self.design_state.get(PointID.WHEEL_CENTER)
+
+    @cached_property
+    def design_contact_patch_center(self) -> Point3:
+        """Contact-patch position at the design condition."""
+        return self.design_state.get(PointID.CONTACT_PATCH_CENTER)
+
+    @cached_property
     def side_view_ic(self) -> Point3 | None:
         """
         Side-view instant center from the suspension.
@@ -115,10 +130,9 @@ class MetricContext:
     @cached_property
     def side_sign(self) -> float:
         """
-        Vehicle side indicator: 1.0 for left (Y > 0), -1.0 for right.
+        Explicit vehicle-side sign: 1.0 for left, -1.0 for right.
         """
-        y_pos = self.state.get(PointID.AXLE_OUTBOARD)[Axis.Y]
-        return -1.0 if y_pos < 0 else 1.0
+        return self.suspension.side.lateral_sign
 
     @cached_property
     def tire_radius(self) -> float:

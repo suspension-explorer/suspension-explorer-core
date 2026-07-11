@@ -10,6 +10,7 @@ from pydantic import BeforeValidator
 
 from kinematics.core.enums import Axis, PointID, TargetPositionMode, Units
 from kinematics.core.geometry import Direction3, Point3
+from kinematics.core.point_ref import Side
 
 E = TypeVar("E", bound=Enum)
 
@@ -44,6 +45,7 @@ def coerce_enum(enum_cls: type[E], value: str | int | E) -> E:
 CIAxis = Annotated[Axis, BeforeValidator(lambda v: coerce_enum(Axis, v))]
 CIPointID = Annotated[PointID, BeforeValidator(lambda v: coerce_enum(PointID, v))]
 CIUnits = Annotated[Units, BeforeValidator(lambda v: coerce_enum(Units, v))]
+CISide = Annotated[Side, BeforeValidator(lambda v: coerce_enum(Side, v))]
 CITargetPositionMode = Annotated[
     TargetPositionMode, BeforeValidator(lambda v: coerce_enum(TargetPositionMode, v))
 ]
@@ -94,6 +96,7 @@ PydanticDirection3 = Annotated[Direction3, BeforeValidator(coerce_direction3)]
 __all__ = [
     "CIAxis",
     "CIPointID",
+    "CISide",
     "CITargetPositionMode",
     "CIUnits",
     "Direction3Like",

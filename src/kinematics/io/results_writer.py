@@ -412,7 +412,11 @@ class CsvWriter(BaseResultsWriter):
             csvfile.write("#\n")
 
             # Write data using DictWriter.
-            writer = csv.DictWriter(csvfile, fieldnames=all_columns)
+            writer = csv.DictWriter(
+                csvfile,
+                fieldnames=all_columns,
+                lineterminator="\n",
+            )
             writer.writeheader()
 
             for frame in self.frames:
