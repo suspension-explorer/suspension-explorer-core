@@ -9,9 +9,9 @@ install:
     uv sync --all-extras --dev
     uv pip install -e .
 
-# Install dependencies for CI (no optional extras like viz).
+# Install dependencies exercised by the CI test suite, including headless plots.
 install-ci:
-    uv sync --dev
+    uv sync --extra viz --dev
     uv pip install -e .
 
 # Clean.
@@ -27,6 +27,10 @@ clean:
 # Testing.
 test:
     uv run pytest tests/ --cov=. --cov-report=term --durations=0
+
+# Run performance benchmarks (deselected from the default suite).
+bench:
+    uv run pytest tests/benchmarks -m benchmark --benchmark-only
 
 # Regenerate e2e test reference files after geometry.yaml changes.
 regen-refs:

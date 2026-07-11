@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Generic point references support ordinary corner points and side-qualified axle points throughout the constraint, state, solver, and derived-point systems.
+- Validated geometry schemas and a shared registry select explicit double-wishbone corner, coilover, pushrod-rocker, axle, and shared anti-roll-bar topologies.
+- Declarative derivative metrics use analytical solution-manifold tangents and forward-mode automatic differentiation for arbitrary scalar responses and drivers.
+- Advisory sweep diagnostics report convergence, residual acceptance, branch continuity, derivative availability, rocker and anti-roll-bar chirality, and transmission margin.
+- Coupled axle models solve left and right corners together and support either mirrored or independently authored geometry.
+- The public `analyze_sweep()` and `initial_pose()` APIs return structured positions, metrics, locations, metadata, display topology, diagnostics, references, and solved frames.
+
+### Changed
+
+- Geometry parsing, validation, and construction now pass through `kinematics.schema` and the suspension registry; filesystem access remains in `kinematics.io`.
+- Metric identities are lowercase, unit-free `snake_case`. Units use typed metadata and are written in CSV metadata or Parquet field metadata.
+- Corner locations remain structural in the analysis API and are rendered as `_left` and `_right` suffixes only in flat result files.
+- Steering metrics use `roadwheel_angle`; the concrete steering input is `trackrod_inboard`, and wheel-centre longitudinal motion is expressed directly as `deriv_wheel_center_x_wrt_hub_z`.
+- Half-track is exported as the absolute `half_track` state metric rather than a design-condition delta.
+
+### Breaking changes
+
+- Removed suspension type aliases `double_wishbone_front` and `double_wishbone_rear`; use an explicit canonical type and configuration.
+- Removed legacy geometry construction and loader paths in favour of validated schemas, `build_suspension()`, `load_geometry()`, and `load_sweep()`.
+- Renamed `SweepFile` to `SweepSpec`.
+- Removed units from metric keys and changed flat axle corner columns from side prefixes to side suffixes, for example `left_camber_deg` to `camber_left`.
+
 ## [0.3.0] - 2026-04-09
 
 ### Added
@@ -39,5 +63,3 @@ All notable changes to this project will be documented in this file.
 - Scrub radius and mechanical trail now intersect the steering axis at the contact patch Z rather than Z=0, giving correct values through bump travel.
 - Clarified `get_contact_patch_center` docstring as the lowest point on an ideal tire circle in the wheel center plane.
 - Dashboard plots now show KPI, mechanical trail, and scrub radius instead of swing arm lengths and FVIC height. Camber plot Y-axis tuned to [-2.5, -1.5] degrees.
-
-

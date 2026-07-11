@@ -34,9 +34,15 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    env:
+      MPLBACKEND: Agg
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - uses: extractions/setup-just@v2
+      - name: Install animation system dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
       - run: just install-ci
       - run: just test
