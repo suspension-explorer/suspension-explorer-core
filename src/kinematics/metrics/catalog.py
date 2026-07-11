@@ -24,7 +24,7 @@ class MetricDefinition:
     A single metric: its export column name, computation function, and units.
 
     Attributes:
-        column_name: Stable export/column identifier (e.g. "camber_deg").
+        column_name: Stable unit-independent metric identity (e.g. "camber").
         compute: Function mapping a MetricContext to the metric value.
         label: Human-readable display name (e.g. "Camber").
         unit: Structured physical unit for the value.
@@ -65,8 +65,7 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
     )
     from kinematics.metrics.travel import (
         calculate_damper_length,
-        calculate_half_track_change,
-        calculate_wheel_recession,
+        calculate_half_track,
         calculate_wheel_travel,
     )
 
@@ -78,80 +77,74 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
         return extract
 
     return (
-        MetricDefinition("camber_deg", calculate_camber, "Camber", MetricUnit.DEG),
-        MetricDefinition("caster_deg", calculate_caster, "Caster", MetricUnit.DEG),
-        MetricDefinition("kpi_deg", calculate_kpi, "KPI", MetricUnit.DEG),
+        MetricDefinition("camber", calculate_camber, "Camber", MetricUnit.DEG),
+        MetricDefinition("caster", calculate_caster, "Caster", MetricUnit.DEG),
+        MetricDefinition("kpi", calculate_kpi, "KPI", MetricUnit.DEG),
         MetricDefinition(
-            "scrub_radius_mm", calculate_scrub_radius, "Scrub Radius", MetricUnit.MM
+            "scrub_radius", calculate_scrub_radius, "Scrub Radius", MetricUnit.MM
         ),
         MetricDefinition(
-            "mechanical_trail_mm",
+            "mechanical_trail",
             calculate_mechanical_trail,
             "Mechanical Trail",
             MetricUnit.MM,
         ),
         MetricDefinition(
-            "roadwheel_angle_deg",
+            "roadwheel_angle",
             calculate_roadwheel_angle,
             "Roadwheel Angle",
             MetricUnit.DEG,
         ),
         MetricDefinition(
-            "svic_x_mm", _ic_coord("side_view_ic", Axis.X), "SVIC X", MetricUnit.MM
+            "svic_x", _ic_coord("side_view_ic", Axis.X), "SVIC X", MetricUnit.MM
         ),
         MetricDefinition(
-            "svic_z_mm", _ic_coord("side_view_ic", Axis.Z), "SVIC Z", MetricUnit.MM
+            "svic_z", _ic_coord("side_view_ic", Axis.Z), "SVIC Z", MetricUnit.MM
         ),
         MetricDefinition(
-            "svsa_length_mm", calculate_svsa_length, "SVSA Length", MetricUnit.MM
+            "svsa_length", calculate_svsa_length, "SVSA Length", MetricUnit.MM
         ),
         MetricDefinition(
-            "fvic_y_mm", _ic_coord("front_view_ic", Axis.Y), "FVIC Y", MetricUnit.MM
+            "fvic_y", _ic_coord("front_view_ic", Axis.Y), "FVIC Y", MetricUnit.MM
         ),
         MetricDefinition(
-            "fvic_z_mm", _ic_coord("front_view_ic", Axis.Z), "FVIC Z", MetricUnit.MM
+            "fvic_z", _ic_coord("front_view_ic", Axis.Z), "FVIC Z", MetricUnit.MM
         ),
         MetricDefinition(
-            "fvsa_length_mm", calculate_fvsa_length, "FVSA Length", MetricUnit.MM
+            "fvsa_length", calculate_fvsa_length, "FVSA Length", MetricUnit.MM
         ),
         MetricDefinition(
-            "wheel_travel_mm", calculate_wheel_travel, "Wheel Travel", MetricUnit.MM
+            "wheel_travel", calculate_wheel_travel, "Wheel Travel", MetricUnit.MM
         ),
         MetricDefinition(
-            "half_track_change_mm",
-            calculate_half_track_change,
-            "Half-Track Change",
+            "half_track",
+            calculate_half_track,
+            "Half-Track",
             MetricUnit.MM,
         ),
         MetricDefinition(
-            "wheel_recession_mm",
-            calculate_wheel_recession,
-            "Wheel Recession",
-            MetricUnit.MM,
-        ),
-        MetricDefinition(
-            "damper_length_mm",
+            "damper_length",
             calculate_damper_length,
             "Damper Length",
             MetricUnit.MM,
         ),
         MetricDefinition(
-            "svsa_angle_deg", calculate_svsa_angle, "SVSA Angle", MetricUnit.DEG
+            "svsa_angle", calculate_svsa_angle, "SVSA Angle", MetricUnit.DEG
         ),
         MetricDefinition(
-            "anti_dive_pct",
+            "anti_dive",
             calculate_anti_dive_pct,
             "Anti-Dive",
             MetricUnit.PERCENT,
         ),
         MetricDefinition(
-            "anti_lift_pct",
+            "anti_lift",
             calculate_anti_lift_pct,
             "Anti-Lift",
             MetricUnit.PERCENT,
         ),
         MetricDefinition(
-            "anti_squat_pct",
+            "anti_squat",
             calculate_anti_squat_pct,
             "Anti-Squat",
             MetricUnit.PERCENT,
@@ -218,7 +211,7 @@ def get_default_corner_derivative_metrics(
         DerivativeMetricDefinition(
             response=response(
                 lambda positions: kernels.toe_deg(positions, side_sign),
-                "toe",
+                "roadwheel_angle",
                 MetricUnit.DEG,
             ),
             driver=hub_z_driver,
@@ -246,9 +239,9 @@ def get_default_corner_derivative_metrics(
         ),
         DerivativeMetricDefinition(
             response=PointCoordinateResponse.from_axis(
-                PointID.CONTACT_PATCH_CENTER,
-                (-1.0, 0.0, 0.0),
-                name="wheel_recession",
+                PointID.WHEEL_CENTER,
+                (1.0, 0.0, 0.0),
+                name="wheel_center_x",
                 unit=MetricUnit.MM,
             ),
             driver=hub_z_driver,
@@ -256,7 +249,7 @@ def get_default_corner_derivative_metrics(
         DerivativeMetricDefinition(
             response=response(
                 lambda positions: kernels.toe_deg(positions, side_sign),
-                "toe",
+                "roadwheel_angle",
                 MetricUnit.DEG,
             ),
             driver=trackrod_inboard_y_driver,

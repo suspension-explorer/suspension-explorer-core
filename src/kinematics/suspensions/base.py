@@ -23,7 +23,7 @@ from kinematics.state import SuspensionState
 if TYPE_CHECKING:
     from kinematics.diagnostics import DiagnosticIssue
     from kinematics.metrics.derivatives import DerivativeMetricDefinition
-    from kinematics.metrics.main import MetricRow
+    from kinematics.metrics.main import AxleMetricRows, MetricRow
     from kinematics.sensitivity import TangentField
     from kinematics.visualization.main import LinkVisualization, WheelAnchors
 
@@ -177,7 +177,7 @@ class Suspension(ABC):
         self,
         state: SuspensionState,
         tangents: "Sequence[TangentField] | None" = None,
-    ) -> "MetricRow":
+    ) -> "MetricRow | AxleMetricRows":
         """Compute one metric row, including derivatives when tangents exist."""
         from kinematics.metrics.main import compute_metrics_for_state
 

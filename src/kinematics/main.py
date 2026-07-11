@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import List
 
 from kinematics.core.types import SweepConfig
+from kinematics.metrics.main import AxleMetricRows, MetricRow
 from kinematics.points.derived.manager import DerivedPointsManager
 from kinematics.sensitivity import (
     TangentField,
@@ -69,7 +70,7 @@ class SweepTangents:
 class SweepMetricsResult:
     """Metric rows plus visible derivative-computation status."""
 
-    rows: list[OrderedDict[str, float | None]]
+    rows: list[MetricRow | AxleMetricRows]
     derivative_error: str | None = None
     tangent_solve_infos: list[TangentSolveInfo] | None = None
 

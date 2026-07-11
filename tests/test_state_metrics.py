@@ -16,7 +16,7 @@ from kinematics.metrics.anti_geometry import (
     calculate_anti_squat_pct,
 )
 from kinematics.metrics.context import MetricContext
-from kinematics.metrics.main import compute_metrics_for_state
+from kinematics.metrics.main import MetricRow, compute_metrics_for_state
 from kinematics.schema.config import SuspensionConfig
 
 TEST_DATA = Path(__file__).parent / "data"
@@ -61,20 +61,21 @@ def test_config_rejects_unknown_axle_selection(field: str) -> None:
         SuspensionConfig.model_validate(data)
 
 
-def test_design_state_travel_metrics_are_zero() -> None:
+def test_design_state_travel_and_position_metrics() -> None:
     suspension = load_geometry(TEST_DATA / "geometry.yaml")
     assert suspension.config is not None
     state = suspension.initial_state()
 
     metrics = compute_metrics_for_state(state, suspension, suspension.config)
 
-    assert metrics["wheel_travel_mm"] == pytest.approx(0.0)
-    assert metrics["half_track_change_mm"] == pytest.approx(0.0)
-    assert metrics["wheel_recession_mm"] == pytest.approx(0.0)
-    assert metrics["damper_length_mm"] is None
-    assert metrics["anti_dive_pct"] is None
-    assert metrics["anti_lift_pct"] is None
-    assert metrics["anti_squat_pct"] is None
+    assert metrics["wheel_travel"] == pytest.approx(0.0)
+    assert metrics["half_track"] == pytest.approx(
+        abs(float(state.get(PointID.CONTACT_PATCH_CENTER)[1]))
+    )
+    assert metrics["damper_length"] is None
+    assert metrics["anti_dive"] is None
+    assert metrics["anti_lift"] is None
+    assert metrics["anti_squat"] is None
 
 
 def test_coilover_damper_length_matches_mount_distance() -> None:
@@ -85,7 +86,7 @@ def test_coilover_damper_length_matches_mount_distance() -> None:
     metrics = compute_metrics_for_state(state, suspension, suspension.config)
     expected = (state.get(PointID.STRUT_TOP) - state.get(PointID.STRUT_BOTTOM)).norm()
 
-    assert metrics["damper_length_mm"] == pytest.approx(expected)
+    assert metrics["damper_length"] == pytest.approx(expected)
 
 
 def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
@@ -140,12 +141,12 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     right_metrics = compute_metrics_for_state(
         finite_difference_states[1], suspension, suspension.config
     )
-    left_travel = left_metrics["wheel_travel_mm"]
-    right_travel = right_metrics["wheel_travel_mm"]
-    left_camber = left_metrics["camber_deg"]
-    right_camber = right_metrics["camber_deg"]
-    left_damper = left_metrics["damper_length_mm"]
-    right_damper = right_metrics["damper_length_mm"]
+    left_travel = left_metrics["wheel_travel"]
+    right_travel = right_metrics["wheel_travel"]
+    left_camber = left_metrics["camber"]
+    right_camber = right_metrics["camber"]
+    left_damper = left_metrics["damper_length"]
+    right_damper = right_metrics["damper_length"]
     assert left_travel is not None and right_travel is not None
     assert left_camber is not None and right_camber is not None
     assert left_damper is not None and right_damper is not None
@@ -153,14 +154,15 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     travel_delta = right_travel - left_travel
     camber_difference = right_camber - left_camber
     expected_camber_derivative = camber_difference / travel_delta
-    assert result.rows[midpoint]["deriv_camber_wrt_hub_z"] == pytest.approx(
+    midpoint_row = cast(MetricRow, result.rows[midpoint])
+    assert midpoint_row["deriv_camber_wrt_hub_z"] == pytest.approx(
         expected_camber_derivative,
         rel=2e-3,
     )
 
     damper_difference = right_damper - left_damper
     expected_damper_derivative = damper_difference / travel_delta
-    assert result.rows[midpoint]["deriv_damper_length_wrt_hub_z"] == pytest.approx(
+    assert midpoint_row["deriv_damper_length_wrt_hub_z"] == pytest.approx(
         expected_damper_derivative,
         rel=2e-3,
     )
@@ -182,8 +184,9 @@ def test_tangent_failure_is_visible_and_preserves_base_metrics(
     assert result.derivative_error == "RuntimeError: synthetic tangent failure"
     assert result.tangent_solve_infos is None
     assert len(result.rows) == len(states)
-    assert "camber_deg" in result.rows[0]
-    assert "deriv_camber_wrt_hub_z" not in result.rows[0]
+    first_row = cast(MetricRow, result.rows[0])
+    assert "camber" in first_row
+    assert "deriv_camber_wrt_hub_z" not in first_row
 
 
 def _anti_context(

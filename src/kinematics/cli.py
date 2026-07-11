@@ -2,11 +2,11 @@ from pathlib import Path
 
 import typer
 
-from kinematics.diagnostics import diagnose_sweep
-from kinematics.io import load_geometry
+from kinematics import analyze_sweep, load_geometry, load_sweep
+from kinematics.core.point_ref import point_key_name
 from kinematics.io.results_writer import SolutionFrame, create_writer_for_path
-from kinematics.io.sweep_loader import parse_sweep_file
-from kinematics.main import compute_sweep_metrics, solve_sweep
+from kinematics.metrics.main import flatten_metric_rows
+from kinematics.metrics.registry import flat_specs_for_suspension
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
@@ -28,45 +28,43 @@ def sweep(
         kinematics sweep --geometry=geo.yaml --sweep=sweep.yaml --out=out.csv
     """
     suspension = load_geometry(geometry)
-    sweep_config = parse_sweep_file(sweep, suspension)
-
-    solution_states, solver_stats = solve_sweep(suspension, sweep_config)
-    diagnostics = diagnose_sweep(suspension, solution_states, solver_stats)
-    if diagnostics.issues:
+    sweep_config = load_sweep(sweep, suspension)
+    analysis = analyze_sweep(suspension, sweep_config)
+    if analysis.diagnostics:
         typer.echo("Diagnostics:", err=True)
-        for issue in diagnostics.issues:
+        for issue in analysis.diagnostics:
             typer.echo(f"{issue.severity.upper()}: {issue.message}", err=True)
-    metric_result = compute_sweep_metrics(suspension, sweep_config, solution_states)
-    if metric_result.derivative_error is not None:
-        typer.echo(
-            f"Warning: derivative metrics unavailable: "
-            f"{metric_result.derivative_error}",
-            err=True,
-        )
 
     # Write out in wide format.
     writer = create_writer_for_path(
         out, geometry_path=str(geometry), sweep_path=str(sweep)
     )
     output_points = suspension.output_points()
-    for idx, (st, solver_info) in enumerate(zip(solution_states, solver_stats)):
+    metric_specs = flat_specs_for_suspension(suspension)
+    for frame_data in analysis.frames:
         # Filter to the suspension type's declared output points, in order.
         positions = {
-            pid.name: (float(pos[0]), float(pos[1]), float(pos[2]))
+            point_key_name(pid): analysis_position
             for pid in output_points
-            if (pos := st.positions.get(pid)) is not None
+            if (
+                analysis_position := frame_data.positions.get(point_key_name(pid))
+            )
+            is not None
         }
 
-        # Compute post-solve metrics for this state.
-        metrics = metric_result.rows[idx]
+        metrics = flatten_metric_rows(
+            frame_data.metrics,
+            frame_data.corner_metrics,
+        )
 
         frame = SolutionFrame(
             positions=positions,
-            solver_info=solver_info,
+            solver_info=frame_data.solver,
             metrics=metrics,
+            metric_specs=metric_specs,
         )
 
-        writer.add_frame(idx, frame)
+        writer.add_frame(frame_data.index, frame)
     writer.write()
 
     typer.echo(f"wrote {out}")
@@ -74,6 +72,7 @@ def sweep(
     # Generate animation if requested.
     if animation_out:
         try:
+            from kinematics.main import solve_sweep
             from kinematics.visualization.api import visualize_suspension_sweep
 
             # Get wheel parameters from suspension configuration.
@@ -82,6 +81,7 @@ def sweep(
                 raise typer.Exit(1)
 
             wheel_cfg = suspension.config.wheel
+            solution_states, _ = solve_sweep(suspension, sweep_config)
 
             # Create animation.
             visualize_suspension_sweep(
@@ -103,7 +103,7 @@ def sweep(
                 f"Details: {e}",
                 err=True,
             )
-            typer.Exit(1)
+            raise typer.Exit(1)
 
 
 @app.command()
