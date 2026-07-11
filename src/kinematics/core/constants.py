@@ -13,6 +13,9 @@ SOLVE_TOLERANCE_VALUE = 1e-5  # 0.01um for mm units.
 SOLVE_TOLERANCE_STEP = 1e-9
 SOLVE_TOLERANCE_GRAD = 1e-9
 
+# Maximum accepted absolute residual after optimizer convergence.
+SOLVE_ACCEPT_RESIDUAL = 1e-3
+
 # Tolerance for tests; has headroom over solve tolerances.
 TEST_TOLERANCE = 1e-3
 
