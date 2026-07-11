@@ -43,9 +43,7 @@ def test_visualize_camber_shim_imports() -> None:
     assert callable(module.plot_front_view_comparison)
 
 
-def test_camber_shim_front_view_renders(
-    tmp_path: Path, test_data_dir: Path
-) -> None:
+def test_camber_shim_front_view_renders(tmp_path: Path, test_data_dir: Path) -> None:
     """Exercise the camber-shim comparison plot with the headless backend."""
     from kinematics import load_geometry
 

@@ -48,4 +48,5 @@ def parse_hardpoints(
         errors.append(f"Missing required hardpoints: {names}")
     return hardpoints, errors
 
+
 __all__ = ["load_geometry", "load_suspension", "parse_hardpoints"]

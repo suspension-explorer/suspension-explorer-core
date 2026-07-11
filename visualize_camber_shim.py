@@ -131,9 +131,7 @@ def plot_front_view_comparison(
         # Draw links.
         first = True
         for link in vis.links:
-            pts = np.stack(
-                [extract_array(state.positions[pid]) for pid in link.points]
-            )
+            pts = np.stack([extract_array(state.positions[pid]) for pid in link.points])
             if len(link.points) > 1:
                 ax.plot(
                     pts[:, 0],

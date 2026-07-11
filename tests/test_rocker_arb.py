@@ -40,10 +40,13 @@ def test_corner_spring_type_owns_derivative_declarations(
         "deriv_rocker_angle_wrt_hub_z",
         "deriv_damper_length_wrt_hub_z",
     }
-    assert sum(
-        isinstance(constraint, ScalarTripleProductConstraint)
-        for constraint in coilover.constraints()
-    ) == 1
+    assert (
+        sum(
+            isinstance(constraint, ScalarTripleProductConstraint)
+            for constraint in coilover.constraints()
+        )
+        == 1
+    )
 
 
 def test_arb_axle_uses_chirality_constraints(test_data_dir: Path) -> None:

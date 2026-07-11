@@ -636,12 +636,8 @@ def test_intersect_two_planes_validation():
     point, direction = result
 
     # Point should satisfy both plane equations: n dot p + d = 0
-    assert math.isclose(
-        np.dot(n1.data, point.data) + d1, 0.0, abs_tol=TEST_TOLERANCE
-    )
-    assert math.isclose(
-        np.dot(n2.data, point.data) + d2, 0.0, abs_tol=TEST_TOLERANCE
-    )
+    assert math.isclose(np.dot(n1.data, point.data) + d1, 0.0, abs_tol=TEST_TOLERANCE)
+    assert math.isclose(np.dot(n2.data, point.data) + d2, 0.0, abs_tol=TEST_TOLERANCE)
 
     # Another point on the line should also satisfy both equations
     test_point = point + 5.0 * direction

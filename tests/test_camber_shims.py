@@ -145,14 +145,10 @@ def test_upper_arm_lengths_preserved():
 
     solved_ubj = Point3(sol.ubj_position)
     solved_front = float(
-        np.linalg.norm(
-            solved_ubj - positions[PointID.UPPER_WISHBONE_INBOARD_FRONT]
-        )
+        np.linalg.norm(solved_ubj - positions[PointID.UPPER_WISHBONE_INBOARD_FRONT])
     )
     solved_rear = float(
-        np.linalg.norm(
-            solved_ubj - positions[PointID.UPPER_WISHBONE_INBOARD_REAR]
-        )
+        np.linalg.norm(solved_ubj - positions[PointID.UPPER_WISHBONE_INBOARD_REAR])
     )
 
     assert abs(solved_front - design_front) < TEST_TOLERANCE

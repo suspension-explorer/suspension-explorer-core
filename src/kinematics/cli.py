@@ -46,9 +46,7 @@ def sweep(
         positions = {
             point_key_name(pid): analysis_position
             for pid in output_points
-            if (
-                analysis_position := frame_data.positions.get(point_key_name(pid))
-            )
+            if (analysis_position := frame_data.positions.get(point_key_name(pid)))
             is not None
         }
 

@@ -184,10 +184,13 @@ def test_coilover_topology_adds_moving_pickup_and_attachment_constraints() -> No
     assert PointID.STRUT_BOTTOM in suspension.OUTPUT_POINTS
     constraints = suspension.constraints()
     assert len(constraints) == 21
-    assert sum(
-        isinstance(constraint, ScalarTripleProductConstraint)
-        for constraint in constraints
-    ) == 1
+    assert (
+        sum(
+            isinstance(constraint, ScalarTripleProductConstraint)
+            for constraint in constraints
+        )
+        == 1
+    )
 
 
 def test_legacy_configuration_key_remains_loadable(tmp_path: Path) -> None:
