@@ -8,7 +8,8 @@ metrics. Returns ordered mappings ready for direct export integration.
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Sequence
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Mapping, Sequence
 
 from kinematics.core.point_ref import PointRef, Side
 from kinematics.metrics.catalog import (
@@ -28,14 +29,42 @@ if TYPE_CHECKING:
 MetricRow = OrderedDict[str, float | None]
 
 
+@dataclass(frozen=True)
+class AxleMetricRows:
+    """Location-independent axle metrics plus one row per corner."""
+
+    axle: MetricRow
+    corners: dict[str, MetricRow]
+
+    def flat_row(self) -> MetricRow:
+        """Render the structured rows for a flat export boundary."""
+        return flatten_metric_rows(self.axle, self.corners)
+
+
+def flatten_metric_rows(
+    metrics: MetricRow,
+    corner_metrics: Mapping[str, MetricRow],
+) -> MetricRow:
+    """Flatten structural metric locations using side suffixes."""
+    from kinematics.metrics.registry import flat_key
+
+    flat: MetricRow = OrderedDict()
+    for location, row in corner_metrics.items():
+        for key, value in row.items():
+            flat[flat_key(key, location)] = value
+    flat.update(metrics)
+    return flat
+
+
 def compute_metrics_for_axle_state(
     state: SuspensionState,
     axle: DoubleWishboneAxleSuspension,
     config: SuspensionConfig,
     tangents: "Sequence[TangentField] | None" = None,
-) -> MetricRow:
-    """Compute suffixed per-corner rows followed by axle-level metrics."""
-    row: MetricRow = OrderedDict()
+) -> AxleMetricRows:
+    """Compute structural per-corner rows followed by axle-level metrics."""
+    axle_row: MetricRow = OrderedDict()
+    corner_rows: dict[str, MetricRow] = {}
     for side in (Side.LEFT, Side.RIGHT):
         corner_state = axle.corner_state(state, side)
         side_row = compute_metrics_for_state(
@@ -44,25 +73,35 @@ def compute_metrics_for_axle_state(
             config,
             _corner_tangents(tangents, side) if tangents else None,
         )
-        suffix = f"_{side.name.lower()}"
-        for column, value in side_row.items():
-            row[f"{column}{suffix}"] = value
+        corner_rows[side.name.lower()] = side_row
 
     from kinematics.metrics.axle_metrics import append_axle_state_metrics
 
-    append_axle_state_metrics(row, state, axle)
-    row.update(axle.topology_metric_values(state))
+    append_axle_state_metrics(axle_row, state, axle)
+    for key, value in axle.topology_metric_values(state).items():
+        base_key, location = _split_topology_location(key)
+        if location is None:
+            axle_row[base_key] = value
+        else:
+            corner_rows[location][base_key] = value
     if tangents:
         from kinematics.metrics.derivatives import evaluate_derivative_metrics
 
-        row.update(
+        axle_row.update(
             evaluate_derivative_metrics(
                 axle.derivative_metric_definitions(),
                 state,
                 tangents,
             )
         )
-    return row
+    return AxleMetricRows(axle=axle_row, corners=corner_rows)
+
+
+def _split_topology_location(key: str) -> tuple[str, str | None]:
+    """Split topology-owned flat side keys while their hook is migrated."""
+    from kinematics.metrics.registry import split_flat_key
+
+    return split_flat_key(key)
 
 
 def _corner_tangents(

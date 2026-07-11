@@ -21,7 +21,7 @@ from kinematics.suspensions.base import Suspension
 from kinematics.suspensions.corner import DoubleWishboneSuspension
 
 if TYPE_CHECKING:
-    from kinematics.metrics.main import MetricRow
+    from kinematics.metrics.main import AxleMetricRows
     from kinematics.sensitivity import TangentField
     from kinematics.visualization.main import LinkVisualization, WheelAnchors
 
@@ -182,8 +182,8 @@ class DoubleWishboneAxleSuspension(Suspension):
         self,
         state: SuspensionState,
         tangents: "Sequence[TangentField] | None" = None,
-    ) -> "MetricRow":
-        """Compute suffixed corner metrics and basic axle-level metrics."""
+    ) -> "AxleMetricRows":
+        """Compute structural corner and axle-level metric rows."""
         if self.config is None:
             raise ValueError("Suspension has no configuration")
         from kinematics.metrics.main import compute_metrics_for_axle_state

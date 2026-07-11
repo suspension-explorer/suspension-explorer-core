@@ -1,10 +1,9 @@
 """
 Per-state suspension travel metrics.
 
-These metrics measure how the current solved corner has displaced relative
-to its design (as-authored) condition: wheel travel, half-track change,
-wheel recession, and the installed damper length. Every value is a scalar
-in millimetres. Sign conventions follow ISO 8855 (X forward, Y left, Z up).
+These metrics report wheel travel, half-track, and installed damper length.
+Every value is a scalar in millimetres. Sign conventions follow ISO 8855
+(X forward, Y left, Z up).
 """
 
 from __future__ import annotations
@@ -32,37 +31,16 @@ def calculate_wheel_travel(ctx: "MetricContext") -> float | None:
     return current_z - design_z
 
 
-def calculate_half_track_change(ctx: "MetricContext") -> float | None:
+def calculate_half_track(ctx: "MetricContext") -> float | None:
     """
-    Change in half-track at this corner in mm relative to design.
+    Half-track at this corner in mm.
 
     Half-track is the lateral distance of the contact patch from the vehicle
-    centreline, i.e. the magnitude of the contact-patch Y. Using magnitudes
-    makes the sign convention identical for left and right corners:
-    positive means the track has widened at this corner, negative means it
-    has narrowed.
+    centreline, i.e. the magnitude of the contact-patch Y.
 
-        half_track_change = |CP_y(current)| - |CP_y(design)|
+        half_track = |CP_y(current)|
     """
-    current_y = abs(float(ctx.contact_patch_center[Axis.Y]))
-    design_y = abs(float(ctx.design_contact_patch_center[Axis.Y]))
-    return current_y - design_y
-
-
-def calculate_wheel_recession(ctx: "MetricContext") -> float | None:
-    """
-    Longitudinal recession of the contact patch in mm relative to design.
-
-    In ISO 8855 +X points forward, so a rearward move is a decrease in X.
-    We negate the X displacement so that positive recession means the wheel
-    has moved rearward (toward the vehicle rear), which is the intuitive
-    reading of "recession".
-
-        wheel_recession = -(CP_x(current) - CP_x(design))
-    """
-    current_x = float(ctx.contact_patch_center[Axis.X])
-    design_x = float(ctx.design_contact_patch_center[Axis.X])
-    return -(current_x - design_x)
+    return abs(float(ctx.contact_patch_center[Axis.Y]))
 
 
 def calculate_damper_length(ctx: "MetricContext") -> float | None:

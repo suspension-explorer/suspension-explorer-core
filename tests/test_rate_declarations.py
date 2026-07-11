@@ -82,12 +82,11 @@ def _metric_rows_at(
 @pytest.mark.parametrize(
     ("column", "base_metric", "sign"),
     [
-        ("deriv_camber_wrt_hub_z", "camber_deg", 1.0),
-        ("deriv_toe_wrt_hub_z", "roadwheel_angle_deg", 1.0),
-        ("deriv_caster_wrt_hub_z", "caster_deg", 1.0),
-        ("deriv_kpi_wrt_hub_z", "kpi_deg", 1.0),
-        ("deriv_half_track_wrt_hub_z", "half_track_change_mm", 1.0),
-        ("deriv_wheel_recession_wrt_hub_z", "wheel_recession_mm", 1.0),
+        ("deriv_camber_wrt_hub_z", "camber", 1.0),
+        ("deriv_roadwheel_angle_wrt_hub_z", "roadwheel_angle", 1.0),
+        ("deriv_caster_wrt_hub_z", "caster", 1.0),
+        ("deriv_kpi_wrt_hub_z", "kpi", 1.0),
+        ("deriv_half_track_wrt_hub_z", "half_track", 1.0),
     ],
 )
 def test_hub_z_declarations_match_finite_difference(
@@ -113,11 +112,51 @@ def test_hub_z_declarations_match_finite_difference(
     )
 
 
+def test_wheel_center_x_derivative_matches_finite_difference() -> None:
+    corner, state, tangents, wheel_z, trackrod_inboard_y = _solve_with_tangents(
+        "geometry.yaml"
+    )
+    definition = _corner_definitions(corner)["deriv_wheel_center_x_wrt_hub_z"]
+    states = solve_sweep(
+        corner,
+        SweepConfig(
+            [
+                [
+                    _target(PointID.WHEEL_CENTER, Axis.Z, wheel_z - FD_STEP),
+                    _target(PointID.WHEEL_CENTER, Axis.Z, wheel_z + FD_STEP),
+                ],
+                [
+                    _target(
+                        PointID.TRACKROD_INBOARD,
+                        Axis.Y,
+                        trackrod_inboard_y,
+                    ),
+                    _target(
+                        PointID.TRACKROD_INBOARD,
+                        Axis.Y,
+                        trackrod_inboard_y,
+                    ),
+                ],
+            ]
+        ),
+    )[0]
+    finite_difference = (
+        float(states[1].get(PointID.WHEEL_CENTER)[Axis.X])
+        - float(states[0].get(PointID.WHEEL_CENTER)[Axis.X])
+    ) / (2 * FD_STEP)
+
+    assert definition.evaluate_from_tangents(state, tangents) == pytest.approx(
+        finite_difference,
+        rel=1e-3,
+        abs=1e-5,
+    )
+
+
 @pytest.mark.parametrize(
     ("column", "base_metric"),
     [
-        ("deriv_toe_wrt_trackrod_inboard_y", "roadwheel_angle_deg"),
-        ("deriv_camber_wrt_trackrod_inboard_y", "camber_deg"),
+        ("deriv_roadwheel_angle_wrt_trackrod_inboard_y", "roadwheel_angle"),
+        ("deriv_camber_wrt_trackrod_inboard_y", "camber"),
     ],
 )
 def test_trackrod_inboard_y_declarations_match_finite_difference(
@@ -155,9 +194,7 @@ def test_damper_length_declaration_matches_finite_difference() -> None:
         wheel_values=(wheel_z - FD_STEP, wheel_z + FD_STEP),
         trackrod_inboard_y_values=(trackrod_inboard_y, trackrod_inboard_y),
     )
-    expected_derivative = (high["damper_length_mm"] - low["damper_length_mm"]) / (
-        2 * FD_STEP
-    )
+    expected_derivative = (high["damper_length"] - low["damper_length"]) / (2 * FD_STEP)
 
     assert definition.evaluate_from_tangents(state, tangents) == pytest.approx(
         expected_derivative,

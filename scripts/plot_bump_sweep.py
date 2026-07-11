@@ -10,11 +10,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from kinematics import analyze_sweep, load_geometry, load_sweep, solve_sweep
 from kinematics.core.enums import PointID
-from kinematics.io.geometry_loader import load_geometry
-from kinematics.io.sweep_loader import parse_sweep_file
-from kinematics.main import solve_sweep
-from kinematics.metrics import compute_metrics_for_state
 from kinematics.visualization.api import visualize_suspension_sweep
 
 GEOMETRY = Path("tests/data/geometry.yaml")
@@ -29,8 +26,9 @@ def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     suspension = load_geometry(GEOMETRY)
-    sweep_config = parse_sweep_file(SWEEP)
-    states, stats = solve_sweep(suspension, sweep_config)
+    sweep_config = load_sweep(SWEEP, suspension)
+    analysis = analyze_sweep(suspension, sweep_config)
+    states, _ = solve_sweep(suspension, sweep_config)
     config = suspension.config
     assert config is not None
 
@@ -52,26 +50,26 @@ def main() -> None:
     # Design position wheel center Z for computing bump travel.
     design_wc_z = float(suspension.initial_state().get(PointID.WHEEL_CENTER)[2])
 
-    for state, stat in zip(states, stats):
-        if not stat.converged:
+    for frame in analysis.frames:
+        if not frame.solver.converged:
             continue
 
-        wc_z = float(state.get(PointID.WHEEL_CENTER)[2])
+        wc_z = frame.positions[PointID.WHEEL_CENTER.name.lower()][2]
         wheel_center_z.append(wc_z - design_wc_z)
 
-        metrics = compute_metrics_for_state(state, suspension, config)
-        camber.append(metrics["camber_deg"])
-        caster.append(metrics["caster_deg"])
-        roadwheel_angle.append(metrics["roadwheel_angle_deg"])
-        svic_x.append(metrics["svic_x_mm"])
-        svic_z.append(metrics["svic_z_mm"])
-        fvic_y.append(metrics["fvic_y_mm"])
-        fvic_z.append(metrics["fvic_z_mm"])
-        svsa.append(metrics["svsa_length_mm"])
-        fvsa.append(metrics["fvsa_length_mm"])
-        kpi.append(metrics["kpi_deg"])
-        mechanical_trail.append(metrics["mechanical_trail_mm"])
-        scrub_radius.append(metrics["scrub_radius_mm"])
+        metrics = frame.metrics
+        camber.append(metrics["camber"])
+        caster.append(metrics["caster"])
+        roadwheel_angle.append(metrics["roadwheel_angle"])
+        svic_x.append(metrics["svic_x"])
+        svic_z.append(metrics["svic_z"])
+        fvic_y.append(metrics["fvic_y"])
+        fvic_z.append(metrics["fvic_z"])
+        svsa.append(metrics["svsa_length"])
+        fvsa.append(metrics["fvsa_length"])
+        kpi.append(metrics["kpi"])
+        mechanical_trail.append(metrics["mechanical_trail"])
+        scrub_radius.append(metrics["scrub_radius"])
 
     bump = np.array(wheel_center_z)
 

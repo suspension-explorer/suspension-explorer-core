@@ -16,7 +16,7 @@ from kinematics.constraints import (
 )
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.geometry import Direction3, Point3
-from kinematics.core.point_ref import PointKey, PointRef, Side
+from kinematics.core.point_ref import PointKey, PointRef, Side, point_key_name
 from kinematics.core.types import PointTarget, PointTargetAxis, SweepConfig
 from kinematics.points.derived.manager import DerivedPointsManager, DerivedPointsSpec
 from kinematics.solver import ResidualComputer, solve_least_squares_problem
@@ -53,6 +53,14 @@ def test_point_ref_name_formatting():
 
     ref3 = PointRef(Side.CENTER, PointID.AXLE_MIDPOINT)
     assert ref3.name == "CENTER_AXLE_MIDPOINT"
+
+
+def test_public_point_names_are_lowercase_snake_case():
+    assert point_key_name(PointID.AXLE_OUTBOARD) == "axle_outboard"
+    assert (
+        point_key_name(PointRef(Side.LEFT, PointID.AXLE_OUTBOARD))
+        == "left_axle_outboard"
+    )
 
 
 def test_point_ref_equality_and_hashing_behave_as_tuples():

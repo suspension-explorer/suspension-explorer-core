@@ -39,16 +39,16 @@ def append_axle_state_metrics(
     left_wheel_z = wheel_delta_z[Side.LEFT]
     right_wheel_z = wheel_delta_z[Side.RIGHT]
     track = abs(contact_y[Side.LEFT] - contact_y[Side.RIGHT])
-    row["heave_mm"] = 0.5 * (left_wheel_z + right_wheel_z)
-    row["roll_deg"] = degrees(atan2(left_wheel_z - right_wheel_z, track))
-    row["ride_height_change_mm"] = -0.5 * (
+    row["heave"] = 0.5 * (left_wheel_z + right_wheel_z)
+    row["roll"] = degrees(atan2(left_wheel_z - right_wheel_z, track))
+    row["ride_height_change"] = -0.5 * (
         contact_delta_z[Side.LEFT] + contact_delta_z[Side.RIGHT]
     )
-    row["track_mm"] = track
+    row["track"] = track
 
     roll_center_y, roll_center_z = _roll_center(state, axle)
-    row["roll_center_y_mm"] = roll_center_y
-    row["roll_center_z_mm"] = roll_center_z
+    row["roll_center_y"] = roll_center_y
+    row["roll_center_z"] = roll_center_z
 
     design_trackrod_y = float(
         axle.corners[Side.LEFT].initial_state().get(PointID.TRACKROD_INBOARD)[Axis.Y]
@@ -56,7 +56,7 @@ def append_axle_state_metrics(
     current_trackrod_y = float(
         state.get(PointRef(Side.LEFT, PointID.TRACKROD_INBOARD))[Axis.Y]
     )
-    row["trackrod_inboard_displacement_mm"] = current_trackrod_y - design_trackrod_y
+    row["trackrod_inboard_displacement"] = current_trackrod_y - design_trackrod_y
 
 
 def _roll_center(

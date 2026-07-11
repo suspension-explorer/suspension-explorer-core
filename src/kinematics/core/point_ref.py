@@ -75,10 +75,10 @@ class PointRef(NamedTuple):
     @property
     def name(self) -> str:
         """
-        Column-friendly name, e.g. ``"LEFT_LOWER_WISHBONE_OUTBOARD"``.
+        Internal enum-style name, e.g. ``"LEFT_LOWER_WISHBONE_OUTBOARD"``.
 
-        Matches how single-corner output columns are built from ``pid.name``,
-        with the side prefixed so left/right columns do not collide.
+        Public outputs use :func:`point_key_name` to normalize this value to
+        lowercase snake-case.
         """
         return f"{self.side.name}_{self.point.name}"
 
@@ -87,3 +87,11 @@ class PointRef(NamedTuple):
 # PointRef. All core machinery (state, constraints, solver, derived points) is
 # annotated over this alias so it works with either concrete key type.
 PointKey = PointID | PointRef
+
+
+def point_key_name(key: PointKey) -> str:
+    """Return the canonical lowercase snake-case public name for a point."""
+    return key.name.lower()
+
+
+__all__ = ["PointKey", "PointRef", "Side", "point_key_name"]

@@ -233,9 +233,9 @@ class DoubleWishbonePushrodRockerAxleSuspension(DoubleWishboneAxleSuspension):
         }
         return OrderedDict(
             (
-                ("arb_arm_angle_deg_left", angles[Side.LEFT]),
-                ("arb_arm_angle_deg_right", angles[Side.RIGHT]),
-                ("arb_twist_deg", angles[Side.LEFT] - angles[Side.RIGHT]),
+                ("arb_arm_angle_left", angles[Side.LEFT]),
+                ("arb_arm_angle_right", angles[Side.RIGHT]),
+                ("arb_twist", angles[Side.LEFT] - angles[Side.RIGHT]),
             )
         )
 

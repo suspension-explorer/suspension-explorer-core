@@ -12,6 +12,7 @@ from kinematics.diagnostics import diagnose_sweep
 from kinematics.io import load_geometry
 from kinematics.io.sweep_loader import parse_sweep_file
 from kinematics.main import compute_sweep_metrics, solve_sweep
+from kinematics.metrics.main import AxleMetricRows
 from kinematics.suspensions.axle import DoubleWishbonePushrodRockerAxleSuspension
 from kinematics.suspensions.corner import DoubleWishbonePushrodRockerSuspension
 
@@ -63,22 +64,25 @@ def test_arb_axle_emits_hub_relative_derivatives(test_data_dir: Path) -> None:
     result = compute_sweep_metrics(axle, sweep, states)
 
     assert result.derivative_error is None
-    expected = {
-        "deriv_rocker_angle_wrt_hub_z_left",
-        "deriv_torsion_bar_twist_wrt_hub_z_left",
-        "deriv_rocker_angle_wrt_hub_z_right",
-        "deriv_torsion_bar_twist_wrt_hub_z_right",
+    expected_corner = {
+        "deriv_rocker_angle_wrt_hub_z",
+        "deriv_torsion_bar_twist_wrt_hub_z",
+    }
+    expected_axle = {
         "deriv_arb_twist_wrt_hub_z_left",
         "deriv_arb_twist_wrt_hub_z_right",
     }
     for row in result.rows:
-        assert expected <= row.keys()
-        assert all(row[column] is not None for column in expected)
-        assert "rocker_angle_deg_left" in row
-        assert "rocker_angle_deg_right" in row
-        assert "arb_arm_angle_deg_left" in row
-        assert "arb_arm_angle_deg_right" in row
-        assert "arb_twist_deg" in row
+        assert isinstance(row, AxleMetricRows)
+        assert expected_axle <= row.axle.keys()
+        assert all(row.axle[key] is not None for key in expected_axle)
+        assert "arb_twist" in row.axle
+        for location in ("left", "right"):
+            corner = row.corners[location]
+            assert expected_corner <= corner.keys()
+            assert all(corner[key] is not None for key in expected_corner)
+            assert "rocker_angle" in corner
+            assert "arb_arm_angle" in corner
 
 
 def test_arb_diagnostics_detect_mirrored_arm_branch(test_data_dir: Path) -> None:

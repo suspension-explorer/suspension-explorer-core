@@ -267,9 +267,9 @@ class DoubleWishbonePushrodRockerSuspension(DoubleWishboneSuspension):
             )
             * self.side.lateral_sign
         )
-        row = OrderedDict([("rocker_angle_deg", angle)])
+        row = OrderedDict([("rocker_angle", angle)])
         if self.has_torsion_bar:
-            row["torsion_bar_twist_deg"] = angle
+            row["torsion_bar_twist"] = angle
         return row
 
     def get_visualization_links(self):

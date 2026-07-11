@@ -125,10 +125,10 @@ def test_front_view_metrics_are_invariant_to_rigid_x_translation(
     comparison_index = next(
         index
         for index, metrics in enumerate(original_metrics)
-        if metrics["fvic_y_mm"] is not None
+        if metrics["fvic_y"] is not None
     )
 
-    for column_name in ("fvic_y_mm", "fvic_z_mm", "fvsa_length_mm"):
+    for column_name in ("fvic_y", "fvic_z", "fvsa_length"):
         original_value = original_metrics[comparison_index][column_name]
         translated_value = translated_metrics[comparison_index][column_name]
         assert original_value is not None, f"{column_name} is None in original"
@@ -172,12 +172,12 @@ def test_parallel_wishbone_planes_produce_null_ic_metrics(
 
     metrics = compute_metrics_for_state_from_suspension(state, suspension)
 
-    assert metrics["svic_x_mm"] is None
-    assert metrics["svic_z_mm"] is None
-    assert metrics["svsa_length_mm"] is None
-    assert metrics["fvic_y_mm"] is None
-    assert metrics["fvic_z_mm"] is None
-    assert metrics["fvsa_length_mm"] is None
+    assert metrics["svic_x"] is None
+    assert metrics["svic_z"] is None
+    assert metrics["svsa_length"] is None
+    assert metrics["fvic_y"] is None
+    assert metrics["fvic_z"] is None
+    assert metrics["fvsa_length"] is None
 
 
 def test_steering_axis_ground_intersection_uses_contact_patch_height(
@@ -262,9 +262,9 @@ def test_scrub_radius_uses_ground_plane_wheel_lateral_direction(
     DerivedPointsManager(suspension.derived_spec()).update_in_place(state.positions)
 
     metrics = compute_metrics_for_state_from_suspension(state, suspension)
-    scrub_radius = metrics["scrub_radius_mm"]
-    roadwheel_angle = metrics["roadwheel_angle_deg"]
-    camber = metrics["camber_deg"]
+    scrub_radius = metrics["scrub_radius"]
+    roadwheel_angle = metrics["roadwheel_angle"]
+    camber = metrics["camber"]
 
     assert scrub_radius is not None
     assert roadwheel_angle is not None
@@ -314,7 +314,7 @@ class TestSignConventionsAndKnownValues:
         state = suspension.initial_state()
         metrics = compute_metrics_for_state_from_suspension(state, suspension)
 
-        camber = metrics["camber_deg"]
+        camber = metrics["camber"]
         assert camber is not None
         assert camber < 0, f"Expected negative camber (top tilted inward), got {camber}"
 
@@ -330,8 +330,8 @@ class TestSignConventionsAndKnownValues:
         state = suspension.initial_state()
         metrics = compute_metrics_for_state_from_suspension(state, suspension)
 
-        camber = metrics["camber_deg"]
-        assert camber is not None, "camber_deg is None"
+        camber = metrics["camber"]
+        assert camber is not None, "camber is None"
         np.testing.assert_allclose(
             camber,
             -1.909,
@@ -351,7 +351,7 @@ class TestSignConventionsAndKnownValues:
         state = suspension.initial_state()
         metrics = compute_metrics_for_state_from_suspension(state, suspension)
 
-        caster = metrics["caster_deg"]
+        caster = metrics["caster"]
         assert caster is not None
         assert caster > 0, (
             f"Expected positive caster (top tilted rearward), got {caster}"
@@ -369,8 +369,8 @@ class TestSignConventionsAndKnownValues:
         state = suspension.initial_state()
         metrics = compute_metrics_for_state_from_suspension(state, suspension)
 
-        caster = metrics["caster_deg"]
-        assert caster is not None, "caster_deg is None"
+        caster = metrics["caster"]
+        assert caster is not None, "caster is None"
         np.testing.assert_allclose(
             caster,
             4.764,
@@ -389,8 +389,8 @@ class TestSignConventionsAndKnownValues:
         state = suspension.initial_state()
         metrics = compute_metrics_for_state_from_suspension(state, suspension)
 
-        roadwheel_angle = metrics["roadwheel_angle_deg"]
-        assert roadwheel_angle is not None, "roadwheel_angle_deg is None"
+        roadwheel_angle = metrics["roadwheel_angle"]
+        assert roadwheel_angle is not None, "roadwheel_angle is None"
         np.testing.assert_allclose(
             roadwheel_angle,
             0.0,
@@ -413,8 +413,8 @@ class TestSignConventionsAndKnownValues:
         first_metrics = compute_metrics_for_state_from_suspension(states[0], suspension)
         last_metrics = compute_metrics_for_state_from_suspension(states[-1], suspension)
 
-        first_rwa = first_metrics["roadwheel_angle_deg"]
-        last_rwa = last_metrics["roadwheel_angle_deg"]
+        first_rwa = first_metrics["roadwheel_angle"]
+        last_rwa = last_metrics["roadwheel_angle"]
         assert first_rwa is not None
         assert last_rwa is not None
 
@@ -428,25 +428,24 @@ def test_default_corner_metric_catalog_matches_trusted_set() -> None:
     column_names = [metric.column_name for metric in get_default_corner_metrics()]
 
     expected = [
-        "camber_deg",
-        "caster_deg",
-        "kpi_deg",
-        "scrub_radius_mm",
-        "mechanical_trail_mm",
-        "roadwheel_angle_deg",
-        "svic_x_mm",
-        "svic_z_mm",
-        "svsa_length_mm",
-        "fvic_y_mm",
-        "fvic_z_mm",
-        "fvsa_length_mm",
-        "wheel_travel_mm",
-        "half_track_change_mm",
-        "wheel_recession_mm",
-        "damper_length_mm",
-        "svsa_angle_deg",
-        "anti_dive_pct",
-        "anti_lift_pct",
-        "anti_squat_pct",
+        "camber",
+        "caster",
+        "kpi",
+        "scrub_radius",
+        "mechanical_trail",
+        "roadwheel_angle",
+        "svic_x",
+        "svic_z",
+        "svsa_length",
+        "fvic_y",
+        "fvic_z",
+        "fvsa_length",
+        "wheel_travel",
+        "half_track",
+        "damper_length",
+        "svsa_angle",
+        "anti_dive",
+        "anti_lift",
+        "anti_squat",
     ]
     assert column_names == expected
