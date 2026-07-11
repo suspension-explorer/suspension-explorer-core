@@ -5,7 +5,9 @@ Derived point specifications and management.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Set, TypeAlias, TypeVar, cast
+from typing import Callable, Container, Mapping, Set, TypeAlias, TypeVar, cast
+
+import numpy as np
 
 from kinematics.core.dual import DualVec3
 from kinematics.core.geometry import Point3
@@ -88,8 +90,7 @@ class DerivedPointsManager:
         # This will raise an error if cycles are detected.
         self.update_order = self.get_topological_sort()
 
-        # Cache of single-point computation plans, built lazily by
-        # get_computation_plan().
+        # Cache of single-point computation plans, built lazily.
         self._computation_plans: dict[
             PointKey, tuple[tuple[PointKey, ...], tuple[PointKey, ...]]
         ] = {}
@@ -181,7 +182,7 @@ class DerivedPointsManager:
             update_positions = cast(dict[PointKey, PositionValue], positions)
             positions[point_id] = cast(_V, update_func(update_positions))
 
-    def get_computation_plan(
+    def _get_computation_plan(
         self, point_id: PointKey
     ) -> tuple[tuple[PointKey, ...], tuple[PointKey, ...]]:
         """
@@ -235,7 +236,7 @@ class DerivedPointsManager:
         self._computation_plans[point_id] = plan
         return plan
 
-    def update_chain_in_place(
+    def _update_chain_in_place(
         self, positions: dict[PointKey, _V], chain: tuple[PointKey, ...]
     ) -> None:
         """
@@ -243,12 +244,67 @@ class DerivedPointsManager:
 
         Args:
             positions: Dictionary to mutate in-place. Must contain the base
-                       dependencies reported by get_computation_plan().
+                       dependencies reported by _get_computation_plan().
             chain: Derived points in dependency order, as returned by
-                   get_computation_plan().
+                   _get_computation_plan().
         """
         update_positions = cast(dict[PointKey, PositionValue], positions)
         for point_id in chain:
             positions[point_id] = cast(
                 _V, self.spec.functions[point_id](update_positions)
             )
+
+    def compute_point_jacobian(
+        self,
+        point_id: PointKey,
+        positions: Mapping[PointKey, Point3],
+        variable_points: Container[PointKey],
+    ) -> dict[PointKey, np.ndarray]:
+        """
+        Compute a derived point's Jacobian with respect to relevant variables.
+
+        Only the point's transitive dependency chain is evaluated. Dual-number
+        inputs are created once, then their derivative seeds are reused for all
+        input coordinates.
+
+        Args:
+            point_id: Derived point whose position is differentiated.
+            positions: Current base and derived point positions.
+            variable_points: Points whose coordinates are solver variables.
+
+        Returns:
+            Mapping from each relevant variable point to a 3x3 block. Column d
+            contains d(point_id) / d(variable_point[d]).
+
+        Raises:
+            KeyError: If point_id is not a derived point in this spec.
+        """
+        chain, base_dependencies = self._get_computation_plan(point_id)
+
+        # The values alias the input arrays, which remain constant throughout
+        # this Jacobian evaluation. Fixed dependencies must be present because
+        # derived functions read them, even though they are never seeded.
+        dual_positions = {
+            dependency: DualVec3(positions[dependency].data)
+            for dependency in base_dependencies
+        }
+
+        jacobian_blocks: dict[PointKey, np.ndarray] = {}
+        for dependency in base_dependencies:
+            if dependency not in variable_points:
+                continue
+
+            block = np.empty((3, 3), dtype=np.float64)
+            seed_derivative = dual_positions[dependency].deriv
+            for dimension in range(3):
+                # Seed d(input) / d(input[dimension]) with basis vector e_d.
+                seed_derivative[:] = 0.0
+                seed_derivative[dimension] = 1.0
+                self._update_chain_in_place(dual_positions, chain)
+                block[:, dimension] = dual_positions[point_id].deriv
+
+            # Clear the seed before differentiating with respect to another point.
+            seed_derivative[:] = 0.0
+            jacobian_blocks[dependency] = block
+
+        return jacobian_blocks
