@@ -8,9 +8,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import matplotlib
 import pytest
 
+matplotlib = pytest.importorskip(
+    "matplotlib",
+    reason="visualization smoke tests require the optional viz extra",
+)
 matplotlib.use("Agg")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

@@ -7,6 +7,7 @@ Metrics are computed after solving, never inside the solve loop.
 
 from kinematics.metrics.context import MetricContext
 from kinematics.metrics.main import (
+    AxleMetricRows,
     MetricRow,
     compute_metrics_for_state,
     compute_metrics_for_state_from_suspension,
@@ -14,6 +15,7 @@ from kinematics.metrics.main import (
 )
 
 __all__ = [
+    "AxleMetricRows",
     "MetricContext",
     "MetricRow",
     "compute_metrics_for_state",

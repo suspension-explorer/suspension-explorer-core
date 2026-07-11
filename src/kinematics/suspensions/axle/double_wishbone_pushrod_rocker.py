@@ -196,7 +196,19 @@ class DoubleWishbonePushrodRockerAxleSuspension(DoubleWishboneAxleSuspension):
             design_sign = np.sign(design_triple)
             for step, state in enumerate(states):
                 triple = self._arb_triple(state, side)
-                if np.sign(triple) != design_sign and triple != 0.0:
+                margin = self._arb_chirality_margin(state, side)
+                if abs(margin) <= EPS_GEOMETRIC:
+                    issues.append(
+                        DiagnosticIssue(
+                            step,
+                            "chirality",
+                            "error",
+                            f"{side.name.lower()} ARB arm reached its chirality "
+                            f"boundary at step {step}.",
+                            margin,
+                        )
+                    )
+                elif np.sign(triple) != design_sign:
                     issues.append(
                         DiagnosticIssue(
                             step,
@@ -208,6 +220,22 @@ class DoubleWishbonePushrodRockerAxleSuspension(DoubleWishboneAxleSuspension):
                     )
                 issues.extend(self._transmission_issues(state, side, step))
         return issues
+
+    @staticmethod
+    def _arb_chirality_margin(state, side: Side) -> float:
+        """Return normalized signed volume for one ARB linkage branch."""
+        axis_a = state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_A)).data
+        axis = state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_B)).data - axis_a
+        rocker_arm = state.get(PointRef(side, PointID.DROPLINK_ROCKER)).data - axis_a
+        arb_arm = state.get(PointRef(side, PointID.DROPLINK_ARB)).data - axis_a
+        scale = (
+            float(np.linalg.norm(axis))
+            * float(np.linalg.norm(rocker_arm))
+            * float(np.linalg.norm(arb_arm))
+        )
+        if scale <= EPS_GEOMETRIC:
+            return 0.0
+        return float(np.dot(axis, np.cross(rocker_arm, arb_arm)) / scale)
 
     def topology_metric_values(self, state):
         """Return per-side ARB arm rotation and total bar twist from design."""

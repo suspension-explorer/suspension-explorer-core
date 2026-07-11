@@ -40,6 +40,10 @@ def test_corner_spring_type_owns_derivative_declarations(
         "deriv_rocker_angle_wrt_hub_z",
         "deriv_damper_length_wrt_hub_z",
     }
+    assert sum(
+        isinstance(constraint, ScalarTripleProductConstraint)
+        for constraint in coilover.constraints()
+    ) == 1
 
 
 def test_arb_axle_uses_chirality_constraints(test_data_dir: Path) -> None:
@@ -110,3 +114,31 @@ def test_arb_diagnostics_detect_mirrored_arm_branch(test_data_dir: Path) -> None
     issues = [issue for issue in diagnostics.errors if issue.category == "chirality"]
     assert len(issues) == 1
     assert issues[0].step == step
+
+
+def test_arb_diagnostics_detect_chirality_boundary(test_data_dir: Path) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
+    assert isinstance(axle, DoubleWishbonePushrodRockerAxleSuspension)
+    sweep = parse_sweep_file(test_data_dir / "axle_rocker_sweep.yaml", axle)
+    states, stats = solve_sweep(axle, sweep)
+    step = len(states) // 2
+    state = states[step].copy()
+    side = Side.LEFT
+    axis_a = state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_A)).data
+    axis_b = state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_B)).data
+    rocker = state.get(PointRef(side, PointID.DROPLINK_ROCKER)).data
+    arm_key = PointRef(side, PointID.DROPLINK_ARB)
+    arm = state.get(arm_key).data
+    normal = np.cross(axis_b - axis_a, rocker - axis_a)
+    normal /= np.linalg.norm(normal)
+    state.positions[arm_key] = Point3(
+        arm - float(np.dot(arm - axis_a, normal)) * normal
+    )
+    states[step] = state
+
+    diagnostics = diagnose_sweep(axle, states, stats)
+
+    issues = [issue for issue in diagnostics.errors if issue.category == "chirality"]
+    assert len(issues) == 1
+    assert issues[0].step == step
+    assert "boundary" in issues[0].message

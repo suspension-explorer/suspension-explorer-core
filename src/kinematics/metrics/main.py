@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Mapping, Sequence
+from typing import TYPE_CHECKING, Mapping, Sequence, overload
 
 from kinematics.core.point_ref import PointRef, Side
 from kinematics.metrics.catalog import (
@@ -66,11 +66,13 @@ def compute_metrics_for_axle_state(
     axle_row: MetricRow = OrderedDict()
     corner_rows: dict[str, MetricRow] = {}
     for side in (Side.LEFT, Side.RIGHT):
+        corner = axle.corners[side]
         corner_state = axle.corner_state(state, side)
+        corner_config = corner.config if corner.config is not None else config
         side_row = compute_metrics_for_state(
             corner_state,
-            axle.corners[side],
-            config,
+            corner,
+            corner_config,
             _corner_tangents(tangents, side) if tangents else None,
         )
         corner_rows[side.name.lower()] = side_row
@@ -173,14 +175,32 @@ def compute_metrics_for_state(
     return row
 
 
+@overload
+def compute_metrics_for_sweep(
+    states: list[SuspensionState],
+    suspension: "DoubleWishboneAxleSuspension",
+    config: SuspensionConfig,
+    tangents_per_state: "Sequence[Sequence[TangentField]] | None" = None,
+) -> list[AxleMetricRows]: ...
+
+
+@overload
 def compute_metrics_for_sweep(
     states: list[SuspensionState],
     suspension: "Suspension",
     config: SuspensionConfig,
     tangents_per_state: "Sequence[Sequence[TangentField]] | None" = None,
-) -> list[MetricRow]:
+) -> list[MetricRow]: ...
+
+
+def compute_metrics_for_sweep(
+    states: list[SuspensionState],
+    suspension: "Suspension",
+    config: SuspensionConfig,
+    tangents_per_state: "Sequence[Sequence[TangentField]] | None" = None,
+) -> list[MetricRow | AxleMetricRows]:
     """
-    Compute all corner-level metrics for a sweep of solved states.
+    Compute metrics for a sweep of solved corner or axle states.
 
     Args:
         states: List of solved SuspensionStates from a parametric sweep.
@@ -192,24 +212,59 @@ def compute_metrics_for_sweep(
             should use :func:`kinematics.main.compute_sweep_metrics`.
 
     Returns:
-        A list of ordered metric rows, one per state.
+        One metric result per state. Corner suspensions return ordered rows;
+        axle suspensions return structural axle and per-corner rows.
     """
     if tangents_per_state is None:
         return [
-            compute_metrics_for_state(state, suspension, config) for state in states
+            _compute_metrics_for_suspension_state(state, suspension, config)
+            for state in states
         ]
     if len(states) != len(tangents_per_state):
         raise ValueError("State/tangent row count mismatch")
     return [
-        compute_metrics_for_state(state, suspension, config, tangents)
+        _compute_metrics_for_suspension_state(
+            state,
+            suspension,
+            config,
+            tangents,
+        )
         for state, tangents in zip(states, tangents_per_state)
     ]
+
+
+def _compute_metrics_for_suspension_state(
+    state: SuspensionState,
+    suspension: "Suspension",
+    config: SuspensionConfig,
+    tangents: "Sequence[TangentField] | None" = None,
+) -> MetricRow | AxleMetricRows:
+    """Dispatch metric calculation without applying corner metrics to an axle."""
+    from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
+
+    if isinstance(suspension, DoubleWishboneAxleSuspension):
+        return compute_metrics_for_axle_state(state, suspension, config, tangents)
+    return compute_metrics_for_state(state, suspension, config, tangents)
+
+
+@overload
+def compute_metrics_for_state_from_suspension(
+    state: SuspensionState,
+    suspension: "DoubleWishboneAxleSuspension",
+) -> AxleMetricRows: ...
+
+
+@overload
+def compute_metrics_for_state_from_suspension(
+    state: SuspensionState,
+    suspension: "Suspension",
+) -> MetricRow: ...
 
 
 def compute_metrics_for_state_from_suspension(
     state: SuspensionState,
     suspension: "Suspension",
-) -> MetricRow:
+) -> MetricRow | AxleMetricRows:
     """
     Compute metrics using parameters from the suspension configuration.
 
@@ -220,7 +275,8 @@ def compute_metrics_for_state_from_suspension(
         suspension: The suspension containing configuration.
 
     Returns:
-        An ordered mapping of metric column names to values.
+        An ordered row for a corner suspension, or structural axle and
+        per-corner rows for an axle suspension.
 
     Raises:
         ValueError: If the suspension has no configuration.
@@ -228,8 +284,8 @@ def compute_metrics_for_state_from_suspension(
     if suspension.config is None:
         raise ValueError("Suspension has no configuration")
 
-    return compute_metrics_for_state(
-        state=state,
-        suspension=suspension,
-        config=suspension.config,
+    return _compute_metrics_for_suspension_state(
+        state,
+        suspension,
+        suspension.config,
     )

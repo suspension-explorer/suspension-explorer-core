@@ -196,6 +196,7 @@ def _build_corner(
 ) -> DoubleWishboneSuspension:
     """Build one concrete corner after exact point validation."""
     _check_valid_points(spec.hardpoints, cls)
+    _validate_side_signs(spec.hardpoints, spec.side)
     _check_shim_support(spec.config, cls)
     return cls(
         name=spec.name,

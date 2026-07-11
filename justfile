@@ -9,9 +9,9 @@ install:
     uv sync --all-extras --dev
     uv pip install -e .
 
-# Install dependencies exercised by the CI test suite, including headless plots.
+# Install core dependencies exercised by CI; visualization remains optional.
 install-ci:
-    uv sync --extra viz --dev
+    uv sync --dev
     uv pip install -e .
 
 # Clean.

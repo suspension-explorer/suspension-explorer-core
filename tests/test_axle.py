@@ -9,7 +9,11 @@ from kinematics.core.point_ref import PointRef, Side
 from kinematics.io import load_geometry
 from kinematics.io.sweep_loader import parse_sweep_file
 from kinematics.main import compute_sweep_metrics, solve_sweep
-from kinematics.metrics.main import AxleMetricRows
+from kinematics.metrics import (
+    AxleMetricRows,
+    compute_metrics_for_state_from_suspension,
+    compute_metrics_for_sweep,
+)
 from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
 
 
@@ -58,3 +62,21 @@ def test_axle_targets_require_side(test_data_dir: Path) -> None:
 
     with pytest.raises(ValueError, match="requires side left or right"):
         axle.resolve_target_key(PointID.WHEEL_CENTER, None)
+
+
+def test_generic_metric_helpers_preserve_structural_axle_rows(
+    test_data_dir: Path,
+) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, DoubleWishboneAxleSuspension)
+    state = axle.initial_state()
+    assert axle.config is not None
+
+    state_metrics = compute_metrics_for_state_from_suspension(state, axle)
+    sweep_metrics = compute_metrics_for_sweep([state], axle, axle.config)
+
+    assert isinstance(state_metrics, AxleMetricRows)
+    assert isinstance(sweep_metrics[0], AxleMetricRows)
+    assert state_metrics.corners.keys() == {"left", "right"}
+    assert "track" in state_metrics.axle
+    assert "camber" in state_metrics.corners["left"]

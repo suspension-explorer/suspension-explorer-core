@@ -7,7 +7,7 @@ from kinematics.constraints import Constraint
 from kinematics.core.enums import PointID
 from kinematics.metrics.derivatives import DerivativeMetricDefinition
 from kinematics.metrics.units import MetricUnit
-from kinematics.suspensions.corner.attachments import rigid_point_constraints
+from kinematics.suspensions.corner.attachments import chiral_rigid_point_constraints
 from kinematics.suspensions.corner.double_wishbone import DoubleWishboneSuspension
 
 
@@ -40,7 +40,7 @@ class DoubleWishboneCoiloverSuspension(DoubleWishboneSuspension):
         """Base corner constraints plus the lower-wishbone attachment."""
         constraints = super().constraints()
         constraints.extend(
-            rigid_point_constraints(
+            chiral_rigid_point_constraints(
                 self.initial_state(),
                 PointID.STRUT_BOTTOM,
                 (

@@ -23,7 +23,6 @@ from kinematics.metrics.units import MetricUnit
 from kinematics.state import SuspensionState
 from kinematics.suspensions.corner.attachments import (
     chiral_rigid_point_constraints,
-    rigid_point_constraints,
 )
 from kinematics.suspensions.corner.double_wishbone import DoubleWishboneSuspension
 
@@ -129,7 +128,7 @@ class DoubleWishbonePushrodRockerSuspension(DoubleWishboneSuspension):
         constraints = [*super().constraints(), *self._rocker_constraints()]
         if self.has_strut:
             constraints.extend(
-                rigid_point_constraints(
+                chiral_rigid_point_constraints(
                     self.initial_state(),
                     PointID.STRUT_BOTTOM,
                     (
