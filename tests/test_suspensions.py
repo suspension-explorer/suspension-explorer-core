@@ -92,12 +92,13 @@ class TestSuspensionBase:
         # Check required points are included
         assert PointID.LOWER_WISHBONE_OUTBOARD in valid
         assert PointID.UPPER_WISHBONE_OUTBOARD in valid
-        # Check optional points are included
-        assert PointID.PUSHROD_OUTBOARD in valid
+        # Variant-specific points are excluded from the basic topology.
+        assert PointID.PUSHROD_OUTBOARD not in valid
+        assert PointID.STRUT_BOTTOM not in valid
 
     def test_matches_type(self):
         """
-        Test type matching with aliases.
+        Test exact, case-insensitive type matching.
         """
         assert DoubleWishboneSuspension.matches_type("double_wishbone")
         assert DoubleWishboneSuspension.matches_type("DOUBLE_WISHBONE")
@@ -268,7 +269,8 @@ class TestRegistry:
         """
         types = list_supported_types()
         assert "double_wishbone" in types
-        assert "double_wishbone_front" in types  # Alias
+        assert "double_wishbone_coilover" in types
+        assert "double_wishbone_front" in types
 
     def test_get_suspension_class(self):
         """

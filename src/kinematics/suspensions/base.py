@@ -16,8 +16,8 @@ from kinematics.constraints import Constraint
 from kinematics.core.enums import PointID, ShimType, Units
 from kinematics.core.geometry import Point3
 from kinematics.points.derived.manager import DerivedPointsSpec
+from kinematics.schema.config import SuspensionConfig
 from kinematics.state import SuspensionState
-from kinematics.suspensions.config.settings import SuspensionConfig
 
 if TYPE_CHECKING:
     from kinematics.visualization.main import LinkVisualization
@@ -161,3 +161,8 @@ class Suspension(ABC):
         affecting the stored design values.
         """
         return {pid: pos.copy() for pid, pos in self.hardpoints.items()}
+
+    @property
+    def has_strut(self) -> bool:
+        """Whether this explicit topology includes a spring/damper element."""
+        return False

@@ -1,0 +1,41 @@
+type: double_wishbone_coilover
+name: "corner strut (outboard)"
+version: "0.0.1"
+units: MILLIMETERS
+
+# Single left corner with an outboard spring/damper mounted on the lower
+# wishbone. STRUT_TOP is chassis-fixed and STRUT_BOTTOM moves rigidly with the
+# lower wishbone.
+hardpoints:
+  # Lower wishbone.
+  lower_wishbone_inboard_front: {x: 250, y: 400, z: 200}
+  lower_wishbone_inboard_rear: {x: -250, y: 450, z: 200}
+  lower_wishbone_outboard: {x: 0, y: 900, z: 200}
+
+  # Upper wishbone.
+  upper_wishbone_inboard_front: {x: 225, y: 350, z: 500}
+  upper_wishbone_inboard_rear: {x: -275, y: 350, z: 500}
+  upper_wishbone_outboard: {x: -25, y: 750, z: 500}
+
+  # Track rod.
+  trackrod_inboard: {x: 50, y: 200, z: 250}
+  trackrod_outboard: {x: 150, y: 800, z: 275}
+
+  # Axle.
+  axle_inboard: {x: -20, y: 800, z: 308.426}
+  axle_outboard: {x: -20, y: 950, z: 313.426}
+
+  # Outboard coilover.
+  strut_bottom: {x: 0, y: 780, z: 240}
+  strut_top: {x: 0, y: 600, z: 650}
+
+config:
+  steered: true
+  wheel:
+    offset: 0
+    tire:
+      aspect_ratio: 0.55
+      section_width: 270
+      rim_diameter: 13
+  cg_position: {x: 1250, y: 0, z: 450}
+  wheelbase: 2500.0
