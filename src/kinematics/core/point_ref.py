@@ -41,6 +41,15 @@ class Side(IntEnum):
     RIGHT = 1
     CENTER = 2
 
+    @property
+    def lateral_sign(self) -> float:
+        """Return the ISO Y sign for a left or right vehicle side."""
+        if self is Side.LEFT:
+            return 1.0
+        if self is Side.RIGHT:
+            return -1.0
+        raise ValueError("CENTER does not have a lateral sign")
+
 
 class PointRef(NamedTuple):
     """

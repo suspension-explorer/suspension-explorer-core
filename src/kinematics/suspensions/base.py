@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, ClassVar, Sequence
 from kinematics.constraints import Constraint
 from kinematics.core.enums import PointID, ShimType, Units
 from kinematics.core.geometry import Point3
+from kinematics.core.point_ref import Side
 from kinematics.points.derived.manager import DerivedPointsSpec
 from kinematics.schema.config import SuspensionConfig
 from kinematics.state import SuspensionState
@@ -51,6 +52,7 @@ class Suspension(ABC):
     units: Units = Units.MILLIMETERS
     hardpoints: dict[PointID, Point3] = field(default_factory=dict)
     config: SuspensionConfig | None = None
+    side: Side = field(kw_only=True)
 
     # Internal state cache.
     _initial_state: SuspensionState | None = field(default=None, repr=False)

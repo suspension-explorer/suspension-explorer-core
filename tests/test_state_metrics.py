@@ -100,22 +100,18 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     assert len(result.rows) == len(states)
     assert result.tangent_solve_infos is not None
     for state, row in zip(states, result.rows):
-        assert "camber_gain_deg_per_mm" in row
-        assert "damper_mr" in row
-        assert row["damper_mr"] is not None
+        assert "deriv_camber_wrt_hub_z" in row
+        assert "deriv_damper_length_wrt_hub_z" in row
+        assert row["deriv_damper_length_wrt_hub_z"] is not None
         non_derivative = compute_metrics_for_state(
             state,
             suspension,
             suspension.config,
         )
-        assert list(row.items())[: len(non_derivative)] == list(
-            non_derivative.items()
-        )
+        assert list(row.items())[: len(non_derivative)] == list(non_derivative.items())
 
     midpoint = len(states) // 2
-    midpoint_targets = [
-        target_sweep[midpoint] for target_sweep in sweep.target_sweeps
-    ]
+    midpoint_targets = [target_sweep[midpoint] for target_sweep in sweep.target_sweeps]
     bump_target = next(
         target for target in midpoint_targets if target.point_id == PointID.WHEEL_CENTER
     )
@@ -128,12 +124,8 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     finite_difference_sweep = SweepConfig(
         target_sweeps=[
             [
-                bump_target._replace(
-                    value=bump_target.value - finite_difference_step
-                ),
-                bump_target._replace(
-                    value=bump_target.value + finite_difference_step
-                ),
+                bump_target._replace(value=bump_target.value - finite_difference_step),
+                bump_target._replace(value=bump_target.value + finite_difference_step),
             ],
             [rack_target, rack_target],
         ]
@@ -160,16 +152,16 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
 
     travel_delta = right_travel - left_travel
     camber_difference = right_camber - left_camber
-    expected_camber_gain = camber_difference / travel_delta
-    assert result.rows[midpoint]["camber_gain_deg_per_mm"] == pytest.approx(
-        expected_camber_gain,
+    expected_camber_derivative = camber_difference / travel_delta
+    assert result.rows[midpoint]["deriv_camber_wrt_hub_z"] == pytest.approx(
+        expected_camber_derivative,
         rel=2e-3,
     )
 
     damper_difference = right_damper - left_damper
-    expected_damper_mr = -damper_difference / travel_delta
-    assert result.rows[midpoint]["damper_mr"] == pytest.approx(
-        expected_damper_mr,
+    expected_damper_derivative = damper_difference / travel_delta
+    assert result.rows[midpoint]["deriv_damper_length_wrt_hub_z"] == pytest.approx(
+        expected_damper_derivative,
         rel=2e-3,
     )
 
@@ -191,7 +183,7 @@ def test_tangent_failure_is_visible_and_preserves_base_metrics(
     assert result.tangent_solve_infos is None
     assert len(result.rows) == len(states)
     assert "camber_deg" in result.rows[0]
-    assert "camber_gain_deg_per_mm" not in result.rows[0]
+    assert "deriv_camber_wrt_hub_z" not in result.rows[0]
 
 
 def _anti_context(

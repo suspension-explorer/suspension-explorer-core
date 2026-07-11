@@ -31,6 +31,10 @@ def test_side_values():
     assert int(Side.LEFT) == 0
     assert int(Side.RIGHT) == 1
     assert int(Side.CENTER) == 2
+    assert Side.LEFT.lateral_sign == 1.0
+    assert Side.RIGHT.lateral_sign == -1.0
+    with pytest.raises(ValueError, match="CENTER does not have a lateral sign"):
+        _ = Side.CENTER.lateral_sign
 
 
 def test_point_ref_is_tuple():

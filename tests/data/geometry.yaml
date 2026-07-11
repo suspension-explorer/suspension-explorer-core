@@ -1,4 +1,5 @@
 type: double_wishbone
+side: LEFT
 name: "test"
 version: "0.0.1"
 units: MILLIMETERS

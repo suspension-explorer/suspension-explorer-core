@@ -1,15 +1,42 @@
 import numpy as np
 
 from kinematics.core.constants import TEST_TOLERANCE
-from kinematics.core.enums import PointID
+from kinematics.core.enums import Axis, PointID
+from kinematics.core.point_ref import Side
 from kinematics.io.geometry_loader import load_geometry
 from kinematics.io.sweep_loader import parse_sweep_file
 from kinematics.main import solve_sweep
 from kinematics.metrics.catalog import get_default_corner_metrics
 from kinematics.metrics.context import MetricContext
 from kinematics.metrics.main import compute_metrics_for_state_from_suspension
+from kinematics.metrics.units import MetricUnit
 from kinematics.points.derived.manager import DerivedPointsManager
 from kinematics.suspensions.double_wishbone import DoubleWishboneSuspension
+
+
+def test_metric_side_sign_uses_declared_side(
+    double_wishbone_geometry_file,
+) -> None:
+    suspension = load_geometry(double_wishbone_geometry_file)
+    assert isinstance(suspension, DoubleWishboneSuspension)
+    assert suspension.config is not None
+    state = suspension.initial_state()
+
+    suspension.side = Side.RIGHT
+    context = MetricContext(state, suspension, suspension.config)
+
+    assert state.get(PointID.AXLE_OUTBOARD)[Axis.Y] > 0.0
+    assert context.side_sign == -1.0
+
+
+def test_metric_catalog_uses_supported_units() -> None:
+    catalog = get_default_corner_metrics()
+
+    assert {definition.unit for definition in catalog} == {
+        MetricUnit.MM,
+        MetricUnit.DEG,
+        MetricUnit.PERCENT,
+    }
 
 
 def _shift_x(point: object, delta_x: float):
@@ -68,6 +95,7 @@ def _translate_double_wishbone_x(
         name=suspension.name,
         version=suspension.version,
         units=suspension.units,
+        side=suspension.side,
         hardpoints=hardpoints,
         config=translated_config,
     )

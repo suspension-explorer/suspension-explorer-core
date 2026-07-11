@@ -16,6 +16,7 @@ import pytest
 
 from kinematics.core.enums import PointID, ShimType, Units
 from kinematics.core.geometry import Direction3, Point3
+from kinematics.core.point_ref import Side
 from kinematics.io.geometry_loader import load_geometry
 from kinematics.suspensions.base import Suspension
 from kinematics.suspensions.config.settings import (
@@ -143,6 +144,7 @@ class TestDoubleWishboneSuspension:
             name="test",
             version="1.0.0",
             units=Units.MILLIMETERS,
+            side=Side.LEFT,
             hardpoints=valid_hardpoints,
             config=valid_config,
         )
@@ -158,6 +160,7 @@ class TestDoubleWishboneSuspension:
             DoubleWishboneSuspension(
                 name="test",
                 units=Units.MILLIMETERS,
+                side=Side.LEFT,
                 hardpoints=valid_hardpoints,
                 config=valid_config,
             )
@@ -169,6 +172,7 @@ class TestDoubleWishboneSuspension:
         suspension = DoubleWishboneSuspension(
             name="test",
             units=Units.MILLIMETERS,
+            side=Side.LEFT,
             hardpoints=valid_hardpoints,
             config=valid_config,
         )
@@ -184,6 +188,7 @@ class TestDoubleWishboneSuspension:
         suspension = DoubleWishboneSuspension(
             name="test",
             units=Units.MILLIMETERS,
+            side=Side.LEFT,
             hardpoints=valid_hardpoints,
             config=valid_config,
         )
@@ -198,6 +203,7 @@ class TestDoubleWishboneSuspension:
         suspension = DoubleWishboneSuspension(
             name="test",
             units=Units.MILLIMETERS,
+            side=Side.LEFT,
             hardpoints=valid_hardpoints,
             config=valid_config,
         )
@@ -211,6 +217,7 @@ class TestDoubleWishboneSuspension:
         suspension = DoubleWishboneSuspension(
             name="test",
             units=Units.MILLIMETERS,
+            side=Side.LEFT,
             hardpoints=valid_hardpoints,
             config=valid_config,
         )
@@ -225,6 +232,7 @@ class TestDoubleWishboneSuspension:
         suspension = DoubleWishboneSuspension(
             name="test",
             units=Units.MILLIMETERS,
+            side=Side.LEFT,
             hardpoints=valid_hardpoints,
             config=valid_config,
         )
@@ -306,6 +314,7 @@ class TestYAMLLoading:
         """
         yaml_content = """
 type: double_wishbone
+side: LEFT
 name: "Test"
 version: "1.0.0"
 units: MILLIMETERS
@@ -348,6 +357,7 @@ config:
         """
         yaml_content = """
 type: double_wishbone
+side: LEFT
 name: "With Shim"
 units: MILLIMETERS
 
@@ -418,6 +428,7 @@ config:
         """
         yaml_content = """
 type: double_wishbone
+side: LEFT
 hardpoints:
   LOWER_WISHBONE_INBOARD_FRONT: [250, 400, 200]
   # Missing most required points!
@@ -463,6 +474,7 @@ class TestIntegration:
         suspension = DoubleWishboneSuspension(
             name="test",
             units=Units.MILLIMETERS,
+            side=Side.LEFT,
             hardpoints=valid_hardpoints,
             config=valid_config,
         )
@@ -493,6 +505,7 @@ class TestIntegration:
         suspension = DoubleWishboneSuspension(
             name="test",
             units=Units.MILLIMETERS,
+            side=Side.LEFT,
             hardpoints=valid_hardpoints,
             config=config,
         )

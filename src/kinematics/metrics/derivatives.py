@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Callable, Mapping, Protocol, Sequence
@@ -13,15 +14,29 @@ from kinematics.core.dual import DualScalar, DualVec3, dot, norm
 from kinematics.core.enums import Axis
 from kinematics.core.geometry import Direction3, extract_array
 from kinematics.core.point_ref import PointKey
+from kinematics.metrics.units import MetricUnit, MetricUnitQuotient
 from kinematics.sensitivity import TangentField
 from kinematics.state import SuspensionState
 
 DualPositions = Mapping[PointKey, DualVec3]
 DualSafeScalarCallable = Callable[[DualPositions], DualScalar]
 
+_SEMANTIC_NAME = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
+
+
+def _validate_semantics(name: str, unit: MetricUnit) -> None:
+    """Validate universal scalar naming and unit metadata."""
+    if _SEMANTIC_NAME.fullmatch(name) is None:
+        raise ValueError(f"Scalar name must be lowercase snake-case, got {name!r}")
+    if not isinstance(unit, MetricUnit):
+        raise TypeError(f"Scalar unit must be a MetricUnit, got {unit!r}")
+
 
 class ScalarResponse(Protocol):
     """A scalar geometric quantity evaluable on dual-number positions."""
+
+    name: str
+    unit: MetricUnit
 
     def evaluate(self, positions: DualPositions) -> DualScalar:
         """Evaluate the response value and directional derivative."""
@@ -41,6 +56,11 @@ class PointCoordinateResponse:
 
     point: PointKey
     axis: Direction3
+    name: str
+    unit: MetricUnit
+
+    def __post_init__(self) -> None:
+        _validate_semantics(self.name, self.unit)
 
     @property
     def selector_point(self) -> PointKey:
@@ -52,22 +72,33 @@ class PointCoordinateResponse:
         cls,
         point: PointKey,
         axis: Axis,
+        *,
+        name: str,
+        unit: MetricUnit,
     ) -> "PointCoordinateResponse":
         """Build a coordinate response along a principal world axis."""
         direction = np.zeros(3, dtype=np.float64)
         direction[int(axis)] = 1.0
-        return cls(point=point, axis=Direction3(direction))
+        return cls(point=point, axis=Direction3(direction), name=name, unit=unit)
 
     @classmethod
     def from_axis(
         cls,
         point: PointKey,
         axis: Axis | Direction3 | np.ndarray | tuple[float, float, float],
+        *,
+        name: str,
+        unit: MetricUnit,
     ) -> "PointCoordinateResponse":
         """Build a coordinate response, normalizing the supplied axis."""
         if isinstance(axis, Axis):
-            return cls.from_world_axis(point, axis)
-        return cls(point=point, axis=Direction3(extract_array(axis)))
+            return cls.from_world_axis(point, axis, name=name, unit=unit)
+        return cls(
+            point=point,
+            axis=Direction3(extract_array(axis)),
+            name=name,
+            unit=unit,
+        )
 
     def evaluate(self, positions: DualPositions) -> DualScalar:
         """Project the point position onto the configured axis."""
@@ -82,7 +113,12 @@ class PointDistanceResponse:
 
     point_a: PointKey
     point_b: PointKey
+    name: str
+    unit: MetricUnit
     driving_point: PointKey | None = None
+
+    def __post_init__(self) -> None:
+        _validate_semantics(self.name, self.unit)
 
     @property
     def selector_point(self) -> PointKey | None:
@@ -103,6 +139,11 @@ class PointDisplacementMagnitudeResponse:
 
     point: PointKey
     reference: np.ndarray
+    name: str
+    unit: MetricUnit
+
+    def __post_init__(self) -> None:
+        _validate_semantics(self.name, self.unit)
 
     @property
     def selector_point(self) -> PointKey:
@@ -114,6 +155,9 @@ class PointDisplacementMagnitudeResponse:
         cls,
         point: PointKey,
         reference: object,
+        *,
+        name: str,
+        unit: MetricUnit,
     ) -> "PointDisplacementMagnitudeResponse":
         """Build the response with a copied three-component reference."""
         raw_reference = extract_array(reference)
@@ -124,7 +168,12 @@ class PointDisplacementMagnitudeResponse:
             )
         copied_reference = raw_reference.copy()
         copied_reference.flags.writeable = False
-        return cls(point=point, reference=copied_reference)
+        return cls(
+            point=point,
+            reference=copied_reference,
+            name=name,
+            unit=unit,
+        )
 
     def evaluate(self, positions: DualPositions) -> DualScalar:
         """Evaluate displacement magnitude away from its singular origin."""
@@ -141,7 +190,12 @@ class CallableScalarResponse:
     """Adapter for an arbitrary dual-safe scalar response callable."""
 
     function: DualSafeScalarCallable
+    name: str
+    unit: MetricUnit
     driving_point: PointKey | None = None
+
+    def __post_init__(self) -> None:
+        _validate_semantics(self.name, self.unit)
 
     @property
     def selector_point(self) -> PointKey | None:
@@ -163,11 +217,19 @@ class CallableScalarResponse:
 class DerivativeMetricDefinition:
     """Declarative derivative ``d(response) / d(driver)``."""
 
-    column_name: str
-    unit: str
     response: ScalarResponse
     driver: ScalarDriver
     scale: float = 1.0
+
+    @property
+    def column_name(self) -> str:
+        """Universal output name derived from scalar semantics."""
+        return f"deriv_{self.response.name}_wrt_{self.driver.name}"
+
+    @property
+    def unit(self) -> MetricUnitQuotient:
+        """Universal quotient unit derived from scalar semantics."""
+        return self.response.unit / self.driver.unit
 
     def evaluate(self, state: SuspensionState, tangent: TangentField) -> float:
         """Evaluate this derivative along one solution-manifold tangent."""

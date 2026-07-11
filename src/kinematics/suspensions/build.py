@@ -55,6 +55,7 @@ def _build_corner(
         name=spec.name,
         version=spec.version,
         units=spec.units,
+        side=spec.side,
         hardpoints={
             point: position.copy() for point, position in spec.hardpoints.items()
         },

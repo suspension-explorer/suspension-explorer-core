@@ -27,7 +27,7 @@ def _bump_target(value: float) -> PointTarget:
     )
 
 
-def _rack_target(value: float) -> PointTarget:
+def _trackrod_inboard_target(value: float) -> PointTarget:
     return PointTarget(
         point_id=PointID.TRACKROD_INBOARD,
         direction=PointTargetAxis(axis=Axis.Y),
@@ -42,9 +42,9 @@ def test_corner_tangent_matches_finite_difference(
     corner = load_geometry(double_wishbone_geometry_file)
     initial = corner.initial_state()
     design_z = float(initial.positions[PointID.WHEEL_CENTER][Axis.Z])
-    rack_y = float(initial.positions[PointID.TRACKROD_INBOARD][Axis.Y])
+    trackrod_inboard_y = float(initial.positions[PointID.TRACKROD_INBOARD][Axis.Y])
     target_z = design_z + 10.0
-    targets = [_bump_target(target_z), _rack_target(rack_y)]
+    targets = [_bump_target(target_z), _trackrod_inboard_target(trackrod_inboard_y)]
 
     state = solve_sweep(corner, SweepConfig([[targets[0]], [targets[1]]]))[0][0]
     fields, solve_info = compute_state_tangents(
@@ -59,7 +59,10 @@ def test_corner_tangent_matches_finite_difference(
         SweepConfig(
             [
                 [_bump_target(target_z - FD_STEP), _bump_target(target_z + FD_STEP)],
-                [_rack_target(rack_y), _rack_target(rack_y)],
+                [
+                    _trackrod_inboard_target(trackrod_inboard_y),
+                    _trackrod_inboard_target(trackrod_inboard_y),
+                ],
             ]
         ),
     )[0]

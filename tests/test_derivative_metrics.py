@@ -1,5 +1,7 @@
 """Unit tests for the declarative scalar derivative engine."""
 
+from typing import cast
+
 import numpy as np
 import pytest
 
@@ -15,6 +17,7 @@ from kinematics.metrics.derivatives import (
     PointDistanceResponse,
     evaluate_derivative_metrics,
 )
+from kinematics.metrics.units import MetricUnit
 from kinematics.sensitivity import TangentField
 from kinematics.state import SuspensionState
 
@@ -49,15 +52,17 @@ def _state_and_tangent() -> tuple[SuspensionState, TangentField]:
 def test_distance_response_per_custom_axis_driver() -> None:
     state, tangent = _state_and_tangent()
     definition = DerivativeMetricDefinition(
-        column_name="distance_per_x",
-        unit="mm/mm",
         response=PointDistanceResponse(
             PointID.AXLE_INBOARD,
             PointID.AXLE_OUTBOARD,
+            name="point_distance",
+            unit=MetricUnit.MM,
         ),
         driver=PointCoordinateResponse.from_axis(
             PointID.AXLE_INBOARD,
             (2.0, 0.0, 0.0),
+            name="wheel_x",
+            unit=MetricUnit.MM,
         ),
     )
 
@@ -69,15 +74,17 @@ def test_distance_response_per_custom_axis_driver() -> None:
 def test_displacement_magnitude_response() -> None:
     state, tangent = _state_and_tangent()
     definition = DerivativeMetricDefinition(
-        column_name="displacement_per_y",
-        unit="mm/mm",
         response=PointDisplacementMagnitudeResponse.from_reference(
             PointID.AXLE_INBOARD,
             Point3([0.0, 0.0, 0.0]),
+            name="point_displacement",
+            unit=MetricUnit.MM,
         ),
         driver=PointCoordinateResponse.from_world_axis(
             PointID.AXLE_INBOARD,
             Axis.Y,
+            name="wheel_y",
+            unit=MetricUnit.MM,
         ),
     )
 
@@ -97,12 +104,16 @@ def test_callable_response() -> None:
         return result
 
     definition = DerivativeMetricDefinition(
-        column_name="callable_per_x",
-        unit="1",
-        response=CallableScalarResponse(response),
+        response=CallableScalarResponse(
+            response,
+            name="coordinate_sum",
+            unit=MetricUnit.MM,
+        ),
         driver=PointCoordinateResponse.from_axis(
             PointID.AXLE_INBOARD,
             (1.0, 0.0, 0.0),
+            name="wheel_x",
+            unit=MetricUnit.MM,
         ),
     )
 
@@ -112,15 +123,17 @@ def test_callable_response() -> None:
 def test_zero_rate_driver_is_rejected() -> None:
     state, tangent = _state_and_tangent()
     definition = DerivativeMetricDefinition(
-        column_name="distance_per_z",
-        unit="mm/mm",
         response=PointDistanceResponse(
             PointID.AXLE_INBOARD,
             PointID.AXLE_OUTBOARD,
+            name="point_distance",
+            unit=MetricUnit.MM,
         ),
         driver=PointCoordinateResponse.from_axis(
             PointID.AXLE_INBOARD,
             (0.0, 0.0, 1.0),
+            name="wheel_z",
+            unit=MetricUnit.MM,
         ),
     )
 
@@ -131,15 +144,17 @@ def test_zero_rate_driver_is_rejected() -> None:
 def test_zero_displacement_magnitude_is_rejected() -> None:
     state, tangent = _state_and_tangent()
     definition = DerivativeMetricDefinition(
-        column_name="displacement_per_x",
-        unit="mm/mm",
         response=PointDisplacementMagnitudeResponse.from_reference(
             PointID.AXLE_INBOARD,
             state.positions[PointID.AXLE_INBOARD],
+            name="point_displacement",
+            unit=MetricUnit.MM,
         ),
         driver=PointCoordinateResponse.from_axis(
             PointID.AXLE_INBOARD,
             (1.0, 0.0, 0.0),
+            name="wheel_x",
+            unit=MetricUnit.MM,
         ),
     )
 
@@ -153,15 +168,17 @@ def test_zero_point_distance_is_rejected() -> None:
         PointID.AXLE_INBOARD
     ].copy()
     definition = DerivativeMetricDefinition(
-        column_name="distance_per_x",
-        unit="mm/mm",
         response=PointDistanceResponse(
             PointID.AXLE_INBOARD,
             PointID.AXLE_OUTBOARD,
+            name="point_distance",
+            unit=MetricUnit.MM,
         ),
         driver=PointCoordinateResponse.from_world_axis(
             PointID.AXLE_INBOARD,
             Axis.X,
+            name="wheel_x",
+            unit=MetricUnit.MM,
         ),
     )
 
@@ -173,6 +190,8 @@ def test_displacement_reference_is_immutable() -> None:
     response = PointDisplacementMagnitudeResponse.from_reference(
         PointID.AXLE_INBOARD,
         Point3([0.0, 0.0, 0.0]),
+        name="point_displacement",
+        unit=MetricUnit.MM,
     )
 
     with pytest.raises(ValueError, match="read-only"):
@@ -197,16 +216,18 @@ def test_multi_tangent_selection_prefers_strongest_driver_rate() -> None:
         velocities={PointID.AXLE_INBOARD: np.array([100.0, 100.0, 0.0])},
     )
     definition = DerivativeMetricDefinition(
-        column_name="scaled_response",
-        unit="mm/mm",
         scale=2.0,
         response=PointCoordinateResponse.from_axis(
             PointID.AXLE_INBOARD,
             (0.0, 1.0, 0.0),
+            name="response_y",
+            unit=MetricUnit.MM,
         ),
         driver=PointCoordinateResponse.from_axis(
             PointID.AXLE_INBOARD,
             Axis.X,
+            name="driver_x",
+            unit=MetricUnit.MM,
         ),
     )
 
@@ -217,22 +238,26 @@ def test_multi_tangent_selection_prefers_strongest_driver_rate() -> None:
     )
 
     # The matching tangent with X rate 2 wins over the matching tangent at 0.5.
-    assert list(row) == ["scaled_response"]
-    assert row["scaled_response"] == pytest.approx(1.0)
+    assert list(row) == ["deriv_response_y_wrt_driver_x"]
+    assert row["deriv_response_y_wrt_driver_x"] == pytest.approx(1.0)
+    assert definition.unit == MetricUnit.MM / MetricUnit.MM
+    assert definition.unit.symbol == "mm/mm"
 
 
 def test_distance_driver_requires_explicit_driving_point() -> None:
     state, tangent = _state_and_tangent()
     definition = DerivativeMetricDefinition(
-        column_name="coordinate_per_distance",
-        unit="mm/mm",
         response=PointCoordinateResponse.from_axis(
             PointID.AXLE_INBOARD,
             Axis.X,
+            name="coordinate_x",
+            unit=MetricUnit.MM,
         ),
         driver=PointDistanceResponse(
             PointID.AXLE_INBOARD,
             PointID.AXLE_OUTBOARD,
+            name="link_length",
+            unit=MetricUnit.MM,
         ),
     )
 
@@ -248,17 +273,40 @@ def test_equal_strength_matching_tangents_are_rejected() -> None:
         velocities={PointID.AXLE_INBOARD: np.array([-2.0, 3.0, 0.0])},
     )
     definition = DerivativeMetricDefinition(
-        column_name="coordinate_per_x",
-        unit="mm/mm",
         response=PointCoordinateResponse.from_world_axis(
             PointID.AXLE_INBOARD,
             Axis.Y,
+            name="coordinate_y",
+            unit=MetricUnit.MM,
         ),
         driver=PointCoordinateResponse.from_world_axis(
             PointID.AXLE_INBOARD,
             Axis.X,
+            name="coordinate_x",
+            unit=MetricUnit.MM,
         ),
     )
 
     with pytest.raises(ValueError, match="Ambiguous derivative driver"):
         definition.evaluate_from_tangents(state, [tangent, tied])
+
+
+@pytest.mark.parametrize("name", ["UpperCase", "has-hyphen", "has space", "_x"])
+def test_scalar_names_must_be_lowercase_snake_case(name: str) -> None:
+    with pytest.raises(ValueError, match="lowercase snake-case"):
+        PointCoordinateResponse.from_world_axis(
+            PointID.AXLE_INBOARD,
+            Axis.X,
+            name=name,
+            unit=MetricUnit.MM,
+        )
+
+
+def test_scalar_units_must_be_supported_metric_units() -> None:
+    with pytest.raises(TypeError, match="must be a MetricUnit"):
+        PointCoordinateResponse.from_world_axis(
+            PointID.AXLE_INBOARD,
+            Axis.X,
+            name="coordinate_x",
+            unit=cast(MetricUnit, "  "),
+        )

@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from kinematics.core.point_ref import Side
 from kinematics.io.geometry_loader import load_geometry
 from kinematics.suspensions.base import Suspension
 
@@ -25,6 +26,7 @@ def invalid_yaml_geometry_file(tmp_path: Path):
 def invalid_geometry_file(tmp_path: Path):
     data = {
         "type": "double_wishbone",
+        "side": "LEFT",
         "hardpoints": {
             # Missing most required hardpoints
             "LOWER_WISHBONE_INBOARD_FRONT": [0, 0, 0],
@@ -55,6 +57,7 @@ def test_load_geometry_valid(double_wishbone_geometry_file):
     # Test that the suspension has required attributes and methods.
     assert suspension.hardpoints is not None
     assert suspension.config is not None
+    assert suspension.side is Side.LEFT
     assert suspension.initial_state() is not None
 
 

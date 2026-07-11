@@ -130,10 +130,9 @@ class MetricContext:
     @cached_property
     def side_sign(self) -> float:
         """
-        Vehicle side indicator: 1.0 for left (Y > 0), -1.0 for right.
+        Explicit vehicle-side sign: 1.0 for left, -1.0 for right.
         """
-        y_pos = self.state.get(PointID.AXLE_OUTBOARD)[Axis.Y]
-        return -1.0 if y_pos < 0 else 1.0
+        return self.suspension.side.lateral_sign
 
     @cached_property
     def tire_radius(self) -> float:
