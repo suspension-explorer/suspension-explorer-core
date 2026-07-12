@@ -6,6 +6,7 @@ import pytest
 
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.point_ref import Side
+from kinematics.core.types import PointTargetAxis
 from kinematics.io.loaders import _read_yaml_mapping
 from kinematics.schema.geometry import (
     AxleHardpointsSpec,
@@ -82,4 +83,5 @@ def test_x_axis_remains_an_axis_target() -> None:
     config = build_sweep_config(spec)
     target = config.target_sweeps[0][0]
     assert target.point_id is PointID.WHEEL_CENTER
+    assert isinstance(target.direction, PointTargetAxis)
     assert target.direction.axis is Axis.X

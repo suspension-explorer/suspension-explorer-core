@@ -5,7 +5,7 @@ Derived point specifications and management.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Container, Mapping, Set, TypeAlias, TypeVar, cast
+from typing import Callable, Container, Generic, Mapping, Set, TypeAlias, TypeVar, cast
 
 import numpy as np
 
@@ -20,9 +20,15 @@ PositionFn = Callable[[dict[PointKey, PositionValue]], PositionValue]
 
 _V = TypeVar("_V", bound=PositionValue)
 
+# A single spec keys homogeneously on one concrete key type: single-corner
+# models use PointID, axle models use PointRef. Parametrizing over that type
+# keeps the function and dependency dicts precise rather than widening to the
+# invariant PointKey union, which would reject the narrow dicts callers build.
+_K = TypeVar("_K", bound=PointKey)
+
 
 @dataclass(frozen=True)
-class DerivedPointsSpec:
+class DerivedPointsSpec(Generic[_K]):
     """
     Specification for derived point calculations.
 
@@ -30,10 +36,13 @@ class DerivedPointsSpec:
     describing format that can be validated and sorted.
     """
 
-    functions: dict[PointKey, PositionFn]
-    dependencies: dict[PointKey, Set[PointKey]]
+    # The spec only reads these maps. Declaring functions as a Mapping keeps its
+    # value type covariant, so a concrete function map whose values are subtypes
+    # of PositionFn is accepted instead of requiring an exact PositionFn match.
+    functions: Mapping[_K, PositionFn]
+    dependencies: Mapping[_K, Set[_K]]
 
-    def all_points(self) -> Set[PointKey]:
+    def all_points(self) -> Set[_K]:
         """
         Get all derived point IDs defined in this spec.
 

@@ -94,4 +94,19 @@ def point_key_name(key: PointKey) -> str:
     return key.name.lower()
 
 
-__all__ = ["PointKey", "PointRef", "Side", "point_key_name"]
+def side_qualified(side: Side, point: PointKey) -> PointRef:
+    """
+    Build a side-qualified reference to a single-corner point.
+
+    Corner models key strictly on ``PointID``, but the shared suspension base
+    types corner keys as the wider ``PointKey``. Axle models qualify those keys
+    with a ``Side`` when combining two corners. This narrows the key before
+    wrapping it, raising if an already side-qualified ``PointRef`` is passed,
+    since an axle key cannot be re-qualified.
+    """
+    if not isinstance(point, PointID):
+        raise TypeError(f"Cannot side-qualify a non-corner key: {point!r}")
+    return PointRef(side, point)
+
+
+__all__ = ["PointKey", "PointRef", "Side", "point_key_name", "side_qualified"]

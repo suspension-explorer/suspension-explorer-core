@@ -16,7 +16,7 @@ from kinematics.metrics.anti_geometry import (
     calculate_anti_squat_pct,
 )
 from kinematics.metrics.context import MetricContext
-from kinematics.metrics.main import MetricRow, compute_metrics_for_state
+from kinematics.metrics.main import AxleMetricRows, MetricRow, compute_metrics_for_state
 from kinematics.schema.config import SuspensionConfig
 
 TEST_DATA = Path(__file__).parent / "data"
@@ -101,6 +101,8 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     assert len(result.rows) == len(states)
     assert result.tangent_solve_infos is not None
     for state, row in zip(states, result.rows):
+        # A corner sweep yields plain metric rows, never axle row bundles.
+        assert not isinstance(row, AxleMetricRows)
         assert "deriv_camber_wrt_hub_z" in row
         assert "deriv_damper_length_wrt_hub_z" in row
         assert row["deriv_damper_length_wrt_hub_z"] is not None

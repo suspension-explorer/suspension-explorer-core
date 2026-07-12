@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import partial
-from typing import TYPE_CHECKING, ClassVar, Sequence
+from typing import TYPE_CHECKING, ClassVar, Sequence, cast
 
 from kinematics.constraints import (
     AngleConstraint,
@@ -20,6 +20,7 @@ from kinematics.constraints import (
 from kinematics.core.constants import EPS_GEOMETRIC
 from kinematics.core.enums import Axis, PointID, ShimType
 from kinematics.core.geometry import Direction3, Point3
+from kinematics.core.point_ref import PointKey
 from kinematics.core.types import WorldAxisSystem
 from kinematics.core.vector_utils.geometric import (
     compute_point_point_distance,
@@ -143,9 +144,11 @@ class DoubleWishboneSuspension(Suspension):
         derived_manager = DerivedPointsManager(derived_spec)
         derived_manager.update_in_place(positions)
 
+        # get_hardpoints_copy widens keys to PointKey, so key the state on
+        # PointKey too even though a corner only ever holds PointID keys.
         self._initial_state = SuspensionState(
             positions=positions,
-            free_points=set(self.free_points()),
+            free_points=set[PointKey](self.free_points()),
         )
         return self._initial_state
 
@@ -383,7 +386,7 @@ class DoubleWishboneSuspension(Suspension):
             ),
         ]
 
-    def apply_camber_shim(self, positions: dict[PointID, Point3]) -> None:
+    def apply_camber_shim(self, positions: dict[PointKey, Point3]) -> None:
         """
         Apply camber shim transformation to the suspension geometry.
 
@@ -401,8 +404,9 @@ class DoubleWishboneSuspension(Suspension):
 
         # Shim face geometry is read directly from shim_config by the solver,
         # so the positions dict only needs the kinematic hardpoints.
+        # A corner keys strictly on PointID; the solver only reads hardpoints.
         assembly_solution = solve_camber_shim_assembly(
-            positions=positions,
+            positions=cast("dict[PointID, Point3]", positions),
             shim_config=shim_config,
         )
 

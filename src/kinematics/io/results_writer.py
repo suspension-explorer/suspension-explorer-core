@@ -77,7 +77,7 @@ def compute_file_hash(path: str | Path) -> str:
     """
     try:
         with open(path, "rb") as f:
-            return hashlib.file_digest(f, "sha256").hexdigest()  # type: ignore
+            return hashlib.file_digest(f, "sha256").hexdigest()
     except Exception:
         return ""
 

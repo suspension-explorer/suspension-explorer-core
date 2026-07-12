@@ -14,6 +14,7 @@ from kinematics.core.dual import (
     sqrt,
 )
 from kinematics.core.enums import Axis, PointID
+from kinematics.core.point_ref import PointKey
 from kinematics.core.vector_utils.generic import normalize_vector
 from kinematics.points.derived.definitions import get_wheel_center
 
@@ -235,7 +236,7 @@ class TestNumpyDispatch:
     def test_dot_dual_dual(self):
         a = DualVec3(np.array([1.0, 2.0, 3.0]), np.array([1.0, 0.0, 0.0]))
         b = DualVec3(np.array([4.0, 5.0, 6.0]), np.array([0.0, 1.0, 0.0]))
-        result = np.dot(a, b)  # type: ignore[arg-type]  # __array_function__ protocol
+        result = np.dot(a, b)  # ty: ignore[invalid-argument-type]  # __array_function__ protocol
         assert isinstance(result, DualScalar)
         # dot(val) = 4 + 10 + 18 = 32.
         assert result.val == pytest.approx(32.0)
@@ -245,7 +246,7 @@ class TestNumpyDispatch:
     def test_dot_dual_ndarray(self):
         a = DualVec3(np.array([1.0, 2.0, 3.0]), np.array([1.0, 0.0, 0.0]))
         b = np.array([4.0, 5.0, 6.0])
-        result = np.dot(a, b)  # type: ignore[arg-type]  # __array_function__ protocol
+        result = np.dot(a, b)  # ty: ignore[invalid-argument-type]  # __array_function__ protocol
         assert isinstance(result, DualScalar)
         assert result.val == pytest.approx(32.0)
         # dot([1,0,0], [4,5,6]) = 4.
@@ -253,7 +254,7 @@ class TestNumpyDispatch:
 
     def test_norm_dual(self):
         v = DualVec3(np.array([3.0, 4.0, 0.0]), np.array([1.0, 0.0, 0.0]))
-        result = np.linalg.norm(v)  # type: ignore[arg-type]  # __array_function__ protocol
+        result = np.linalg.norm(v)  # ty: ignore[no-matching-overload]  # __array_function__ protocol
         assert isinstance(result, DualScalar)
         assert result.val == pytest.approx(5.0)
         # d(||v||) = dot(v, v') / ||v|| = 3*1 / 5 = 0.6.
@@ -261,7 +262,7 @@ class TestNumpyDispatch:
 
     def test_norm_zero_vector(self):
         v = DualVec3(np.zeros(3), np.array([1.0, 0.0, 0.0]))
-        result = np.linalg.norm(v)  # type: ignore[arg-type]  # __array_function__ protocol
+        result = np.linalg.norm(v)  # ty: ignore[no-matching-overload]  # __array_function__ protocol
         assert isinstance(result, DualScalar)
         assert result.val == pytest.approx(0.0)
         assert result.deriv == pytest.approx(0.0)
@@ -335,7 +336,7 @@ class TestAnalyticalDerivatives:
         v_val = np.array([3.0, 4.0, 0.0])
         for i, expected in enumerate([6.0, 8.0, 0.0]):
             v = DualVec3(v_val.copy(), np.eye(3)[i])
-            f = np.dot(v, v)  # type: ignore[arg-type]  # __array_function__ protocol
+            f = np.dot(v, v)  # ty: ignore[invalid-argument-type]  # __array_function__ protocol
             assert f.val == pytest.approx(25.0)
             assert f.deriv == pytest.approx(expected)
 
@@ -354,8 +355,8 @@ class TestAnalyticalDerivatives:
         expected_derivs = [16.0 / 125.0, -12.0 / 125.0, 0.0]
         for i, expected in enumerate(expected_derivs):
             v = DualVec3(v_val.copy(), np.eye(3)[i])
-            unit = v / np.linalg.norm(v)  # type: ignore[arg-type]  # __array_function__ protocol
-            f = np.dot(unit, e_x)  # type: ignore[arg-type]  # __array_function__ protocol
+            unit = v / np.linalg.norm(v)  # ty: ignore[no-matching-overload]  # __array_function__ protocol
+            f = np.dot(unit, e_x)  # __array_function__ protocol
             assert f.val == pytest.approx(3.0 / 5.0)
             assert f.deriv == pytest.approx(expected)
 
@@ -368,9 +369,10 @@ class TestAnalyticalDerivatives:
         expected_derivs = [-3.0 / 125.0, -4.0 / 125.0, 0.0]
         for i, expected in enumerate(expected_derivs):
             v = DualVec3(v_val.copy(), np.eye(3)[i])
-            norm = np.linalg.norm(v)  # type: ignore[arg-type]  # __array_function__ protocol
+            norm = np.linalg.norm(v)  # ty: ignore[no-matching-overload]  # __array_function__ protocol
             assert isinstance(norm, DualScalar)
             f = 1.0 / norm
+            assert isinstance(f, DualScalar)
             assert f.val == pytest.approx(1.0 / 5.0)
             assert f.deriv == pytest.approx(expected)
 
@@ -384,7 +386,7 @@ class TestAnalyticalDerivatives:
         for i, expected in enumerate(expected_derivs):
             a = DualVec3(a_val.copy(), np.eye(3)[i])
             delta = a - b
-            f = np.dot(delta, delta)  # type: ignore[arg-type]  # __array_function__ protocol
+            f = np.dot(delta, delta)  # ty: ignore[invalid-argument-type]  # __array_function__ protocol
             assert f.val == pytest.approx(18.0)
             assert f.deriv == pytest.approx(expected)
 
@@ -414,7 +416,7 @@ class TestWheelCenterAutodiff:
     """
 
     def test_jacobian_matches_finite_differences(self):
-        positions = {
+        positions: dict[PointKey, np.ndarray] = {
             PointID.AXLE_INBOARD: np.array([0.0, -200.0, 300.0]),
             PointID.AXLE_OUTBOARD: np.array([0.0, -600.0, 300.0]),
         }
@@ -426,8 +428,8 @@ class TestWheelCenterAutodiff:
             for d in range(3):
                 # Autodiff derivative.
                 dual_pos = seed_positions(positions, pid, d)
-                result = get_wheel_center(dual_pos, wheel_offset)  # type: ignore[arg-type]  # dict invariance; works via duck typing
-                ad_deriv = result.deriv  # type: ignore[attr-defined]  # returns DualVec3 at runtime
+                result = get_wheel_center(dual_pos, wheel_offset)
+                ad_deriv = result.deriv  # returns DualVec3 at runtime
 
                 # Finite-difference derivative.
                 saved = positions[pid].copy()

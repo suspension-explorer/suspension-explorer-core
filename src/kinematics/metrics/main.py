@@ -198,7 +198,10 @@ def compute_metrics_for_sweep(
     suspension: "Suspension",
     config: SuspensionConfig,
     tangents_per_state: "Sequence[Sequence[TangentField]] | None" = None,
-) -> list[MetricRow | AxleMetricRows]:
+    # The overloads narrow the element type per suspension kind. The invariant
+    # list return of each overload is only assignable to a covariant Sequence
+    # here, so the implementation widens to Sequence.
+) -> Sequence[MetricRow | AxleMetricRows]:
     """
     Compute metrics for a sweep of solved corner or axle states.
 

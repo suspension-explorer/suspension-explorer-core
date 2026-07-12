@@ -1,0 +1,11 @@
+{
+    "recommendations": [
+        // Python language support and IntelliSense (completions, hover).
+        "ms-python.python",
+        // ty: Astral's type checker, run as a language server for in-editor
+        // diagnostics matching `just type-check`.
+        "astral-sh.ty",
+        // Ruff: linting and formatting, matching `just lint` / `just format`.
+        "charliermarsh.ruff"
+    ]
+}

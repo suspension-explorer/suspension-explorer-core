@@ -52,7 +52,9 @@ def extract_array(x: object) -> np.ndarray:
     data = getattr(x, "data", None)
     if isinstance(data, np.ndarray):
         return data
-    return x  # type: ignore[return-value]
+    # Scalars and other non-array inputs pass through unchanged, so the declared
+    # ndarray return type is optimistic for those callers by design.
+    return x  # ty: ignore[invalid-return-type]
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +319,7 @@ class Vector3:
         a, b = inputs
         if ufunc is np.multiply:
             if isinstance(a, (int, float, np.floating)) and isinstance(b, Vector3):
-                return Vector3(float(a) * b.data)
+                return Vector3(b.data * float(a))
             if isinstance(a, Vector3) and isinstance(b, (int, float, np.floating)):
                 return Vector3(a.data * float(b))
         if ufunc is np.subtract:
@@ -461,7 +463,7 @@ class Direction3:
         a, b = inputs
         if ufunc is np.multiply:
             if isinstance(a, (int, float, np.floating)) and isinstance(b, Direction3):
-                return Vector3(float(a) * b.data)
+                return Vector3(b.data * float(a))
             if isinstance(a, Direction3) and isinstance(b, (int, float, np.floating)):
                 return Vector3(a.data * float(b))
         return NotImplemented
@@ -521,7 +523,7 @@ def geom_norm(
     """
     if isinstance(x, (Vector3, Direction3, Point3)):
         return float(np.linalg.norm(x.data))
-    return np.linalg.norm(x, ord=ord, axis=axis, keepdims=keepdims)  # type: ignore[arg-type]
+    return np.linalg.norm(x, ord=ord, axis=axis, keepdims=keepdims)  # ty: ignore[no-matching-overload]
 
 
 def geom_cross(

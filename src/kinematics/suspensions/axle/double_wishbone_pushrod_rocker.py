@@ -10,7 +10,7 @@ from kinematics.constraints import Constraint, DistanceConstraint
 from kinematics.core.constants import EPS_GEOMETRIC, MIN_CHIRALITY_VOLUME
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.geometry import Point3, extract_array
-from kinematics.core.point_ref import PointKey, PointRef, Side
+from kinematics.core.point_ref import PointKey, PointRef, Side, side_qualified
 from kinematics.core.vector_utils.geometric import (
     compute_point_point_distance,
     compute_point_to_line_distance,
@@ -128,7 +128,8 @@ class DoubleWishbonePushrodRockerAxleSuspension(DoubleWishboneAxleSuspension):
         result: list[PointKey] = []
         for side in (Side.LEFT, Side.RIGHT):
             result.extend(
-                PointRef(side, point) for point in self.corners[side].output_points()
+                side_qualified(side, point)
+                for point in self.corners[side].output_points()
             )
             result.append(PointRef(side, PointID.DROPLINK_ARB))
         return tuple(result)

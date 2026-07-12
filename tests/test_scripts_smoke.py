@@ -68,7 +68,8 @@ def test_plot_bump_sweep_end_to_end(
 ) -> None:
     """Run the full bump-sweep script, including its MP4 animation."""
     if shutil.which("ffmpeg") is None:
-        pytest.skip("ffmpeg not available")
+        # pytest wraps skip() so its stub drops the reason parameter from view.
+        pytest.skip("ffmpeg not available")  # ty: ignore[too-many-positional-arguments]
 
     module = _load_script(PLOT_BUMP_SWEEP)
     monkeypatch.setattr(module, "OUTPUT_DIR", tmp_path)

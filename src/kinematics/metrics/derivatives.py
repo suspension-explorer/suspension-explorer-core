@@ -35,8 +35,13 @@ def _validate_semantics(name: str, unit: MetricUnit) -> None:
 class ScalarResponse(Protocol):
     """A scalar geometric quantity evaluable on dual-number positions."""
 
-    name: str
-    unit: MetricUnit
+    @property
+    def name(self) -> str:
+        """Semantic snake-case name used for output columns."""
+
+    @property
+    def unit(self) -> MetricUnit:
+        """Physical unit of the scalar value."""
 
     def evaluate(self, positions: DualPositions) -> DualScalar:
         """Evaluate the response value and directional derivative."""

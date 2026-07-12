@@ -5,16 +5,22 @@ Core state management for suspension kinematics.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Set
+from typing import Generic, List, Set, TypeVar
 
 import numpy as np
 
 from kinematics.core.geometry import Point3
 from kinematics.core.point_ref import PointKey
 
+# A single state keys homogeneously on one concrete key type: single-corner
+# models use PointID, axle models use PointRef. Parametrizing over that type
+# keeps dict/set operations precise instead of widening to the PointKey union,
+# which would be invariant and reject the narrow dicts callers actually build.
+KeyT = TypeVar("KeyT", bound=PointKey)
+
 
 @dataclass
-class SuspensionState:
+class SuspensionState(Generic[KeyT]):
     """
     Represents the complete state of a suspension system.
 
@@ -32,9 +38,9 @@ class SuspensionState:
         free_points_order: Sorted list of free point keys for consistent ordering.
     """
 
-    positions: dict[PointKey, Point3]
-    free_points: Set[PointKey]
-    free_points_order: List[PointKey] = field(init=False)
+    positions: dict[KeyT, Point3]
+    free_points: Set[KeyT]
+    free_points_order: List[KeyT] = field(init=False)
 
     def __post_init__(self) -> None:
         """
@@ -43,7 +49,7 @@ class SuspensionState:
         self.free_points_order = sorted(list(self.free_points))
 
     @property
-    def fixed_points(self) -> Set[PointKey]:
+    def fixed_points(self) -> Set[KeyT]:
         """
         Points that are fixed (not free to move).
         """
@@ -95,7 +101,7 @@ class SuspensionState:
             # explicit opt-in to this aliasing.
             self.positions[point_id] = Point3.from_trusted(positions_2d[i])
 
-    def update_positions(self, new_positions: dict[PointKey, Point3]) -> None:
+    def update_positions(self, new_positions: dict[KeyT, Point3]) -> None:
         """
         Replace positions dictionary in-place.
 
@@ -109,40 +115,40 @@ class SuspensionState:
         """
         self.positions = new_positions
 
-    def copy(self) -> "SuspensionState":
+    def copy(self) -> "SuspensionState[KeyT]":
         """
         Create a deep copy.
         """
         return SuspensionState(
             positions={pid: pos.copy() for pid, pos in self.positions.items()},
-            free_points=self.free_points.copy(),
+            free_points=set(self.free_points),
         )
 
-    def get(self, point_id: PointKey) -> Point3:
+    def get(self, point_id: KeyT) -> Point3:
         """
         Get position of a specific point.
         """
         return self.positions[point_id]
 
-    def set(self, point_id: PointKey, position: Point3) -> None:
+    def set(self, point_id: KeyT, position: Point3) -> None:
         """
         Set position of a specific point.
         """
         self.positions[point_id] = position.copy()
 
-    def __getitem__(self, point_id: PointKey) -> Point3:
+    def __getitem__(self, point_id: KeyT) -> Point3:
         """
         Allow dict-like access.
         """
         return self.positions[point_id]
 
-    def __setitem__(self, point_id: PointKey, position: Point3) -> None:
+    def __setitem__(self, point_id: KeyT, position: Point3) -> None:
         """
         Allow dict-like assignment.
         """
         self.positions[point_id] = position.copy()
 
-    def __contains__(self, point_id: PointKey) -> bool:
+    def __contains__(self, point_id: KeyT) -> bool:
         """
         Check if point exists.
         """

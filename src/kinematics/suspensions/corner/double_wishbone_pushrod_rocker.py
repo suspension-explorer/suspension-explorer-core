@@ -9,6 +9,7 @@ from kinematics.constraints import Constraint, DistanceConstraint
 from kinematics.core.constants import EPS_GEOMETRIC
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.geometry import extract_array
+from kinematics.core.point_ref import PointKey
 from kinematics.core.vector_utils.geometric import (
     compute_point_point_distance,
     compute_point_to_line_distance,
@@ -110,7 +111,7 @@ class DoubleWishbonePushrodRockerSuspension(DoubleWishboneSuspension):
             points.append(PointID.STRUT_BOTTOM)
         return points
 
-    def output_points(self) -> tuple[PointID, ...]:
+    def output_points(self) -> tuple[PointKey, ...]:
         """Return base outputs plus the explicit inboard actuation points."""
         points = [
             *super().output_points(),
@@ -275,7 +276,10 @@ class DoubleWishbonePushrodRockerSuspension(DoubleWishboneSuspension):
         """Return base links plus pushrod, rocker, and selected spring."""
         from kinematics.visualization.main import LinkVisualization
 
-        rocker_points = [PointID.ROCKER_AXIS_FRONT, PointID.PUSHROD_INBOARD]
+        rocker_points: list[PointKey] = [
+            PointID.ROCKER_AXIS_FRONT,
+            PointID.PUSHROD_INBOARD,
+        ]
         if self.has_droplink:
             rocker_points.append(PointID.DROPLINK_ROCKER)
         rocker_points.append(PointID.ROCKER_AXIS_REAR)

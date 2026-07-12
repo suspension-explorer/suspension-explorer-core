@@ -10,7 +10,7 @@ np.dot and np.linalg.norm works unmodified with dual-number inputs.
 from __future__ import annotations
 
 import math
-from typing import Mapping, overload
+from typing import Mapping, TypeVar, overload
 
 import numpy as np
 
@@ -527,12 +527,17 @@ def degrees(x: DualScalar | float) -> DualScalar | float:
 # Seeding utility
 # ----------------------------------------------------------------
 
+# Seeding preserves the caller's concrete key type: single-corner callers seed a
+# PointID-keyed map, axle callers a PointRef-keyed map. Parametrizing over the key
+# keeps the returned dict's key type precise instead of the invariant PointKey union.
+_SeedKey = TypeVar("_SeedKey", bound=PointKey)
+
 
 def seed_positions(
-    positions: Mapping[PointKey, object],
-    seed_point: PointKey,
+    positions: Mapping[_SeedKey, object],
+    seed_point: _SeedKey,
     seed_dim: int,
-) -> dict[PointKey, DualVec3]:
+) -> dict[_SeedKey, DualVec3]:
     """
     Create dual-number positions seeded for differentiation.
 
@@ -550,7 +555,7 @@ def seed_positions(
     Returns:
         Dictionary of DualVec3 positions ready for derived-point computation.
     """
-    dual_positions: dict[PointKey, DualVec3] = {}
+    dual_positions: dict[_SeedKey, DualVec3] = {}
     for pid, pos in positions.items():
         raw = extract_array(pos)
         if pid == seed_point:
@@ -563,16 +568,16 @@ def seed_positions(
 
 
 def seed_positions_with_tangent(
-    positions: Mapping[PointKey, object],
-    tangent: Mapping[PointKey, np.ndarray],
-) -> dict[PointKey, DualVec3]:
+    positions: Mapping[_SeedKey, object],
+    tangent: Mapping[_SeedKey, np.ndarray],
+) -> dict[_SeedKey, DualVec3]:
     """
     Seed every position along an arbitrary tangent field.
 
     Missing tangent keys are held constant. This evaluates a
     Jacobian-vector product in one forward dual-number pass.
     """
-    dual_positions: dict[PointKey, DualVec3] = {}
+    dual_positions: dict[_SeedKey, DualVec3] = {}
     for point_id, position in positions.items():
         raw = extract_array(position)
         tangent_vector = tangent.get(point_id)
