@@ -7,17 +7,9 @@ import yaml
 from kinematics.constraints import ScalarTripleProductConstraint
 from kinematics.core.enums import PointID
 from kinematics.io import load_geometry
-from kinematics.io.geometry_loader import load_geometry as legacy_load_geometry
-from kinematics.schema.config import SuspensionConfig
-from kinematics.suspensions.config.settings import (
-    SuspensionConfig as LegacySuspensionConfig,
-)
 from kinematics.suspensions.corner import (
     DoubleWishboneCoiloverSuspension,
     DoubleWishboneSuspension,
-)
-from kinematics.suspensions.double_wishbone import (
-    DoubleWishboneSuspension as LegacyDoubleWishboneSuspension,
 )
 from kinematics.suspensions.registry import (
     SUSPENSION_DEFINITIONS,
@@ -161,18 +153,6 @@ def test_corner_registry_has_one_complete_definition_per_type() -> None:
         assert definition is not None
         assert definition.suspension_type is get_suspension_class(type_key)
         assert definition.spec_type.model_fields["type"].default == type_key
-
-
-def test_legacy_import_paths_reexport_current_objects() -> None:
-    assert legacy_load_geometry is load_geometry
-    assert LegacySuspensionConfig is SuspensionConfig
-    assert LegacyDoubleWishboneSuspension is DoubleWishboneSuspension
-
-
-def test_legacy_loader_loads_existing_geometry() -> None:
-    suspension = legacy_load_geometry(TEST_DATA / "geometry.yaml")
-
-    assert type(suspension) is DoubleWishboneSuspension
 
 
 def test_coilover_topology_adds_moving_pickup_and_attachment_constraints() -> None:

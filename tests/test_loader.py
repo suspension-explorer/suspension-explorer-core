@@ -4,7 +4,7 @@ import pytest
 import yaml
 
 from kinematics.core.point_ref import Side
-from kinematics.io.geometry_loader import load_geometry
+from kinematics.io import load_geometry
 from kinematics.suspensions.base import Suspension
 
 

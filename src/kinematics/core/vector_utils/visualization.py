@@ -2,6 +2,7 @@
 Visualization utilities for geometric computations.
 """
 
+import importlib
 from typing import Any, Optional, cast
 
 import numpy as np
@@ -44,7 +45,7 @@ def plot_plane_from_points(
         import matplotlib.pyplot as plt
 
         # Import needed for 3D plotting.
-        import mpl_toolkits.mplot3d  # noqa: F401
+        importlib.import_module("mpl_toolkits.mplot3d")
     except ImportError:
         print("Warning: matplotlib not available for plotting")
         return
@@ -155,7 +156,8 @@ def plot_plane_intersection(
 
     try:
         import matplotlib.pyplot as plt
-        import mpl_toolkits.mplot3d  # noqa: F401
+
+        importlib.import_module("mpl_toolkits.mplot3d")
     except ImportError:
         print("Warning: matplotlib not available for plotting")
         return
@@ -256,7 +258,8 @@ def plot_line_plane_intersection(
 
     try:
         import matplotlib.pyplot as plt
-        import mpl_toolkits.mplot3d  # noqa: F401
+
+        importlib.import_module("mpl_toolkits.mplot3d")
     except ImportError:
         print("Warning: matplotlib not available for plotting")
         return

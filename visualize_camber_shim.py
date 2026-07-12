@@ -5,6 +5,7 @@ Generates side-by-side comparisons of stock vs. shimmed suspension geometry,
 demonstrating how camber shims rotate the upright about the lower ball joint.
 """
 
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
@@ -16,6 +17,7 @@ from kinematics import load_geometry
 from kinematics.core.enums import PointID
 from kinematics.core.geometry import extract_array
 from kinematics.schema import CamberShimConfig
+from kinematics.suspensions.base import Suspension
 from kinematics.visualization.api import visualize_geometry
 from kinematics.visualization.main import SuspensionVisualizer, WheelVisualization
 from kinematics.visualization.plots import (
@@ -67,16 +69,7 @@ def main():
     if suspension.config is None:
         raise ValueError("Suspension has no configuration")
 
-    setup_config = suspension.config.model_copy(update={"camber_shim": shim_config})
-
-    suspension_class = type(suspension)
-    setup_suspension = suspension_class(
-        name=suspension.name,
-        version=suspension.version,
-        units=suspension.units,
-        hardpoints=suspension.hardpoints.copy(),
-        config=setup_config,
-    )
+    setup_suspension = create_setup_suspension(suspension, shim_config)
 
     # Visualize setup configuration.
     shim_delta = SETUP_SHIM_THICKNESS - DESIGN_SHIM_THICKNESS
@@ -92,6 +85,23 @@ def main():
         suspension, setup_suspension, comparison_output, shim_delta
     )
     print(f"Comparison visualization saved to: {comparison_output}")
+
+
+def create_setup_suspension(
+    suspension: Suspension,
+    shim_config: CamberShimConfig,
+) -> Suspension:
+    """Create a fresh suspension with the requested camber-shim setup."""
+    if suspension.config is None:
+        raise ValueError("Suspension has no configuration")
+
+    setup_config = suspension.config.model_copy(update={"camber_shim": shim_config})
+    return replace(
+        suspension,
+        hardpoints=suspension.get_hardpoints_copy(),
+        config=setup_config,
+        _initial_state=None,
+    )
 
 
 def plot_front_view_comparison(

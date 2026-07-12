@@ -107,6 +107,3 @@ def side_qualified(side: Side, point: PointKey) -> PointRef:
     if not isinstance(point, PointID):
         raise TypeError(f"Cannot side-qualify a non-corner key: {point!r}")
     return PointRef(side, point)
-
-
-__all__ = ["PointKey", "PointRef", "Side", "point_key_name", "side_qualified"]

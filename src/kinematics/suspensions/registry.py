@@ -1,6 +1,7 @@
 """Single catalogue of supported suspension geometry types."""
 
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Callable
 
 from kinematics.schema.geometry import (
@@ -87,11 +88,13 @@ SUSPENSION_DEFINITIONS = (
     ),
 )
 
-SUSPENSION_REGISTRY: dict[str, SuspensionDefinition] = {}
+_definitions_by_key: dict[str, SuspensionDefinition] = {}
 for definition in SUSPENSION_DEFINITIONS:
-    SUSPENSION_REGISTRY[definition.type_key] = definition
+    _definitions_by_key[definition.type_key] = definition
     for alias in definition.aliases:
-        SUSPENSION_REGISTRY[alias] = definition
+        _definitions_by_key[alias] = definition
+
+SUSPENSION_REGISTRY = MappingProxyType(_definitions_by_key)
 
 
 def get_suspension_definition(type_key: str) -> SuspensionDefinition | None:
@@ -108,15 +111,3 @@ def get_suspension_class(type_key: str) -> SuspensionClass | None:
 def list_supported_types() -> list[str]:
     """Return every supported public type key in sorted order."""
     return sorted(SUSPENSION_REGISTRY)
-
-
-__all__ = [
-    "SUSPENSION_DEFINITIONS",
-    "SUSPENSION_REGISTRY",
-    "SuspensionBuilder",
-    "SuspensionClass",
-    "SuspensionDefinition",
-    "get_suspension_class",
-    "get_suspension_definition",
-    "list_supported_types",
-]

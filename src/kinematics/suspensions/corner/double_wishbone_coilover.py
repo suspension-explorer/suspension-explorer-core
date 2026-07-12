@@ -4,8 +4,12 @@ from dataclasses import dataclass
 from typing import ClassVar, Sequence
 
 from kinematics.constraints import Constraint
-from kinematics.core.enums import PointID
-from kinematics.metrics.derivatives import DerivativeMetricDefinition
+from kinematics.core.enums import Axis, PointID
+from kinematics.metrics.derivatives import (
+    DerivativeMetricDefinition,
+    PointCoordinateResponse,
+    PointDistanceResponse,
+)
 from kinematics.metrics.units import MetricUnit
 from kinematics.suspensions.corner.attachments import chiral_rigid_point_constraints
 from kinematics.suspensions.corner.double_wishbone import DoubleWishboneSuspension
@@ -56,12 +60,6 @@ class DoubleWishboneCoiloverSuspension(DoubleWishboneSuspension):
         self,
     ) -> tuple[DerivativeMetricDefinition, ...]:
         """Declare damper length relative to hub vertical travel."""
-        from kinematics.core.enums import Axis
-        from kinematics.metrics.derivatives import (
-            PointCoordinateResponse,
-            PointDistanceResponse,
-        )
-
         return (
             DerivativeMetricDefinition(
                 response=PointDistanceResponse(

@@ -6,8 +6,3 @@ from kinematics.suspensions.axle.double_wishbone import (
 from kinematics.suspensions.axle.double_wishbone_pushrod_rocker import (
     DoubleWishbonePushrodRockerAxleSuspension,
 )
-
-__all__ = [
-    "DoubleWishboneAxleSuspension",
-    "DoubleWishbonePushrodRockerAxleSuspension",
-]

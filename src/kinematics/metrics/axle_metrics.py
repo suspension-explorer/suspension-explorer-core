@@ -90,6 +90,3 @@ def _roll_center(
         (right[0] - left[0]) * right[3] - (right[1] - left[1]) * right[2]
     ) / denominator
     return left[0] + parameter * left[2], left[1] + parameter * left[3]
-
-
-__all__ = ["append_axle_state_metrics"]

@@ -202,12 +202,3 @@ def tangent_positions(
 ) -> dict[PointKey, DualVec3]:
     """Seed a state's positions with a velocity field for dual evaluation."""
     return seed_positions_with_tangent(state.positions, velocities)
-
-
-__all__ = [
-    "TangentField",
-    "TangentSolveInfo",
-    "combine_tangents",
-    "compute_state_tangents",
-    "tangent_positions",
-]

@@ -74,6 +74,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["D103"]  # Test functions don't need docstrings
 "visualize_*.py" = ["D103"] # Script functions don't need docstrings
+"src/kinematics/**/__init__.py" = ["F401"] # Package imports define public APIs
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

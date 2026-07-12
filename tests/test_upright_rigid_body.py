@@ -464,6 +464,21 @@ class TestHardpointsArchitecture:
             atol=1e-6,
         )
 
+    def test_from_hardpoints_and_attachments_copies_point_id_mapping(
+        self, hardpoints_registry, hardpoint_point_ids, attachments
+    ):
+        upright = Upright.from_hardpoints_and_attachments(
+            hardpoint_point_ids, hardpoints_registry, attachments
+        )
+
+        hardpoint_point_ids["upper_ball_joint"] = PointID.LOWER_WISHBONE_OUTBOARD
+
+        assert upright.hardpoint_point_ids is not None
+        assert (
+            upright.hardpoint_point_ids["upper_ball_joint"]
+            == PointID.UPPER_WISHBONE_OUTBOARD
+        )
+
     def test_from_hardpoints_and_attachments_missing_mount_raises(
         self, hardpoints_registry, attachments
     ):

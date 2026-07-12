@@ -13,11 +13,11 @@ from kinematics.core.constants import TEST_TOLERANCE
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.geometry import Direction3, Point3
 from kinematics.core.vector_utils.geometric import rotate_point_about_axis
-from kinematics.io.geometry_loader import load_geometry
+from kinematics.io import load_geometry
+from kinematics.schema.config import CamberShimConfig
 from kinematics.suspensions.base import Suspension
-from kinematics.suspensions.config.settings import CamberShimConfig
 from kinematics.suspensions.config.shims import solve_camber_shim_assembly
-from kinematics.suspensions.double_wishbone import DoubleWishboneSuspension
+from kinematics.suspensions.corner import DoubleWishboneSuspension
 
 # ---------------------------------------------------------------------------
 # rotate_point_about_axis

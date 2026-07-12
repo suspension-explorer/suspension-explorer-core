@@ -8,6 +8,7 @@ import numpy as np
 from kinematics.core.enums import PointID
 from kinematics.core.geometry import Direction3, Point3, midpoint
 from kinematics.core.rigid_body import LocalCoordinateSystem, RigidBody
+from kinematics.core.vector_utils.geometric import rotate_point_about_axis
 
 
 @dataclass
@@ -102,8 +103,8 @@ class Upright(RigidBody):
         self.hardpoints = hardpoints
         self.attachments = attachments
 
-        # Hardpoint PointIDs for hardpoints-based construction.
-        self._hardpoint_point_ids: dict[str, PointID] | None = None
+        # Point references used to resolve hardpoints from the central registry.
+        self.hardpoint_point_ids: dict[str, PointID] | None = None
 
     @classmethod
     def from_global_positions(
@@ -220,8 +221,6 @@ class Upright(RigidBody):
             rotation_axis: Unit direction for the rotation axis.
             rotation_angle_rad: Rotation angle in radians.
         """
-        from kinematics.core.vector_utils.geometric import rotate_point_about_axis
-
         # Get current world positions of attachments.
         axle_inboard_world = self.get_world_position("axle_inboard")
         axle_outboard_world = self.get_world_position("axle_outboard")
@@ -329,7 +328,8 @@ class Upright(RigidBody):
         )
 
         upright = cls(hardpoints=upright_hardpoints, attachments=upright_attachments)
-        upright._hardpoint_point_ids = hardpoint_point_ids  # Store for updates.
+        # Own the mapping so later caller mutation cannot alter the upright topology.
+        upright.hardpoint_point_ids = dict(hardpoint_point_ids)
         upright.init_local_frame()
         return upright
 
@@ -363,14 +363,3 @@ class Upright(RigidBody):
             "trackrod_outboard": hardpoints[point_ids["trackrod_outboard"]],
         }
         self.update_from_hardpoints(new_hardpoints)
-
-    @property
-    def hardpoint_point_ids(self) -> dict[str, PointID] | None:
-        """
-        Get the mount PointID references if available.
-
-        Returns:
-            Dictionary mapping mount roles to PointIDs, or None if not using
-            hardpoints-based construction.
-        """
-        return getattr(self, "_hardpoint_point_ids", None)

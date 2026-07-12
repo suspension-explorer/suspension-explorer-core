@@ -1,5 +1,6 @@
 """Double-wishbone pushrod-rocker axle with a shared anti-roll bar."""
 
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from math import acos, degrees
 from typing import TYPE_CHECKING, ClassVar, Sequence
@@ -15,7 +16,10 @@ from kinematics.core.vector_utils.geometric import (
     compute_point_point_distance,
     compute_point_to_line_distance,
     compute_scalar_triple_product,
+    signed_angle_about_axis,
 )
+from kinematics.diagnostics import DiagnosticIssue
+from kinematics.metrics import kernels
 from kinematics.metrics.derivatives import (
     CallableScalarResponse,
     DerivativeMetricDefinition,
@@ -26,6 +30,9 @@ from kinematics.suspensions.axle.double_wishbone import DoubleWishboneAxleSuspen
 from kinematics.suspensions.corner.double_wishbone_pushrod_rocker import (
     DoubleWishbonePushrodRockerArbSuspension,
 )
+
+TRANSMISSION_MARGIN_WARNING_THRESHOLD = 0.15
+"""Warn when a linkage transmission margin falls below this ratio."""
 
 if TYPE_CHECKING:
     from kinematics.state import SuspensionState
@@ -142,14 +149,15 @@ class DoubleWishbonePushrodRockerAxleSuspension(DoubleWishboneAxleSuspension):
         self,
     ) -> tuple[DerivativeMetricDefinition, ...]:
         """Declare ARB twist relative to each hub Z with the other hub held."""
-        from kinematics.metrics import kernels
-
         design = self.initial_state()
         axis_a_key = PointRef(Side.CENTER, PointID.ARB_AXIS_A)
         axis_b_key = PointRef(Side.CENTER, PointID.ARB_AXIS_B)
         axis_point = extract_array(design.positions[axis_a_key])
         axis_direction = extract_array(design.positions[axis_b_key]) - axis_point
-        axis_direction /= np.linalg.norm(axis_direction)
+        axis_length = float(np.linalg.norm(axis_direction))
+        if axis_length < EPS_GEOMETRIC:
+            raise ValueError("ARB twist derivative requires distinct ARB axis points.")
+        axis_direction /= axis_length
         design_pickups = {
             side: extract_array(design.positions[PointRef(side, PointID.DROPLINK_ARB)])
             for side in (Side.LEFT, Side.RIGHT)
@@ -188,8 +196,6 @@ class DoubleWishbonePushrodRockerAxleSuspension(DoubleWishboneAxleSuspension):
 
     def topology_diagnostics(self, states):
         """Report ARB branch inversions and approaching linkage toggles."""
-        from kinematics.diagnostics import DiagnosticIssue
-
         issues: list[DiagnosticIssue] = []
         design = self.initial_state()
         for side in (Side.LEFT, Side.RIGHT):
@@ -240,10 +246,6 @@ class DoubleWishbonePushrodRockerAxleSuspension(DoubleWishboneAxleSuspension):
 
     def topology_metric_values(self, state):
         """Return per-side ARB arm rotation and total bar twist from design."""
-        from collections import OrderedDict
-
-        from kinematics.core.vector_utils.geometric import signed_angle_about_axis
-
         design = self.initial_state()
         axis_a = design.get(PointRef(Side.CENTER, PointID.ARB_AXIS_A))
         axis = (
@@ -271,10 +273,6 @@ class DoubleWishbonePushrodRockerAxleSuspension(DoubleWishboneAxleSuspension):
     @staticmethod
     def _arb_triple(state, side: Side) -> float:
         """Return the signed branch volume for one ARB arm."""
-        from kinematics.core.vector_utils.geometric import (
-            compute_scalar_triple_product,
-        )
-
         axis_a = state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_A))
         return compute_scalar_triple_product(
             state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_B)) - axis_a,
@@ -284,7 +282,6 @@ class DoubleWishbonePushrodRockerAxleSuspension(DoubleWishboneAxleSuspension):
 
     def _transmission_issues(self, state, side: Side, step: int):
         """Return warnings for the three link-to-lever transmission margins."""
-        from kinematics.diagnostics import DiagnosticIssue
 
         def point(point_id: PointID):
             return state.get(PointRef(side, point_id)).data
@@ -328,7 +325,7 @@ class DoubleWishbonePushrodRockerAxleSuspension(DoubleWishboneAxleSuspension):
         )
         issues: list[DiagnosticIssue] = []
         for joint, margin in checks:
-            if margin is None or margin >= 0.15:
+            if margin is None or margin >= TRANSMISSION_MARGIN_WARNING_THRESHOLD:
                 continue
             angle_from_toggle = 90.0 - degrees(acos(min(1.0, margin)))
             issues.append(

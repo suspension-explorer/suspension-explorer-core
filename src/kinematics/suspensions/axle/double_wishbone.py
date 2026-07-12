@@ -11,6 +11,7 @@ from kinematics.core.enums import PointID
 from kinematics.core.geometry import Point3
 from kinematics.core.point_ref import PointKey, PointRef, Side, side_qualified
 from kinematics.core.vector_utils.geometric import compute_point_point_distance
+from kinematics.metrics.main import compute_metrics_for_axle_state
 from kinematics.points.derived.manager import (
     DerivedPointsSpec,
     PositionFn,
@@ -58,6 +59,11 @@ class DoubleWishboneAxleSuspension(Suspension):
     )
 
     corners: dict[Side, DoubleWishboneSuspension] = field(default_factory=dict)
+
+    @property
+    def is_axle(self) -> bool:
+        """Whether this topology composes multiple corner suspensions."""
+        return True
 
     def validate_hardpoints(self) -> None:
         """Require one explicitly sided corner on each side."""
@@ -188,8 +194,6 @@ class DoubleWishboneAxleSuspension(Suspension):
         """Compute structural corner and axle-level metric rows."""
         if self.config is None:
             raise ValueError("Suspension has no configuration")
-        from kinematics.metrics.main import compute_metrics_for_axle_state
-
         return compute_metrics_for_axle_state(
             state,
             self,

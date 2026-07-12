@@ -13,6 +13,7 @@ making debugging easier while still testing the same code path.
 import csv
 import io
 import tempfile
+from importlib.util import find_spec
 from pathlib import Path
 from typing import Generator
 from unittest.mock import patch
@@ -24,13 +25,8 @@ import pytest
 from kinematics.cli import sweep as cli_sweep
 from kinematics.core.constants import TEST_TOLERANCE
 
-# Check if matplotlib is available for animation tests.
-try:
-    import matplotlib  # noqa: F401  # type: ignore[import-not-found]
-
-    HAS_MATPLOTLIB = True
-except ImportError:
-    HAS_MATPLOTLIB = False
+# Check if matplotlib is available for animation tests without importing it.
+HAS_MATPLOTLIB = find_spec("matplotlib") is not None
 
 requires_viz = pytest.mark.skipif(
     not HAS_MATPLOTLIB,

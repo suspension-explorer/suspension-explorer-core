@@ -9,19 +9,22 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Mapping, Sequence, overload
+from typing import TYPE_CHECKING, Mapping, Sequence, cast, overload
 
 from kinematics.core.point_ref import PointRef, Side
+from kinematics.metrics.axle_metrics import append_axle_state_metrics
 from kinematics.metrics.catalog import (
     get_default_corner_derivative_metrics,
     get_default_corner_metrics,
 )
 from kinematics.metrics.context import MetricContext
+from kinematics.metrics.derivatives import evaluate_derivative_metrics
+from kinematics.metrics.registry import flat_key, split_flat_key
 from kinematics.schema.config import SuspensionConfig
+from kinematics.sensitivity import TangentField
 from kinematics.state import SuspensionState
 
 if TYPE_CHECKING:
-    from kinematics.sensitivity import TangentField
     from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
     from kinematics.suspensions.base import Suspension
 
@@ -46,8 +49,6 @@ def flatten_metric_rows(
     corner_metrics: Mapping[str, MetricRow],
 ) -> MetricRow:
     """Flatten structural metric locations using side suffixes."""
-    from kinematics.metrics.registry import flat_key
-
     flat: MetricRow = OrderedDict()
     for location, row in corner_metrics.items():
         for key, value in row.items():
@@ -77,8 +78,6 @@ def compute_metrics_for_axle_state(
         )
         corner_rows[side.name.lower()] = side_row
 
-    from kinematics.metrics.axle_metrics import append_axle_state_metrics
-
     append_axle_state_metrics(axle_row, state, axle)
     for key, value in axle.topology_metric_values(state).items():
         base_key, location = _split_topology_location(key)
@@ -87,8 +86,6 @@ def compute_metrics_for_axle_state(
         else:
             corner_rows[location][base_key] = value
     if tangents:
-        from kinematics.metrics.derivatives import evaluate_derivative_metrics
-
         axle_row.update(
             evaluate_derivative_metrics(
                 axle.derivative_metric_definitions(),
@@ -101,8 +98,6 @@ def compute_metrics_for_axle_state(
 
 def _split_topology_location(key: str) -> tuple[str, str | None]:
     """Split topology-owned flat side keys while their hook is migrated."""
-    from kinematics.metrics.registry import split_flat_key
-
     return split_flat_key(key)
 
 
@@ -111,8 +106,6 @@ def _corner_tangents(
     side: Side,
 ) -> list["TangentField"]:
     """Strip one side's PointRef qualifiers from axle tangent fields."""
-    from kinematics.sensitivity import TangentField
-
     result: list[TangentField] = []
     for tangent in tangents:
         target_key = tangent.target.point_id
@@ -165,8 +158,6 @@ def compute_metrics_for_state(
         row[metric.column_name] = metric.compute(ctx)
     row.update(suspension.topology_metric_values(state))
     if tangents:
-        from kinematics.metrics.derivatives import evaluate_derivative_metrics
-
         definitions = (
             *get_default_corner_derivative_metrics(suspension),
             *suspension.derivative_metric_definitions(),
@@ -243,10 +234,9 @@ def _compute_metrics_for_suspension_state(
     tangents: "Sequence[TangentField] | None" = None,
 ) -> MetricRow | AxleMetricRows:
     """Dispatch metric calculation without applying corner metrics to an axle."""
-    from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
-
-    if isinstance(suspension, DoubleWishboneAxleSuspension):
-        return compute_metrics_for_axle_state(state, suspension, config, tangents)
+    if suspension.is_axle:
+        axle = cast("DoubleWishboneAxleSuspension", suspension)
+        return compute_metrics_for_axle_state(state, axle, config, tangents)
     return compute_metrics_for_state(state, suspension, config, tangents)
 
 

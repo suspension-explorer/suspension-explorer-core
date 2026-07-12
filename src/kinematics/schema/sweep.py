@@ -174,12 +174,3 @@ def build_sweep_config(
             ]
         )
     return SweepConfig(dimensions)
-
-
-__all__ = [
-    "DirectionSpec",
-    "SweepSpec",
-    "TargetSpec",
-    "build_sweep_config",
-    "vector_to_axis",
-]

@@ -7,5 +7,5 @@ def test_no_matplotlib_import_on_core():
     sys.modules.pop("matplotlib", None)
 
     importlib.invalidate_caches()
-    importlib.import_module("kinematics")  # noqa: F401
+    importlib.import_module("kinematics")
     assert "matplotlib" not in sys.modules

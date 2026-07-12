@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Sequence
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Literal, Sequence, cast
 
+from kinematics.metrics.catalog import (
+    get_default_corner_derivative_metrics,
+    get_default_corner_metrics,
+)
 from kinematics.metrics.derivatives import DerivativeMetricDefinition
 from kinematics.metrics.units import MetricUnit, MetricUnitQuotient
 
 if TYPE_CHECKING:
+    from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
     from kinematics.suspensions.base import Suspension
 
 MetricUnits = MetricUnit | MetricUnitQuotient
@@ -100,8 +105,6 @@ def derivative_spec(
 
 def all_static_metric_specs() -> tuple[MetricSpec, ...]:
     """Return every statically declared state metric."""
-    from kinematics.metrics.catalog import get_default_corner_metrics
-
     corner = tuple(
         MetricSpec(metric.column_name, metric.label, metric.unit, "state", "corner")
         for metric in get_default_corner_metrics()
@@ -125,12 +128,10 @@ def specs_by_key(
 
 def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpec]:
     """Return all metadata that the selected topology can emit."""
-    from kinematics.metrics.catalog import get_default_corner_derivative_metrics
-    from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
-
     derivatives: list[tuple[DerivativeMetricDefinition, MetricScope]] = []
-    if isinstance(suspension, DoubleWishboneAxleSuspension):
-        representative = next(iter(suspension.corners.values()))
+    if suspension.is_axle:
+        axle = cast("DoubleWishboneAxleSuspension", suspension)
+        representative = next(iter(axle.corners.values()))
         derivatives.extend(
             (definition, "corner")
             for definition in (
@@ -139,8 +140,7 @@ def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpe
             )
         )
         derivatives.extend(
-            (definition, "axle")
-            for definition in suspension.derivative_metric_definitions()
+            (definition, "axle") for definition in axle.derivative_metric_definitions()
         )
     else:
         derivatives.extend(
@@ -163,12 +163,8 @@ def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpe
 
 def flat_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpec]:
     """Render topology metadata using the same keys as flat result exports."""
-    from dataclasses import replace
-
-    from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
-
     specs = metric_specs_for_suspension(suspension)
-    if not isinstance(suspension, DoubleWishboneAxleSuspension):
+    if not suspension.is_axle:
         return specs
 
     result: dict[str, MetricSpec] = {}
@@ -189,19 +185,3 @@ def _validate_unique(specs: Sequence[MetricSpec]) -> None:
         if spec.key in seen:
             raise ValueError(f"Duplicate metric specification: {spec.key}")
         seen.add(spec.key)
-
-
-__all__ = [
-    "LOCATIONS",
-    "MetricKind",
-    "MetricScope",
-    "MetricSpec",
-    "MetricUnits",
-    "all_static_metric_specs",
-    "derivative_spec",
-    "flat_key",
-    "flat_specs_for_suspension",
-    "metric_specs_for_suspension",
-    "specs_by_key",
-    "split_flat_key",
-]

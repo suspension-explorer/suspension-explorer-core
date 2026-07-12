@@ -7,6 +7,7 @@ from kinematics.core.geometry import Direction3, Point3
 from kinematics.core.point_ref import PointKey, Side
 from kinematics.schema.config import SuspensionConfig
 from kinematics.schema.geometry import (
+    AxleHardpointsSpec,
     DoubleWishboneAxleGeometrySpec,
     DoubleWishboneCoiloverGeometrySpec,
     DoubleWishboneGeometrySpec,
@@ -166,18 +167,27 @@ def build_double_wishbone_pushrod_rocker_axle(
     )
 
 
-def _build_axle_side_points(blocks) -> dict[Side, dict[PointID, Point3]]:
+def _build_axle_side_points(
+    blocks: AxleHardpointsSpec,
+) -> dict[Side, dict[PointID, Point3]]:
     """Copy explicit axle corners or mirror one explicitly sided source."""
     if blocks.is_explicit:
-        assert blocks.left is not None and blocks.right is not None
+        if blocks.left is None or blocks.right is None:
+            raise ValueError(
+                "Explicit axle hardpoints require both left and right point maps."
+            )
         side_points = {
             Side.LEFT: _copy_points(blocks.left),
             Side.RIGHT: _copy_points(blocks.right),
         }
     else:
-        assert blocks.points is not None
+        if blocks.points is None:
+            raise ValueError("Mirrored axle hardpoints require a source point map.")
         source_side = blocks.side
-        assert source_side is not None
+        if source_side not in (Side.LEFT, Side.RIGHT):
+            raise ValueError(
+                "Mirrored axle hardpoints require a left or right source side."
+            )
         source_points = _copy_points(blocks.points)
         other_side = Side.RIGHT if source_side is Side.LEFT else Side.LEFT
         side_points = {

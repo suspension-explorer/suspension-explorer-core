@@ -20,7 +20,7 @@ Disallowed operations (raise TypeError at runtime):
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Final, overload
+from typing import TYPE_CHECKING, Any, Callable, Final, Protocol, overload
 
 import numpy as np
 from numpy.typing import NDArray
@@ -28,33 +28,53 @@ from numpy.typing import NDArray
 from kinematics.core.constants import EPS_GEOMETRIC
 
 # ---------------------------------------------------------------------------
-# Numpy dispatch tables
+# Numpy dispatch support
 # ---------------------------------------------------------------------------
-# Geometry types register here so that np.dot, np.linalg.norm, and np.cross
-# work transparently when a Point3/Vector3/Direction3 is an operand.
-GEOM_IMPLEMENTATIONS: dict = {}
-
 # Types that our __array_function__ knows how to handle.  If any argument
 # type is NOT in this set we return NotImplemented so that other protocols
 # (e.g. DualVec3) can take over.
 GEOM_TYPES: tuple[type, ...] = ()  # Populated after class definitions.
 
 
+class ArrayBacked(Protocol):
+    """
+    Provide an ndarray through a data attribute.
+    """
+
+    data: np.ndarray
+
+
 def extract_array(x: object) -> np.ndarray:
     """
-    Extract the raw ndarray from a geometry wrapper, or pass through.
+    Extract the raw ndarray from a supported array-backed value.
 
-    Works for Point3, Vector3, Direction3 (via .data), plain ndarray,
-    and scalars.
+    Plain ndarrays pass through unchanged. Geometry wrappers provide their
+    backing array through ``data``. Lists and tuples are converted to arrays.
+
+    Raises:
+        TypeError: If the value is not array-backed or an array-like sequence.
     """
     if isinstance(x, np.ndarray):
         return x
     data = getattr(x, "data", None)
     if isinstance(data, np.ndarray):
         return data
-    # Scalars and other non-array inputs pass through unchanged, so the declared
-    # ndarray return type is optimistic for those callers by design.
-    return x  # ty: ignore[invalid-return-type]
+    if isinstance(x, (list, tuple)):
+        return np.asarray(x)
+    raise TypeError(f"Expected an array-backed value, got {type(x).__name__}")
+
+
+def try_extract_array(x: object) -> np.ndarray | None:
+    """
+    Return an operand's backing array when it has one.
+
+    This dynamic probe is used by numeric protocols that must return
+    ``NotImplemented`` for unsupported operand types.
+    """
+    if isinstance(x, np.ndarray):
+        return x
+    data = getattr(x, "data", None)
+    return data if isinstance(data, np.ndarray) else None
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +160,7 @@ class Point3:
     def __array_function__(self, func, types, args, kwargs):
         if not all(issubclass(t, GEOM_TYPES) for t in types):
             return NotImplemented
-        impl = GEOM_IMPLEMENTATIONS.get(func)
+        impl = _geometry_implementation(func)
         if impl is not None:
             return impl(*args, **kwargs)
         return NotImplemented
@@ -308,7 +328,7 @@ class Vector3:
     def __array_function__(self, func, types, args, kwargs):
         if not all(issubclass(t, GEOM_TYPES) for t in types):
             return NotImplemented
-        impl = GEOM_IMPLEMENTATIONS.get(func)
+        impl = _geometry_implementation(func)
         if impl is not None:
             return impl(*args, **kwargs)
         return NotImplemented
@@ -452,7 +472,7 @@ class Direction3:
     def __array_function__(self, func, types, args, kwargs):
         if not all(issubclass(t, GEOM_TYPES) for t in types):
             return NotImplemented
-        impl = GEOM_IMPLEMENTATIONS.get(func)
+        impl = _geometry_implementation(func)
         if impl is not None:
             return impl(*args, **kwargs)
         return NotImplemented
@@ -501,7 +521,11 @@ GEOM_TYPES = (Point3, Vector3, Direction3, np.ndarray)
 # ---------------------------------------------------------------------------
 
 
-def geom_dot(a: object, b: object, out: object = None) -> float:
+def geom_dot(
+    a: np.ndarray | ArrayBacked,
+    b: np.ndarray | ArrayBacked,
+    out: object = None,
+) -> float:
     """
     Geometry-aware dot product.
 
@@ -527,8 +551,8 @@ def geom_norm(
 
 
 def geom_cross(
-    a: object,
-    b: object,
+    a: np.ndarray | ArrayBacked,
+    b: np.ndarray | ArrayBacked,
     axisa: int = -1,
     axisb: int = -1,
     axisc: int = -1,
@@ -542,9 +566,15 @@ def geom_cross(
     return Vector3(np.cross(a_data, b_data))
 
 
-GEOM_IMPLEMENTATIONS[np.dot] = geom_dot
-GEOM_IMPLEMENTATIONS[np.linalg.norm] = geom_norm
-GEOM_IMPLEMENTATIONS[np.cross] = geom_cross
+def _geometry_implementation(func: object) -> Callable[..., object] | None:
+    """Return the geometry implementation for a supported numpy function."""
+    if func is np.dot:
+        return geom_dot
+    if func is np.linalg.norm:
+        return geom_norm
+    if func is np.cross:
+        return geom_cross
+    return None
 
 
 # ---------------------------------------------------------------------------

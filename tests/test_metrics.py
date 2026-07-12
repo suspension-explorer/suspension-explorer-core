@@ -3,7 +3,7 @@ import numpy as np
 from kinematics.core.constants import TEST_TOLERANCE
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.point_ref import Side
-from kinematics.io.geometry_loader import load_geometry
+from kinematics.io import load_geometry
 from kinematics.io.sweep_loader import parse_sweep_file
 from kinematics.main import solve_sweep
 from kinematics.metrics.catalog import get_default_corner_metrics
@@ -11,7 +11,7 @@ from kinematics.metrics.context import MetricContext
 from kinematics.metrics.main import compute_metrics_for_state_from_suspension
 from kinematics.metrics.units import MetricUnit
 from kinematics.points.derived.manager import DerivedPointsManager
-from kinematics.suspensions.double_wishbone import DoubleWishboneSuspension
+from kinematics.suspensions.corner import DoubleWishboneSuspension
 
 
 def test_metric_side_sign_uses_declared_side(

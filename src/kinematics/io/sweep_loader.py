@@ -5,17 +5,8 @@ from pathlib import Path
 import yaml
 
 from kinematics.core.types import SweepConfig
-from kinematics.schema.sweep import (
-    DirectionSpec,
-    SweepSpec,
-    TargetSpec,
-    build_sweep_config,
-    vector_to_axis,
-)
+from kinematics.schema.sweep import SweepSpec, build_sweep_config
 from kinematics.suspensions.base import Suspension
-
-# Compatibility name for callers that imported the former file schema directly.
-SweepFile = SweepSpec
 
 
 def parse_sweep_file(
@@ -38,14 +29,3 @@ def parse_sweep_file(
     except Exception as error:
         raise ValueError(f"Invalid sweep specification: {error}") from error
     return build_sweep_config(spec, suspension)
-
-
-__all__ = [
-    "DirectionSpec",
-    "SweepFile",
-    "SweepSpec",
-    "TargetSpec",
-    "build_sweep_config",
-    "parse_sweep_file",
-    "vector_to_axis",
-]

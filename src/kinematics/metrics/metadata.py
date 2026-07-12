@@ -48,6 +48,3 @@ def metric_display_for_keys(
     """Resolve known keys in input order."""
     displays = (metric_display(key, specs) for key in keys)
     return [display for display in displays if display is not None]
-
-
-__all__ = ["MetricDisplay", "metric_display", "metric_display_for_keys"]

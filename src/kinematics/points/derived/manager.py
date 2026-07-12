@@ -104,8 +104,11 @@ class DerivedPointsManager:
             PointKey, tuple[tuple[PointKey, ...], tuple[PointKey, ...]]
         ] = {}
 
-    def detect_cycles_util(
-        self, node: PointKey, visited: set, recursion_stack: set
+    def _dependency_path_contains_cycle(
+        self,
+        node: PointKey,
+        visited: set[PointKey],
+        recursion_stack: set[PointKey],
     ) -> bool:
         """
         Depth-first search utility for cycle detection in dependency graph.
@@ -130,7 +133,9 @@ class DerivedPointsManager:
 
         for neighbor in self.dependency_graph.get(node, set()):
             if neighbor not in visited:
-                if self.detect_cycles_util(neighbor, visited, recursion_stack):
+                if self._dependency_path_contains_cycle(
+                    neighbor, visited, recursion_stack
+                ):
                     return True
             elif neighbor in recursion_stack:
                 return True  # Cycle detected.
@@ -146,13 +151,13 @@ class DerivedPointsManager:
         Raises:
             ValueError: If a circular dependency is detected in the graph.
         """
-        visited = set()
-        recursion_stack = set()
-        nodes = set(self.dependency_graph.keys())
+        visited: set[PointKey] = set()
+        recursion_stack: set[PointKey] = set()
+        nodes: set[PointKey] = set(self.dependency_graph)
 
         for node in nodes:
             if node not in visited:
-                if self.detect_cycles_util(node, visited, recursion_stack):
+                if self._dependency_path_contains_cycle(node, visited, recursion_stack):
                     raise ValueError(
                         "Circular dependency detected in derived point definitions."
                     )

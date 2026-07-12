@@ -325,18 +325,3 @@ def evaluate_derivative_metrics(
             tangents,
         )
     return row
-
-
-__all__ = [
-    "CallableScalarResponse",
-    "DerivativeMetricDefinition",
-    "DerivativeMetricRow",
-    "DualPositions",
-    "DualSafeScalarCallable",
-    "PointCoordinateResponse",
-    "PointDisplacementMagnitudeResponse",
-    "PointDistanceResponse",
-    "ScalarDriver",
-    "ScalarResponse",
-    "evaluate_derivative_metrics",
-]

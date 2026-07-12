@@ -182,21 +182,3 @@ def parse_geometry_spec(data: Mapping[str, Any]) -> GeometrySpecBase:
         return definition.spec_type.model_validate(normalized)
     except Exception as error:
         raise ValueError(f"Invalid geometry specification: {error}") from error
-
-
-__all__ = [
-    "DoubleWishboneCoiloverGeometrySpec",
-    "DoubleWishboneAxleGeometrySpec",
-    "DoubleWishboneGeometrySpec",
-    "DoubleWishbonePushrodRockerGeometrySpec",
-    "DoubleWishbonePushrodRockerArbGeometrySpec",
-    "DoubleWishbonePushrodRockerAxleGeometrySpec",
-    "AxleHardpointsSpec",
-    "CornerGeometrySpecBase",
-    "GeometrySpec",
-    "GeometrySpecBase",
-    "HardpointMap",
-    "RockerSpringSpec",
-    "RockerAxleHardpointsSpec",
-    "parse_geometry_spec",
-]

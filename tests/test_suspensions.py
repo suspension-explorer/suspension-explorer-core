@@ -17,15 +17,15 @@ import pytest
 from kinematics.core.enums import PointID, ShimType, Units
 from kinematics.core.geometry import Direction3, Point3
 from kinematics.core.point_ref import Side
-from kinematics.io.geometry_loader import load_geometry
-from kinematics.suspensions.base import Suspension
-from kinematics.suspensions.config.settings import (
+from kinematics.io import load_geometry
+from kinematics.schema.config import (
     CamberShimConfig,
     SuspensionConfig,
     TireConfig,
     WheelConfig,
 )
-from kinematics.suspensions.double_wishbone import DoubleWishboneSuspension
+from kinematics.suspensions.base import Suspension
+from kinematics.suspensions.corner import DoubleWishboneSuspension
 from kinematics.suspensions.registry import get_suspension_class, list_supported_types
 
 # Test fixtures

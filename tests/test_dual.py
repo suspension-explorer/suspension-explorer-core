@@ -262,10 +262,10 @@ class TestNumpyDispatch:
 
     def test_norm_zero_vector(self):
         v = DualVec3(np.zeros(3), np.array([1.0, 0.0, 0.0]))
-        result = np.linalg.norm(v)  # ty: ignore[no-matching-overload]  # __array_function__ protocol
-        assert isinstance(result, DualScalar)
-        assert result.val == pytest.approx(0.0)
-        assert result.deriv == pytest.approx(0.0)
+        with pytest.raises(
+            ValueError, match="Dual vector norm derivative is undefined at zero length"
+        ):
+            np.linalg.norm(v)  # ty: ignore[no-matching-overload]  # __array_function__ protocol
 
 
 class TestSeedPositions:

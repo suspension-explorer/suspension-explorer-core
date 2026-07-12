@@ -1,6 +1,8 @@
 """Double-wishbone corner with explicit pushrod and rocker actuation."""
 
+from collections import OrderedDict
 from dataclasses import dataclass, field
+from math import degrees
 from typing import ClassVar, Literal, Sequence
 
 import numpy as np
@@ -13,7 +15,9 @@ from kinematics.core.point_ref import PointKey
 from kinematics.core.vector_utils.geometric import (
     compute_point_point_distance,
     compute_point_to_line_distance,
+    signed_angle_about_axis,
 )
+from kinematics.metrics import kernels
 from kinematics.metrics.derivatives import (
     CallableScalarResponse,
     DerivativeMetricDefinition,
@@ -49,6 +53,7 @@ class DoubleWishbonePushrodRockerSuspension(DoubleWishboneSuspension):
         DoubleWishboneSuspension.REQUIRED_POINTS | ROCKER_POINTS
     )
     OPTIONAL_POINTS: ClassVar[frozenset[PointID]] = COILOVER_POINTS
+    ROCKER_PICKUPS: ClassVar[tuple[PointID, ...]] = (PointID.PUSHROD_INBOARD,)
 
     spring_type: RockerSpringType = field(kw_only=True)
 
@@ -89,23 +94,19 @@ class DoubleWishbonePushrodRockerSuspension(DoubleWishboneSuspension):
         if compute_point_point_distance(axis_front, axis_rear) <= EPS_GEOMETRIC:
             raise ValueError("Rocker axis points must be distinct")
         axis_direction = (axis_rear - axis_front).normalize()
-        for point in self._rocker_pickups():
+        for point in self.ROCKER_PICKUPS:
             radius = compute_point_to_line_distance(
                 self.hardpoints[point], axis_front, axis_direction
             )
             if radius <= EPS_GEOMETRIC:
                 raise ValueError(f"{point.name} must not lie on the rocker axis")
 
-    def _rocker_pickups(self) -> tuple[PointID, ...]:
-        """Return moving pickups belonging to the rocker body."""
-        return (PointID.PUSHROD_INBOARD,)
-
     def free_points(self) -> Sequence[PointID]:
         """Return base variables plus pushrod, rocker, and optional damper pickup."""
         points = [
             *super().free_points(),
             PointID.PUSHROD_OUTBOARD,
-            *self._rocker_pickups(),
+            *self.ROCKER_PICKUPS,
         ]
         if self.has_strut:
             points.append(PointID.STRUT_BOTTOM)
@@ -187,13 +188,16 @@ class DoubleWishbonePushrodRockerSuspension(DoubleWishboneSuspension):
         self,
     ) -> tuple[DerivativeMetricDefinition, ...]:
         """Declare rocker, selected spring, and hub-relative derivatives."""
-        from kinematics.metrics import kernels
-
         design = self.initial_state()
         axis_front = extract_array(design.positions[PointID.ROCKER_AXIS_FRONT])
         axis_rear = extract_array(design.positions[PointID.ROCKER_AXIS_REAR])
         axis_direction = axis_rear - axis_front
-        axis_direction /= np.linalg.norm(axis_direction)
+        axis_length = float(np.linalg.norm(axis_direction))
+        if axis_length < EPS_GEOMETRIC:
+            raise ValueError(
+                "Rocker angle derivative requires distinct rocker axis points."
+            )
+        axis_direction /= axis_length
         design_pickup = extract_array(design.positions[PointID.PUSHROD_INBOARD])
         hub_z = PointCoordinateResponse.from_world_axis(
             PointID.WHEEL_CENTER,
@@ -248,11 +252,6 @@ class DoubleWishbonePushrodRockerSuspension(DoubleWishboneSuspension):
 
     def topology_metric_values(self, state: SuspensionState):
         """Return rocker rotation and selected spring twist from design."""
-        from collections import OrderedDict
-        from math import degrees
-
-        from kinematics.core.vector_utils.geometric import signed_angle_about_axis
-
         design = self.initial_state()
         axis_front = design.get(PointID.ROCKER_AXIS_FRONT)
         axis = (design.get(PointID.ROCKER_AXIS_REAR) - axis_front).normalize()
@@ -316,12 +315,12 @@ class DoubleWishbonePushrodRockerArbSuspension(DoubleWishbonePushrodRockerSuspen
         DoubleWishbonePushrodRockerSuspension.REQUIRED_POINTS
         | {PointID.DROPLINK_ROCKER}
     )
+    ROCKER_PICKUPS: ClassVar[tuple[PointID, ...]] = (
+        PointID.PUSHROD_INBOARD,
+        PointID.DROPLINK_ROCKER,
+    )
 
     @property
     def has_droplink(self) -> bool:
         """This corner exposes the rocker-side anti-roll-bar pickup."""
         return True
-
-    def _rocker_pickups(self) -> tuple[PointID, ...]:
-        """Return both pickups rigidly attached to the rocker."""
-        return (PointID.PUSHROD_INBOARD, PointID.DROPLINK_ROCKER)
