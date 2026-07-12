@@ -100,7 +100,6 @@ def create_setup_suspension(
         suspension,
         hardpoints=suspension.get_hardpoints_copy(),
         config=setup_config,
-        _initial_state=None,
     )
 
 

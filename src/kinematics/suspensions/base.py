@@ -57,7 +57,11 @@ class Suspension(ABC):
     side: Side = field(kw_only=True)
 
     # Internal state cache.
-    _initial_state: SuspensionState | None = field(default=None, repr=False)
+    _initial_state: SuspensionState | None = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
 
     def __post_init__(self) -> None:
         """Validate instance after creation."""
