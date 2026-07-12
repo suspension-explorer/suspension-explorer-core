@@ -3,14 +3,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from kinematics.constraints import DistanceConstraint
-from kinematics.core.constants import TEST_TOLERANCE
-from kinematics.core.enums import Axis, PointID, TargetPositionMode
-from kinematics.core.types import PointTargetAxis, SweepConfig
-from kinematics.io import load_geometry
-from kinematics.main import solve_sweep
-from kinematics.points.derived.manager import DerivedPointsManager
-from kinematics.solver import PointTarget
+from kinematics.cli.io.yaml import load_geometry
+from kinematics.core.constraints import DistanceConstraint
+from kinematics.core.points.derived.manager import DerivedPointsManager
+from kinematics.core.primitives.constants import TEST_TOLERANCE
+from kinematics.core.primitives.enums import Axis, PointID, TargetPositionMode
+from kinematics.core.primitives.types import PointTargetAxis, SweepConfig
+from kinematics.core.solver import PointTarget
+from kinematics.core.sweep import solve_sweep
 
 
 @pytest.fixture
@@ -120,8 +120,12 @@ def test_run_solver(
     print("Creating animation...")
 
     # Defer visualization imports to avoid collection errors when matplotlib is missing.
-    from kinematics.visualization.animation import create_animation
-    from kinematics.visualization.main import SuspensionVisualizer, WheelVisualization
+    from kinematics.cli.visualization.animation import create_animation
+    from kinematics.cli.visualization.main import (
+        SuspensionVisualizer,
+        WheelVisualization,
+        renderer_links,
+    )
 
     # Extract positions from SuspensionState objects for animation.
     position_states_positions = [state.positions for state in position_states]
@@ -138,8 +142,12 @@ def test_run_solver(
         width=225,
     )
 
-    visualization_links = suspension.get_visualization_links()
-    visualizer = SuspensionVisualizer(visualization_links, wheel_config)
+    topology = suspension.topology()
+    visualizer = SuspensionVisualizer(
+        renderer_links(topology),
+        wheel_config,
+        topology.wheels,
+    )
     create_animation(
         position_states_positions,
         initial_positions,

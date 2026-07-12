@@ -5,17 +5,17 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from kinematics.constraints import ScalarTripleProductConstraint
-from kinematics.core.enums import PointID
-from kinematics.core.geometry import Point3
-from kinematics.core.point_ref import PointRef, Side
-from kinematics.diagnostics import diagnose_sweep
-from kinematics.io import load_geometry
-from kinematics.io.sweep_loader import parse_sweep_file
-from kinematics.main import compute_sweep_metrics, solve_sweep
-from kinematics.metrics.main import AxleMetricRows
-from kinematics.suspensions.axle import DoubleWishbonePushrodRockerAxleSuspension
-from kinematics.suspensions.corner import DoubleWishbonePushrodRockerSuspension
+from kinematics.cli.io.sweep_loader import parse_sweep_file
+from kinematics.cli.io.yaml import load_geometry
+from kinematics.core.constraints import ScalarTripleProductConstraint
+from kinematics.core.diagnostics import diagnose_sweep
+from kinematics.core.metrics.main import AxleMetricRows
+from kinematics.core.primitives.enums import PointID
+from kinematics.core.primitives.geometry import Point3
+from kinematics.core.primitives.point_ref import PointRef, Side
+from kinematics.core.suspensions.axle import DoubleWishbonePushrodRockerAxleSuspension
+from kinematics.core.suspensions.corner import DoubleWishbonePushrodRockerSuspension
+from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
 
 
 def _definition_names(suspension) -> set[str]:

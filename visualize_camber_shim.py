@@ -13,17 +13,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
-from kinematics import load_geometry
-from kinematics.core.enums import PointID
-from kinematics.core.geometry import extract_array
-from kinematics.schema import CamberShimConfig
-from kinematics.suspensions.base import Suspension
-from kinematics.visualization.api import visualize_geometry
-from kinematics.visualization.main import SuspensionVisualizer, WheelVisualization
-from kinematics.visualization.plots import (
+from kinematics.cli.io.yaml import load_geometry
+from kinematics.cli.visualization.api import visualize_geometry
+from kinematics.cli.visualization.main import (
+    SuspensionVisualizer,
+    WheelVisualization,
+    renderer_links,
+)
+from kinematics.cli.visualization.plots import (
     compute_bounds_from_positions,
     configure_3d_axis,
 )
+from kinematics.core.primitives.enums import PointID
+from kinematics.core.primitives.geometry import extract_array
+from kinematics.core.schema import CamberShimConfig
+from kinematics.core.suspensions.base import Suspension
 
 # Shim configuration constants.
 DESIGN_SHIM_THICKNESS = 30.0  # mm - design/baseline shim stack thickness.
@@ -135,7 +139,12 @@ def plot_front_view_comparison(
             diameter=wheel_cfg.tire.nominal_radius * 2,
             width=wheel_cfg.tire.section_width,
         )
-        vis = SuspensionVisualizer(suspension.get_visualization_links(), wheel_config)
+        topology = suspension.topology()
+        vis = SuspensionVisualizer(
+            renderer_links(topology),
+            wheel_config,
+            topology.wheels,
+        )
 
         # Draw links.
         first = True

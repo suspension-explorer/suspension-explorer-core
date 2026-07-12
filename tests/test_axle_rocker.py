@@ -4,14 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from kinematics.core.enums import PointID
-from kinematics.core.point_ref import PointRef, Side
-from kinematics.io import load_geometry
-from kinematics.io.sweep_loader import parse_sweep_file
-from kinematics.main import solve_sweep
-from kinematics.suspensions.axle import (
+from kinematics.cli.io.sweep_loader import parse_sweep_file
+from kinematics.cli.io.yaml import load_geometry
+from kinematics.core.primitives.enums import PointID
+from kinematics.core.primitives.point_ref import PointRef, Side
+from kinematics.core.suspensions.axle import (
     DoubleWishbonePushrodRockerAxleSuspension,
 )
+from kinematics.core.sweep import solve_sweep
 
 
 @pytest.fixture
@@ -63,11 +63,11 @@ def test_roll_sweep_conserves_both_droplink_lengths(
             assert length == pytest.approx(design_lengths[side], abs=1e-5)
 
 
-def test_arb_visualization_is_one_bar_and_two_droplinks(
+def test_arb_topology_is_one_bar_and_two_droplinks(
     rocker_axle: DoubleWishbonePushrodRockerAxleSuspension,
 ) -> None:
     """Render the shared ARB as one continuous series."""
-    links = rocker_axle.get_visualization_links()
+    links = rocker_axle.link_topology()
     arb_links = [link for link in links if link.label == "Anti-Roll Bar"]
     droplinks = [link for link in links if link.label.endswith("Droplink")]
 

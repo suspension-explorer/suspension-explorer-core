@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 
-from kinematics.io.results_writer import CsvWriter, ParquetWriter, SolutionFrame
-from kinematics.metrics.registry import MetricSpec
-from kinematics.metrics.units import MetricUnit
-from kinematics.solver import SolverInfo
+from kinematics.cli.io.results_writer import CsvWriter, ParquetWriter, SolutionFrame
+from kinematics.core.metrics.registry import MetricSpec
+from kinematics.core.metrics.units import MetricUnit
+from kinematics.core.solver import SolverInfo
 
 
 def _frame() -> SolutionFrame:

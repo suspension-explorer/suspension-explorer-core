@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from kinematics import analyze_sweep, solve_sweep
-from kinematics.io import load_geometry, load_sweep
+from kinematics.cli.io.yaml import load_geometry, load_sweep
+from kinematics.core import analyze_sweep, solve_sweep
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 

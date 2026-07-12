@@ -43,25 +43,55 @@ Use of a virtual environment is recommended. [uv](https://github.com/astral-sh/u
 
 The package is not published to PyPI; install it from this repository.
 
-### Basic Installation
+### Core Library Installation
 
-For core kinematics functionality without visualization dependencies:
+For the transport-independent solver API only:
 
 ```bash
 uv pip install "kinematics @ git+https://github.com/nickmccleery/open-kinematics.git"
 ```
 
-### Full Installation (with Visualization)
+This installs NumPy, SciPy, and Pydantic. Importing `kinematics` or
+`kinematics.core` does not require CLI, YAML, export, or plotting dependencies.
 
-To generate plots and animations, you need to install the `[viz]` extra, which includes `matplotlib`.
+### CLI Installation
+
+To load YAML files and write CSV or Parquet results, install the `[cli]` extra:
 
 ```bash
-uv pip install "kinematics[viz] @ git+https://github.com/nickmccleery/open-kinematics.git"
+uv pip install "kinematics[cli] @ git+https://github.com/nickmccleery/open-kinematics.git"
+```
+
+### Full Installation (with Visualization)
+
+To use the CLI and generate plots or animations, install both extras:
+
+```bash
+uv pip install "kinematics[cli,viz] @ git+https://github.com/nickmccleery/open-kinematics.git"
+```
+
+## Core Library API
+
+`kinematics.core` accepts already-decoded data and returns structured Python
+objects; callers own transport and filesystem behavior.
+
+```python
+from kinematics.core import (
+    SweepSpec,
+    analyze_sweep,
+    build_suspension,
+    build_sweep_config,
+    parse_geometry_spec,
+)
+
+suspension = build_suspension(parse_geometry_spec(geometry_data))
+sweep = build_sweep_config(SweepSpec.model_validate(sweep_data), suspension)
+analysis = analyze_sweep(suspension, sweep)
 ```
 
 ## Usage
 
-The primary way to use `open-kinematics` is through its command-line interface.
+The CLI is the file and terminal adapter around the public `kinematics.core` API.
 
 ### 1. Visualising a geometry at 'design condition'
 
@@ -120,4 +150,6 @@ This will produce a video like the one below, showing the suspension articulatin
   <em>Animation of a full kinematic sweep.</em>
 </p>
 
-**Note:** If you try to use visualization features (`--animation-out` or the `visualize` command) without installing the `[viz]` extra, you will receive an error indicating that the required dependencies are not installed.
+**Note:** If you try to use visualization features (`--animation-out` or the
+`visualize` command) without installing `[cli,viz]`, the command reports the
+missing optional dependencies.

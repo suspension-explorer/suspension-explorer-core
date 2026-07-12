@@ -6,23 +6,23 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.2.0",
-    "pyarrow>=21.0.0",
     "pydantic>=2.0",
-    "python-dotenv>=1.0.1",
-    "pyyaml>=6.0.2",
     "scipy>=1.14.1",
-    "typer>=0.19.2",
 ]
 
 [project.scripts]
-kinematics = "kinematics.cli:app"
+kinematics = "kinematics.cli.bootstrap:main"
 
 [tool.uv]
 package = true
 
 [project.optional-dependencies]
 viz = ["matplotlib>=3.8"]
-cli = ["typer>=0.12"]
+cli = [
+    "pyarrow>=21.0.0",
+    "pyyaml>=6.0.2",
+    "typer>=0.19.2",
+]
 
 [dependency-groups]
 dev = [
@@ -115,8 +115,7 @@ builtin = "clear,rare,informal,usage"
 [tool.ty.src]
 exclude = [
     "src/kinematics/generated/",
-    "src/kinematics/visualization/",
-    "src/kinematics/core/vector_utils/visualization.py",
+    "src/kinematics/cli/visualization/",
     "visualize_*.py",
     "tools/",
     "scripts/",

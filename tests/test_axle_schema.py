@@ -4,16 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from kinematics.core.enums import Axis, PointID
-from kinematics.core.point_ref import Side
-from kinematics.core.types import PointTargetAxis
-from kinematics.io.loaders import _read_yaml_mapping
-from kinematics.schema.geometry import (
+from kinematics.cli.io.loaders import _read_yaml_mapping
+from kinematics.core.primitives.enums import Axis, PointID
+from kinematics.core.primitives.point_ref import Side
+from kinematics.core.primitives.types import PointTargetAxis
+from kinematics.core.schema.geometry import (
     AxleHardpointsSpec,
     DoubleWishboneAxleGeometrySpec,
     parse_geometry_spec,
 )
-from kinematics.schema.sweep import SweepSpec, build_sweep_config
+from kinematics.core.schema.sweep import SweepSpec, build_sweep_config
 
 
 def test_mirrored_axle_geometry_parses_without_top_level_side(
@@ -85,3 +85,43 @@ def test_x_axis_remains_an_axis_target() -> None:
     assert target.point_id is PointID.WHEEL_CENTER
     assert isinstance(target.direction, PointTargetAxis)
     assert target.direction.axis is Axis.X
+
+
+def test_sweep_spec_reports_expanded_step_count() -> None:
+    spec = SweepSpec.model_validate(
+        {
+            "steps": 7,
+            "targets": [
+                {
+                    "point": "wheel_center",
+                    "direction": {"axis": "z"},
+                    "start": -10.0,
+                    "stop": 10.0,
+                }
+            ],
+        }
+    )
+
+    assert spec.n_steps == 7
+
+
+def test_sweep_spec_step_count_validates_target_lengths() -> None:
+    spec = SweepSpec.model_validate(
+        {
+            "targets": [
+                {
+                    "point": "wheel_center",
+                    "direction": {"axis": "z"},
+                    "values": [-10.0, 0.0, 10.0],
+                },
+                {
+                    "point": "trackrod_inboard",
+                    "direction": {"axis": "y"},
+                    "values": [0.0, 1.0],
+                },
+            ],
+        }
+    )
+
+    with pytest.raises(ValueError, match="same length"):
+        _ = spec.n_steps

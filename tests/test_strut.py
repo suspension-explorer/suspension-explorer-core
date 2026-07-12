@@ -4,14 +4,14 @@ from typing import cast
 import pytest
 import yaml
 
-from kinematics.constraints import ScalarTripleProductConstraint
-from kinematics.core.enums import PointID
-from kinematics.io import load_geometry
-from kinematics.suspensions.corner import (
+from kinematics.cli.io.yaml import load_geometry
+from kinematics.core.constraints import ScalarTripleProductConstraint
+from kinematics.core.primitives.enums import PointID
+from kinematics.core.suspensions.corner import (
     DoubleWishboneCoiloverSuspension,
     DoubleWishboneSuspension,
 )
-from kinematics.suspensions.registry import (
+from kinematics.core.suspensions.registry import (
     SUSPENSION_DEFINITIONS,
     get_suspension_class,
     get_suspension_definition,

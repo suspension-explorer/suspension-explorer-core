@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from kinematics.core.geometry import Point3, extract_array, try_extract_array
+from kinematics.core.primitives.geometry import Point3, extract_array, try_extract_array
 
 
 def test_extract_array_returns_plain_array_unchanged():

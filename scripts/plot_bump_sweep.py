@@ -10,9 +10,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from kinematics import analyze_sweep, load_geometry, load_sweep, solve_sweep
-from kinematics.core.enums import PointID
-from kinematics.visualization.api import visualize_suspension_sweep
+from kinematics.cli.io.yaml import load_geometry, load_sweep
+from kinematics.cli.visualization.api import visualize_suspension_sweep
+from kinematics.core import analyze_sweep, solve_sweep
+from kinematics.core.primitives.enums import PointID
 
 GEOMETRY = Path("tests/data/geometry.yaml")
 SWEEP = Path("scripts/bump_sweep.yaml")

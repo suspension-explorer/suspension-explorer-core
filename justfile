@@ -9,8 +9,13 @@ install:
     uv sync --all-extras --dev
     uv pip install -e .
 
-# Install core dependencies exercised by CI; visualization remains optional.
+# Install core and CLI dependencies exercised by CI; visualization remains optional.
 install-ci:
+    uv sync --extra cli --dev
+    uv pip install -e .
+
+# Install only the solver API and development tooling for boundary checks.
+install-core-ci:
     uv sync --dev
     uv pip install -e .
 
@@ -27,6 +32,10 @@ clean:
 # Testing.
 test:
     uv run pytest tests/ --cov=. --cov-report=term --durations=0
+
+# Exercise the core-only test slice without CLI extras.
+test-core:
+    uv run pytest tests/core/ tests/test_public_api.py
 
 # Run performance benchmarks (deselected from the default suite).
 bench:
@@ -48,7 +57,7 @@ generate-animation-test:
 generate-animation:
     uv run kinematics sweep --geometry=tests/data/geometry.yaml --sweep=tests/data/sweep.yaml --out=results.csv --animation-out=anim.gif
 
-# Print CSE snippets for Jacobian functions (paste into src/kinematics/jacobians.py).
+# Print CSE snippets for Jacobian functions (paste into core/jacobians.py).
 generate-jacobians:
     uv run python tools/generate_jacobians.py
 

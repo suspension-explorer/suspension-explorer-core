@@ -4,10 +4,15 @@ from pathlib import Path
 
 import pytest
 
-from kinematics.analysis import analyze_sweep, initial_pose, sweep_parameters
-from kinematics.io import load_geometry, load_sweep
-from kinematics.main import compute_sweep_metrics, solve_sweep
-from kinematics.metrics.main import AxleMetricRows, flatten_metric_rows
+from kinematics.cli.io.yaml import load_geometry, load_sweep
+from kinematics.core.analysis import (
+    analyze_solved_sweep,
+    analyze_sweep,
+    initial_pose,
+    sweep_parameters,
+)
+from kinematics.core.metrics.main import AxleMetricRows, flatten_metric_rows
+from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
 
 DATA_DIR = Path(__file__).parent / "data"
 
@@ -89,8 +94,17 @@ def test_initial_pose_contains_display_geometry() -> None:
     assert pose.wheel_anchors
 
 
+def test_analyze_solved_sweep_rejects_mismatched_solver_stats() -> None:
+    suspension = load_geometry(DATA_DIR / "corner_strut_geometry.yaml")
+    sweep = load_sweep(DATA_DIR / "sweep.yaml", suspension)
+    states, solver_stats = solve_sweep(suspension, sweep)
+
+    with pytest.raises(ValueError, match="counts must match"):
+        analyze_solved_sweep(suspension, sweep, states, solver_stats[:-1])
+
+
 def test_tangent_failure_is_visible_without_losing_metrics(monkeypatch) -> None:
-    import kinematics.main as main
+    import kinematics.core.sweep as main
 
     def fail_tangents(*_args, **_kwargs):
         raise RuntimeError("synthetic tangent failure")
@@ -109,7 +123,7 @@ def test_tangent_failure_is_visible_without_losing_metrics(monkeypatch) -> None:
 
 
 def test_diagnostic_failure_is_advisory(monkeypatch) -> None:
-    import kinematics.analysis as analysis_module
+    import kinematics.core.analysis as analysis_module
 
     def fail_diagnostics(*_args, **_kwargs):
         raise RuntimeError("synthetic diagnostic failure")

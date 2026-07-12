@@ -14,19 +14,22 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from kinematics.core.enums import PointID, ShimType, Units
-from kinematics.core.geometry import Direction3, Point3
-from kinematics.core.point_ref import Side
-from kinematics.io import load_geometry
-from kinematics.schema.config import (
+from kinematics.cli.io.yaml import load_geometry
+from kinematics.core.primitives.enums import PointID, ShimType, Units
+from kinematics.core.primitives.geometry import Direction3, Point3
+from kinematics.core.primitives.point_ref import Side
+from kinematics.core.schema.config import (
     CamberShimConfig,
     SuspensionConfig,
     TireConfig,
     WheelConfig,
 )
-from kinematics.suspensions.base import Suspension
-from kinematics.suspensions.corner import DoubleWishboneSuspension
-from kinematics.suspensions.registry import get_suspension_class, list_supported_types
+from kinematics.core.suspensions.base import Suspension
+from kinematics.core.suspensions.corner import DoubleWishboneSuspension
+from kinematics.core.suspensions.registry import (
+    get_suspension_class,
+    list_supported_types,
+)
 
 # Test fixtures
 
@@ -225,9 +228,9 @@ class TestDoubleWishboneSuspension:
         assert PointID.WHEEL_CENTER in spec.functions
         assert PointID.CONTACT_PATCH_CENTER in spec.functions
 
-    def test_visualization_links(self, valid_hardpoints, valid_config):
+    def test_link_topology(self, valid_hardpoints, valid_config):
         """
-        Test visualization link generation.
+        Test renderer-neutral link topology generation.
         """
         suspension = DoubleWishboneSuspension(
             name="test",
@@ -236,7 +239,7 @@ class TestDoubleWishboneSuspension:
             hardpoints=valid_hardpoints,
             config=valid_config,
         )
-        links = suspension.get_visualization_links()
+        links = suspension.link_topology()
         assert len(links) > 0
         # Check for expected link labels
         labels = [link.label for link in links]
