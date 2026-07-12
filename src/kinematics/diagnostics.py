@@ -2,7 +2,7 @@
 Post-sweep diagnostics for suspension solves.
 
 Diagnostics are advisory and inspect a completed sweep without changing solver
-behaviour. The checks in this module are topology-independent; topology-specific
+behavior. The checks in this module are topology-independent; topology-specific
 checks belong with the topology that defines them.
 """
 

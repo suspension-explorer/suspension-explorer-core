@@ -56,13 +56,13 @@ def visualize_suspension_sweep(
             f"Original error: {e}"
         ) from e
 
-    # Configure wheel visualisation.
+    # Configure wheel visualization.
     wheel_config = WheelVisualization(
         diameter=wheel_diameter,
         width=wheel_width,
     )
 
-    # Get visualisation links from suspension.
+    # Get visualization links from suspension.
     visualization_links = suspension.get_visualization_links()
 
     # Create visualizer.

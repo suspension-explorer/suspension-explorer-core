@@ -98,7 +98,7 @@ def main() -> None:
     trail_m = to_masked(mechanical_trail)
     scrub_m = to_masked(scrub_radius)
 
-    x_label = r"$\Delta$ Wheel Centre Z [mm]"
+    x_label = r"$\Delta$ Wheel Center Z [mm]"
 
     # -- Figure 2: Instant center positions vs bump travel --
     fig2, axes2 = plt.subplots(2, 2, figsize=(12, 8))

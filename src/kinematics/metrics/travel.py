@@ -2,7 +2,7 @@
 Per-state suspension travel metrics.
 
 These metrics report wheel travel, half-track, and installed damper length.
-Every value is a scalar in millimetres. Sign conventions follow ISO 8855
+Every value is a scalar in millimeters. Sign conventions follow ISO 8855
 (X forward, Y left, Z up).
 """
 
@@ -20,7 +20,7 @@ def calculate_wheel_travel(ctx: "MetricContext") -> float | None:
     """
     Vertical wheel travel in mm relative to the design condition.
 
-    Defined as the current wheel-centre Z minus the design wheel-centre Z.
+    Defined as the current wheel-center Z minus the design wheel-center Z.
     Positive means the wheel has moved up in the chassis-fixed frame (bump);
     negative means droop.
 
@@ -36,7 +36,7 @@ def calculate_half_track(ctx: "MetricContext") -> float | None:
     Half-track at this corner in mm.
 
     Half-track is the lateral distance of the contact patch from the vehicle
-    centreline, i.e. the magnitude of the contact-patch Y.
+    centerline, i.e. the magnitude of the contact-patch Y.
 
         half_track = |CP_y(current)|
     """

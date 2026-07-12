@@ -16,7 +16,7 @@ kernel per tangent.
 
 To stay substrate-generic the kernels avoid the float-only geometry wrappers
 (Point3 / Vector3 / Direction3) and route all math through the dual-aware
-helpers in kinematics.core.dual. Angle kernels feed unnormalised direction
+helpers in kinematics.core.dual. Angle kernels feed unnormalized direction
 vectors straight into atan2: atan2(k*y, k*x) is identical to atan2(y, x) for
 any positive scale k, as a function of the positions, so values AND
 derivatives are unaffected and the normalisation step can be skipped.
@@ -125,7 +125,7 @@ def camber_deg(
     Camber angle in degrees; mirrors metrics.angles.calculate_camber.
 
     Negative camber tilts the top of the wheel towards the vehicle
-    centreline.
+    centerline.
     """
     axle = _vec(positions, axle_outboard) - _vec(positions, axle_inboard)
 
@@ -152,7 +152,7 @@ def toe_deg(
     Toe angle in degrees; mirrors metrics.angles.calculate_toe.
 
     Positive is toe-in: the front of the wheel points towards the vehicle
-    centreline.
+    centerline.
     """
     axle = _vec(positions, axle_outboard) - _vec(positions, axle_inboard)
     proj_x = _component(axle, Axis.X)
@@ -194,7 +194,7 @@ def kpi_deg(
     Kingpin inclination in degrees; mirrors metrics.angles.calculate_kpi.
 
     Positive KPI tilts the top of the steering axis towards the vehicle
-    centreline.
+    centerline.
     """
     steering = _vec(positions, upper_pivot) - _vec(positions, lower_pivot)
     # Front-view (YZ) angle from vertical; -side folds left/right into the

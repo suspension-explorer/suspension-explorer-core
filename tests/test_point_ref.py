@@ -220,7 +220,7 @@ def test_remap_round_trip(constraint, point_attrs, nonpoint_attrs):
 
 
 def test_remap_shares_line_point_with_original():
-    # Documented behaviour: remapped copy shares the (immutable) line_point.
+    # Documented behavior: remapped copy shares the (immutable) line_point.
     c = PointOnLineConstraint(
         PointID.TRACKROD_INBOARD,
         Point3([1.0, 2.0, 3.0]),

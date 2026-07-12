@@ -70,7 +70,7 @@ format:
     uv run ruff format .
 
 
-# Spell check source code and comments (includes British -> American English).
+# Spell check source code and comments.
 spellcheck:
     uv run codespell src/ tests/
 

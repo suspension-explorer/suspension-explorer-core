@@ -147,7 +147,7 @@ class Suspension(ABC):
         Get visualization links for rendering the suspension.
 
         Returns:
-            List of link definitions for visualisation.
+            List of link definitions for visualization.
         """
         ...
 

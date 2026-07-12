@@ -19,13 +19,13 @@ All notable changes to this project will be documented in this file.
 - Geometry parsing, validation, and construction now pass through `kinematics.schema` and the suspension registry; filesystem access remains in `kinematics.io`.
 - Metric identities are lowercase, unit-free `snake_case`. Units use typed metadata and are written in CSV metadata or Parquet field metadata.
 - Corner locations remain structural in the analysis API and are rendered as `_left` and `_right` suffixes only in flat result files.
-- Steering metrics use `roadwheel_angle`; the concrete steering input is `trackrod_inboard`, and wheel-centre longitudinal motion is expressed directly as `deriv_wheel_center_x_wrt_hub_z`.
+- Steering metrics use `roadwheel_angle`; the concrete steering input is `trackrod_inboard`, and wheel-center longitudinal motion is expressed directly as `deriv_wheel_center_x_wrt_hub_z`.
 - Half-track is exported as the absolute `half_track` state metric rather than a design-condition delta.
 
 ### Breaking changes
 
 - Removed suspension type aliases `double_wishbone_front` and `double_wishbone_rear`; use an explicit canonical type and configuration.
-- Removed legacy geometry construction and loader paths in favour of validated schemas, `build_suspension()`, `load_geometry()`, and `load_sweep()`.
+- Removed legacy geometry construction and loader paths in favor of validated schemas, `build_suspension()`, `load_geometry()`, and `load_sweep()`.
 - Renamed `SweepFile` to `SweepSpec`.
 - Removed units from metric keys and changed flat axle corner columns from side prefixes to side suffixes, for example `left_camber_deg` to `camber_left`.
 
@@ -50,11 +50,11 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `ResidualComputer.validate_target_count` enforces that every evaluation receives the same number of targets configured at init time.
 - Test for Jacobian shape consistency (`test_residual_computer_rejects_target_count_changes`).
-- Front-view (Y-Z) comparison plot in `visualize_camber_shim.py` overlaying design and setup suspensions with distinct colours.
+- Front-view (Y-Z) comparison plot in `visualize_camber_shim.py` overlaying design and setup suspensions with distinct colors.
 - Direct sign and known-value tests for `camber_deg`, `caster_deg`, and `roadwheel_angle_deg`, plus catalog coverage for the trusted corner-metric export set.
 - Kingpin inclination metric (`kpi_deg`): steering axis angle in the front-view (YZ) plane.
-- Scrub radius metric (`scrub_radius_mm`): lateral offset from steering axis ground intersection to contact patch centre.
-- Mechanical trail metric (`mechanical_trail_mm`): longitudinal offset from steering axis ground intersection to contact patch centre.
+- Scrub radius metric (`scrub_radius_mm`): lateral offset from steering axis ground intersection to contact patch center.
+- Mechanical trail metric (`mechanical_trail_mm`): longitudinal offset from steering axis ground intersection to contact patch center.
 
 ### Removed
 - `WHEEL_CENTER_ON_GROUND` point and `get_wheel_center_on_ground` derived point function. The Z=0 ground plane assumption was incorrect in a chassis-fixed frame; ground-plane intersections now use the contact patch Z via `MetricContext.ground_z`.

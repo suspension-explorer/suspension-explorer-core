@@ -3,7 +3,7 @@ Plot distance constraint residual and its analytical gradient.
 
 Generates PNG figures showing the residual function and Jacobian
 for the DistanceConstraint, illustrating the softnorm regularisation
-behaviour near zero separation.
+behavior near zero separation.
 """
 
 import math

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Print common sub-expression optimised Jacobian snippets for kinematic constraints.
+Print common sub-expression optimized Jacobian snippets for kinematic constraints.
 
 Uses SymPy to symbolically differentiate the residual expression for each
 constraint type, applies common-subexpression elimination, and prints the
-optimised CSE body (temporaries + return expression) to stdout.
+optimized CSE body (temporaries + return expression) to stdout.
 
 The output is meant to be pasted into `src/kinematics/jacobians.py`
 when a residual formula changes.

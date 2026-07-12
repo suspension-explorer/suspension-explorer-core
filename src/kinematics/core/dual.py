@@ -302,7 +302,7 @@ class DualVec3:
         if method != "__call__" or len(inputs) != 2:
             return NotImplemented
         a, b = inputs
-        # Normalise non-dual, non-ndarray operands to raw arrays.
+        # Normalize non-dual, non-ndarray operands to raw arrays.
         if not isinstance(a, (DualVec3, np.ndarray)):
             a = extract_array(a)
         if not isinstance(b, (DualVec3, np.ndarray)):

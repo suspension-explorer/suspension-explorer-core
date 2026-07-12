@@ -4,14 +4,14 @@
 >
 > **Note that this system is both experimental and still under development. I do not recommend using it for anything important.**
 
-`open-kinematics` is a Python-based geometric constraint solver for simulating the kinematic behaviour of vehicle suspension systems. It allows users to analyse suspension geometries by running parametric sweeps, then offering exports of solved system positions alongside visualisations of suspension state.
+`open-kinematics` is a Python-based geometric constraint solver for simulating the kinematic behavior of vehicle suspension systems. It allows users to analyze suspension geometries by running parametric sweeps, then offering exports of solved system positions alongside visualizations of suspension state.
 
 The tool is built around a numerical solver that determines the positions of all suspension components for a given set of boundary conditions, such as wheel height or trackrod inboard position.
 
 <p align="center">
-  <img src="/images/plot.png" alt="Design Condition Visualisation" width="80%">
+  <img src="/images/plot.png" alt="Design Condition Visualization" width="80%">
   <br>
-  <em>Visualisation of a double wishbone suspension at its design condition.</em>
+  <em>Visualization of a double wishbone suspension at its design condition.</em>
 </p>
 
 ## Features
@@ -22,8 +22,8 @@ The tool is built around a numerical solver that determines the positions of all
 - Full-Axle Simulation: Solve left and right corners together with a fixed separation between their trackrod inboard points. Geometry can provide one explicitly sided corner to mirror or both sides independently.
 - Camber Shim Simulation: Model outboard camber shim configurations to simulate shimmed ball joint offsets.
 - Derived Points System: A dependency-aware system for calculating the position of non-kinematic points (like wheel centers) based on the solved positions of core hard points.
-- Suspension Metrics: Compute roadwheel angle, camber, caster, kingpin inclination, scrub radius, mechanical trail, instant-centre geometry, wheel travel, half-track, damper length, and anti-pitch geometry. Axle models add track, roll centre, heave, roll, ride-height change, trackrod inboard displacement, and anti-roll-bar metrics.
-- Exact Derivatives: Evaluate declarative `d(response) / d(driver)` metrics, including wheel-centre X with respect to wheel-centre Z, camber, roadwheel angle, damper, rocker, torsion-bar, and anti-roll-bar ratios, using analytical constraint Jacobians and forward-mode automatic differentiation.
+- Suspension Metrics: Compute roadwheel angle, camber, caster, kingpin inclination, scrub radius, mechanical trail, instant-center geometry, wheel travel, half-track, damper length, and anti-pitch geometry. Axle models add track, roll center, heave, roll, ride-height change, trackrod inboard displacement, and anti-roll-bar metrics.
+- Exact Derivatives: Evaluate declarative `d(response) / d(driver)` metrics, including wheel-center X with respect to wheel-center Z, camber, roadwheel angle, damper, rocker, torsion-bar, and anti-roll-bar ratios, using analytical constraint Jacobians and forward-mode automatic differentiation.
 - Sweep Diagnostics: Report convergence, residual acceptance, branch continuity, derivative availability, mechanism chirality, and transmission-margin issues without discarding otherwise available results.
 - Structured Analysis API: Use `analyze_sweep()` and `initial_pose()` to obtain name-keyed positions, structural corner locations, metric metadata, display topology, diagnostics, and solved frames.
 - Data Export: Save wide-format CSV or Apache Parquet results with lowercase `snake_case` columns. Units are metadata rather than part of metric names.
@@ -45,7 +45,7 @@ The package is not published to PyPI; install it from this repository.
 
 ### Basic Installation
 
-For core kinematics functionality without visualisation dependencies:
+For core kinematics functionality without visualization dependencies:
 
 ```bash
 uv pip install "kinematics @ git+https://github.com/nickmccleery/open-kinematics.git"
@@ -120,4 +120,4 @@ This will produce a video like the one below, showing the suspension articulatin
   <em>Animation of a full kinematic sweep.</em>
 </p>
 
-**Note:** If you try to use visualisation features (`--animation-out` or the `visualize` command) without installing the `[viz]` extra, you will receive an error indicating that the required dependencies are not installed.
+**Note:** If you try to use visualization features (`--animation-out` or the `visualize` command) without installing the `[viz]` extra, you will receive an error indicating that the required dependencies are not installed.

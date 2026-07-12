@@ -160,7 +160,7 @@ def calculate_anti_squat_pct(ctx: "MetricContext") -> float | None:
 
     Only defined when a driven axle is configured AND it is this axle
     (driven_axle == axle_position, both non-None). With inboard-sprung drive
-    (halfshafts) the tractive force reacts along the WHEEL-CENTRE -> SVIC line,
+    (halfshafts) the tractive force reacts along the WHEEL-CENTER -> SVIC line,
     not the contact-patch line. The full drive torque is carried by the driven
     axle. With L the wheelbase and h the CG height above ground:
 

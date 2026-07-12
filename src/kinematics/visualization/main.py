@@ -105,7 +105,7 @@ class SuspensionVisualizer:
         radius: float,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
-        Compute the endpoints for cross-tyre bands at true radial angles.
+        Compute the endpoints for cross-tire bands at true radial angles.
 
         Returns two arrays of shape (num_bands, 3): inboard and outboard endpoints.
         """

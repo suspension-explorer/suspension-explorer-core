@@ -102,8 +102,8 @@ class MetricContext:
 
         In a chassis-fixed reference frame the ground is not at Z=0; it
         follows the tire. We define ground level as the contact patch
-        centre Z so that all ground-plane intersections (steering axis,
-        instant centres, etc.) are evaluated at the actual tire-road
+        center Z so that all ground-plane intersections (steering axis,
+        instant centers, etc.) are evaluated at the actual tire-road
         interface.
         """
         return float(self.contact_patch_center[Axis.Z])

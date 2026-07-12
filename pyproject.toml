@@ -107,9 +107,7 @@ exclude_lines = [
 skip = ".git,*.pyc,*.pyo,__pycache__,*.egg-info,.venv,venv,.mypy_cache,.ruff_cache"
 # Ignore words that are valid in our domain (e.g., technical terms, variable names).
 ignore-words-list = "nd"
-# Use custom dictionary for British -> American English conversions.
 builtin = "clear,rare,informal,usage"
-dictionary = ".codespell-british.txt,-"
 
 # ty type checker settings.
 # --------------------------------------------------------------------------------------

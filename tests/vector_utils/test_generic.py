@@ -181,7 +181,7 @@ class TestProjectCoordinate:
         Test projection along a diagonal direction.
         """
         position = Point3([1.0, 1.0, 0.0])
-        # Direction3 auto-normalises; an unnormalised diagonal works fine.
+        # Direction3 auto-normalizes; an unnormalized diagonal works fine.
         direction = Direction3([1.0, 1.0, 0.0])
         result = project_coordinate(position, direction)
         expected = np.sqrt(2)  # ||(1,1,0)|| projected onto (1/sqrt(2), 1/sqrt(2), 0).
@@ -219,11 +219,11 @@ class TestProjectCoordinate:
         Test projection along an arbitrary unit direction.
         """
         position = Point3([2.0, 3.0, 6.0])
-        # Direction3 auto-normalises this raw vector.
+        # Direction3 auto-normalizes this raw vector.
         direction = Direction3([1.0, 2.0, 2.0])
         result = project_coordinate(position, direction)
 
-        # Manual calculation: dot product against the normalised data.
+        # Manual calculation: dot product against the normalized data.
         expected = np.dot(position.data, direction.data)
         assert np.isclose(result, expected, atol=TEST_TOLERANCE)
 
@@ -264,7 +264,7 @@ class TestProjectCoordinate:
         """
         position = Point3([1.0, 2.0, 3.0])
         # Create a direction vector that's almost but not exactly unit length;
-        # Direction3 normalises it on construction.
+        # Direction3 normalizes it on construction.
         direction = Direction3([1.0 + EPS_NUMERICAL / 2, 0.0, 0.0])
         result = project_coordinate(position, direction)
         # Should be close to projecting onto [1,0,0].
