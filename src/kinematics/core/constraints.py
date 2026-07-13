@@ -627,6 +627,45 @@ class PointOnPlaneConstraint(Constraint):
         )
 
 
+class MidpointOnPlaneConstraint(Constraint):
+    """Constrain the midpoint of two points to an authored plane."""
+
+    _POINT_ATTRS: ClassVar[tuple[str, ...]] = ("point_a", "point_b")
+
+    def __init__(
+        self,
+        point_a: PointKey,
+        point_b: PointKey,
+        plane_point: Point3,
+        plane_normal: Direction3,
+    ) -> None:
+        """Initialize a midpoint-to-plane relationship."""
+        if not isinstance(plane_point, Point3):
+            raise TypeError("plane_point must be a Point3")
+        if not isinstance(plane_normal, Direction3):
+            raise TypeError("plane_normal must be a Direction3")
+        self.point_a = point_a
+        self.point_b = point_b
+        self.plane_point = plane_point.copy()
+        self.plane_normal = plane_normal
+
+    @property
+    def involved_points(self) -> Set[PointKey]:
+        """Return the two points defining the midpoint."""
+        return {self.point_a, self.point_b}
+
+    def residual(self, positions: dict[PointKey, Point3]) -> float:
+        """Return the signed distance from the midpoint to the plane."""
+        point_a = positions[self.point_a]
+        point_b = positions[self.point_b]
+        midpoint = point_a + (point_b - point_a) / 2.0
+        return compute_point_to_plane_distance(
+            midpoint,
+            self.plane_point,
+            self.plane_normal,
+        )
+
+
 class CoplanarPointsConstraint(Constraint):
     """
     Constrains four points to be coplanar.

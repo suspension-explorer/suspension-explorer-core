@@ -181,8 +181,10 @@ class DoubleWishboneAxleGeometrySpec(GeometrySpecBase):
     def check_axle_mechanisms(self) -> "DoubleWishboneAxleGeometrySpec":
         """Validate shared mechanisms against the selected corner actuation."""
         has_rocker = self.corner.actuation.type is ActuationType.PUSHROD_ROCKER
-        if self.anti_roll.type is ArbType.U_BAR and not has_rocker:
-            raise ValueError("The implemented U-bar requires pushrod-rocker actuation")
+        if self.anti_roll.type in (ArbType.U_BAR, ArbType.T_BAR) and not has_rocker:
+            raise ValueError(
+                "The implemented anti-roll mechanism requires pushrod-rocker actuation"
+            )
         if self.heave_link.type is HeaveLinkType.ROCKER_TO_ROCKER and not has_rocker:
             raise ValueError(
                 "A rocker-to-rocker heave link requires pushrod-rocker actuation"

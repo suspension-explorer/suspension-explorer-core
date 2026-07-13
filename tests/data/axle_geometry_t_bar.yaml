@@ -1,5 +1,5 @@
 type: double_wishbone_axle
-name: "test axle rocker"
+name: "composed T-bar axle"
 version: "0.0.1"
 units: millimeters
 
@@ -9,7 +9,7 @@ corner:
   spring:
     type: torsion_bar
 anti_roll:
-  type: u_bar
+  type: t_bar
 heave_link:
   type: none
 
@@ -27,20 +27,19 @@ hardpoints:
     axle_inboard: {x: -20, y: 800, z: 308.426}
     axle_outboard: {x: -20, y: 950, z: 313.426}
 
-    # Pushrod and rocker geometry.
+    # The oblique rocker axis has constant X and changes in both Y and Z.
     pushrod_outboard: {x: 0, y: 870, z: 240}
-    pushrod_inboard: {x: 0, y: 430, z: 480}
-    rocker_axis_a: {x: 100, y: 340, z: 450}
-    rocker_axis_b: {x: -100, y: 340, z: 450}
-    droplink_rocker: {x: 0, y: 250, z: 450}
+    pushrod_inboard: {x: 100, y: 430, z: 480}
+    rocker_axis_a: {x: 0, y: 250, z: 400}
+    rocker_axis_b: {x: 0, y: 300, z: 500}
 
-    # The per-side ARB arm point is mirrored with the corner geometry.
-    droplink_u_bar: {x: 80, y: 250, z: 300}
+    # The rocker and T-bar pickups are joined by a fixed-length droplink.
+    droplink_rocker: {x: 60, y: 250, z: 450}
+    droplink_t_bar: {x: 20, y: 220, z: 430}
 
-  # The shared transverse ARB axis is authored once at axle level.
   center:
-    arb_u_bar_axis_a: {x: 0, y: 250, z: 300}
-    arb_u_bar_axis_b: {x: 0, y: -250, z: 300}
+    # The T-bar bottom point is fixed to the chassis centerline.
+    arb_t_bar_pivot: {x: 0, y: 0, z: 250}
 
 config:
   steered: true

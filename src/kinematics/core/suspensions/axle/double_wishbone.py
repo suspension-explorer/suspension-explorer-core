@@ -196,6 +196,9 @@ class DoubleWishboneAxleSuspension(Suspension):
                 dependencies[PointRef(side, point)] = {
                     PointRef(side, dependency) for dependency in point_dependencies
                 }
+        anti_roll_spec = self.anti_roll.derived_spec()
+        functions.update(anti_roll_spec.functions)
+        dependencies.update(anti_roll_spec.dependencies)
         return DerivedPointsSpec(functions, dependencies)
 
     @staticmethod

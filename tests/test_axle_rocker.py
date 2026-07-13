@@ -64,13 +64,13 @@ def test_arb_points_are_owned_by_axle(
     """Shared-axis and arm points use their explicit axle namespaces."""
     state = rocker_axle.initial_state()
 
-    assert PointRef(Side.CENTER, PointID.ARB_AXIS_A) in state.positions
-    assert PointRef(Side.CENTER, PointID.ARB_AXIS_B) in state.positions
+    assert PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_A) in state.positions
+    assert PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_B) in state.positions
     assembly = rocker_axle.assembly()
-    assert PointRef(Side.CENTER, PointID.ARB_AXIS_A) in assembly.points.fixed
-    assert PointRef(Side.CENTER, PointID.ARB_AXIS_B) in assembly.points.fixed
+    assert PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_A) in assembly.points.fixed
+    assert PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_B) in assembly.points.fixed
     for side in (Side.LEFT, Side.RIGHT):
-        arm_point = PointRef(side, PointID.DROPLINK_ARB)
+        arm_point = PointRef(side, PointID.DROPLINK_U_BAR)
         assert arm_point in state.positions
         assert arm_point in state.free_points
         assert arm_point in assembly.points.free
@@ -85,7 +85,7 @@ def test_roll_sweep_conserves_both_droplink_lengths(
     design_lengths = {
         side: (
             design.positions[PointRef(side, PointID.DROPLINK_ROCKER)]
-            - design.positions[PointRef(side, PointID.DROPLINK_ARB)]
+            - design.positions[PointRef(side, PointID.DROPLINK_U_BAR)]
         ).norm()
         for side in (Side.LEFT, Side.RIGHT)
     }
@@ -98,7 +98,7 @@ def test_roll_sweep_conserves_both_droplink_lengths(
         for side in (Side.LEFT, Side.RIGHT):
             length = (
                 state.positions[PointRef(side, PointID.DROPLINK_ROCKER)]
-                - state.positions[PointRef(side, PointID.DROPLINK_ARB)]
+                - state.positions[PointRef(side, PointID.DROPLINK_U_BAR)]
             ).norm()
             assert length == pytest.approx(design_lengths[side], abs=1e-5)
 
@@ -113,8 +113,11 @@ def test_arb_assembly_is_one_bar_and_two_droplinks(
 
     assert len(arb_elements) == 1
     assert isinstance(arb_elements[0], TorsionElement)
-    assert arb_elements[0].path[0] == PointRef(Side.LEFT, PointID.DROPLINK_ARB)
-    assert arb_elements[0].path[-1] == PointRef(Side.RIGHT, PointID.DROPLINK_ARB)
+    assert arb_elements[0].attachments == (
+        PointRef(Side.LEFT, PointID.DROPLINK_U_BAR),
+        PointRef(Side.RIGHT, PointID.DROPLINK_U_BAR),
+    )
+    assert not hasattr(arb_elements[0], "paths")
     assert {element.label for element in droplinks} == {
         "Left Droplink",
         "Right Droplink",

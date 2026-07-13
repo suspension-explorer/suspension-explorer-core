@@ -25,6 +25,7 @@ from kinematics.core.schema.geometry import (
 from kinematics.core.suspensions.axle import DoubleWishboneAxleSuspension
 from kinematics.core.suspensions.axle.mechanisms import (
     ArbNone,
+    ArbTBar,
     ArbUBar,
     AxleArb,
     AxleHeaveLink,
@@ -73,16 +74,24 @@ def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
     side_points = _build_axle_side_points(typed.hardpoints)
 
     external_pickups: list[RockerPickup] = []
-    droplink_arb_points: dict[Side, Point3] = {}
-    if typed.anti_roll.type is ArbType.U_BAR:
+    anti_roll_droplink_points: dict[Side, Point3] = {}
+    if typed.anti_roll.type in (ArbType.U_BAR, ArbType.T_BAR):
         external_pickups.append(
             RockerPickup(PointID.DROPLINK_ROCKER, RockerPickupType.DROPLINK)
         )
+        droplink_point_id = (
+            PointID.DROPLINK_U_BAR
+            if typed.anti_roll.type is ArbType.U_BAR
+            else PointID.DROPLINK_T_BAR
+        )
         for side, points in side_points.items():
             try:
-                droplink_arb_points[side] = points.pop(PointID.DROPLINK_ARB)
+                anti_roll_droplink_points[side] = points.pop(droplink_point_id)
             except KeyError as error:
-                raise ValueError(f"{side.name} U-bar requires DROPLINK_ARB") from error
+                mechanism_name = typed.anti_roll.type.value.replace("_", "-")
+                raise ValueError(
+                    f"{side.name} {mechanism_name} requires {droplink_point_id.name}"
+                ) from error
 
     if typed.heave_link.type is HeaveLinkType.ROCKER_TO_ROCKER:
         external_pickups.append(
@@ -119,7 +128,7 @@ def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
 
     anti_roll = build_anti_roll(
         typed,
-        droplink_arb_points,
+        anti_roll_droplink_points,
     )
     heave_link = build_heave_link(typed)
     return DoubleWishboneAxleSuspension(
@@ -175,6 +184,11 @@ def build_anti_roll(
         return ArbNone()
     if spec.anti_roll.type is ArbType.U_BAR:
         return ArbUBar(
+            center_points=center_points,
+            droplink_points=droplink_points,
+        )
+    if spec.anti_roll.type is ArbType.T_BAR:
+        return ArbTBar(
             center_points=center_points,
             droplink_points=droplink_points,
         )

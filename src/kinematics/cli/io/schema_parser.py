@@ -28,9 +28,7 @@ def parse_enum(enum_type: type[E], value: object) -> E:
                 return member
 
     valid = ", ".join(
-        str(member.value)
-        if isinstance(member.value, str)
-        else member.name.lower()
+        str(member.value) if isinstance(member.value, str) else member.name.lower()
         for member in enum_type
     )
     raise ValueError(

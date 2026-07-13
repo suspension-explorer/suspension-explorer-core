@@ -5,13 +5,8 @@ Validated composition of suspension points and physical elements.
 from dataclasses import dataclass
 
 from kinematics.core.elements import (
-    ElementPath,
-    ElementType,
-    RockerElement,
     SuspensionElement,
-    TorsionElement,
     WheelElement,
-    element_paths,
 )
 from kinematics.core.points.derived.manager import DerivedPointsSpec
 from kinematics.core.primitives.point_ref import PointKey
@@ -129,35 +124,6 @@ class SuspensionAssembly:
                     ordered.append(point)
                     seen.add(point)
         return tuple(ordered)
-
-    @property
-    def element_paths(self) -> tuple[ElementPath, ...]:
-        """
-        Compose renderer-neutral paths for the complete assembly.
-
-        A torsion bar and its rocker can share the same physical rotation axis.
-        In that case the torsion bar owns the path so clients receive it once.
-        """
-        torsion_bar_paths = {
-            torsion.path
-            for torsion in self.elements
-            if isinstance(torsion, TorsionElement)
-            and torsion.type is ElementType.TORSION_BAR
-            and len(torsion.path) == 2
-        }
-        torsion_bar_paths |= {(end, start) for start, end in torsion_bar_paths}
-
-        paths: list[ElementPath] = []
-        for element in self.elements:
-            for path in element_paths(element):
-                rocker_axis_owned_by_torsion_bar = (
-                    isinstance(element, RockerElement)
-                    and path.points == element.rotation_axis
-                    and element.rotation_axis in torsion_bar_paths
-                )
-                if not rocker_axis_owned_by_torsion_bar:
-                    paths.append(path)
-        return tuple(paths)
 
     @property
     def wheels(self) -> tuple[WheelElement, ...]:

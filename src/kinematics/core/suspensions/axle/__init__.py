@@ -5,6 +5,7 @@ from kinematics.core.suspensions.axle.double_wishbone import (
 )
 from kinematics.core.suspensions.axle.mechanisms import (
     ArbNone,
+    ArbTBar,
     ArbUBar,
     AxleArb,
     AxleHeaveLink,

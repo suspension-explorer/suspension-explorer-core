@@ -71,10 +71,12 @@ class PointID(IntEnum):
     ROCKER_AXIS_A = 24
     ROCKER_AXIS_B = 25
     DROPLINK_ROCKER = 26
-    DROPLINK_ARB = 27
-    ARB_AXIS_A = 28
-    ARB_AXIS_B = 29
+    DROPLINK_U_BAR = 27
+    ARB_U_BAR_AXIS_A = 28
+    ARB_U_BAR_AXIS_B = 29
     HEAVE_LINK_ROCKER = 30
+    ARB_T_BAR_PIVOT = 31
+    DROPLINK_T_BAR = 32
 
 
 class ShimType(StrEnum):
@@ -110,6 +112,7 @@ class ArbType(StrEnum):
 
     NONE = "none"
     U_BAR = "u_bar"
+    T_BAR = "t_bar"
 
 
 class HeaveLinkType(StrEnum):

@@ -24,6 +24,10 @@ The tool is built around a numerical solver that determines the positions of all
 - Derived Points System: A dependency-aware system for calculating the position of non-kinematic points (like wheel centers) based on the solved positions of core hard points.
 - Suspension Metrics: Compute roadwheel angle, camber, caster, kingpin inclination, scrub radius, mechanical trail, instant-center geometry, wheel travel, half-track, damper length, and anti-pitch geometry. Axle models add track, roll center, heave, roll, ride-height change, trackrod inboard displacement, and anti-roll-bar metrics.
 - Exact Derivatives: Evaluate declarative `d(response) / d(driver)` metrics, including wheel-center X with respect to wheel-center Z, camber, roadwheel angle, damper, rocker, torsion-bar, and anti-roll-bar ratios, using analytical constraint Jacobians and forward-mode automatic differentiation.
+
+See [Composable Suspension Mechanisms](docs/composable_suspensions.md) for a
+worked double-wishbone axle with pushrod-rocker actuation and a T-bar anti-roll
+bar.
 - Sweep Diagnostics: Report convergence, residual acceptance, branch continuity, derivative availability, mechanism chirality, and transmission-margin issues without discarding otherwise available results.
 - Structured Analysis API: Use `analyze_sweep()` and `initial_pose()` to obtain name-keyed positions, structural corner locations, metric metadata, renderer-neutral element paths, diagnostics, and solved frames.
 - Data Export: Save wide-format CSV or Apache Parquet results with lowercase `snake_case` columns. Units are metadata rather than part of metric names.

@@ -19,6 +19,7 @@ from kinematics.core.constraints import (
     DistanceConstraint,
     EqualDistanceConstraint,
     FixedAxisConstraint,
+    MidpointOnPlaneConstraint,
     PointOnLineConstraint,
     PointOnPlaneConstraint,
     ScalarTripleProductConstraint,
@@ -433,6 +434,17 @@ class ResidualComputer:
                 return normal
 
             compute_fn = compute_point_on_plane
+
+        elif isinstance(constraint, MidpointOnPlaneConstraint):
+            point_ids = (constraint.point_a, constraint.point_b)
+            normal = constraint.plane_normal.data * 0.5
+            derivative = np.concatenate((normal, normal))
+
+            def compute_midpoint_on_plane(pos: dict[PointKey, Point3]) -> np.ndarray:
+                _ = pos
+                return derivative
+
+            compute_fn = compute_midpoint_on_plane
 
         elif isinstance(constraint, ScalarTripleProductConstraint):
             point_ids = (

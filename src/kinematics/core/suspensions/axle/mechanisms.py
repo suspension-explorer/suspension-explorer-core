@@ -5,11 +5,15 @@ from __future__ import annotations
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from math import acos, degrees
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Mapping
 
 import numpy as np
 
-from kinematics.core.constraints import Constraint, DistanceConstraint
+from kinematics.core.constraints import (
+    Constraint,
+    DistanceConstraint,
+    MidpointOnPlaneConstraint,
+)
 from kinematics.core.diagnostics import (
     DiagnosticCategory,
     DiagnosticIssue,
@@ -19,6 +23,7 @@ from kinematics.core.elements import (
     ElementType,
     RigidLinkElement,
     SuspensionElement,
+    TBarElement,
     TorsionElement,
     VariableLengthLinkElement,
 )
@@ -31,8 +36,11 @@ from kinematics.core.metrics.derivatives import (
     PointDistanceResponse,
 )
 from kinematics.core.metrics.units import MetricUnit
+from kinematics.core.points.derived.manager import (
+    DerivedPointsSpec,
+)
 from kinematics.core.primitives.constants import EPS_GEOMETRIC, MIN_CHIRALITY_VOLUME
-from kinematics.core.primitives.geometry import Point3, extract_array
+from kinematics.core.primitives.geometry import Direction3, Point3, extract_array
 from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
 from kinematics.core.primitives.vector_utils.geometric import (
     compute_point_point_distance,
@@ -53,23 +61,36 @@ if TYPE_CHECKING:
 # Warn when a linkage transmission margin falls below this ratio.
 TRANSMISSION_MARGIN_WARNING_THRESHOLD = 0.15
 
+T_BAR_PIVOT_KEY = PointRef(Side.CENTER, PointID.ARB_T_BAR_PIVOT)
+T_BAR_LEFT_KEY = PointRef(Side.LEFT, PointID.DROPLINK_T_BAR)
+T_BAR_RIGHT_KEY = PointRef(Side.RIGHT, PointID.DROPLINK_T_BAR)
+
+
+def calculate_t_bar_crossbar_center(
+    positions: Mapping[PointKey, Any],
+) -> Any:
+    """Return the midpoint of the rigid T-bar crossbar."""
+    left = positions[T_BAR_LEFT_KEY]
+    right = positions[T_BAR_RIGHT_KEY]
+    return left + (right - left) / 2.0
+
 
 def calculate_arb_branch_volume(state: SuspensionState, side: Side) -> float:
     """Calculate the signed volume of one U-bar linkage branch."""
-    axis_a = state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_A))
+    axis_a = state.get(PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_A))
     return compute_scalar_triple_product(
-        state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_B)) - axis_a,
+        state.get(PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_B)) - axis_a,
         state.get(PointRef(side, PointID.DROPLINK_ROCKER)) - axis_a,
-        state.get(PointRef(side, PointID.DROPLINK_ARB)) - axis_a,
+        state.get(PointRef(side, PointID.DROPLINK_U_BAR)) - axis_a,
     )
 
 
 def calculate_arb_chirality_margin(state: SuspensionState, side: Side) -> float:
     """Calculate normalized signed volume for one U-bar linkage branch."""
-    axis_a = state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_A)).data
-    axis = state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_B)).data - axis_a
+    axis_a = state.get(PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_A)).data
+    axis = state.get(PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_B)).data - axis_a
     rocker_arm = state.get(PointRef(side, PointID.DROPLINK_ROCKER)).data - axis_a
-    arb_arm = state.get(PointRef(side, PointID.DROPLINK_ARB)).data - axis_a
+    arb_arm = state.get(PointRef(side, PointID.DROPLINK_U_BAR)).data - axis_a
     scale = (
         float(np.linalg.norm(axis))
         * float(np.linalg.norm(rocker_arm))
@@ -110,6 +131,10 @@ class ArbNone:
 
     def add_to_state(self, state: SuspensionState) -> None:
         """Add no anti-roll points."""
+
+    def derived_spec(self) -> DerivedPointsSpec[PointKey]:
+        """Declare no anti-roll derived points."""
+        return DerivedPointsSpec({}, {})
 
     @property
     def free_points(self) -> tuple[PointKey, ...]:
@@ -173,22 +198,26 @@ class ArbUBar:
             if PointID.DROPLINK_ROCKER not in corner.actuation.external_point_ids:
                 raise ValueError(f"{side.name} rocker does not expose DROPLINK_ROCKER")
 
-        expected_axis = {PointID.ARB_AXIS_A, PointID.ARB_AXIS_B}
+        expected_axis = {PointID.ARB_U_BAR_AXIS_A, PointID.ARB_U_BAR_AXIS_B}
         if set(self.center_points) != expected_axis:
-            raise ValueError("U-bar requires center ARB_AXIS_A and ARB_AXIS_B")
+            raise ValueError(
+                "U-bar requires center ARB_U_BAR_AXIS_A and ARB_U_BAR_AXIS_B"
+            )
         if set(self.droplink_points) != {Side.LEFT, Side.RIGHT}:
-            raise ValueError("U-bar requires DROPLINK_ARB on both sides")
+            raise ValueError("U-bar requires DROPLINK_U_BAR on both sides")
 
-        axis_a = self.center_points[PointID.ARB_AXIS_A]
-        axis_b = self.center_points[PointID.ARB_AXIS_B]
+        axis_a = self.center_points[PointID.ARB_U_BAR_AXIS_A]
+        axis_b = self.center_points[PointID.ARB_U_BAR_AXIS_B]
         if compute_point_point_distance(axis_a, axis_b) <= EPS_GEOMETRIC:
-            raise ValueError("ARB_AXIS_A and ARB_AXIS_B must be distinct points")
+            raise ValueError(
+                "ARB_U_BAR_AXIS_A and ARB_U_BAR_AXIS_B must be distinct points"
+            )
         axis_direction = (axis_b - axis_a).normalize()
         for side, droplink in self.droplink_points.items():
             radius = compute_point_to_line_distance(droplink, axis_a, axis_direction)
             if radius <= EPS_GEOMETRIC:
                 raise ValueError(
-                    f"{side.name} DROPLINK_ARB lies on the U-bar axis; "
+                    f"{side.name} DROPLINK_U_BAR lies on the U-bar axis; "
                     "it must be off-axis"
                 )
             authored_volume = compute_scalar_triple_product(
@@ -207,16 +236,20 @@ class ArbUBar:
         for point, position in self.center_points.items():
             state.positions[PointRef(Side.CENTER, point)] = position.copy()
         for side, position in self.droplink_points.items():
-            key = PointRef(side, PointID.DROPLINK_ARB)
+            key = PointRef(side, PointID.DROPLINK_U_BAR)
             state.positions[key] = position.copy()
             state.free_points.add(key)
+
+    def derived_spec(self) -> DerivedPointsSpec[PointKey]:
+        """Declare no U-bar derived points."""
+        return DerivedPointsSpec({}, {})
 
     @property
     def free_points(self) -> tuple[PointKey, ...]:
         """Return both moving U-bar arm pickups."""
         return (
-            PointRef(Side.LEFT, PointID.DROPLINK_ARB),
-            PointRef(Side.RIGHT, PointID.DROPLINK_ARB),
+            PointRef(Side.LEFT, PointID.DROPLINK_U_BAR),
+            PointRef(Side.RIGHT, PointID.DROPLINK_U_BAR),
         )
 
     @property
@@ -227,14 +260,14 @@ class ArbUBar:
     def constraints(self, axle: DoubleWishboneAxleSuspension) -> list[Constraint]:
         """Constrain each U-bar arm to its axis and rocker droplink."""
         constraints: list[Constraint] = []
-        axis_a = self.center_points[PointID.ARB_AXIS_A]
-        axis_b = self.center_points[PointID.ARB_AXIS_B]
-        axis_a_key = PointRef(Side.CENTER, PointID.ARB_AXIS_A)
-        axis_b_key = PointRef(Side.CENTER, PointID.ARB_AXIS_B)
+        axis_a = self.center_points[PointID.ARB_U_BAR_AXIS_A]
+        axis_b = self.center_points[PointID.ARB_U_BAR_AXIS_B]
+        axis_a_key = PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_A)
+        axis_b_key = PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_B)
 
         for side in (Side.LEFT, Side.RIGHT):
             droplink = self.droplink_points[side]
-            arb_key = PointRef(side, PointID.DROPLINK_ARB)
+            arb_key = PointRef(side, PointID.DROPLINK_U_BAR)
             constraints.extend(
                 (
                     DistanceConstraint(
@@ -267,8 +300,8 @@ class ArbUBar:
     ) -> tuple[DerivativeMetricDefinition, ...]:
         """Declare U-bar twist relative to each hub Z with the other hub held."""
         design = axle.initial_state()
-        axis_a_key = PointRef(Side.CENTER, PointID.ARB_AXIS_A)
-        axis_b_key = PointRef(Side.CENTER, PointID.ARB_AXIS_B)
+        axis_a_key = PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_A)
+        axis_b_key = PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_B)
         axis_point = extract_array(design.positions[axis_a_key])
         axis_direction = extract_array(design.positions[axis_b_key]) - axis_point
         axis_length = float(np.linalg.norm(axis_direction))
@@ -276,7 +309,9 @@ class ArbUBar:
             raise ValueError("ARB twist derivative requires distinct ARB axis points")
         axis_direction /= axis_length
         design_pickups = {
-            side: extract_array(design.positions[PointRef(side, PointID.DROPLINK_ARB)])
+            side: extract_array(
+                design.positions[PointRef(side, PointID.DROPLINK_U_BAR)]
+            )
             for side in (Side.LEFT, Side.RIGHT)
         }
 
@@ -284,7 +319,7 @@ class ArbUBar:
             angles = {
                 side: kernels.rotation_about_fixed_axis_deg(
                     positions,
-                    PointRef(side, PointID.DROPLINK_ARB),
+                    PointRef(side, PointID.DROPLINK_U_BAR),
                     design_pickups[side],
                     axis_point,
                     axis_direction,
@@ -318,15 +353,15 @@ class ArbUBar:
     ) -> MetricRow:
         """Return per-side U-bar arm rotation and total twist from design."""
         design = axle.initial_state()
-        axis_a = design.get(PointRef(Side.CENTER, PointID.ARB_AXIS_A))
+        axis_a = design.get(PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_A))
         axis = (
-            design.get(PointRef(Side.CENTER, PointID.ARB_AXIS_B)) - axis_a
+            design.get(PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_B)) - axis_a
         ).normalize()
         angles = {
             side: degrees(
                 signed_angle_about_axis(
-                    design.get(PointRef(side, PointID.DROPLINK_ARB)),
-                    state.get(PointRef(side, PointID.DROPLINK_ARB)),
+                    design.get(PointRef(side, PointID.DROPLINK_U_BAR)),
+                    state.get(PointRef(side, PointID.DROPLINK_U_BAR)),
                     axis_a,
                     axis,
                 )
@@ -392,10 +427,10 @@ class ArbUBar:
         rocker_axis_a = point(PointID.ROCKER_AXIS_A)
         rocker_axis = point(PointID.ROCKER_AXIS_B) - rocker_axis_a
         pushrod = point(PointID.PUSHROD_OUTBOARD) - point(PointID.PUSHROD_INBOARD)
-        droplink = point(PointID.DROPLINK_ARB) - point(PointID.DROPLINK_ROCKER)
-        arb_axis_a = state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_A)).data
+        droplink = point(PointID.DROPLINK_U_BAR) - point(PointID.DROPLINK_ROCKER)
+        arb_axis_a = state.get(PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_A)).data
         arb_axis = (
-            state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_B)).data - arb_axis_a
+            state.get(PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_B)).data - arb_axis_a
         )
         checks = (
             (
@@ -417,9 +452,9 @@ class ArbUBar:
                 ),
             ),
             (
-                "droplink @ DROPLINK_ARB",
+                "droplink @ DROPLINK_U_BAR",
                 calculate_transmission_margin(
-                    point(PointID.DROPLINK_ARB),
+                    point(PointID.DROPLINK_U_BAR),
                     arb_axis_a,
                     arb_axis,
                     droplink,
@@ -449,15 +484,21 @@ class ArbUBar:
     ) -> tuple[SuspensionElement, ...]:
         """Return one continuous U-bar and its two droplinks."""
         design = axle.initial_state()
-        left_droplink = design.positions[PointRef(Side.LEFT, PointID.DROPLINK_ARB)]
-        axis_a = design.positions[PointRef(Side.CENTER, PointID.ARB_AXIS_A)]
-        axis_b = design.positions[PointRef(Side.CENTER, PointID.ARB_AXIS_B)]
+        left_droplink = design.positions[PointRef(Side.LEFT, PointID.DROPLINK_U_BAR)]
+        axis_a = design.positions[PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_A)]
+        axis_b = design.positions[PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_B)]
         if compute_point_point_distance(
             left_droplink, axis_a
         ) <= compute_point_point_distance(left_droplink, axis_b):
-            left_end, right_end = PointID.ARB_AXIS_A, PointID.ARB_AXIS_B
+            left_end, right_end = (
+                PointID.ARB_U_BAR_AXIS_A,
+                PointID.ARB_U_BAR_AXIS_B,
+            )
         else:
-            left_end, right_end = PointID.ARB_AXIS_B, PointID.ARB_AXIS_A
+            left_end, right_end = (
+                PointID.ARB_U_BAR_AXIS_B,
+                PointID.ARB_U_BAR_AXIS_A,
+            )
 
         elements: list[SuspensionElement] = [
             TorsionElement(
@@ -468,14 +509,8 @@ class ArbUBar:
                     PointRef(Side.CENTER, right_end),
                 ),
                 attachments=(
-                    PointRef(Side.LEFT, PointID.DROPLINK_ARB),
-                    PointRef(Side.RIGHT, PointID.DROPLINK_ARB),
-                ),
-                path=(
-                    PointRef(Side.LEFT, PointID.DROPLINK_ARB),
-                    PointRef(Side.CENTER, left_end),
-                    PointRef(Side.CENTER, right_end),
-                    PointRef(Side.RIGHT, PointID.DROPLINK_ARB),
+                    PointRef(Side.LEFT, PointID.DROPLINK_U_BAR),
+                    PointRef(Side.RIGHT, PointID.DROPLINK_U_BAR),
                 ),
             )
         ]
@@ -485,13 +520,232 @@ class ArbUBar:
                     label=f"{side.name.title()} Droplink",
                     type=ElementType.DROPLINK,
                     point_a=PointRef(side, PointID.DROPLINK_ROCKER),
-                    point_b=PointRef(side, PointID.DROPLINK_ARB),
+                    point_b=PointRef(side, PointID.DROPLINK_U_BAR),
                 )
             )
         return tuple(elements)
 
 
-type AxleArb = ArbNone | ArbUBar
+@dataclass(frozen=True)
+class ArbTBar:
+    """Rigid T-bar connected to the rockers by two droplinks.
+
+    The two arm pickups and chassis-fixed pivot form a rigid triangle. The
+    crossbar midpoint remains on the vehicle XZ plane, so the rigid T rotates
+    about its stem while both droplinks preserve their design lengths.
+    """
+
+    center_points: dict[PointID, Point3] = field(default_factory=dict)
+    droplink_points: dict[Side, Point3] = field(default_factory=dict)
+
+    def validate(self, axle: DoubleWishboneAxleSuspension) -> None:
+        """Validate rocker connections and the authored T-bar geometry."""
+        for side, corner in axle.corners.items():
+            if not isinstance(corner.actuation, ActuationPushrodRocker):
+                raise ValueError(
+                    f"{side.name} T-bar corner requires pushrod-rocker actuation"
+                )
+            if PointID.DROPLINK_ROCKER not in corner.actuation.external_point_ids:
+                raise ValueError(f"{side.name} rocker does not expose DROPLINK_ROCKER")
+
+        expected_center = {PointID.ARB_T_BAR_PIVOT}
+        if set(self.center_points) != expected_center:
+            raise ValueError("T-bar requires center ARB_T_BAR_PIVOT")
+        if set(self.droplink_points) != {Side.LEFT, Side.RIGHT}:
+            raise ValueError("T-bar requires DROPLINK_T_BAR on both sides")
+
+        pivot = self.center_points[PointID.ARB_T_BAR_PIVOT]
+        if abs(float(pivot[Axis.Y])) > EPS_GEOMETRIC:
+            raise ValueError("ARB_T_BAR_PIVOT must lie on the vehicle centerline Y = 0")
+        left = self.droplink_points[Side.LEFT]
+        right = self.droplink_points[Side.RIGHT]
+        crossbar_center = left + (right - left) / 2.0
+        if abs(float(crossbar_center[Axis.Y])) > EPS_GEOMETRIC:
+            raise ValueError(
+                "The T-bar crossbar midpoint must lie on the vehicle centerline Y = 0"
+            )
+        crossbar = right - left
+        stem = crossbar_center - pivot
+        if crossbar.norm() <= EPS_GEOMETRIC:
+            raise ValueError("T-bar crossbar points must be distinct")
+        if stem.norm() <= EPS_GEOMETRIC:
+            raise ValueError("T-bar pivot and crossbar midpoint must be distinct")
+        if crossbar.cross(stem).norm() <= EPS_GEOMETRIC:
+            raise ValueError("T-bar points must define a non-degenerate triangle")
+
+    def add_to_state(self, state: SuspensionState) -> None:
+        """Add the fixed pivot and moving crossbar endpoints."""
+        state.positions[T_BAR_PIVOT_KEY] = self.center_points[
+            PointID.ARB_T_BAR_PIVOT
+        ].copy()
+        for side, position in self.droplink_points.items():
+            key = PointRef(side, PointID.DROPLINK_T_BAR)
+            state.positions[key] = position.copy()
+            state.free_points.add(key)
+
+    def derived_spec(self) -> DerivedPointsSpec[PointKey]:
+        """Declare no T-bar derived solver points."""
+        return DerivedPointsSpec({}, {})
+
+    @property
+    def free_points(self) -> tuple[PointKey, ...]:
+        """Return both moving T-bar arm pickups."""
+        return T_BAR_LEFT_KEY, T_BAR_RIGHT_KEY
+
+    @property
+    def output_points(self) -> tuple[PointKey, ...]:
+        """Return the two crossbar endpoints."""
+        return self.free_points
+
+    def constraints(self, axle: DoubleWishboneAxleSuspension) -> list[Constraint]:
+        """Preserve the rigid T triangle and both droplink lengths."""
+        design = axle.initial_state()
+        constraints: list[Constraint] = [
+            DistanceConstraint(
+                T_BAR_LEFT_KEY,
+                T_BAR_RIGHT_KEY,
+                compute_point_point_distance(
+                    design.get(T_BAR_LEFT_KEY),
+                    design.get(T_BAR_RIGHT_KEY),
+                ),
+            ),
+            DistanceConstraint(
+                T_BAR_LEFT_KEY,
+                T_BAR_PIVOT_KEY,
+                compute_point_point_distance(
+                    design.get(T_BAR_LEFT_KEY),
+                    design.get(T_BAR_PIVOT_KEY),
+                ),
+            ),
+            DistanceConstraint(
+                T_BAR_RIGHT_KEY,
+                T_BAR_PIVOT_KEY,
+                compute_point_point_distance(
+                    design.get(T_BAR_RIGHT_KEY),
+                    design.get(T_BAR_PIVOT_KEY),
+                ),
+            ),
+            MidpointOnPlaneConstraint(
+                T_BAR_LEFT_KEY,
+                T_BAR_RIGHT_KEY,
+                Point3([0.0, 0.0, 0.0]),
+                Direction3([0.0, 1.0, 0.0]),
+            ),
+        ]
+        for side in (Side.LEFT, Side.RIGHT):
+            arb_key = PointRef(side, PointID.DROPLINK_T_BAR)
+            rocker_key = PointRef(side, PointID.DROPLINK_ROCKER)
+            constraints.append(
+                DistanceConstraint(
+                    rocker_key,
+                    arb_key,
+                    compute_point_point_distance(
+                        design.get(rocker_key), design.get(arb_key)
+                    ),
+                )
+            )
+        return constraints
+
+    def derivative_metric_definitions(
+        self,
+        axle: DoubleWishboneAxleSuspension,
+    ) -> tuple[DerivativeMetricDefinition, ...]:
+        """Declare T-bar center X motion relative to each hub Z."""
+        response = CallableScalarResponse(
+            lambda positions: calculate_t_bar_crossbar_center(positions)[Axis.X],
+            name="t_bar_center_x",
+            unit=MetricUnit.MM,
+        )
+        return tuple(
+            DerivativeMetricDefinition(
+                response=response,
+                driver=PointCoordinateResponse.from_world_axis(
+                    PointRef(side, PointID.WHEEL_CENTER),
+                    Axis.Z,
+                    name=f"hub_z_{side.name.lower()}",
+                    unit=MetricUnit.MM,
+                ),
+            )
+            for side in (Side.LEFT, Side.RIGHT)
+        )
+
+    def topology_metric_values(
+        self,
+        axle: DoubleWishboneAxleSuspension,
+        state: SuspensionState,
+    ) -> MetricRow:
+        """Return T-bar stem heave angle and shaft twist."""
+        design = axle.initial_state()
+        pivot = design.get(T_BAR_PIVOT_KEY)
+        heave_angle = degrees(
+            signed_angle_about_axis(
+                calculate_t_bar_crossbar_center(design.positions),
+                calculate_t_bar_crossbar_center(state.positions),
+                pivot,
+                Direction3([0.0, 1.0, 0.0]),
+            )
+        )
+        design_twist = self._shaft_twist(design)
+        current_twist = self._shaft_twist(state)
+        return OrderedDict(
+            (
+                ("t_bar_heave_angle", heave_angle),
+                ("t_bar_twist", degrees(current_twist - design_twist)),
+            )
+        )
+
+    @staticmethod
+    def _shaft_twist(state: SuspensionState) -> float:
+        """Return crossbar rotation about the moving stem axis."""
+        pivot = state.get(T_BAR_PIVOT_KEY).data
+        center = calculate_t_bar_crossbar_center(state.positions).data
+        stem = center - pivot
+        stem /= np.linalg.norm(stem)
+        crossbar = state.get(T_BAR_LEFT_KEY).data - state.get(T_BAR_RIGHT_KEY).data
+        crossbar -= stem * float(np.dot(crossbar, stem))
+        lateral_reference = np.array([0.0, 1.0, 0.0])
+        sine = float(np.dot(stem, np.cross(lateral_reference, crossbar)))
+        cosine = float(np.dot(lateral_reference, crossbar))
+        return float(np.arctan2(sine, cosine))
+
+    def topology_diagnostics(
+        self,
+        axle: DoubleWishboneAxleSuspension,
+        states: list[SuspensionState],
+    ) -> list[DiagnosticIssue]:
+        """Return no T-bar-specific diagnostics yet."""
+        return []
+
+    def elements(
+        self,
+        axle: DoubleWishboneAxleSuspension,
+    ) -> tuple[SuspensionElement, ...]:
+        """Return the branched T-bar and one droplink per side."""
+        left = T_BAR_LEFT_KEY
+        right = T_BAR_RIGHT_KEY
+        return (
+            TBarElement(
+                label="T-Bar Anti-Roll Bar",
+                pivot=T_BAR_PIVOT_KEY,
+                left_attachment=left,
+                right_attachment=right,
+            ),
+            RigidLinkElement(
+                label="Left Droplink",
+                type=ElementType.DROPLINK,
+                point_a=PointRef(Side.LEFT, PointID.DROPLINK_ROCKER),
+                point_b=left,
+            ),
+            RigidLinkElement(
+                label="Right Droplink",
+                type=ElementType.DROPLINK,
+                point_a=PointRef(Side.RIGHT, PointID.DROPLINK_ROCKER),
+                point_b=right,
+            ),
+        )
+
+
+type AxleArb = ArbNone | ArbUBar | ArbTBar
 
 
 @dataclass(frozen=True)

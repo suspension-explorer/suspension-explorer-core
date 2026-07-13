@@ -83,9 +83,9 @@ def test_axle_derivative_rejects_coincident_arb_axis(test_data_dir: Path) -> Non
     axle = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
     assert isinstance(axle, DoubleWishboneAxleSuspension)
     assert isinstance(axle.anti_roll, ArbUBar)
-    axle.anti_roll.center_points[PointID.ARB_AXIS_B] = axle.anti_roll.center_points[
-        PointID.ARB_AXIS_A
-    ]
+    axle.anti_roll.center_points[PointID.ARB_U_BAR_AXIS_B] = (
+        axle.anti_roll.center_points[PointID.ARB_U_BAR_AXIS_A]
+    )
 
     with pytest.raises(ValueError, match="distinct ARB axis points"):
         axle.derivative_metric_definitions()
@@ -144,10 +144,10 @@ def test_arb_diagnostics_detect_mirrored_arm_branch(test_data_dir: Path) -> None
     step = len(states) // 2
     state = states[step].copy()
     side = Side.LEFT
-    axis_a = state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_A)).data
-    axis_b = state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_B)).data
+    axis_a = state.get(PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_A)).data
+    axis_b = state.get(PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_B)).data
     rocker = state.get(PointRef(side, PointID.DROPLINK_ROCKER)).data
-    arm_key = PointRef(side, PointID.DROPLINK_ARB)
+    arm_key = PointRef(side, PointID.DROPLINK_U_BAR)
     arm = state.get(arm_key).data
     normal = np.cross(axis_b - axis_a, rocker - axis_a)
     normal /= np.linalg.norm(normal)
@@ -171,10 +171,10 @@ def test_arb_diagnostics_detect_chirality_boundary(test_data_dir: Path) -> None:
     step = len(states) // 2
     state = states[step].copy()
     side = Side.LEFT
-    axis_a = state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_A)).data
-    axis_b = state.get(PointRef(Side.CENTER, PointID.ARB_AXIS_B)).data
+    axis_a = state.get(PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_A)).data
+    axis_b = state.get(PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_B)).data
     rocker = state.get(PointRef(side, PointID.DROPLINK_ROCKER)).data
-    arm_key = PointRef(side, PointID.DROPLINK_ARB)
+    arm_key = PointRef(side, PointID.DROPLINK_U_BAR)
     arm = state.get(arm_key).data
     normal = np.cross(axis_b - axis_a, rocker - axis_a)
     normal /= np.linalg.norm(normal)

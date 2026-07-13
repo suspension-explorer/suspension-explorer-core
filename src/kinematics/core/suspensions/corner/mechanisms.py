@@ -518,7 +518,6 @@ class CornerSpringTorsionBar:
                     actuation.torsion_axis,
                 ),
                 attachments=(),
-                path=actuation.torsion_axis,
             ),
         )
 

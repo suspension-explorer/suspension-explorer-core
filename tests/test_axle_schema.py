@@ -46,9 +46,7 @@ def test_geometry_selectors_parse_as_enums_and_serialize_as_strings(
 ) -> None:
     spec = parse_geometry_spec(
         parse_geometry_data(
-            _read_yaml_mapping(
-                test_data_dir / "axle_geometry_rocker.yaml", "Geometry"
-            )
+            _read_yaml_mapping(test_data_dir / "axle_geometry_rocker.yaml", "Geometry")
         )
     )
     assert isinstance(spec, DoubleWishboneAxleGeometrySpec)
@@ -68,6 +66,34 @@ def test_geometry_selectors_parse_as_enums_and_serialize_as_strings(
     }
     assert spec.anti_roll.model_dump(mode="json") == {"type": "u_bar"}
     assert spec.heave_link.model_dump(mode="json") == {"type": "none"}
+
+
+def test_t_bar_selector_round_trips_without_heave_link(test_data_dir: Path) -> None:
+    spec = parse_geometry_spec(
+        parse_geometry_data(
+            _read_yaml_mapping(
+                test_data_dir / "axle_geometry_t_bar.yaml",
+                "Geometry",
+            )
+        )
+    )
+    assert isinstance(spec, DoubleWishboneAxleGeometrySpec)
+
+    assert spec.anti_roll.type is ArbType.T_BAR
+    assert spec.heave_link.type is HeaveLinkType.NONE
+    assert spec.anti_roll.model_dump(mode="json") == {"type": "t_bar"}
+
+
+def test_t_bar_requires_pushrod_rocker_actuation(test_data_dir: Path) -> None:
+    data = _read_yaml_mapping(
+        test_data_dir / "axle_geometry_t_bar.yaml",
+        "Geometry",
+    )
+    data["corner"]["actuation"]["type"] = "direct"
+    data["corner"]["spring"]["type"] = "none"
+
+    with pytest.raises(ValueError, match="requires pushrod-rocker actuation"):
+        parse_geometry_spec(parse_geometry_data(data))
 
 
 def test_rocker_to_rocker_heave_link_selector_round_trips() -> None:
