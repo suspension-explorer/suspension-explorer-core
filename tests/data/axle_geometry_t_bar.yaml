@@ -1,13 +1,13 @@
-type: double_wishbone_axle
+type: double_wishbone
+scope: axle
 name: "composed T-bar axle"
 version: "0.0.1"
 units: millimeters
 
-corner:
-  actuation:
-    type: pushrod_rocker
-  spring:
-    type: torsion_bar
+actuation:
+  type: pushrod_rocker
+spring:
+  type: torsion_bar
 anti_roll:
   type: t_bar
 heave_link:

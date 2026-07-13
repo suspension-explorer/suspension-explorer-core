@@ -13,6 +13,7 @@ from kinematics.core.enums import (
     CornerSpringType,
     HeaveLinkType,
     PointID,
+    Scope,
     SuspensionType,
     TargetPositionMode,
 )
@@ -51,19 +52,19 @@ def test_geometry_selectors_parse_as_enums_and_serialize_as_strings(
     )
     assert isinstance(spec, DoubleWishboneAxleGeometrySpec)
 
-    assert spec.type is SuspensionType.DOUBLE_WISHBONE_AXLE
-    assert spec.corner.actuation.type is ActuationType.PUSHROD_ROCKER
-    assert spec.corner.spring.type is CornerSpringType.TORSION_BAR
+    assert spec.type is SuspensionType.DOUBLE_WISHBONE
+    assert spec.scope is Scope.AXLE
+    assert spec.actuation.type is ActuationType.PUSHROD_ROCKER
+    assert spec.spring.type is CornerSpringType.TORSION_BAR
     assert spec.anti_roll.type is ArbType.U_BAR
     assert spec.heave_link.type is HeaveLinkType.NONE
 
-    assert spec.model_dump(mode="json", include={"type"}) == {
-        "type": "double_wishbone_axle"
+    assert spec.model_dump(mode="json", include={"type", "scope"}) == {
+        "type": "double_wishbone",
+        "scope": "axle",
     }
-    assert spec.corner.model_dump(mode="json") == {
-        "actuation": {"type": "pushrod_rocker"},
-        "spring": {"type": "torsion_bar"},
-    }
+    assert spec.actuation.model_dump(mode="json") == {"type": "pushrod_rocker"}
+    assert spec.spring.model_dump(mode="json") == {"type": "torsion_bar"}
     assert spec.anti_roll.model_dump(mode="json") == {"type": "u_bar"}
     assert spec.heave_link.model_dump(mode="json") == {"type": "none"}
 
@@ -89,8 +90,8 @@ def test_t_bar_requires_pushrod_rocker_actuation(test_data_dir: Path) -> None:
         test_data_dir / "axle_geometry_t_bar.yaml",
         "Geometry",
     )
-    data["corner"]["actuation"]["type"] = "direct"
-    data["corner"]["spring"]["type"] = "none"
+    data["actuation"]["type"] = "direct"
+    data["spring"]["type"] = "none"
 
     with pytest.raises(ValueError, match="requires pushrod-rocker actuation"):
         parse_geometry_spec(parse_geometry_data(data))

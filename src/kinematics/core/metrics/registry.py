@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Literal, Sequence, cast
+from enum import StrEnum
+from typing import TYPE_CHECKING, Sequence, cast
 
+from kinematics.core.enums import Scope
 from kinematics.core.metrics.catalog import (
     get_default_corner_derivative_metrics,
     get_default_corner_metrics,
@@ -18,8 +20,14 @@ if TYPE_CHECKING:
     from kinematics.core.suspensions.corner.base import CornerSuspension
 
 MetricUnits = MetricUnit | MetricUnitQuotient
-MetricScope = Literal["corner", "axle"]
-MetricKind = Literal["state", "derivative"]
+
+
+class MetricKind(StrEnum):
+    """Whether a metric is a state value or a declared derivative."""
+
+    STATE = "state"
+    DERIVATIVE = "derivative"
+
 
 LOCATIONS: tuple[str, ...] = ("left", "right")
 
@@ -32,7 +40,7 @@ class MetricSpec:
     label: str
     unit: MetricUnits
     kind: MetricKind
-    scope: MetricScope
+    scope: Scope
     component: str | None = None
 
 
@@ -51,46 +59,79 @@ def split_flat_key(key: str) -> tuple[str, str | None]:
 
 
 _AXLE_SPECS = (
-    MetricSpec("heave", "Heave", MetricUnit.MM, "state", "axle"),
-    MetricSpec("roll", "Roll", MetricUnit.DEG, "state", "axle"),
+    MetricSpec("heave", "Heave", MetricUnit.MM, MetricKind.STATE, Scope.AXLE),
+    MetricSpec("roll", "Roll", MetricUnit.DEG, MetricKind.STATE, Scope.AXLE),
     MetricSpec(
-        "ride_height_change", "Ride Height Change", MetricUnit.MM, "state", "axle"
+        "ride_height_change",
+        "Ride Height Change",
+        MetricUnit.MM,
+        MetricKind.STATE,
+        Scope.AXLE,
     ),
-    MetricSpec("track", "Track", MetricUnit.MM, "state", "axle"),
-    MetricSpec("roll_center_y", "Roll Center Y", MetricUnit.MM, "state", "axle"),
-    MetricSpec("roll_center_z", "Roll Center Z", MetricUnit.MM, "state", "axle"),
+    MetricSpec("track", "Track", MetricUnit.MM, MetricKind.STATE, Scope.AXLE),
+    MetricSpec(
+        "roll_center_y",
+        "Roll Center Y",
+        MetricUnit.MM,
+        MetricKind.STATE,
+        Scope.AXLE,
+    ),
+    MetricSpec(
+        "roll_center_z",
+        "Roll Center Z",
+        MetricUnit.MM,
+        MetricKind.STATE,
+        Scope.AXLE,
+    ),
     MetricSpec(
         "rack_displacement",
         "Rack Displacement",
         MetricUnit.MM,
-        "state",
-        "axle",
+        MetricKind.STATE,
+        Scope.AXLE,
     ),
-    MetricSpec("arb_twist", "ARB Twist", MetricUnit.DEG, "state", "axle", "arb"),
+    MetricSpec(
+        "arb_twist",
+        "ARB Twist",
+        MetricUnit.DEG,
+        MetricKind.STATE,
+        Scope.AXLE,
+        "arb",
+    ),
     MetricSpec(
         "heave_link_length",
         "Heave Link Length",
         MetricUnit.MM,
-        "state",
-        "axle",
+        MetricKind.STATE,
+        Scope.AXLE,
         "heave_link",
     ),
 )
 
 _TOPOLOGY_SPECS = (
     MetricSpec(
-        "rocker_angle", "Rocker Angle", MetricUnit.DEG, "state", "corner", "rocker"
+        "rocker_angle",
+        "Rocker Angle",
+        MetricUnit.DEG,
+        MetricKind.STATE,
+        Scope.CORNER,
+        "rocker",
     ),
     MetricSpec(
         "torsion_bar_twist",
         "Torsion Bar Twist",
         MetricUnit.DEG,
-        "state",
-        "corner",
+        MetricKind.STATE,
+        Scope.CORNER,
         "torsion_bar",
     ),
     MetricSpec(
-        "arb_arm_angle", "ARB Arm Angle", MetricUnit.DEG, "state", "corner", "arb"
+        "arb_arm_angle",
+        "ARB Arm Angle",
+        MetricUnit.DEG,
+        MetricKind.STATE,
+        Scope.CORNER,
+        "arb",
     ),
 )
 
@@ -98,7 +139,7 @@ _TOPOLOGY_SPECS = (
 def derivative_spec(
     definition: DerivativeMetricDefinition,
     *,
-    scope: MetricScope = "corner",
+    scope: Scope = Scope.CORNER,
 ) -> MetricSpec:
     """Derive metadata from a declarative derivative definition."""
     response = definition.response.name.replace("_", " ").title()
@@ -107,7 +148,7 @@ def derivative_spec(
         definition.column_name,
         f"{response} wrt {driver}",
         definition.unit,
-        "derivative",
+        MetricKind.DERIVATIVE,
         scope,
     )
 
@@ -115,7 +156,13 @@ def derivative_spec(
 def all_static_metric_specs() -> tuple[MetricSpec, ...]:
     """Return every statically declared state metric."""
     corner = tuple(
-        MetricSpec(metric.column_name, metric.label, metric.unit, "state", "corner")
+        MetricSpec(
+            metric.column_name,
+            metric.label,
+            metric.unit,
+            MetricKind.STATE,
+            Scope.CORNER,
+        )
         for metric in get_default_corner_metrics()
     )
     specs = corner + _TOPOLOGY_SPECS + _AXLE_SPECS
@@ -137,24 +184,25 @@ def specs_by_key(
 
 def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpec]:
     """Return all metadata that the selected topology can emit."""
-    derivatives: list[tuple[DerivativeMetricDefinition, MetricScope]] = []
+    derivatives: list[tuple[DerivativeMetricDefinition, Scope]] = []
     if suspension.is_axle:
         axle = cast("AxleSuspension", suspension)
         representative = next(iter(axle.corners.values()))
         derivatives.extend(
-            (definition, "corner")
+            (definition, Scope.CORNER)
             for definition in (
                 *get_default_corner_derivative_metrics(representative),
                 *representative.derivative_metric_definitions(),
             )
         )
         derivatives.extend(
-            (definition, "axle") for definition in axle.derivative_metric_definitions()
+            (definition, Scope.AXLE)
+            for definition in axle.derivative_metric_definitions()
         )
     else:
         corner = cast("CornerSuspension", suspension)
         derivatives.extend(
-            (definition, "corner")
+            (definition, Scope.CORNER)
             for definition in (
                 *get_default_corner_derivative_metrics(corner),
                 *corner.derivative_metric_definitions(),
@@ -180,7 +228,7 @@ def flat_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpec]
     result: dict[str, MetricSpec] = {}
     for spec in specs.values():
         locations: tuple[str | None, ...] = (
-            LOCATIONS if spec.scope == "corner" else (None,)
+            LOCATIONS if spec.scope is Scope.CORNER else (None,)
         )
         for location in locations:
             key = flat_key(spec.key, location)

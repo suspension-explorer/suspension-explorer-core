@@ -1,0 +1,37 @@
+type: macpherson
+side: left
+name: "macpherson_test"
+version: "0.0.1"
+units: millimeters
+
+# Hardpoints: World Axis, Design Condition. Left front corner.
+hardpoints:
+  # Lower control arm.
+  lower_wishbone_inboard_front: {x: 250, y: 400, z: 200}
+  lower_wishbone_inboard_rear: {x: -250, y: 450, z: 200}
+  lower_wishbone_outboard: {x: 0, y: 900, z: 200}
+
+  # Strut mounts. The steering axis runs from the lower ball joint to the
+  # fixed top mount, and the clamp (strut_bottom) must lie on that axis.
+  strut_top: {x: -40, y: 700, z: 850}
+  strut_bottom: {x: -14, y: 830, z: 427.5}
+
+  # Track Rod.
+  trackrod_inboard: {x: 50, y: 200, z: 250}
+  trackrod_outboard: {x: 150, y: 800, z: 275}
+
+  # Axle.
+  axle_inboard: {x: -20, y: 800, z: 308.426}
+  axle_outboard: {x: -20, y: 950, z: 313.426}
+
+# Configuration.
+config:
+  steered: true
+  wheel:
+    offset: 0  # ET convention: positive is inboard.
+    tire:
+      aspect_ratio: 0.55
+      section_width: 270
+      rim_diameter: 13  # Specified in inches.
+  cg_position: {x: 1250, y: 0, z: 450}
+  wheelbase: 2500.0

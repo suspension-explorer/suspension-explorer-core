@@ -10,18 +10,20 @@ from kinematics.core.enums import (
     HeaveLinkType,
     PointID,
     ShimType,
-    SuspensionType,
 )
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import PointKey, Side
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.schema.geometry import (
     ActuationSpec,
+    AxleGeometrySpecBase,
     AxleHardpointsSpec,
     CornerSpringSpec,
     DoubleWishboneAxleGeometrySpec,
     DoubleWishboneGeometrySpec,
     GeometrySpecBase,
+    MacPhersonAxleGeometrySpec,
+    MacPhersonGeometrySpec,
 )
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.axle.mechanisms import (
@@ -37,6 +39,7 @@ from kinematics.core.suspensions.base import Suspension
 from kinematics.core.suspensions.corner import (
     CornerSuspension,
     DoubleWishboneSuspension,
+    MacPhersonSuspension,
 )
 from kinematics.core.suspensions.corner.mechanisms import (
     Actuation,
@@ -53,9 +56,11 @@ def build_suspension(spec: GeometrySpecBase) -> Suspension:
     """Construct a suspension using the registered architecture definition."""
     from kinematics.core.suspensions.registry import get_suspension_definition
 
-    definition = get_suspension_definition(spec.type)
+    definition = get_suspension_definition(spec.type, spec.scope)
     if definition is None:
-        raise TypeError(f"Unsupported geometry spec type: {spec.type}")
+        raise TypeError(
+            f"Unsupported geometry spec type: {spec.type} ({spec.scope})"
+        )
     if not isinstance(spec, definition.spec_type):
         raise TypeError(
             f"Type '{spec.type}' requires {definition.spec_type.__name__}, "
@@ -76,52 +81,39 @@ def build_double_wishbone(spec: GeometrySpecBase) -> Suspension:
     return _build_corner(typed, actuation, spring)
 
 
+def build_macpherson(spec: GeometrySpecBase) -> Suspension:
+    """Build one MacPherson strut corner."""
+    typed = cast(MacPhersonGeometrySpec, spec)
+    _validate_side_signs(typed.hardpoints, typed.side)
+    _check_shim_support(typed.config, MacPhersonSuspension)
+    return MacPhersonSuspension(
+        name=typed.name,
+        version=typed.version,
+        units=typed.units,
+        side=typed.side,
+        hardpoints={
+            point: position.copy() for point, position in typed.hardpoints.items()
+        },
+        config=typed.config,
+    )
+
+
 def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
-    """Build two composed corners and their shared axle mechanisms."""
+    """Build a double-wishbone axle with composed shared hardware."""
     typed = cast(DoubleWishboneAxleGeometrySpec, spec)
     side_points = _build_axle_side_points(typed.hardpoints)
-
-    external_pickups: list[RockerPickup] = []
-    anti_roll_droplink_points: dict[Side, Point3] = {}
-    if typed.anti_roll.type in (ArbType.U_BAR, ArbType.T_BAR):
-        external_pickups.append(
-            RockerPickup(PointID.DROPLINK_ROCKER, RockerPickupType.DROPLINK)
-        )
-        droplink_point_id = (
-            PointID.DROPLINK_U_BAR
-            if typed.anti_roll.type is ArbType.U_BAR
-            else PointID.DROPLINK_T_BAR
-        )
-        for side, points in side_points.items():
-            try:
-                anti_roll_droplink_points[side] = points.pop(droplink_point_id)
-            except KeyError as error:
-                mechanism_name = typed.anti_roll.type.value.replace("_", "-")
-                raise ValueError(
-                    f"{side.name} {mechanism_name} requires {droplink_point_id.name}"
-                ) from error
-
-    if typed.heave_link.type is HeaveLinkType.ROCKER_TO_ROCKER:
-        external_pickups.append(
-            RockerPickup(
-                PointID.HEAVE_LINK_ROCKER,
-                RockerPickupType.HEAVE_LINK,
-            )
-        )
+    external_pickups, droplink_points = _extract_axle_pickups(typed, side_points)
 
     actuation = build_actuation(
-        typed.corner.actuation,
+        typed.actuation,
         spring_pickup_body=DoubleWishboneSuspension.LOWER_WISHBONE_BODY,
         pushrod_outboard_body=DoubleWishboneSuspension.UPRIGHT_BODY,
-        external_pickups=tuple(external_pickups),
+        external_pickups=external_pickups,
     )
-    spring = build_corner_spring(typed.corner.spring)
+    spring = build_corner_spring(typed.spring)
     _check_shim_support(typed.config, DoubleWishboneSuspension)
 
-    side_configs = {
-        Side.LEFT: typed.config,
-        Side.RIGHT: _mirror_config(typed.config),
-    }
+    side_configs = _mirror_side_configs(typed.config)
     corners: dict[Side, CornerSuspension] = {
         side: DoubleWishboneSuspension(
             name=f"{typed.name}_{side.name.lower()}",
@@ -135,23 +127,92 @@ def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
         )
         for side, points in side_points.items()
     }
+    return _assemble_axle(typed, corners, droplink_points)
 
-    anti_roll = build_anti_roll(
-        typed,
-        anti_roll_droplink_points,
-    )
-    heave_link = build_heave_link(typed)
+
+def build_macpherson_axle(spec: GeometrySpecBase) -> Suspension:
+    """Build a MacPherson axle from two mirrored or explicit strut corners."""
+    typed = cast(MacPhersonAxleGeometrySpec, spec)
+    side_points = _build_axle_side_points(typed.hardpoints)
+    # The schema rejects shared hardware that needs a rocker corner, so a
+    # MacPherson axle has no pickup points to extract.
+    _check_shim_support(typed.config, MacPhersonSuspension)
+
+    side_configs = _mirror_side_configs(typed.config)
+    corners: dict[Side, CornerSuspension] = {
+        side: MacPhersonSuspension(
+            name=f"{typed.name}_{side.name.lower()}",
+            version=typed.version,
+            units=typed.units,
+            side=side,
+            hardpoints=cast("dict[PointKey, Point3]", points),
+            config=side_configs[side],
+        )
+        for side, points in side_points.items()
+    }
+    return _assemble_axle(typed, corners, {})
+
+
+def _extract_axle_pickups(
+    spec: AxleGeometrySpecBase,
+    side_points: dict[Side, dict[PointID, Point3]],
+) -> tuple[tuple[RockerPickup, ...], dict[Side, Point3]]:
+    """Collect rocker pickups and droplink points for shared hardware."""
+    external_pickups: list[RockerPickup] = []
+    droplink_points: dict[Side, Point3] = {}
+    if spec.anti_roll.type in (ArbType.U_BAR, ArbType.T_BAR):
+        external_pickups.append(
+            RockerPickup(PointID.DROPLINK_ROCKER, RockerPickupType.DROPLINK)
+        )
+        droplink_point_id = (
+            PointID.DROPLINK_U_BAR
+            if spec.anti_roll.type is ArbType.U_BAR
+            else PointID.DROPLINK_T_BAR
+        )
+        for side, points in side_points.items():
+            try:
+                droplink_points[side] = points.pop(droplink_point_id)
+            except KeyError as error:
+                mechanism_name = spec.anti_roll.type.value.replace("_", "-")
+                raise ValueError(
+                    f"{side.name} {mechanism_name} requires {droplink_point_id.name}"
+                ) from error
+
+    if spec.heave_link.type is HeaveLinkType.ROCKER_TO_ROCKER:
+        external_pickups.append(
+            RockerPickup(
+                PointID.HEAVE_LINK_ROCKER,
+                RockerPickupType.HEAVE_LINK,
+            )
+        )
+    return tuple(external_pickups), droplink_points
+
+
+def _mirror_side_configs(config: SuspensionConfig) -> dict[Side, SuspensionConfig]:
+    """Return the authored left config and its mirrored right counterpart."""
+    return {
+        Side.LEFT: config,
+        Side.RIGHT: _mirror_config(config),
+    }
+
+
+def _assemble_axle(
+    spec: AxleGeometrySpecBase,
+    corners: dict[Side, CornerSuspension],
+    droplink_points: dict[Side, Point3],
+) -> AxleSuspension:
+    """Compose built corners with shared axle mechanisms."""
     return AxleSuspension(
-        type_key=SuspensionType.DOUBLE_WISHBONE_AXLE,
-        name=typed.name,
-        version=typed.version,
-        units=typed.units,
+        type_key=spec.type,
+        name=spec.name,
+        version=spec.version,
+        units=spec.units,
         side=Side.CENTER,
         hardpoints={},
-        config=typed.config,
+        config=spec.config,
         corners=corners,
-        anti_roll=anti_roll,
-        heave_link=heave_link,
+        anti_roll=build_anti_roll(spec, droplink_points),
+        heave_link=build_heave_link(spec),
     )
 
 
@@ -193,7 +254,7 @@ def build_corner_spring(spec: CornerSpringSpec) -> CornerSpring:
 
 
 def build_anti_roll(
-    spec: DoubleWishboneAxleGeometrySpec,
+    spec: AxleGeometrySpecBase,
     droplink_points: dict[Side, Point3],
 ) -> AxleArb:
     """Build the selected shared anti-roll mechanism."""
@@ -217,7 +278,7 @@ def build_anti_roll(
     raise TypeError(f"Unsupported anti-roll type: {spec.anti_roll.type}")
 
 
-def build_heave_link(spec: DoubleWishboneAxleGeometrySpec) -> AxleHeaveLink:
+def build_heave_link(spec: AxleGeometrySpecBase) -> AxleHeaveLink:
     """Build the selected shared heave mechanism."""
     if spec.heave_link.type is HeaveLinkType.NONE:
         return HeaveLinkNone()

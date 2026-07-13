@@ -9,6 +9,7 @@ from kinematics.core.schema.config import (
 from kinematics.core.schema.geometry import (
     ActuationSpec,
     ArbSpec,
+    AxleGeometrySpecBase,
     AxleHardpointsSpec,
     CornerSpringSpec,
     DoubleWishboneAxleGeometrySpec,
@@ -16,6 +17,7 @@ from kinematics.core.schema.geometry import (
     GeometrySpec,
     GeometrySpecBase,
     HeaveLinkSpec,
+    MacPhersonAxleGeometrySpec,
     parse_geometry_spec,
 )
 from kinematics.core.schema.sweep import (

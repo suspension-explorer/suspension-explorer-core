@@ -57,7 +57,14 @@ if TYPE_CHECKING:
     )
 
 
-# Warn when a linkage transmission margin falls below this ratio.
+# The transmission margin measures how squarely a link drives its lever: it
+# is the cosine between the link direction and the driven pickup's tangent of
+# travel, so 1.0 means the link pushes exactly along the direction the pickup
+# can move, and 0.0 means the link points along the lever arm and can only
+# stretch the mechanism, not rotate it. That zero-margin condition is a
+# toggle point (kinematic lock). Below this ratio the linkage still moves,
+# but it is close enough to toggle that joint loads and motion sensitivity
+# grow sharply, so we warn.
 TRANSMISSION_MARGIN_WARNING_THRESHOLD = 0.15
 
 T_BAR_PIVOT_KEY = PointRef(Side.CENTER, PointID.ARB_T_BAR_PIVOT)

@@ -189,8 +189,10 @@ def build_stub_corner(
 
 
 def build_stub_axle(config: SuspensionConfig | None = None) -> AxleSuspension:
+    # The stub corners have no registered architecture; any member works as
+    # the reported identity here.
     return AxleSuspension(
-        type_key=SuspensionType.DOUBLE_WISHBONE_AXLE,
+        type_key=SuspensionType.DOUBLE_WISHBONE,
         name="stub_axle",
         side=Side.CENTER,
         hardpoints={},
@@ -230,7 +232,7 @@ def test_axle_composes_non_double_wishbone_corners():
 def test_axle_rejects_mixed_rack_attachment():
     with pytest.raises(ValueError, match="disagree on rack attachment"):
         AxleSuspension(
-            type_key=SuspensionType.DOUBLE_WISHBONE_AXLE,
+            type_key=SuspensionType.DOUBLE_WISHBONE,
             name="stub_axle",
             side=Side.CENTER,
             hardpoints={},
@@ -291,7 +293,7 @@ def test_stub_axle_solves_and_reports_metrics_through_role_hooks():
     assert len(stub_issues) == 2
 
     # The composer reports the identity its builder supplied.
-    assert axle.reported_type_key() is SuspensionType.DOUBLE_WISHBONE_AXLE
+    assert axle.reported_type_key() is SuspensionType.DOUBLE_WISHBONE
 
 
 def test_double_wishbone_declares_expected_point_roles():

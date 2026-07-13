@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from kinematics.core.enums import PointID
+from kinematics.core.enums import AxlePosition, PointID
 from kinematics.core.primitives.constants import MM_PER_INCH
 from kinematics.core.primitives.geometry import Direction3, Point3
 
@@ -91,9 +89,9 @@ class SuspensionConfig(BaseModel):
             PointID.TRACKROD_OUTBOARD,
         ]
     )
-    axle_position: Literal["front", "rear"] | None = None
+    axle_position: AxlePosition | None = None
     front_brake_bias: float | None = None
-    driven_axle: Literal["front", "rear"] | None = None
+    driven_axle: AxlePosition | None = None
 
     @field_validator("front_brake_bias")
     @classmethod

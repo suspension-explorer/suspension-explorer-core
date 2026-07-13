@@ -309,7 +309,6 @@ class TestRegistry:
         """
         types = list_supported_types()
         assert "double_wishbone" in types
-        assert "double_wishbone_axle" in types
         assert "double_wishbone_front" in types
 
     def test_get_suspension_class(self):

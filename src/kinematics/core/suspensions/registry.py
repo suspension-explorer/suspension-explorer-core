@@ -4,19 +4,26 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Callable
 
-from kinematics.core.enums import SuspensionType
+from kinematics.core.enums import Scope, SuspensionType
 from kinematics.core.schema.geometry import (
     DoubleWishboneAxleGeometrySpec,
     DoubleWishboneGeometrySpec,
     GeometrySpecBase,
+    MacPhersonAxleGeometrySpec,
+    MacPhersonGeometrySpec,
 )
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.suspensions.build import (
     build_double_wishbone,
     build_double_wishbone_axle,
+    build_macpherson,
+    build_macpherson_axle,
 )
-from kinematics.core.suspensions.corner import DoubleWishboneSuspension
+from kinematics.core.suspensions.corner import (
+    DoubleWishboneSuspension,
+    MacPhersonSuspension,
+)
 
 SuspensionBuilder = Callable[[GeometrySpecBase], Suspension]
 SuspensionClass = type[Suspension]
@@ -24,9 +31,10 @@ SuspensionClass = type[Suspension]
 
 @dataclass(frozen=True)
 class SuspensionDefinition:
-    """Schema, builder, and runtime class belonging to one public type key."""
+    """Schema, builder, and runtime class for one architecture and scope."""
 
     type_key: SuspensionType
+    scope: Scope
     spec_type: type[GeometrySpecBase]
     build: SuspensionBuilder
     suspension_type: SuspensionClass
@@ -36,41 +44,64 @@ class SuspensionDefinition:
 SUSPENSION_DEFINITIONS = (
     SuspensionDefinition(
         SuspensionType.DOUBLE_WISHBONE,
+        Scope.CORNER,
         DoubleWishboneGeometrySpec,
         build_double_wishbone,
         DoubleWishboneSuspension,
         DoubleWishboneSuspension.ALIASES,
     ),
     SuspensionDefinition(
-        SuspensionType.DOUBLE_WISHBONE_AXLE,
+        SuspensionType.DOUBLE_WISHBONE,
+        Scope.AXLE,
         DoubleWishboneAxleGeometrySpec,
         build_double_wishbone_axle,
         AxleSuspension,
+        DoubleWishboneSuspension.ALIASES,
+    ),
+    SuspensionDefinition(
+        SuspensionType.MACPHERSON,
+        Scope.CORNER,
+        MacPhersonGeometrySpec,
+        build_macpherson,
+        MacPhersonSuspension,
+        MacPhersonSuspension.ALIASES,
+    ),
+    SuspensionDefinition(
+        SuspensionType.MACPHERSON,
+        Scope.AXLE,
+        MacPhersonAxleGeometrySpec,
+        build_macpherson_axle,
+        AxleSuspension,
+        MacPhersonSuspension.ALIASES,
     ),
 )
 
-_definitions_by_key: dict[str, SuspensionDefinition] = {}
+_definitions_by_key: dict[tuple[str, Scope], SuspensionDefinition] = {}
 for definition in SUSPENSION_DEFINITIONS:
-    _definitions_by_key[definition.type_key.value] = definition
+    _definitions_by_key[(definition.type_key.value, definition.scope)] = definition
     for alias in definition.aliases:
-        _definitions_by_key[alias] = definition
+        _definitions_by_key[(alias, definition.scope)] = definition
 
 SUSPENSION_REGISTRY = MappingProxyType(_definitions_by_key)
 
 
 def get_suspension_definition(
     type_key: str | SuspensionType,
+    scope: Scope = Scope.CORNER,
 ) -> SuspensionDefinition | None:
-    """Return the complete definition for a type key."""
-    return SUSPENSION_REGISTRY.get(type_key)
+    """Return the complete definition for an architecture and scope."""
+    return SUSPENSION_REGISTRY.get((str(type_key), scope))
 
 
-def get_suspension_class(type_key: str | SuspensionType) -> SuspensionClass | None:
-    """Return the runtime class registered for a type key."""
-    definition = get_suspension_definition(type_key)
+def get_suspension_class(
+    type_key: str | SuspensionType,
+    scope: Scope = Scope.CORNER,
+) -> SuspensionClass | None:
+    """Return the runtime class registered for an architecture and scope."""
+    definition = get_suspension_definition(type_key, scope)
     return None if definition is None else definition.suspension_type
 
 
 def list_supported_types() -> list[str]:
-    """Return every supported public type key in sorted order."""
-    return sorted(SUSPENSION_REGISTRY)
+    """Return every supported public architecture key in sorted order."""
+    return sorted({type_key for type_key, _ in SUSPENSION_REGISTRY})

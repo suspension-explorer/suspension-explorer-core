@@ -89,7 +89,21 @@ class SuspensionType(StrEnum):
     """Supported suspension architecture carriers."""
 
     DOUBLE_WISHBONE = "double_wishbone"
-    DOUBLE_WISHBONE_AXLE = "double_wishbone_axle"
+    MACPHERSON = "macpherson"
+
+
+class Scope(StrEnum):
+    """Whether a model or metric covers one corner or a composed axle."""
+
+    CORNER = "corner"
+    AXLE = "axle"
+
+
+class AxlePosition(StrEnum):
+    """Which end of the vehicle an axle or corner belongs to."""
+
+    FRONT = "front"
+    REAR = "rear"
 
 
 class ActuationType(StrEnum):

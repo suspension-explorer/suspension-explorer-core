@@ -12,6 +12,7 @@ from kinematics.core.enums import (
     CornerSpringType,
     HeaveLinkType,
     PointID,
+    Scope,
     SuspensionType,
     Units,
 )
@@ -35,12 +36,14 @@ class GeometrySpecBase(BaseModel):
     version: str = "0.0.0"
     units: Units = Units.MILLIMETERS
     type: SuspensionType
+    scope: Scope
     config: SuspensionConfig
 
 
 class CornerGeometrySpecBase(GeometrySpecBase):
     """Fields required by every explicitly sided corner geometry."""
 
+    scope: Literal[Scope.CORNER] = Scope.CORNER
     side: Side
 
     @model_validator(mode="after")
@@ -69,21 +72,16 @@ class CornerSpringSpec(MechanismSpecBase):
     type: CornerSpringType
 
 
-class DoubleWishboneMechanismsSpec(MechanismSpecBase):
-    """Mechanisms installed on one double-wishbone corner."""
-
-    actuation: ActuationSpec
-    spring: CornerSpringSpec
-
-    @model_validator(mode="after")
-    def check_implemented_combination(self) -> "DoubleWishboneMechanismsSpec":
-        """Reject combinations whose physical connection is not implemented."""
-        if (
-            self.actuation.type is ActuationType.DIRECT
-            and self.spring.type is CornerSpringType.TORSION_BAR
-        ):
-            raise ValueError("Direct torsion-bar actuation is not implemented yet")
-        return self
+def check_double_wishbone_mechanism_combination(
+    actuation: ActuationSpec,
+    spring: CornerSpringSpec,
+) -> None:
+    """Reject combinations whose physical connection is not implemented."""
+    if (
+        actuation.type is ActuationType.DIRECT
+        and spring.type is CornerSpringType.TORSION_BAR
+    ):
+        raise ValueError("Direct torsion-bar actuation is not implemented yet")
 
 
 class DoubleWishboneGeometrySpec(CornerGeometrySpecBase):
@@ -97,11 +95,15 @@ class DoubleWishboneGeometrySpec(CornerGeometrySpecBase):
     @model_validator(mode="after")
     def check_mechanisms(self) -> "DoubleWishboneGeometrySpec":
         """Validate the selected corner mechanism combination."""
-        DoubleWishboneMechanismsSpec(
-            actuation=self.actuation,
-            spring=self.spring,
-        )
+        check_double_wishbone_mechanism_combination(self.actuation, self.spring)
         return self
+
+
+class MacPhersonGeometrySpec(CornerGeometrySpecBase):
+    """MacPherson strut corner: lower arm, integral strut, and trackrod."""
+
+    type: Literal[SuspensionType.MACPHERSON] = SuspensionType.MACPHERSON
+    hardpoints: HardpointMap
 
 
 class AxleHardpointsSpec(BaseModel):
@@ -166,21 +168,27 @@ class HeaveLinkSpec(MechanismSpecBase):
     type: HeaveLinkType
 
 
-class DoubleWishboneAxleGeometrySpec(GeometrySpecBase):
-    """Full axle with composed corner and shared axle mechanisms."""
+class AxleGeometrySpecBase(GeometrySpecBase):
+    """Fields shared by every composed full-axle geometry."""
 
-    type: Literal[SuspensionType.DOUBLE_WISHBONE_AXLE] = (
-        SuspensionType.DOUBLE_WISHBONE_AXLE
-    )
-    corner: DoubleWishboneMechanismsSpec
+    scope: Literal[Scope.AXLE] = Scope.AXLE
     anti_roll: ArbSpec
     heave_link: HeaveLinkSpec
     hardpoints: AxleHardpointsSpec
 
+
+class DoubleWishboneAxleGeometrySpec(AxleGeometrySpecBase):
+    """Double-wishbone axle with corner mechanisms and shared hardware."""
+
+    type: Literal[SuspensionType.DOUBLE_WISHBONE] = SuspensionType.DOUBLE_WISHBONE
+    actuation: ActuationSpec
+    spring: CornerSpringSpec
+
     @model_validator(mode="after")
-    def check_axle_mechanisms(self) -> "DoubleWishboneAxleGeometrySpec":
-        """Validate shared mechanisms against the selected corner actuation."""
-        has_rocker = self.corner.actuation.type is ActuationType.PUSHROD_ROCKER
+    def check_mechanisms(self) -> "DoubleWishboneAxleGeometrySpec":
+        """Validate corner mechanisms and their shared-hardware pairing."""
+        check_double_wishbone_mechanism_combination(self.actuation, self.spring)
+        has_rocker = self.actuation.type is ActuationType.PUSHROD_ROCKER
         if self.anti_roll.type in (ArbType.U_BAR, ArbType.T_BAR) and not has_rocker:
             raise ValueError(
                 "The implemented anti-roll mechanism requires pushrod-rocker actuation"
@@ -192,22 +200,56 @@ class DoubleWishboneAxleGeometrySpec(GeometrySpecBase):
         return self
 
 
-GeometrySpec = DoubleWishboneGeometrySpec | DoubleWishboneAxleGeometrySpec
+class MacPhersonAxleGeometrySpec(AxleGeometrySpecBase):
+    """MacPherson axle: two mirrored or explicit strut corners."""
+
+    type: Literal[SuspensionType.MACPHERSON] = SuspensionType.MACPHERSON
+
+    @model_validator(mode="after")
+    def check_axle_mechanisms(self) -> "MacPhersonAxleGeometrySpec":
+        """Reject shared hardware that needs a rocker corner."""
+        if self.anti_roll.type in (ArbType.U_BAR, ArbType.T_BAR):
+            raise ValueError(
+                "The implemented anti-roll mechanism requires pushrod-rocker "
+                "actuation, which a MacPherson corner does not provide"
+            )
+        if self.heave_link.type is HeaveLinkType.ROCKER_TO_ROCKER:
+            raise ValueError(
+                "A rocker-to-rocker heave link requires pushrod-rocker "
+                "actuation, which a MacPherson corner does not provide"
+            )
+        return self
+
+
+GeometrySpec = (
+    DoubleWishboneGeometrySpec
+    | MacPhersonGeometrySpec
+    | DoubleWishboneAxleGeometrySpec
+    | MacPhersonAxleGeometrySpec
+)
 
 
 def parse_geometry_spec(data: Mapping[str, Any]) -> GeometrySpecBase:
-    """Validate a raw mapping as the explicitly selected corner type."""
+    """Validate a raw mapping as the selected architecture and scope."""
     if "type" not in data:
         raise ValueError("Geometry type not specified")
 
     normalized = dict(data)
     type_key = normalized["type"]
+    raw_scope = normalized.get("scope", Scope.CORNER)
+    try:
+        scope = Scope(raw_scope)
+    except ValueError as error:
+        raise ValueError(f"Unsupported geometry scope: '{raw_scope}'") from error
     from kinematics.core.suspensions.registry import get_suspension_definition
 
-    definition = get_suspension_definition(type_key)
+    definition = get_suspension_definition(type_key, scope)
     if definition is None:
-        raise ValueError(f"Unsupported geometry type: '{type_key}'")
+        raise ValueError(
+            f"Unsupported geometry type: '{type_key}' with scope '{scope}'"
+        )
     normalized["type"] = definition.type_key
+    normalized["scope"] = scope
     try:
         return definition.spec_type.model_validate(normalized)
     except Exception as error:

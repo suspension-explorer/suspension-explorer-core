@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from functools import partial
 from typing import TYPE_CHECKING, ClassVar, Sequence, cast
 
 from kinematics.core.constraints import (
@@ -26,13 +25,7 @@ from kinematics.core.elements import (
     WheelElement,
 )
 from kinematics.core.enums import Axis, PointID, ShimType, SuspensionType
-from kinematics.core.points.derived.definitions import (
-    get_axle_midpoint,
-    get_contact_patch_center,
-    get_wheel_center,
-    get_wheel_inboard,
-    get_wheel_outboard,
-)
+from kinematics.core.points.derived.definitions import build_wheel_derived_spec
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
@@ -313,42 +306,10 @@ class DoubleWishboneSuspension(CornerSuspension):
         return row
 
     def derived_spec(self) -> DerivedPointsSpec:
-        """Specification for derived points (wheel center, contact patch, etc.)."""
+        """Standard wheel derived points from the axle pair."""
         if self.config is None:
             raise ValueError("Cannot compute derived spec without config")
-
-        wheel_cfg = self.config.wheel
-        tire_radius = wheel_cfg.tire.nominal_radius
-
-        functions = {
-            PointID.AXLE_MIDPOINT: get_axle_midpoint,
-            PointID.WHEEL_CENTER: partial(
-                get_wheel_center, wheel_offset=wheel_cfg.offset
-            ),
-            PointID.WHEEL_INBOARD: partial(
-                get_wheel_inboard, wheel_width=wheel_cfg.tire.section_width
-            ),
-            PointID.WHEEL_OUTBOARD: partial(
-                get_wheel_outboard, wheel_width=wheel_cfg.tire.section_width
-            ),
-            PointID.CONTACT_PATCH_CENTER: partial(
-                get_contact_patch_center, tire_radius=tire_radius
-            ),
-        }
-
-        dependencies = {
-            PointID.AXLE_MIDPOINT: {PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD},
-            PointID.WHEEL_CENTER: {PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD},
-            PointID.WHEEL_INBOARD: {PointID.WHEEL_CENTER, PointID.AXLE_INBOARD},
-            PointID.WHEEL_OUTBOARD: {PointID.WHEEL_CENTER, PointID.AXLE_INBOARD},
-            PointID.CONTACT_PATCH_CENTER: {
-                PointID.WHEEL_CENTER,
-                PointID.AXLE_INBOARD,
-                PointID.AXLE_OUTBOARD,
-            },
-        }
-
-        return DerivedPointsSpec(functions=functions, dependencies=dependencies)
+        return build_wheel_derived_spec(self.config.wheel)
 
     def compute_side_view_instant_center(self, state: SuspensionState) -> Point3 | None:
         """

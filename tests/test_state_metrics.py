@@ -6,7 +6,7 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.sweep_loader import load_sweep
-from kinematics.core.enums import PointID
+from kinematics.core.enums import AxlePosition, PointID
 from kinematics.core.metrics.anti_geometry import (
     calculate_anti_dive_pct,
     calculate_anti_lift_pct,
@@ -202,9 +202,9 @@ def test_tangent_failure_is_visible_and_preserves_base_metrics(
 def _anti_context(
     *,
     svic_x: float,
-    axle_position: str,
+    axle_position: AxlePosition,
     front_brake_bias: float = 0.6,
-    driven_axle: str | None = None,
+    driven_axle: AxlePosition | None = None,
 ) -> MetricContext:
     """Build the minimal synthetic context consumed by anti metrics."""
     return cast(
@@ -225,9 +225,9 @@ def _anti_context(
 
 
 def test_anti_dive_and_lift_follow_axle_and_svic_signs() -> None:
-    front_behind = _anti_context(svic_x=-500.0, axle_position="front")
-    front_ahead = _anti_context(svic_x=500.0, axle_position="front")
-    rear_ahead = _anti_context(svic_x=500.0, axle_position="rear")
+    front_behind = _anti_context(svic_x=-500.0, axle_position=AxlePosition.FRONT)
+    front_ahead = _anti_context(svic_x=500.0, axle_position=AxlePosition.FRONT)
+    rear_ahead = _anti_context(svic_x=500.0, axle_position=AxlePosition.REAR)
 
     anti_dive_behind = calculate_anti_dive_pct(front_behind)
     anti_dive_ahead = calculate_anti_dive_pct(front_ahead)
@@ -243,13 +243,13 @@ def test_anti_dive_and_lift_follow_axle_and_svic_signs() -> None:
 def test_anti_squat_requires_the_configured_driven_axle() -> None:
     driven_rear = _anti_context(
         svic_x=500.0,
-        axle_position="rear",
-        driven_axle="rear",
+        axle_position=AxlePosition.REAR,
+        driven_axle=AxlePosition.REAR,
     )
     non_driven_rear = _anti_context(
         svic_x=500.0,
-        axle_position="rear",
-        driven_axle="front",
+        axle_position=AxlePosition.REAR,
+        driven_axle=AxlePosition.FRONT,
     )
 
     assert calculate_anti_squat_pct(driven_rear) is not None
