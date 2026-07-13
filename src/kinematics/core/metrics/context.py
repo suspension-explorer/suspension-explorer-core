@@ -11,8 +11,8 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import TYPE_CHECKING
 
+from kinematics.core.enums import Axis, PointID
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
-from kinematics.core.primitives.enums import Axis, PointID
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.state import SuspensionState

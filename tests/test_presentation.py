@@ -15,13 +15,13 @@ from kinematics.core.elements import (
     TorsionElement,
     WheelElement,
 )
+from kinematics.core.enums import Axis, PointID
 from kinematics.core.presentation import (
     axis_projection_name,
     named_element_paths,
     named_point_keys,
     resolve_positions,
 )
-from kinematics.core.primitives.enums import Axis, PointID
 from kinematics.core.primitives.point_ref import PointRef, Side, point_key_name
 
 

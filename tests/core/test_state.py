@@ -1,6 +1,6 @@
 import numpy as np
 
-from kinematics.core.primitives.enums import PointID
+from kinematics.core.enums import PointID
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.state import SuspensionState
 

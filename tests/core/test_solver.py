@@ -2,12 +2,12 @@ import numpy as np
 import pytest
 
 from kinematics.core.constraints import DistanceConstraint
+from kinematics.core.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
 )
 from kinematics.core.primitives.constants import TEST_TOLERANCE
-from kinematics.core.primitives.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.solver import (
     SolverConfig,
     solve_least_squares_problem,

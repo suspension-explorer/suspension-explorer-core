@@ -31,6 +31,7 @@ from typing import Mapping, Union
 
 import numpy as np
 
+from kinematics.core.enums import Axis, PointID
 from kinematics.core.primitives.dual import (
     DualScalar,
     DualVec3,
@@ -40,7 +41,6 @@ from kinematics.core.primitives.dual import (
     dot,
     norm,
 )
-from kinematics.core.primitives.enums import Axis, PointID
 from kinematics.core.primitives.geometry import extract_array
 from kinematics.core.primitives.point_ref import PointKey
 

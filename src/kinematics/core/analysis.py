@@ -15,6 +15,7 @@ from kinematics.core.diagnostics import (
     DiagnosticIssue,
     DiagnosticSeverity,
 )
+from kinematics.core.enums import TargetPositionMode
 from kinematics.core.metrics.main import AxleMetricRows, MetricRow
 from kinematics.core.metrics.metadata import MetricDisplay, metric_display_for_keys
 from kinematics.core.metrics.registry import metric_specs_for_suspension
@@ -28,7 +29,6 @@ from kinematics.core.presentation import (
     wheel_dimensions,
     wheel_references,
 )
-from kinematics.core.primitives.enums import TargetPositionMode
 from kinematics.core.primitives.point_ref import (
     PointRef,
     Side,

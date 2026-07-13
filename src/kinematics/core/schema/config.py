@@ -6,8 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from kinematics.core.enums import PointID
 from kinematics.core.primitives.constants import MM_PER_INCH
-from kinematics.core.primitives.enums import PointID
 from kinematics.core.primitives.geometry import Direction3, Point3
 
 

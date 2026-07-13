@@ -6,6 +6,7 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.sweep_loader import load_sweep
+from kinematics.core.enums import PointID
 from kinematics.core.metrics.anti_geometry import (
     calculate_anti_dive_pct,
     calculate_anti_lift_pct,
@@ -17,7 +18,6 @@ from kinematics.core.metrics.main import (
     MetricRow,
     compute_metrics_for_state,
 )
-from kinematics.core.primitives.enums import PointID
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep

@@ -5,8 +5,8 @@ from __future__ import annotations
 from math import atan2, degrees
 from typing import TYPE_CHECKING
 
+from kinematics.core.enums import Axis, PointID
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
-from kinematics.core.primitives.enums import Axis, PointID
 from kinematics.core.primitives.point_ref import PointRef, Side
 
 if TYPE_CHECKING:

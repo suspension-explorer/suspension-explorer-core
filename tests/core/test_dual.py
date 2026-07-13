@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+from kinematics.core.enums import Axis, PointID
 from kinematics.core.points.derived.definitions import get_wheel_center
 from kinematics.core.primitives.dual import (
     DualScalar,
@@ -14,7 +15,6 @@ from kinematics.core.primitives.dual import (
     seed_positions_with_tangent,
     sqrt,
 )
-from kinematics.core.primitives.enums import Axis, PointID
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.primitives.vector_utils.generic import normalize_vector
 

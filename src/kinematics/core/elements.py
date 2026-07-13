@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
-from kinematics.core.primitives.enums import Axis
+from kinematics.core.enums import Axis
 from kinematics.core.primitives.point_ref import PointKey
 
 

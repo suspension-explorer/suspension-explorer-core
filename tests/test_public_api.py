@@ -12,7 +12,7 @@ PUBLIC_CORE_MODULES = {
     "kinematics.core.export",
     "kinematics.core.metrics.main",
     "kinematics.core.metrics.registry",
-    "kinematics.core.primitives.enums",
+    "kinematics.core.enums",
     "kinematics.core.primitives.geometry",
     "kinematics.core.primitives.point_ref",
     "kinematics.core.presentation",
@@ -50,7 +50,7 @@ def test_core_import_succeeds_without_cli_dependencies() -> None:
 def test_low_level_core_import_does_not_load_solver_stack() -> None:
     script = (
         "import sys\n"
-        "from kinematics.core.primitives.enums import Axis\n"
+        "from kinematics.core.enums import Axis\n"
         "assert Axis.X.value == 0\n"
         "assert 'scipy' not in sys.modules\n"
         "assert 'kinematics.core.analysis' not in sys.modules\n"

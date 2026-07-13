@@ -6,17 +6,18 @@ from typing import Any, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from kinematics.core.primitives.enums import PointID, Units
-from kinematics.core.primitives.geometry import Point3
-from kinematics.core.primitives.point_ref import Side
-from kinematics.core.schema.config import SuspensionConfig
-from kinematics.core.suspensions.enums import (
+from kinematics.core.enums import (
     ActuationType,
     ArbType,
     CornerSpringType,
     HeaveLinkType,
+    PointID,
     SuspensionType,
+    Units,
 )
+from kinematics.core.primitives.geometry import Point3
+from kinematics.core.primitives.point_ref import Side
+from kinematics.core.schema.config import SuspensionConfig
 
 HardpointMap = dict[PointID, Point3]
 

@@ -11,8 +11,8 @@ from kinematics.core.diagnostics import (
     SweepDiagnostics,
     diagnose_sweep,
 )
+from kinematics.core.enums import PointID
 from kinematics.core.primitives.constants import SOLVE_ACCEPT_RESIDUAL
-from kinematics.core.primitives.enums import PointID
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.solver import SolverInfo
 from kinematics.core.state import SuspensionState

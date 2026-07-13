@@ -15,8 +15,8 @@ from kinematics.core.constraints import (
     VectorsParallelConstraint,
     VectorsPerpendicularConstraint,
 )
+from kinematics.core.enums import Axis, PointID
 from kinematics.core.primitives.constants import TEST_TOLERANCE
-from kinematics.core.primitives.enums import Axis, PointID
 from kinematics.core.primitives.geometry import Direction3, Point3
 
 

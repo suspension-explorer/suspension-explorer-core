@@ -23,7 +23,7 @@ from kinematics.cli.visualization.plots import (
     compute_bounds_from_positions,
     configure_3d_axis,
 )
-from kinematics.core.primitives.enums import PointID
+from kinematics.core.enums import PointID
 from kinematics.core.primitives.geometry import extract_array
 from kinematics.core.schema import CamberShimConfig
 from kinematics.core.suspensions.base import Suspension

@@ -9,10 +9,10 @@ from typing import Callable, Mapping, Protocol, Sequence
 
 import numpy as np
 
+from kinematics.core.enums import Axis
 from kinematics.core.metrics.units import MetricUnit, MetricUnitQuotient
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
 from kinematics.core.primitives.dual import DualScalar, DualVec3, dot, norm
-from kinematics.core.primitives.enums import Axis
 from kinematics.core.primitives.geometry import Direction3, extract_array
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.sensitivity import TangentField

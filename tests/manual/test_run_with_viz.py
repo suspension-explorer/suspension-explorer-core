@@ -5,9 +5,9 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.constraints import DistanceConstraint
+from kinematics.core.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.constants import TEST_TOLERANCE
-from kinematics.core.primitives.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.sweep import solve_sweep
 from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
 

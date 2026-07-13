@@ -5,8 +5,8 @@ from kinematics.core.constraints import (
     DistanceConstraint,
     ScalarTripleProductConstraint,
 )
+from kinematics.core.enums import PointID
 from kinematics.core.primitives.constants import MIN_CHIRALITY_VOLUME
-from kinematics.core.primitives.enums import PointID
 from kinematics.core.primitives.vector_utils.geometric import (
     compute_point_point_distance,
     compute_scalar_triple_product,

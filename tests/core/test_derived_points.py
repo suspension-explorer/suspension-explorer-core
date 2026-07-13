@@ -3,6 +3,7 @@ from functools import partial
 import numpy as np
 import pytest
 
+from kinematics.core.enums import PointID
 from kinematics.core.points.derived.definitions import (
     get_axle_midpoint,
     get_wheel_center,
@@ -13,7 +14,6 @@ from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
 )
-from kinematics.core.primitives.enums import PointID
 
 
 @pytest.fixture

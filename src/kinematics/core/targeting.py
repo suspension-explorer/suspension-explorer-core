@@ -9,7 +9,7 @@ from typing import Final, NamedTuple, Union
 
 import numpy as np
 
-from kinematics.core.primitives.enums import Axis, TargetPositionMode
+from kinematics.core.enums import Axis, TargetPositionMode
 from kinematics.core.primitives.geometry import Direction3
 from kinematics.core.primitives.point_ref import PointKey
 

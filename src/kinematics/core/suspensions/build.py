@@ -3,7 +3,14 @@
 from typing import cast
 
 from kinematics.core.elements import RockerPickup, RockerPickupType
-from kinematics.core.primitives.enums import PointID, ShimType
+from kinematics.core.enums import (
+    ActuationType,
+    ArbType,
+    CornerSpringType,
+    HeaveLinkType,
+    PointID,
+    ShimType,
+)
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import PointKey, Side
 from kinematics.core.schema.config import SuspensionConfig
@@ -34,12 +41,6 @@ from kinematics.core.suspensions.corner.mechanisms import (
     CornerSpringCoilover,
     CornerSpringNone,
     CornerSpringTorsionBar,
-)
-from kinematics.core.suspensions.enums import (
-    ActuationType,
-    ArbType,
-    CornerSpringType,
-    HeaveLinkType,
 )
 
 

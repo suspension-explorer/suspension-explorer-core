@@ -2,13 +2,13 @@ import numpy as np
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.sweep_loader import load_sweep
+from kinematics.core.enums import Axis, PointID
 from kinematics.core.metrics.catalog import get_default_corner_metrics
 from kinematics.core.metrics.context import MetricContext
 from kinematics.core.metrics.main import compute_metrics_for_state_from_suspension
 from kinematics.core.metrics.units import MetricUnit
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.constants import TEST_TOLERANCE
-from kinematics.core.primitives.enums import Axis, PointID
 from kinematics.core.primitives.point_ref import Side
 from kinematics.core.suspensions.corner import DoubleWishboneSuspension
 from kinematics.core.sweep import solve_sweep

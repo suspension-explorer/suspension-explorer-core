@@ -8,8 +8,8 @@ kinematic analysis and constraint evaluation.
 
 import numpy as np
 
+from kinematics.core.enums import Axis
 from kinematics.core.primitives.constants import EPS_GEOMETRIC, EPS_NUMERICAL
-from kinematics.core.primitives.enums import Axis
 from kinematics.core.primitives.geometry import Direction3, Point3, Vector3, midpoint
 from kinematics.core.primitives.vector_utils.generic import normalize_vector
 

@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from kinematics.core.primitives.enums import Axis
+from kinematics.core.enums import Axis
 
 if TYPE_CHECKING:
     from kinematics.core.metrics.context import MetricContext

@@ -14,8 +14,8 @@ from kinematics.core.elements import (
     TorsionElement,
     VariableLengthLinkElement,
 )
+from kinematics.core.enums import PointID
 from kinematics.core.metrics.main import AxleMetricRows
-from kinematics.core.primitives.enums import PointID
 from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.suspensions.axle import (
     ArbUBar,

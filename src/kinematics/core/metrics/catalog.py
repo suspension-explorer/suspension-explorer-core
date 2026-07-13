@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
+from kinematics.core.enums import Axis, PointID
 from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
 from kinematics.core.metrics.units import MetricUnit
 
@@ -67,8 +68,6 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
         calculate_half_track,
         calculate_wheel_travel,
     )
-    from kinematics.core.primitives.enums import Axis
-
     def _ic_coord(attr: str, axis: Axis) -> Callable[["MetricContext"], float | None]:
         def extract(ctx: "MetricContext") -> float | None:
             ic = getattr(ctx, attr)
@@ -171,8 +170,6 @@ def get_default_corner_derivative_metrics(
         PointCoordinateResponse,
     )
     from kinematics.core.primitives.dual import DualScalar
-    from kinematics.core.primitives.enums import Axis, PointID
-
     side_sign = suspension.side.lateral_sign
     hub_z_driver = PointCoordinateResponse.from_world_axis(
         PointID.WHEEL_CENTER,

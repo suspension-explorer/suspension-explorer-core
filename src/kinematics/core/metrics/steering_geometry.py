@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from kinematics.core.primitives.enums import Axis
+from kinematics.core.enums import Axis
 from kinematics.core.primitives.geometry import Vector3
 
 if TYPE_CHECKING:

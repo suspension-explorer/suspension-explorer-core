@@ -6,7 +6,16 @@ import pytest
 
 from kinematics.cli.io.loaders import _read_yaml_mapping
 from kinematics.cli.io.schema_parser import parse_enum, parse_geometry_data
-from kinematics.core.primitives.enums import Axis, PointID, TargetPositionMode
+from kinematics.core.enums import (
+    ActuationType,
+    ArbType,
+    Axis,
+    CornerSpringType,
+    HeaveLinkType,
+    PointID,
+    SuspensionType,
+    TargetPositionMode,
+)
 from kinematics.core.primitives.point_ref import Side
 from kinematics.core.schema.geometry import (
     AxleHardpointsSpec,
@@ -15,13 +24,6 @@ from kinematics.core.schema.geometry import (
     parse_geometry_spec,
 )
 from kinematics.core.schema.sweep import SweepSpec, TargetSpec, build_sweep_config
-from kinematics.core.suspensions.enums import (
-    ActuationType,
-    ArbType,
-    CornerSpringType,
-    HeaveLinkType,
-    SuspensionType,
-)
 from kinematics.core.targeting import PointTargetAxis
 
 

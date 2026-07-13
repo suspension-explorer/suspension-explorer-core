@@ -23,8 +23,8 @@ from __future__ import annotations
 from math import atan, degrees
 from typing import TYPE_CHECKING
 
+from kinematics.core.enums import Axis
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
-from kinematics.core.primitives.enums import Axis
 
 if TYPE_CHECKING:
     from kinematics.core.metrics.context import MetricContext

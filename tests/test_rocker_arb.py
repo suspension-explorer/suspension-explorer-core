@@ -9,8 +9,8 @@ from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.sweep_loader import load_sweep
 from kinematics.core.constraints import ScalarTripleProductConstraint
 from kinematics.core.diagnostics import diagnose_sweep
+from kinematics.core.enums import PointID
 from kinematics.core.metrics.main import AxleMetricRows
-from kinematics.core.primitives.enums import PointID
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.suspensions.axle import ArbUBar, DoubleWishboneAxleSuspension

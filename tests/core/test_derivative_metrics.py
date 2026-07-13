@@ -5,6 +5,7 @@ from typing import cast
 import numpy as np
 import pytest
 
+from kinematics.core.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.metrics.derivatives import (
     CallableScalarResponse,
     DerivativeMetricDefinition,
@@ -15,7 +16,6 @@ from kinematics.core.metrics.derivatives import (
 )
 from kinematics.core.metrics.units import MetricUnit
 from kinematics.core.primitives.dual import DualScalar, dot
-from kinematics.core.primitives.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.sensitivity import TangentField
 from kinematics.core.state import SuspensionState

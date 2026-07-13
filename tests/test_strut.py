@@ -6,13 +6,12 @@ import yaml
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.constraints import ScalarTripleProductConstraint
-from kinematics.core.primitives.enums import PointID
+from kinematics.core.enums import PointID, SuspensionType
 from kinematics.core.suspensions.corner import (
     CornerSpringCoilover,
     CornerSpringNone,
     DoubleWishboneSuspension,
 )
-from kinematics.core.suspensions.enums import SuspensionType
 from kinematics.core.suspensions.registry import (
     SUSPENSION_DEFINITIONS,
     get_suspension_class,

@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from kinematics.core.constraints import DistanceConstraint, FixedAxisConstraint
+from kinematics.core.enums import Axis, PointID
 from kinematics.core.jacobians import (
     jac_angle,
     jac_coplanar,
@@ -23,7 +24,6 @@ from kinematics.core.jacobians import (
     jac_vectors_parallel,
     jac_vectors_perpendicular,
 )
-from kinematics.core.primitives.enums import Axis, PointID
 
 # Central-difference step size.  Small enough for accuracy, large enough to
 # avoid cancellation error with float64.

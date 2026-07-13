@@ -8,7 +8,7 @@ from typing import Any, TypeVar, cast
 
 import numpy as np
 
-from kinematics.core.primitives.enums import Axis, PointID, TargetPositionMode, Units
+from kinematics.core.enums import Axis, PointID, TargetPositionMode, Units
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import Side
 

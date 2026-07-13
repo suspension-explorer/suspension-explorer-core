@@ -25,6 +25,7 @@ from kinematics.core.elements import (
     UprightElement,
     WheelElement,
 )
+from kinematics.core.enums import Axis, PointID, ShimType, SuspensionType
 from kinematics.core.points.derived.definitions import (
     get_axle_midpoint,
     get_contact_patch_center,
@@ -37,7 +38,6 @@ from kinematics.core.points.derived.manager import (
     DerivedPointsSpec,
 )
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
-from kinematics.core.primitives.enums import Axis, PointID, ShimType
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.primitives.vector_utils.geometric import (
@@ -58,7 +58,6 @@ from kinematics.core.suspensions.corner.mechanisms import (
     CornerSpring,
     CornerSpringNone,
 )
-from kinematics.core.suspensions.enums import SuspensionType
 from kinematics.core.targeting import WorldAxisSystem
 
 if TYPE_CHECKING:

@@ -22,6 +22,7 @@ from kinematics.core.elements import (
     TorsionElement,
     VariableLengthLinkElement,
 )
+from kinematics.core.enums import Axis, PointID
 from kinematics.core.metrics import kernels
 from kinematics.core.metrics.derivatives import (
     CallableScalarResponse,
@@ -31,7 +32,6 @@ from kinematics.core.metrics.derivatives import (
 )
 from kinematics.core.metrics.units import MetricUnit
 from kinematics.core.primitives.constants import EPS_GEOMETRIC, MIN_CHIRALITY_VOLUME
-from kinematics.core.primitives.enums import Axis, PointID
 from kinematics.core.primitives.geometry import Point3, extract_array
 from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
 from kinematics.core.primitives.vector_utils.geometric import (

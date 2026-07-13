@@ -13,13 +13,13 @@ from kinematics.core.elements import (
     SuspensionElement,
     map_element_points,
 )
+from kinematics.core.enums import Axis, PointID, SuspensionType
 from kinematics.core.metrics.main import compute_metrics_for_axle_state
 from kinematics.core.points.derived.manager import (
     DerivedPointsSpec,
     PositionFn,
     PositionValue,
 )
-from kinematics.core.primitives.enums import Axis, PointID
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import (
     PointKey,
@@ -39,7 +39,6 @@ from kinematics.core.suspensions.axle.mechanisms import (
 )
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.suspensions.corner import DoubleWishboneSuspension
-from kinematics.core.suspensions.enums import SuspensionType
 
 if TYPE_CHECKING:
     from kinematics.core.diagnostics import DiagnosticIssue

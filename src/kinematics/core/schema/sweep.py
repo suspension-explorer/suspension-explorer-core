@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Sequence
 import numpy as np
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from kinematics.core.primitives.enums import Axis, PointID, TargetPositionMode
+from kinematics.core.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.primitives.geometry import Direction3, extract_array
 from kinematics.core.primitives.point_ref import Side
 from kinematics.core.targeting import (

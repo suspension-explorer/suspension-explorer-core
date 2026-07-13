@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Callable
 
+from kinematics.core.enums import SuspensionType
 from kinematics.core.schema.geometry import (
     DoubleWishboneAxleGeometrySpec,
     DoubleWishboneGeometrySpec,
@@ -16,7 +17,6 @@ from kinematics.core.suspensions.build import (
     build_double_wishbone_axle,
 )
 from kinematics.core.suspensions.corner import DoubleWishboneSuspension
-from kinematics.core.suspensions.enums import SuspensionType
 
 SuspensionBuilder = Callable[[GeometrySpecBase], Suspension]
 SuspensionClass = type[Suspension]

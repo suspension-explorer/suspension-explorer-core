@@ -14,8 +14,8 @@ from kinematics.core.elements import (
     UprightElement,
     VariableLengthLinkElement,
 )
+from kinematics.core.enums import PointID
 from kinematics.core.points.derived.manager import DerivedPointsSpec
-from kinematics.core.primitives.enums import PointID
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.state import SuspensionState
 

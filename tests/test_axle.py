@@ -6,12 +6,12 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.sweep_loader import load_sweep
+from kinematics.core.enums import Axis, PointID
 from kinematics.core.metrics import (
     AxleMetricRows,
     compute_metrics_for_state_from_suspension,
     compute_metrics_for_sweep,
 )
-from kinematics.core.primitives.enums import Axis, PointID
 from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.suspensions.axle import DoubleWishboneAxleSuspension
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep

@@ -13,7 +13,7 @@ from typing import Callable, ClassVar, Set
 
 import numpy as np
 
-from kinematics.core.primitives.enums import Axis
+from kinematics.core.enums import Axis
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.primitives.soft_math import softnorm

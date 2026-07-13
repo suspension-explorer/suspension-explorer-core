@@ -4,11 +4,11 @@ import numpy as np
 import pytest
 
 from kinematics.core.constraints import ScalarTripleProductConstraint
+from kinematics.core.enums import PointID
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
 )
-from kinematics.core.primitives.enums import PointID
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.solver import ResidualComputer

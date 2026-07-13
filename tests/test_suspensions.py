@@ -16,7 +16,7 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.elements import UprightElement
-from kinematics.core.primitives.enums import PointID, ShimType, Units
+from kinematics.core.enums import PointID, ShimType, Units
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import Side
 from kinematics.core.schema.config import (

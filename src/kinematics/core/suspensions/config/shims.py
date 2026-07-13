@@ -28,8 +28,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from kinematics.core.enums import PointID
 from kinematics.core.primitives.constants import EPS_GEOMETRIC, EPS_NUMERICAL
-from kinematics.core.primitives.enums import PointID
 from kinematics.core.primitives.geometry import Point3, Vector3, extract_array
 from kinematics.core.primitives.vector_utils.generic import normalize_vector
 from kinematics.core.primitives.vector_utils.geometric import rotate_vector_rodrigues

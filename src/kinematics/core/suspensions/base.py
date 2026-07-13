@@ -16,18 +16,17 @@ from typing import TYPE_CHECKING, ClassVar, Sequence
 from kinematics.core.assembly import SuspensionAssembly
 from kinematics.core.constraints import Constraint
 from kinematics.core.elements import SuspensionElement
+from kinematics.core.enums import PointID, ShimType, SuspensionType, Units
 from kinematics.core.metrics.main import (
     AxleMetricRows,
     MetricRow,
     compute_metrics_for_state,
 )
 from kinematics.core.points.derived.manager import DerivedPointsSpec
-from kinematics.core.primitives.enums import PointID, ShimType, Units
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointKey, Side
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.state import SuspensionState
-from kinematics.core.suspensions.enums import SuspensionType
 
 if TYPE_CHECKING:
     from kinematics.core.diagnostics import DiagnosticIssue

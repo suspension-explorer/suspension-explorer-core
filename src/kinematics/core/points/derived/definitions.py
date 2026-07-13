@@ -12,7 +12,7 @@ from typing import Any
 
 import numpy as np
 
-from kinematics.core.primitives.enums import PointID
+from kinematics.core.enums import PointID
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.primitives.vector_utils.generic import normalize_vector
 from kinematics.core.targeting import WorldAxisSystem
