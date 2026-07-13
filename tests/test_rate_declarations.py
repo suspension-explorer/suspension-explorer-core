@@ -155,8 +155,8 @@ def test_wheel_center_x_derivative_matches_finite_difference() -> None:
 @pytest.mark.parametrize(
     ("column", "base_metric"),
     [
-        ("deriv_roadwheel_angle_wrt_trackrod_inboard_y", "roadwheel_angle"),
-        ("deriv_camber_wrt_trackrod_inboard_y", "camber"),
+        ("deriv_roadwheel_angle_wrt_rack_displacement", "roadwheel_angle"),
+        ("deriv_camber_wrt_rack_displacement", "camber"),
     ],
 )
 def test_trackrod_inboard_y_declarations_match_finite_difference(

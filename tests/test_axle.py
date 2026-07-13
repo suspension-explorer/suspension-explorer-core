@@ -13,14 +13,14 @@ from kinematics.core.metrics import (
     compute_metrics_for_sweep,
 )
 from kinematics.core.primitives.point_ref import PointRef, Side
-from kinematics.core.suspensions.axle import DoubleWishboneAxleSuspension
+from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
 
 
 def test_mirrored_axle_builds_two_explicit_corners(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
 
-    assert isinstance(axle, DoubleWishboneAxleSuspension)
+    assert isinstance(axle, AxleSuspension)
     assert axle.side is Side.CENTER
     assert set(axle.corners) == {Side.LEFT, Side.RIGHT}
     assert axle.corners[Side.LEFT].side is Side.LEFT
@@ -32,7 +32,7 @@ def test_basic_axle_sweep_solves_and_emits_structural_metrics(
     test_data_dir: Path,
 ) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
-    assert isinstance(axle, DoubleWishboneAxleSuspension)
+    assert isinstance(axle, AxleSuspension)
     sweep = load_sweep(test_data_dir / "axle_sweep.yaml", axle)
 
     states, stats = solve_sweep(axle, sweep)
@@ -47,7 +47,7 @@ def test_basic_axle_sweep_solves_and_emits_structural_metrics(
     assert "camber" in midpoint.corners["left"]
     assert "camber" in midpoint.corners["right"]
     assert "camber_left" not in midpoint.corners["left"]
-    assert "trackrod_inboard_displacement" in midpoint.axle
+    assert "rack_displacement" in midpoint.axle
     assert midpoint.axle["heave"] == pytest.approx(0.0, abs=1e-5)
 
     final = states[-1]
@@ -58,7 +58,7 @@ def test_basic_axle_sweep_solves_and_emits_structural_metrics(
 
 def test_axle_targets_require_side(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
-    assert isinstance(axle, DoubleWishboneAxleSuspension)
+    assert isinstance(axle, AxleSuspension)
 
     with pytest.raises(ValueError, match="requires side left or right"):
         axle.resolve_target_key(PointID.WHEEL_CENTER, None)
@@ -68,7 +68,7 @@ def test_generic_metric_helpers_preserve_structural_axle_rows(
     test_data_dir: Path,
 ) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
-    assert isinstance(axle, DoubleWishboneAxleSuspension)
+    assert isinstance(axle, AxleSuspension)
     state = axle.initial_state()
     assert axle.config is not None
 

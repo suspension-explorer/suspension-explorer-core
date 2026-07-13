@@ -13,8 +13,9 @@ from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
 from kinematics.core.metrics.units import MetricUnit, MetricUnitQuotient
 
 if TYPE_CHECKING:
-    from kinematics.core.suspensions.axle import DoubleWishboneAxleSuspension
+    from kinematics.core.suspensions.axle import AxleSuspension
     from kinematics.core.suspensions.base import Suspension
+    from kinematics.core.suspensions.corner.base import CornerSuspension
 
 MetricUnits = MetricUnit | MetricUnitQuotient
 MetricScope = Literal["corner", "axle"]
@@ -59,8 +60,8 @@ _AXLE_SPECS = (
     MetricSpec("roll_center_y", "Roll Center Y", MetricUnit.MM, "state", "axle"),
     MetricSpec("roll_center_z", "Roll Center Z", MetricUnit.MM, "state", "axle"),
     MetricSpec(
-        "trackrod_inboard_displacement",
-        "Trackrod Inboard Displacement",
+        "rack_displacement",
+        "Rack Displacement",
         MetricUnit.MM,
         "state",
         "axle",
@@ -138,7 +139,7 @@ def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpe
     """Return all metadata that the selected topology can emit."""
     derivatives: list[tuple[DerivativeMetricDefinition, MetricScope]] = []
     if suspension.is_axle:
-        axle = cast("DoubleWishboneAxleSuspension", suspension)
+        axle = cast("AxleSuspension", suspension)
         representative = next(iter(axle.corners.values()))
         derivatives.extend(
             (definition, "corner")
@@ -151,11 +152,12 @@ def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpe
             (definition, "axle") for definition in axle.derivative_metric_definitions()
         )
     else:
+        corner = cast("CornerSuspension", suspension)
         derivatives.extend(
             (definition, "corner")
             for definition in (
-                *get_default_corner_derivative_metrics(suspension),
-                *suspension.derivative_metric_definitions(),
+                *get_default_corner_derivative_metrics(corner),
+                *corner.derivative_metric_definitions(),
             )
         )
 

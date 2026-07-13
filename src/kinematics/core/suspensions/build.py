@@ -10,6 +10,7 @@ from kinematics.core.enums import (
     HeaveLinkType,
     PointID,
     ShimType,
+    SuspensionType,
 )
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import PointKey, Side
@@ -22,7 +23,7 @@ from kinematics.core.schema.geometry import (
     DoubleWishboneGeometrySpec,
     GeometrySpecBase,
 )
-from kinematics.core.suspensions.axle import DoubleWishboneAxleSuspension
+from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.axle.mechanisms import (
     ArbNone,
     ArbTBar,
@@ -33,7 +34,10 @@ from kinematics.core.suspensions.axle.mechanisms import (
     HeaveLinkRockerToRocker,
 )
 from kinematics.core.suspensions.base import Suspension
-from kinematics.core.suspensions.corner import DoubleWishboneSuspension
+from kinematics.core.suspensions.corner import (
+    CornerSuspension,
+    DoubleWishboneSuspension,
+)
 from kinematics.core.suspensions.corner.mechanisms import (
     Actuation,
     ActuationDirect,
@@ -63,7 +67,11 @@ def build_suspension(spec: GeometrySpecBase) -> Suspension:
 def build_double_wishbone(spec: GeometrySpecBase) -> Suspension:
     """Build one double-wishbone corner with composed mechanisms."""
     typed = cast(DoubleWishboneGeometrySpec, spec)
-    actuation = build_actuation(typed.actuation)
+    actuation = build_actuation(
+        typed.actuation,
+        spring_pickup_body=DoubleWishboneSuspension.LOWER_WISHBONE_BODY,
+        pushrod_outboard_body=DoubleWishboneSuspension.UPRIGHT_BODY,
+    )
     spring = build_corner_spring(typed.spring)
     return _build_corner(typed, actuation, spring)
 
@@ -103,6 +111,8 @@ def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
 
     actuation = build_actuation(
         typed.corner.actuation,
+        spring_pickup_body=DoubleWishboneSuspension.LOWER_WISHBONE_BODY,
+        pushrod_outboard_body=DoubleWishboneSuspension.UPRIGHT_BODY,
         external_pickups=tuple(external_pickups),
     )
     spring = build_corner_spring(typed.corner.spring)
@@ -112,7 +122,7 @@ def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
         Side.LEFT: typed.config,
         Side.RIGHT: _mirror_config(typed.config),
     }
-    corners = {
+    corners: dict[Side, CornerSuspension] = {
         side: DoubleWishboneSuspension(
             name=f"{typed.name}_{side.name.lower()}",
             version=typed.version,
@@ -131,7 +141,8 @@ def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
         anti_roll_droplink_points,
     )
     heave_link = build_heave_link(typed)
-    return DoubleWishboneAxleSuspension(
+    return AxleSuspension(
+        type_key=SuspensionType.DOUBLE_WISHBONE_AXLE,
         name=typed.name,
         version=typed.version,
         units=typed.units,
@@ -147,15 +158,26 @@ def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
 def build_actuation(
     spec: ActuationSpec,
     *,
+    spring_pickup_body: tuple[PointID, PointID, PointID],
+    pushrod_outboard_body: tuple[PointID, ...],
     external_pickups: tuple[RockerPickup, ...] = (),
 ) -> Actuation:
-    """Build one typed corner actuation mechanism."""
+    """
+    Build one typed corner actuation mechanism.
+
+    The attachment bodies come from the locating architecture: which points
+    carry the spring pickup and the outboard pushrod end is the caller's
+    knowledge, not the mechanism's.
+    """
     if spec.type is ActuationType.DIRECT:
         if external_pickups:
             raise ValueError("Direct actuation does not accept rocker pickups")
-        return ActuationDirect()
+        return ActuationDirect(spring_pickup_body=spring_pickup_body)
     if spec.type is ActuationType.PUSHROD_ROCKER:
-        return ActuationPushrodRocker(external_pickups=external_pickups)
+        return ActuationPushrodRocker(
+            pushrod_outboard_body=pushrod_outboard_body,
+            external_pickups=external_pickups,
+        )
     raise TypeError(f"Unsupported actuation type: {spec.type}")
 
 

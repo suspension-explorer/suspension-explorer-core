@@ -26,7 +26,10 @@ from kinematics.core.schema.config import (
     WheelConfig,
 )
 from kinematics.core.suspensions.base import Suspension
-from kinematics.core.suspensions.corner import DoubleWishboneSuspension
+from kinematics.core.suspensions.corner import (
+    ActuationPushrodRocker,
+    DoubleWishboneSuspension,
+)
 from kinematics.core.suspensions.registry import (
     get_suspension_class,
     list_supported_types,
@@ -549,3 +552,30 @@ class TestIntegration:
 
         # Should not be identical (shim rotates attachments)
         assert not np.allclose(original_axle.data, new_axle.data)
+
+
+class TestMechanismAttachmentInjection:
+    """Mechanisms receive attachment bodies from the architecture."""
+
+    def test_pushrod_actuation_rejects_insufficient_outboard_anchors(self):
+        actuation = ActuationPushrodRocker(
+            pushrod_outboard_body=(
+                PointID.UPPER_WISHBONE_OUTBOARD,
+                PointID.LOWER_WISHBONE_OUTBOARD,
+            )
+        )
+        with pytest.raises(ValueError, match="at least three outboard body anchors"):
+            actuation.validate({})
+
+    def test_double_wishbone_declares_mechanism_attachment_bodies(self):
+        assert DoubleWishboneSuspension.LOWER_WISHBONE_BODY == (
+            PointID.LOWER_WISHBONE_INBOARD_FRONT,
+            PointID.LOWER_WISHBONE_INBOARD_REAR,
+            PointID.LOWER_WISHBONE_OUTBOARD,
+        )
+        assert DoubleWishboneSuspension.UPRIGHT_BODY == (
+            PointID.UPPER_WISHBONE_OUTBOARD,
+            PointID.LOWER_WISHBONE_OUTBOARD,
+            PointID.AXLE_INBOARD,
+            PointID.AXLE_OUTBOARD,
+        )

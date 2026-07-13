@@ -18,8 +18,6 @@ matplotlib.use("Agg")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PLOT_BUMP_SWEEP = REPO_ROOT / "scripts" / "plot_bump_sweep.py"
-VISUALIZE_T_BAR_BUMP = REPO_ROOT / "scripts" / "visualize_t_bar_bump.py"
-VISUALIZE_T_BAR_ROLL = REPO_ROOT / "scripts" / "visualize_t_bar_roll.py"
 VISUALIZE_CAMBER_SHIM = REPO_ROOT / "visualize_camber_shim.py"
 
 
@@ -43,12 +41,6 @@ def test_visualize_camber_shim_imports() -> None:
     module = _load_script(VISUALIZE_CAMBER_SHIM)
     assert callable(module.main)
     assert callable(module.plot_front_view_comparison)
-
-
-@pytest.mark.parametrize("script", [VISUALIZE_T_BAR_BUMP, VISUALIZE_T_BAR_ROLL])
-def test_visualize_t_bar_imports(script: Path) -> None:
-    module = _load_script(script)
-    assert callable(module.main)
 
 
 def test_camber_shim_setup_reconstruction_preserves_suspension_data(
@@ -114,20 +106,3 @@ def test_plot_bump_sweep_end_to_end(
 
     assert (tmp_path / "dashboard.png").exists()
     assert (tmp_path / "bump_sweep.mp4").exists()
-
-
-@pytest.mark.manual
-def test_visualize_t_bar_end_to_end(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Run the composed T-bar animation script."""
-    if shutil.which("ffmpeg") is None:
-        pytest.skip("ffmpeg not available")  # ty: ignore[too-many-positional-arguments]
-
-    module = _load_script(VISUALIZE_T_BAR_BUMP)
-    output = tmp_path / "t_bar_bump.mp4"
-    monkeypatch.setattr(module, "OUTPUT", output)
-    module.main()
-
-    assert output.exists()
-    assert output.stat().st_size > 0

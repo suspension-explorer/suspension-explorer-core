@@ -19,17 +19,17 @@ from kinematics.core.metrics.main import AxleMetricRows
 from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.suspensions.axle import (
     ArbUBar,
-    DoubleWishboneAxleSuspension,
+    AxleSuspension,
     HeaveLinkRockerToRocker,
 )
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
 
 
 @pytest.fixture
-def rocker_axle(test_data_dir: Path) -> DoubleWishboneAxleSuspension:
+def rocker_axle(test_data_dir: Path) -> AxleSuspension:
     """Load the explicit rocker/ARB axle fixture."""
     suspension = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
-    assert isinstance(suspension, DoubleWishboneAxleSuspension)
+    assert isinstance(suspension, AxleSuspension)
     assert isinstance(suspension.anti_roll, ArbUBar)
     return suspension
 
@@ -37,7 +37,7 @@ def rocker_axle(test_data_dir: Path) -> DoubleWishboneAxleSuspension:
 def _load_heave_axle(
     tmp_path: Path,
     test_data_dir: Path,
-) -> DoubleWishboneAxleSuspension:
+) -> AxleSuspension:
     data = cast(
         "dict[str, object]",
         yaml.safe_load(
@@ -52,14 +52,14 @@ def _load_heave_axle(
     geometry_path.write_text(yaml.safe_dump(data), encoding="utf-8")
 
     suspension = load_geometry(geometry_path)
-    assert isinstance(suspension, DoubleWishboneAxleSuspension)
+    assert isinstance(suspension, AxleSuspension)
     assert isinstance(suspension.anti_roll, ArbUBar)
     assert isinstance(suspension.heave_link, HeaveLinkRockerToRocker)
     return suspension
 
 
 def test_arb_points_are_owned_by_axle(
-    rocker_axle: DoubleWishboneAxleSuspension,
+    rocker_axle: AxleSuspension,
 ) -> None:
     """Shared-axis and arm points use their explicit axle namespaces."""
     state = rocker_axle.initial_state()
@@ -77,7 +77,7 @@ def test_arb_points_are_owned_by_axle(
 
 
 def test_roll_sweep_conserves_both_droplink_lengths(
-    rocker_axle: DoubleWishboneAxleSuspension,
+    rocker_axle: AxleSuspension,
     test_data_dir: Path,
 ) -> None:
     """Opposed wheel travel moves the ARB without stretching its droplinks."""
@@ -104,7 +104,7 @@ def test_roll_sweep_conserves_both_droplink_lengths(
 
 
 def test_arb_assembly_is_one_bar_and_two_droplinks(
-    rocker_axle: DoubleWishboneAxleSuspension,
+    rocker_axle: AxleSuspension,
 ) -> None:
     """Render the shared ARB as one continuous series."""
     elements = rocker_axle.elements()

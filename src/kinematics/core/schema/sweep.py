@@ -156,7 +156,7 @@ def build_sweep_config(
             if point_key not in suspension.initial_state().positions:
                 raise ValueError(
                     f"Sweep target point '{point_key.name}' is not present in "
-                    f"suspension type '{suspension.TYPE_KEY}'."
+                    f"suspension type '{suspension.reported_type_key()}'."
                 )
         else:
             if target_spec.side is not None:

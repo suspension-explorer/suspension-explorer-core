@@ -17,11 +17,6 @@ from kinematics.core.assembly import SuspensionAssembly
 from kinematics.core.constraints import Constraint
 from kinematics.core.elements import SuspensionElement
 from kinematics.core.enums import PointID, ShimType, SuspensionType, Units
-from kinematics.core.metrics.main import (
-    AxleMetricRows,
-    MetricRow,
-    compute_metrics_for_state,
-)
 from kinematics.core.points.derived.manager import DerivedPointsSpec
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointKey, Side
@@ -31,6 +26,7 @@ from kinematics.core.state import SuspensionState
 if TYPE_CHECKING:
     from kinematics.core.diagnostics import DiagnosticIssue
     from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
+    from kinematics.core.metrics.main import AxleMetricRows, MetricRow
     from kinematics.core.sensitivity import TangentField
 
 
@@ -88,6 +84,15 @@ class Suspension(ABC):
     def matches_type(cls, type_key: str) -> bool:
         """Check if this class handles the given type key."""
         return type_key == cls.TYPE_KEY.value or type_key in cls.ALIASES
+
+    def reported_type_key(self) -> SuspensionType:
+        """
+        Return the public geometry type identity exported with results.
+
+        Corner architectures identify by class; the generic axle composer
+        overrides this with its builder-supplied identity.
+        """
+        return self.TYPE_KEY
 
     @abstractmethod
     def initial_state(self) -> SuspensionState:
@@ -198,15 +203,14 @@ class Suspension(ABC):
         """Whether this topology composes multiple corner suspensions."""
         return False
 
+    @abstractmethod
     def compute_state_metrics(
         self,
         state: SuspensionState,
         tangents: "Sequence[TangentField] | None" = None,
     ) -> "MetricRow | AxleMetricRows":
-        """Compute one metric row, including derivatives when tangents exist."""
-        if self.config is None:
-            raise ValueError("Suspension has no configuration")
-        return compute_metrics_for_state(state, self, self.config, tangents)
+        """Compute metric output for one solved state."""
+        ...
 
     def derivative_metric_definitions(
         self,

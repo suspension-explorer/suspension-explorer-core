@@ -25,8 +25,9 @@ from kinematics.core.sensitivity import TangentField
 from kinematics.core.state import SuspensionState
 
 if TYPE_CHECKING:
-    from kinematics.core.suspensions.axle import DoubleWishboneAxleSuspension
+    from kinematics.core.suspensions.axle import AxleSuspension
     from kinematics.core.suspensions.base import Suspension
+    from kinematics.core.suspensions.corner.base import CornerSuspension
 
 
 MetricRow = OrderedDict[str, float | None]
@@ -59,7 +60,7 @@ def flatten_metric_rows(
 
 def compute_metrics_for_axle_state(
     state: SuspensionState,
-    axle: DoubleWishboneAxleSuspension,
+    axle: AxleSuspension,
     config: SuspensionConfig,
     tangents: "Sequence[TangentField] | None" = None,
 ) -> AxleMetricRows:
@@ -127,7 +128,7 @@ def _corner_tangents(
 
 def compute_metrics_for_state(
     state: SuspensionState,
-    suspension: "Suspension",
+    suspension: "CornerSuspension",
     config: SuspensionConfig,
     tangents: "Sequence[TangentField] | None" = None,
 ) -> MetricRow:
@@ -136,7 +137,7 @@ def compute_metrics_for_state(
 
     Args:
         state: The solved SuspensionState to analyze.
-        suspension: The suspension instance for type-specific geometry.
+        suspension: The corner suspension instance for type-specific geometry.
         config: Suspension configuration with vehicle parameters.
         tangents: Optional solution-manifold tangents. Derivative columns are
             appended only when these are supplied.
@@ -169,7 +170,7 @@ def compute_metrics_for_state(
 @overload
 def compute_metrics_for_sweep(
     states: list[SuspensionState],
-    suspension: "DoubleWishboneAxleSuspension",
+    suspension: "AxleSuspension",
     config: SuspensionConfig,
     tangents_per_state: "Sequence[Sequence[TangentField]] | None" = None,
 ) -> list[AxleMetricRows]: ...
@@ -235,15 +236,16 @@ def _compute_metrics_for_suspension_state(
 ) -> MetricRow | AxleMetricRows:
     """Dispatch metric calculation without applying corner metrics to an axle."""
     if suspension.is_axle:
-        axle = cast("DoubleWishboneAxleSuspension", suspension)
+        axle = cast("AxleSuspension", suspension)
         return compute_metrics_for_axle_state(state, axle, config, tangents)
-    return compute_metrics_for_state(state, suspension, config, tangents)
+    corner = cast("CornerSuspension", suspension)
+    return compute_metrics_for_state(state, corner, config, tangents)
 
 
 @overload
 def compute_metrics_for_state_from_suspension(
     state: SuspensionState,
-    suspension: "DoubleWishboneAxleSuspension",
+    suspension: "AxleSuspension",
 ) -> AxleMetricRows: ...
 
 

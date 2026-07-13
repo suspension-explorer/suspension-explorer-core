@@ -1,4 +1,10 @@
-"""Double-wishbone full axle composed from two explicit corner models."""
+"""Generic full axle composed from two explicit corner suspensions.
+
+There is one axle class for every corner architecture: the composer mirrors,
+side-qualifies, and couples whatever corners it is given, and reads the
+corner role hooks for anything architecture-specific (currently the rack
+coupling). New locating architectures add a corner class, not an axle class.
+"""
 
 from __future__ import annotations
 
@@ -38,7 +44,7 @@ from kinematics.core.suspensions.axle.mechanisms import (
     HeaveLinkNone,
 )
 from kinematics.core.suspensions.base import Suspension
-from kinematics.core.suspensions.corner import DoubleWishboneSuspension
+from kinematics.core.suspensions.corner.base import CornerSuspension
 
 if TYPE_CHECKING:
     from kinematics.core.diagnostics import DiagnosticIssue
@@ -67,12 +73,15 @@ class _CornerPositionView(Mapping[PointID, Any]):
 
 
 @dataclass
-class DoubleWishboneAxleSuspension(Suspension):
-    """Two double-wishbone corners coupled by their inboard trackrod points."""
+class AxleSuspension(Suspension):
+    """Two corner suspensions coupled by shared rack and axle mechanisms."""
 
-    TYPE_KEY: ClassVar[SuspensionType] = SuspensionType.DOUBLE_WISHBONE_AXLE
     REQUIRED_POINTS: ClassVar[frozenset[PointID]] = frozenset()
-    corners: dict[Side, DoubleWishboneSuspension] = field(default_factory=dict)
+    # The composer serves every corner architecture, so its public identity
+    # is instance data supplied by the builder, not a class constant. The
+    # inherited TYPE_KEY class variable is deliberately left unset.
+    type_key: SuspensionType = field(kw_only=True)
+    corners: dict[Side, CornerSuspension] = field(default_factory=dict)
     anti_roll: AxleArb = field(default_factory=ArbNone, kw_only=True)
     heave_link: AxleHeaveLink = field(default_factory=HeaveLinkNone, kw_only=True)
 
@@ -80,6 +89,10 @@ class DoubleWishboneAxleSuspension(Suspension):
     def is_axle(self) -> bool:
         """Whether this topology composes multiple corner suspensions."""
         return True
+
+    def reported_type_key(self) -> SuspensionType:
+        """Return the builder-supplied geometry type identity."""
+        return self.type_key
 
     def validate_hardpoints(self) -> None:
         """Require one explicitly sided corner on each side."""
@@ -92,8 +105,28 @@ class DoubleWishboneAxleSuspension(Suspension):
                     f"'{side.name.lower()}'."
                 )
             corner.validate_hardpoints()
+        # Raises when one corner is steered and the other is not.
+        self.rack_attachment_points()
         self.anti_roll.validate(self)
         self.heave_link.validate(self)
+
+    def rack_attachment_points(self) -> tuple[PointID, PointID] | None:
+        """
+        Rack attachment points as (left, right), or None for an unsteered axle.
+
+        Raises:
+            ValueError: If exactly one corner exposes a rack attachment.
+        """
+        left = self.corners[Side.LEFT].rack_attachment_point()
+        right = self.corners[Side.RIGHT].rack_attachment_point()
+        if (left is None) != (right is None):
+            raise ValueError(
+                "Axle corners disagree on rack attachment: one corner is "
+                "steered and the other is not."
+            )
+        if left is None or right is None:
+            return None
+        return (left, right)
 
     def initial_state(self) -> SuspensionState:
         """Combine both corner states under side-qualified point keys."""
@@ -139,25 +172,26 @@ class DoubleWishboneAxleSuspension(Suspension):
         return tuple(dict.fromkeys((*corner_points, *self.anti_roll.output_points)))
 
     def constraints(self) -> list[Constraint]:
-        """Combine remapped corner constraints and trackrod coupling."""
+        """Combine remapped corner constraints and the rigid rack coupling."""
         constraints = [
             constraint.remap(lambda point, side=side: side_qualified(side, point))
             for side, corner in self.corners.items()
             for constraint in corner.constraints()
         ]
-        left = (
-            self.corners[Side.LEFT].initial_state().positions[PointID.TRACKROD_INBOARD]
-        )
-        right = (
-            self.corners[Side.RIGHT].initial_state().positions[PointID.TRACKROD_INBOARD]
-        )
-        constraints.append(
-            DistanceConstraint(
-                PointRef(Side.LEFT, PointID.TRACKROD_INBOARD),
-                PointRef(Side.RIGHT, PointID.TRACKROD_INBOARD),
-                compute_point_point_distance(left, right),
+        rack = self.rack_attachment_points()
+        if rack is not None:
+            left_point, right_point = rack
+            left = self.corners[Side.LEFT].initial_state().positions[left_point]
+            right = self.corners[Side.RIGHT].initial_state().positions[right_point]
+            # The rigid rack keeps the two attachment points a fixed distance
+            # apart; each corner constrains its own point to the rack axis.
+            constraints.append(
+                DistanceConstraint(
+                    PointRef(Side.LEFT, left_point),
+                    PointRef(Side.RIGHT, right_point),
+                    compute_point_point_distance(left, right),
+                )
             )
-        )
         constraints.extend(self.anti_roll.constraints(self))
         return constraints
 
@@ -181,8 +215,13 @@ class DoubleWishboneAxleSuspension(Suspension):
         self,
         states: list[SuspensionState],
     ) -> list[DiagnosticIssue]:
-        """Return diagnostics owned by shared axle mechanisms."""
-        return self.anti_roll.topology_diagnostics(self, states)
+        """Return corner-owned diagnostics followed by shared axle checks."""
+        issues: list[DiagnosticIssue] = []
+        for side in (Side.LEFT, Side.RIGHT):
+            corner_states = [self.corner_state(state, side) for state in states]
+            issues.extend(self.corners[side].topology_diagnostics(corner_states))
+        issues.extend(self.anti_roll.topology_diagnostics(self, states))
+        return issues
 
     def derived_spec(self) -> DerivedPointsSpec:
         """Combine remapped corner derived-point specifications."""
@@ -260,7 +299,7 @@ class DoubleWishboneAxleSuspension(Suspension):
         )
 
     def elements(self) -> tuple[SuspensionElement, ...]:
-        """Return side-qualified corner elements and the trackrod coupling."""
+        """Return side-qualified corner elements and shared axle hardware."""
         elements = tuple(
             map_element_points(
                 element,
@@ -270,16 +309,20 @@ class DoubleWishboneAxleSuspension(Suspension):
             for side, corner in self.corners.items()
             for element in corner.elements()
         )
-        base_elements = elements + (
-            RackElement(
-                label="Steering Rack",
-                left_inner=PointRef(Side.LEFT, PointID.TRACKROD_INBOARD),
-                right_inner=PointRef(Side.RIGHT, PointID.TRACKROD_INBOARD),
-                translation_axis=Axis.Y,
-            ),
-        )
+        rack = self.rack_attachment_points()
+        rack_elements: tuple[SuspensionElement, ...] = ()
+        if rack is not None:
+            rack_elements = (
+                RackElement(
+                    label="Steering Rack",
+                    left_inner=PointRef(Side.LEFT, rack[0]),
+                    right_inner=PointRef(Side.RIGHT, rack[1]),
+                    translation_axis=Axis.Y,
+                ),
+            )
         return (
-            *base_elements,
+            *elements,
+            *rack_elements,
             *self.anti_roll.elements(self),
             *self.heave_link.elements(),
         )

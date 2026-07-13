@@ -49,12 +49,11 @@ from kinematics.core.primitives.vector_utils.geometric import (
     signed_angle_about_axis,
 )
 from kinematics.core.state import SuspensionState
-from kinematics.core.suspensions.corner.mechanisms import ActuationPushrodRocker
 
 if TYPE_CHECKING:
     from kinematics.core.metrics.main import MetricRow
-    from kinematics.core.suspensions.axle.double_wishbone import (
-        DoubleWishboneAxleSuspension,
+    from kinematics.core.suspensions.axle.suspension import (
+        AxleSuspension,
     )
 
 
@@ -126,7 +125,7 @@ def calculate_transmission_margin(
 class ArbNone:
     """Explicit absence of shared anti-roll hardware."""
 
-    def validate(self, axle: DoubleWishboneAxleSuspension) -> None:
+    def validate(self, axle: AxleSuspension) -> None:
         """Accept any pair of compatible corners."""
 
     def add_to_state(self, state: SuspensionState) -> None:
@@ -146,20 +145,20 @@ class ArbNone:
         """Return no anti-roll output points."""
         return ()
 
-    def constraints(self, axle: DoubleWishboneAxleSuspension) -> list[Constraint]:
+    def constraints(self, axle: AxleSuspension) -> list[Constraint]:
         """Add no anti-roll constraints."""
         return []
 
     def derivative_metric_definitions(
         self,
-        axle: DoubleWishboneAxleSuspension,
+        axle: AxleSuspension,
     ) -> tuple[DerivativeMetricDefinition, ...]:
         """Add no anti-roll derivative metrics."""
         return ()
 
     def topology_metric_values(
         self,
-        axle: DoubleWishboneAxleSuspension,
+        axle: AxleSuspension,
         state: SuspensionState,
     ) -> MetricRow:
         """Add no anti-roll state metrics."""
@@ -167,7 +166,7 @@ class ArbNone:
 
     def topology_diagnostics(
         self,
-        axle: DoubleWishboneAxleSuspension,
+        axle: AxleSuspension,
         states: list[SuspensionState],
     ) -> list[DiagnosticIssue]:
         """Add no anti-roll diagnostics."""
@@ -175,7 +174,7 @@ class ArbNone:
 
     def elements(
         self,
-        axle: DoubleWishboneAxleSuspension,
+        axle: AxleSuspension,
     ) -> tuple[SuspensionElement, ...]:
         """Add no anti-roll elements."""
         return ()
@@ -188,15 +187,17 @@ class ArbUBar:
     center_points: dict[PointID, Point3] = field(default_factory=dict)
     droplink_points: dict[Side, Point3] = field(default_factory=dict)
 
-    def validate(self, axle: DoubleWishboneAxleSuspension) -> None:
-        """Validate rocker connections and authored U-bar geometry."""
+    def validate(self, axle: AxleSuspension) -> None:
+        """Validate droplink pickups and authored U-bar geometry."""
         for side, corner in axle.corners.items():
-            if not isinstance(corner.actuation, ActuationPushrodRocker):
+            # The droplink must anchor to a solver-controlled point riding on
+            # a moving corner body; which body provides it is the corner's
+            # concern.
+            if PointID.DROPLINK_ROCKER not in corner.free_points():
                 raise ValueError(
-                    f"{side.name} U-bar corner requires pushrod-rocker actuation"
+                    f"{side.name} U-bar corner does not expose DROPLINK_ROCKER "
+                    "as a moving pickup"
                 )
-            if PointID.DROPLINK_ROCKER not in corner.actuation.external_point_ids:
-                raise ValueError(f"{side.name} rocker does not expose DROPLINK_ROCKER")
 
         expected_axis = {PointID.ARB_U_BAR_AXIS_A, PointID.ARB_U_BAR_AXIS_B}
         if set(self.center_points) != expected_axis:
@@ -257,7 +258,7 @@ class ArbUBar:
         """Return both U-bar arm pickups."""
         return self.free_points
 
-    def constraints(self, axle: DoubleWishboneAxleSuspension) -> list[Constraint]:
+    def constraints(self, axle: AxleSuspension) -> list[Constraint]:
         """Constrain each U-bar arm to its axis and rocker droplink."""
         constraints: list[Constraint] = []
         axis_a = self.center_points[PointID.ARB_U_BAR_AXIS_A]
@@ -296,7 +297,7 @@ class ArbUBar:
 
     def derivative_metric_definitions(
         self,
-        axle: DoubleWishboneAxleSuspension,
+        axle: AxleSuspension,
     ) -> tuple[DerivativeMetricDefinition, ...]:
         """Declare U-bar twist relative to each hub Z with the other hub held."""
         design = axle.initial_state()
@@ -348,7 +349,7 @@ class ArbUBar:
 
     def topology_metric_values(
         self,
-        axle: DoubleWishboneAxleSuspension,
+        axle: AxleSuspension,
         state: SuspensionState,
     ) -> MetricRow:
         """Return per-side U-bar arm rotation and total twist from design."""
@@ -378,7 +379,7 @@ class ArbUBar:
 
     def topology_diagnostics(
         self,
-        axle: DoubleWishboneAxleSuspension,
+        axle: AxleSuspension,
         states: list[SuspensionState],
     ) -> list[DiagnosticIssue]:
         """Report U-bar branch inversions and approaching linkage toggles."""
@@ -424,33 +425,12 @@ class ArbUBar:
         def point(point_id: PointID) -> np.ndarray:
             return state.get(PointRef(side, point_id)).data
 
-        rocker_axis_a = point(PointID.ROCKER_AXIS_A)
-        rocker_axis = point(PointID.ROCKER_AXIS_B) - rocker_axis_a
-        pushrod = point(PointID.PUSHROD_OUTBOARD) - point(PointID.PUSHROD_INBOARD)
         droplink = point(PointID.DROPLINK_U_BAR) - point(PointID.DROPLINK_ROCKER)
         arb_axis_a = state.get(PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_A)).data
         arb_axis = (
             state.get(PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_B)).data - arb_axis_a
         )
-        checks = (
-            (
-                "pushrod @ PUSHROD_INBOARD",
-                calculate_transmission_margin(
-                    point(PointID.PUSHROD_INBOARD),
-                    rocker_axis_a,
-                    rocker_axis,
-                    pushrod,
-                ),
-            ),
-            (
-                "droplink @ DROPLINK_ROCKER",
-                calculate_transmission_margin(
-                    point(PointID.DROPLINK_ROCKER),
-                    rocker_axis_a,
-                    rocker_axis,
-                    droplink,
-                ),
-            ),
+        checks = [
             (
                 "droplink @ DROPLINK_U_BAR",
                 calculate_transmission_margin(
@@ -460,7 +440,45 @@ class ArbUBar:
                     droplink,
                 ),
             ),
+        ]
+
+        # The rocker-side transmission checks only apply when this corner
+        # actually carries a pushrod-rocker group; a differently actuated
+        # corner can drive the droplink without those points existing.
+        rocker_group = (
+            PointID.ROCKER_AXIS_A,
+            PointID.ROCKER_AXIS_B,
+            PointID.PUSHROD_INBOARD,
+            PointID.PUSHROD_OUTBOARD,
         )
+        if all(
+            PointRef(side, point_id) in state.positions for point_id in rocker_group
+        ):
+            rocker_axis_a = point(PointID.ROCKER_AXIS_A)
+            rocker_axis = point(PointID.ROCKER_AXIS_B) - rocker_axis_a
+            pushrod = point(PointID.PUSHROD_OUTBOARD) - point(PointID.PUSHROD_INBOARD)
+            checks.extend(
+                (
+                    (
+                        "pushrod @ PUSHROD_INBOARD",
+                        calculate_transmission_margin(
+                            point(PointID.PUSHROD_INBOARD),
+                            rocker_axis_a,
+                            rocker_axis,
+                            pushrod,
+                        ),
+                    ),
+                    (
+                        "droplink @ DROPLINK_ROCKER",
+                        calculate_transmission_margin(
+                            point(PointID.DROPLINK_ROCKER),
+                            rocker_axis_a,
+                            rocker_axis,
+                            droplink,
+                        ),
+                    ),
+                )
+            )
         issues: list[DiagnosticIssue] = []
         for joint, margin in checks:
             if margin is None or margin >= TRANSMISSION_MARGIN_WARNING_THRESHOLD:
@@ -480,7 +498,7 @@ class ArbUBar:
 
     def elements(
         self,
-        axle: DoubleWishboneAxleSuspension,
+        axle: AxleSuspension,
     ) -> tuple[SuspensionElement, ...]:
         """Return one continuous U-bar and its two droplinks."""
         design = axle.initial_state()
@@ -538,15 +556,14 @@ class ArbTBar:
     center_points: dict[PointID, Point3] = field(default_factory=dict)
     droplink_points: dict[Side, Point3] = field(default_factory=dict)
 
-    def validate(self, axle: DoubleWishboneAxleSuspension) -> None:
-        """Validate rocker connections and the authored T-bar geometry."""
+    def validate(self, axle: AxleSuspension) -> None:
+        """Validate droplink pickups and the authored T-bar geometry."""
         for side, corner in axle.corners.items():
-            if not isinstance(corner.actuation, ActuationPushrodRocker):
+            if PointID.DROPLINK_ROCKER not in corner.free_points():
                 raise ValueError(
-                    f"{side.name} T-bar corner requires pushrod-rocker actuation"
+                    f"{side.name} T-bar corner does not expose DROPLINK_ROCKER "
+                    "as a moving pickup"
                 )
-            if PointID.DROPLINK_ROCKER not in corner.actuation.external_point_ids:
-                raise ValueError(f"{side.name} rocker does not expose DROPLINK_ROCKER")
 
         expected_center = {PointID.ARB_T_BAR_PIVOT}
         if set(self.center_points) != expected_center:
@@ -597,7 +614,7 @@ class ArbTBar:
         """Return the two crossbar endpoints."""
         return self.free_points
 
-    def constraints(self, axle: DoubleWishboneAxleSuspension) -> list[Constraint]:
+    def constraints(self, axle: AxleSuspension) -> list[Constraint]:
         """Preserve the rigid T triangle and both droplink lengths."""
         design = axle.initial_state()
         constraints: list[Constraint] = [
@@ -648,7 +665,7 @@ class ArbTBar:
 
     def derivative_metric_definitions(
         self,
-        axle: DoubleWishboneAxleSuspension,
+        axle: AxleSuspension,
     ) -> tuple[DerivativeMetricDefinition, ...]:
         """Declare T-bar center X motion relative to each hub Z."""
         response = CallableScalarResponse(
@@ -671,7 +688,7 @@ class ArbTBar:
 
     def topology_metric_values(
         self,
-        axle: DoubleWishboneAxleSuspension,
+        axle: AxleSuspension,
         state: SuspensionState,
     ) -> MetricRow:
         """Return T-bar stem heave angle and shaft twist."""
@@ -710,7 +727,7 @@ class ArbTBar:
 
     def topology_diagnostics(
         self,
-        axle: DoubleWishboneAxleSuspension,
+        axle: AxleSuspension,
         states: list[SuspensionState],
     ) -> list[DiagnosticIssue]:
         """Return no T-bar-specific diagnostics yet."""
@@ -718,7 +735,7 @@ class ArbTBar:
 
     def elements(
         self,
-        axle: DoubleWishboneAxleSuspension,
+        axle: AxleSuspension,
     ) -> tuple[SuspensionElement, ...]:
         """Return the branched T-bar and one droplink per side."""
         left = T_BAR_LEFT_KEY
@@ -752,12 +769,12 @@ type AxleArb = ArbNone | ArbUBar | ArbTBar
 class HeaveLinkNone:
     """Explicit absence of a rocker-to-rocker heave link."""
 
-    def validate(self, axle: DoubleWishboneAxleSuspension) -> None:
+    def validate(self, axle: AxleSuspension) -> None:
         """Accept any pair of compatible corners."""
 
     def derivative_metric_definitions(
         self,
-        axle: DoubleWishboneAxleSuspension,
+        axle: AxleSuspension,
     ) -> tuple[DerivativeMetricDefinition, ...]:
         """Add no heave-link derivatives."""
         return ()
@@ -778,21 +795,18 @@ class HeaveLinkNone:
 class HeaveLinkRockerToRocker:
     """Variable-length link between left and right rocker pickups."""
 
-    def validate(self, axle: DoubleWishboneAxleSuspension) -> None:
-        """Require a typed heave-link pickup on both rockers."""
+    def validate(self, axle: AxleSuspension) -> None:
+        """Require a moving heave-link pickup on both corners."""
         for side, corner in axle.corners.items():
-            if not isinstance(corner.actuation, ActuationPushrodRocker):
+            if PointID.HEAVE_LINK_ROCKER not in corner.free_points():
                 raise ValueError(
-                    f"{side.name} heave link requires pushrod-rocker actuation"
-                )
-            if PointID.HEAVE_LINK_ROCKER not in corner.actuation.external_point_ids:
-                raise ValueError(
-                    f"{side.name} rocker does not expose HEAVE_LINK_ROCKER"
+                    f"{side.name} corner does not expose HEAVE_LINK_ROCKER "
+                    "as a moving pickup"
                 )
 
     def derivative_metric_definitions(
         self,
-        axle: DoubleWishboneAxleSuspension,
+        axle: AxleSuspension,
     ) -> tuple[DerivativeMetricDefinition, ...]:
         """Declare heave-link length relative to each hub Z."""
         response = PointDistanceResponse(

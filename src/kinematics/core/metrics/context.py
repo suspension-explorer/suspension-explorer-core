@@ -18,20 +18,22 @@ from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.state import SuspensionState
 
 if TYPE_CHECKING:
-    from kinematics.core.suspensions.base import Suspension
+    from kinematics.core.suspensions.corner.base import CornerSuspension
 
 
 @dataclass
 class MetricContext:
     """
-    Shared context for computing metrics on a single solved state.
+    Shared context for computing metrics on a single solved corner state.
 
     Caches expensive geometry (ICs, wheel axis, etc.) so that multiple
-    metric functions can share the same intermediate results.
+    metric functions can share the same intermediate results. Point roles
+    (wheel axis, steering axis) are resolved through the corner's role hooks
+    rather than assumed from any one architecture's point naming.
     """
 
     state: SuspensionState
-    suspension: "Suspension"
+    suspension: "CornerSuspension"
     config: SuspensionConfig
 
     @cached_property
@@ -80,19 +82,27 @@ class MetricContext:
     @cached_property
     def wheel_axis(self) -> Direction3:
         """
-        Unit vector along the axle from inboard to outboard.
+        Unit vector along the wheel spin axis from inboard to outboard.
         """
-        axle_in = self.state.get(PointID.AXLE_INBOARD)
-        axle_out = self.state.get(PointID.AXLE_OUTBOARD)
+        inboard_id, outboard_id = self.suspension.wheel_axis_points()
+        axle_in = self.state.get(inboard_id)
+        axle_out = self.state.get(outboard_id)
         return (axle_out - axle_in).normalize()
+
+    @cached_property
+    def steering_axis_pivots(self) -> tuple[Point3, Point3]:
+        """
+        Steering-axis pivot positions as (lower, upper).
+        """
+        lower_id, upper_id = self.suspension.steering_axis_points()
+        return (self.state.get(lower_id), self.state.get(upper_id))
 
     @cached_property
     def steering_axis(self) -> Direction3:
         """
         Unit vector along the steering axis from lower to upper pivot.
         """
-        lower = self.state.get(PointID.LOWER_WISHBONE_OUTBOARD)
-        upper = self.state.get(PointID.UPPER_WISHBONE_OUTBOARD)
+        lower, upper = self.steering_axis_pivots
         return (upper - lower).normalize()
 
     @cached_property
@@ -113,12 +123,11 @@ class MetricContext:
         """
         Point where the steering axis intersects the ground plane.
 
-        Parameterises the line from the lower ball joint through the upper
-        ball joint and solves for the parameter t where Z = ground_z.
+        Parameterises the line from the lower steering pivot through the
+        upper pivot and solves for the parameter t where Z = ground_z.
         Returns None if the steering axis is parallel to the ground plane.
         """
-        lower = self.state.get(PointID.LOWER_WISHBONE_OUTBOARD)
-        upper = self.state.get(PointID.UPPER_WISHBONE_OUTBOARD)
+        lower, upper = self.steering_axis_pivots
         direction = upper - lower
         dz = direction[Axis.Z]
         if abs(dz) < EPS_GEOMETRIC:

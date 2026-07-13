@@ -31,7 +31,7 @@ from typing import Mapping, Union
 
 import numpy as np
 
-from kinematics.core.enums import Axis, PointID
+from kinematics.core.enums import Axis
 from kinematics.core.primitives.dual import (
     DualScalar,
     DualVec3,
@@ -39,7 +39,6 @@ from kinematics.core.primitives.dual import (
     cross,
     degrees,
     dot,
-    norm,
 )
 from kinematics.core.primitives.geometry import extract_array
 from kinematics.core.primitives.point_ref import PointKey
@@ -85,15 +84,6 @@ def rotation_about_fixed_axis_deg(
     return degrees(atan2(sine, cosine))
 
 
-def _norm(vector) -> Scalar:
-    """
-    Euclidean norm on either substrate.
-    """
-    if isinstance(vector, DualVec3):
-        return norm(vector)
-    return float(np.linalg.norm(vector))
-
-
 def _component(vector, axis: Axis) -> Scalar:
     """
     Single component on either substrate (DualScalar or float).
@@ -118,14 +108,15 @@ def coordinate(
 def camber_deg(
     positions: Mapping[PointKey, PositionLike],
     side_sign: float,
-    axle_inboard: PointKey = PointID.AXLE_INBOARD,
-    axle_outboard: PointKey = PointID.AXLE_OUTBOARD,
+    axle_inboard: PointKey,
+    axle_outboard: PointKey,
 ) -> Scalar:
     """
     Camber angle in degrees; mirrors metrics.angles.calculate_camber.
 
-    Negative camber tilts the top of the wheel towards the vehicle
-    centerline.
+    The wheel-axis endpoints are supplied by the caller, normally from
+    CornerSuspension.wheel_axis_points(). Negative camber tilts the top of
+    the wheel towards the vehicle centerline.
     """
     axle = _vec(positions, axle_outboard) - _vec(positions, axle_inboard)
 
@@ -145,14 +136,15 @@ def camber_deg(
 def toe_deg(
     positions: Mapping[PointKey, PositionLike],
     side_sign: float,
-    axle_inboard: PointKey = PointID.AXLE_INBOARD,
-    axle_outboard: PointKey = PointID.AXLE_OUTBOARD,
+    axle_inboard: PointKey,
+    axle_outboard: PointKey,
 ) -> Scalar:
     """
     Toe angle in degrees; mirrors metrics.angles.calculate_toe.
 
-    Positive is toe-in: the front of the wheel points towards the vehicle
-    centerline.
+    The wheel-axis endpoints are supplied by the caller, normally from
+    CornerSuspension.wheel_axis_points(). Positive is toe-in: the front of
+    the wheel points towards the vehicle centerline.
     """
     axle = _vec(positions, axle_outboard) - _vec(positions, axle_inboard)
     proj_x = _component(axle, Axis.X)
@@ -169,12 +161,14 @@ def toe_deg(
 
 def caster_deg(
     positions: Mapping[PointKey, PositionLike],
-    lower_pivot: PointKey = PointID.LOWER_WISHBONE_OUTBOARD,
-    upper_pivot: PointKey = PointID.UPPER_WISHBONE_OUTBOARD,
+    lower_pivot: PointKey,
+    upper_pivot: PointKey,
 ) -> Scalar:
     """
     Caster angle in degrees; mirrors metrics.angles.calculate_caster.
 
+    The steering-axis pivots are architecture-specific and must be supplied
+    by the caller, normally from CornerSuspension.steering_axis_points().
     Positive caster tilts the top of the steering axis rearward.
     """
     steering = _vec(positions, upper_pivot) - _vec(positions, lower_pivot)
@@ -187,12 +181,14 @@ def caster_deg(
 def kpi_deg(
     positions: Mapping[PointKey, PositionLike],
     side_sign: float,
-    lower_pivot: PointKey = PointID.LOWER_WISHBONE_OUTBOARD,
-    upper_pivot: PointKey = PointID.UPPER_WISHBONE_OUTBOARD,
+    lower_pivot: PointKey,
+    upper_pivot: PointKey,
 ) -> Scalar:
     """
     Kingpin inclination in degrees; mirrors metrics.angles.calculate_kpi.
 
+    The steering-axis pivots are architecture-specific and must be supplied
+    by the caller, normally from CornerSuspension.steering_axis_points().
     Positive KPI tilts the top of the steering axis towards the vehicle
     centerline.
     """
@@ -204,14 +200,3 @@ def kpi_deg(
         _component(steering, Axis.Z),
     )
     return degrees(kpi)
-
-
-def strut_length_mm(
-    positions: Mapping[PointKey, PositionLike],
-    strut_top: PointKey = PointID.STRUT_TOP,
-    strut_bottom: PointKey = PointID.STRUT_BOTTOM,
-) -> Scalar:
-    """
-    Straight-line spring/damper length in mm: |STRUT_TOP - STRUT_BOTTOM|.
-    """
-    return _norm(_vec(positions, strut_top) - _vec(positions, strut_bottom))

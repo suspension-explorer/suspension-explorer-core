@@ -50,8 +50,8 @@ from kinematics.core.primitives.vector_utils.geometric import (
     rotate_point_about_axis,
 )
 from kinematics.core.state import SuspensionState
-from kinematics.core.suspensions.base import Suspension
 from kinematics.core.suspensions.config.shims import solve_camber_shim_assembly
+from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.suspensions.corner.mechanisms import (
     Actuation,
     ActuationDirect,
@@ -66,7 +66,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class DoubleWishboneSuspension(Suspension):
+class DoubleWishboneSuspension(CornerSuspension):
     """Double-wishbone locating geometry with composed corner mechanisms."""
 
     TYPE_KEY: ClassVar[SuspensionType] = SuspensionType.DOUBLE_WISHBONE
@@ -89,6 +89,21 @@ class DoubleWishboneSuspension(Suspension):
     )
 
     OPTIONAL_POINTS: ClassVar[frozenset[PointID]] = frozenset()
+
+    # Rigid bodies that composed mechanisms may attach to. The architecture
+    # owns these; mechanisms receive them at construction and stay free of
+    # double-wishbone point names.
+    LOWER_WISHBONE_BODY: ClassVar[tuple[PointID, PointID, PointID]] = (
+        PointID.LOWER_WISHBONE_INBOARD_FRONT,
+        PointID.LOWER_WISHBONE_INBOARD_REAR,
+        PointID.LOWER_WISHBONE_OUTBOARD,
+    )
+    UPRIGHT_BODY: ClassVar[tuple[PointID, ...]] = (
+        PointID.UPPER_WISHBONE_OUTBOARD,
+        PointID.LOWER_WISHBONE_OUTBOARD,
+        PointID.AXLE_INBOARD,
+        PointID.AXLE_OUTBOARD,
+    )
 
     SUPPORTED_SHIMS: ClassVar[frozenset[ShimType]] = frozenset(
         {ShimType.OUTBOARD_CAMBER}
@@ -124,7 +139,12 @@ class DoubleWishboneSuspension(Suspension):
         PointID.TRACKROD_INBOARD,
     )
 
-    actuation: Actuation = field(default_factory=ActuationDirect, kw_only=True)
+    actuation: Actuation = field(
+        default_factory=lambda: ActuationDirect(
+            spring_pickup_body=DoubleWishboneSuspension.LOWER_WISHBONE_BODY
+        ),
+        kw_only=True,
+    )
     spring: CornerSpring = field(default_factory=CornerSpringNone, kw_only=True)
 
     def required_points(self) -> frozenset[PointID]:
@@ -164,6 +184,14 @@ class DoubleWishboneSuspension(Suspension):
     def damper_points(self) -> tuple[PointKey, PointKey] | None:
         """Return selected linear spring/damper endpoints."""
         return self.spring.damper_points
+
+    def steering_axis_points(self) -> tuple[PointID, PointID]:
+        """The steering axis runs between the two outboard ball joints."""
+        return (PointID.LOWER_WISHBONE_OUTBOARD, PointID.UPPER_WISHBONE_OUTBOARD)
+
+    def rack_attachment_point(self) -> PointID | None:
+        """The inboard trackrod point rides on the steering rack."""
+        return PointID.TRACKROD_INBOARD
 
     def initial_state(self) -> SuspensionState:
         """Build initial state from hardpoints, applying shims if configured."""
@@ -242,7 +270,7 @@ class DoubleWishboneSuspension(Suspension):
             )
         )
 
-        # Point-on-line constraint for rack travel.
+        # The rack constrains its attachment point to translate along world Y.
         constraints.append(
             PointOnLineConstraint(
                 point_id=PointID.TRACKROD_INBOARD,

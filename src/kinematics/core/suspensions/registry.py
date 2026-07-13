@@ -10,7 +10,7 @@ from kinematics.core.schema.geometry import (
     DoubleWishboneGeometrySpec,
     GeometrySpecBase,
 )
-from kinematics.core.suspensions.axle import DoubleWishboneAxleSuspension
+from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.suspensions.build import (
     build_double_wishbone,
@@ -45,7 +45,7 @@ SUSPENSION_DEFINITIONS = (
         SuspensionType.DOUBLE_WISHBONE_AXLE,
         DoubleWishboneAxleGeometrySpec,
         build_double_wishbone_axle,
-        DoubleWishboneAxleSuspension,
+        AxleSuspension,
     ),
 )
 

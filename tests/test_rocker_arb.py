@@ -13,7 +13,7 @@ from kinematics.core.enums import PointID
 from kinematics.core.metrics.main import AxleMetricRows
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointRef, Side
-from kinematics.core.suspensions.axle import ArbUBar, DoubleWishboneAxleSuspension
+from kinematics.core.suspensions.axle import ArbUBar, AxleSuspension
 from kinematics.core.suspensions.corner import (
     ActuationPushrodRocker,
     DoubleWishboneSuspension,
@@ -46,12 +46,14 @@ def test_corner_spring_type_owns_derivative_declarations(
         "deriv_rocker_angle_wrt_hub_z",
         "deriv_damper_length_wrt_hub_z",
     }
+    # One handedness constraint holds the outboard pushrod end on the
+    # upright, and one holds the spring pickup on the rocker.
     assert (
         sum(
             isinstance(constraint, ScalarTripleProductConstraint)
             for constraint in coilover.constraints()
         )
-        == 1
+        == 2
     )
 
 
@@ -81,7 +83,7 @@ def test_pushrod_outboard_is_required_but_not_rocker_mounted(
 
 def test_axle_derivative_rejects_coincident_arb_axis(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
-    assert isinstance(axle, DoubleWishboneAxleSuspension)
+    assert isinstance(axle, AxleSuspension)
     assert isinstance(axle.anti_roll, ArbUBar)
     axle.anti_roll.center_points[PointID.ARB_U_BAR_AXIS_B] = (
         axle.anti_roll.center_points[PointID.ARB_U_BAR_AXIS_A]
@@ -93,7 +95,7 @@ def test_axle_derivative_rejects_coincident_arb_axis(test_data_dir: Path) -> Non
 
 def test_arb_axle_uses_chirality_constraints(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
-    assert isinstance(axle, DoubleWishboneAxleSuspension)
+    assert isinstance(axle, AxleSuspension)
     assert isinstance(axle.anti_roll, ArbUBar)
 
     chirality = [
@@ -102,12 +104,14 @@ def test_arb_axle_uses_chirality_constraints(test_data_dir: Path) -> None:
         if isinstance(constraint, ScalarTripleProductConstraint)
     ]
 
-    assert len(chirality) == 2
+    # Each corner holds handedness for its droplink pickup on the rocker and
+    # for its outboard pushrod end on the upright.
+    assert len(chirality) == 4
 
 
 def test_arb_axle_emits_hub_relative_derivatives(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
-    assert isinstance(axle, DoubleWishboneAxleSuspension)
+    assert isinstance(axle, AxleSuspension)
     assert isinstance(axle.anti_roll, ArbUBar)
     sweep = load_sweep(test_data_dir / "axle_rocker_sweep.yaml", axle)
     states, _ = solve_sweep(axle, sweep)
@@ -138,7 +142,7 @@ def test_arb_axle_emits_hub_relative_derivatives(test_data_dir: Path) -> None:
 
 def test_arb_diagnostics_detect_mirrored_arm_branch(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
-    assert isinstance(axle, DoubleWishboneAxleSuspension)
+    assert isinstance(axle, AxleSuspension)
     sweep = load_sweep(test_data_dir / "axle_rocker_sweep.yaml", axle)
     states, stats = solve_sweep(axle, sweep)
     step = len(states) // 2
@@ -165,7 +169,7 @@ def test_arb_diagnostics_detect_mirrored_arm_branch(test_data_dir: Path) -> None
 
 def test_arb_diagnostics_detect_chirality_boundary(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
-    assert isinstance(axle, DoubleWishboneAxleSuspension)
+    assert isinstance(axle, AxleSuspension)
     sweep = load_sweep(test_data_dir / "axle_rocker_sweep.yaml", axle)
     states, stats = solve_sweep(axle, sweep)
     step = len(states) // 2

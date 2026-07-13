@@ -127,7 +127,7 @@ class SweepAnalysis:
 def _suspension_info(suspension: Suspension) -> SuspensionInfo:
     return SuspensionInfo(
         name=suspension.name,
-        type_key=suspension.TYPE_KEY,
+        type_key=suspension.reported_type_key(),
         units=suspension.units.symbol,
     )
 

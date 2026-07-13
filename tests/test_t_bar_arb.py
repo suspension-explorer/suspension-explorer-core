@@ -14,23 +14,23 @@ from kinematics.core.presentation import PointMidpoint, element_paths
 from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.suspensions.axle import (
     ArbTBar,
-    DoubleWishboneAxleSuspension,
+    AxleSuspension,
     HeaveLinkNone,
 )
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
 
 
 @pytest.fixture
-def t_bar_axle(test_data_dir: Path) -> DoubleWishboneAxleSuspension:
+def t_bar_axle(test_data_dir: Path) -> AxleSuspension:
     suspension = load_geometry(test_data_dir / "axle_geometry_t_bar.yaml")
-    assert isinstance(suspension, DoubleWishboneAxleSuspension)
+    assert isinstance(suspension, AxleSuspension)
     assert isinstance(suspension.anti_roll, ArbTBar)
     assert isinstance(suspension.heave_link, HeaveLinkNone)
     return suspension
 
 
 def test_t_bar_assembly_has_only_pivot_and_crossbar_endpoints(
-    t_bar_axle: DoubleWishboneAxleSuspension,
+    t_bar_axle: AxleSuspension,
 ) -> None:
     """The crossbar midpoint is presentation geometry, not a solver point."""
     assembly = t_bar_axle.assembly()
@@ -64,7 +64,7 @@ def test_t_bar_assembly_has_only_pivot_and_crossbar_endpoints(
 
 
 def test_demo_rocker_axis_is_oblique_and_nearly_perpendicular_to_pushrod(
-    t_bar_axle: DoubleWishboneAxleSuspension,
+    t_bar_axle: AxleSuspension,
 ) -> None:
     """The demonstration uses the intended oblique rocker-axis arrangement."""
     corner = t_bar_axle.corners[Side.LEFT]
@@ -87,7 +87,7 @@ def test_demo_rocker_axis_is_oblique_and_nearly_perpendicular_to_pushrod(
 
 
 def test_bump_sweep_preserves_rigid_t_bar_distances(
-    t_bar_axle: DoubleWishboneAxleSuspension,
+    t_bar_axle: AxleSuspension,
     test_data_dir: Path,
 ) -> None:
     """Same-direction wheel travel moves the T-bar stem through its XZ arc."""
@@ -125,7 +125,7 @@ def test_bump_sweep_preserves_rigid_t_bar_distances(
 
 
 def test_roll_sweep_produces_differential_t_bar_twist(
-    t_bar_axle: DoubleWishboneAxleSuspension,
+    t_bar_axle: AxleSuspension,
     test_data_dir: Path,
 ) -> None:
     """Opposed wheel travel rotates the rigid crossbar about the T-bar stem."""

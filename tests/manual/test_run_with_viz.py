@@ -65,7 +65,7 @@ def test_run_solver(
     hub_displacements, _ = displacements
 
     suspension = load_geometry(double_wishbone_geometry_file)
-    if suspension.TYPE_KEY not in (
+    if suspension.reported_type_key() not in (
         "double_wishbone",
         "double_wishbone_front",
         "double_wishbone_rear",

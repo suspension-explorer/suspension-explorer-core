@@ -20,6 +20,7 @@ from kinematics.core.metrics.main import (
 )
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.schema.config import SuspensionConfig
+from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
 from kinematics.core.targeting import SweepConfig
 
@@ -67,6 +68,7 @@ def test_config_rejects_unknown_axle_selection(field: str) -> None:
 
 def test_design_state_travel_and_position_metrics() -> None:
     suspension = load_geometry(TEST_DATA / "geometry.yaml")
+    assert isinstance(suspension, CornerSuspension)
     assert suspension.config is not None
     state = suspension.initial_state()
 
@@ -84,6 +86,7 @@ def test_design_state_travel_and_position_metrics() -> None:
 
 def test_coilover_damper_length_matches_mount_distance() -> None:
     suspension = load_geometry(TEST_DATA / "corner_strut_geometry.yaml")
+    assert isinstance(suspension, CornerSuspension)
     assert suspension.config is not None
     state = suspension.initial_state()
 
@@ -95,6 +98,7 @@ def test_coilover_damper_length_matches_mount_distance() -> None:
 
 def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     suspension = load_geometry(TEST_DATA / "corner_strut_geometry.yaml")
+    assert isinstance(suspension, CornerSuspension)
     assert suspension.config is not None
     sweep = load_sweep(TEST_DATA / "sweep.yaml")
     states, _ = solve_sweep(suspension, sweep)
