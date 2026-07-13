@@ -15,8 +15,8 @@ from kinematics.core.solver import ResidualComputer
 from kinematics.core.state import SuspensionState
 
 POINTS = (
-    PointID.ROCKER_AXIS_FRONT,
-    PointID.ROCKER_AXIS_REAR,
+    PointID.ROCKER_AXIS_A,
+    PointID.ROCKER_AXIS_B,
     PointID.PUSHROD_INBOARD,
     PointID.DROPLINK_ROCKER,
 )

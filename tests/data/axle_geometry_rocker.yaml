@@ -1,10 +1,17 @@
-type: double_wishbone_pushrod_rocker_axle
+type: double_wishbone_axle
 name: "test axle rocker"
 version: "0.0.1"
-units: MILLIMETERS
+units: millimeters
 
-spring:
-  type: torsion_bar
+corner:
+  actuation:
+    type: pushrod_rocker
+  spring:
+    type: torsion_bar
+anti_roll:
+  type: u_bar
+heave_link:
+  type: none
 
 hardpoints:
   side: left
@@ -23,8 +30,8 @@ hardpoints:
     # Pushrod and rocker geometry.
     pushrod_outboard: {x: 0, y: 870, z: 240}
     pushrod_inboard: {x: 0, y: 430, z: 480}
-    rocker_axis_front: {x: 100, y: 340, z: 450}
-    rocker_axis_rear: {x: -100, y: 340, z: 450}
+    rocker_axis_a: {x: 100, y: 340, z: 450}
+    rocker_axis_b: {x: -100, y: 340, z: 450}
     droplink_rocker: {x: 0, y: 250, z: 450}
 
     # The per-side ARB arm point is mirrored with the corner geometry.

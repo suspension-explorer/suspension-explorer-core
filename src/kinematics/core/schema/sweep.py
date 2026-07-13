@@ -7,15 +7,9 @@ from typing import TYPE_CHECKING, Sequence
 import numpy as np
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from kinematics.core.primitives.enums import Axis, TargetPositionMode
+from kinematics.core.primitives.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.primitives.geometry import Direction3, extract_array
 from kinematics.core.primitives.point_ref import Side
-from kinematics.core.schema.coercion import (
-    CIAxis,
-    CIPointID,
-    CISide,
-    CITargetPositionMode,
-)
 from kinematics.core.targeting import (
     PointTarget,
     PointTargetAxis,
@@ -48,7 +42,7 @@ class DirectionSpec(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    axis: CIAxis | None = None
+    axis: Axis | None = None
     vector: Sequence[float] | None = None
 
     @model_validator(mode="after")
@@ -75,11 +69,11 @@ class TargetSpec(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    point: CIPointID
+    point: PointID
     direction: DirectionSpec
     name: str | None = None
-    side: CISide | None = None
-    mode: CITargetPositionMode = TargetPositionMode.RELATIVE
+    side: Side | None = None
+    mode: TargetPositionMode = TargetPositionMode.RELATIVE
     start: float | None = None
     stop: float | None = None
     values: Sequence[float] | None = None

@@ -27,6 +27,7 @@ from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointKey, Side
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.state import SuspensionState
+from kinematics.core.suspensions.enums import SuspensionType
 
 if TYPE_CHECKING:
     from kinematics.core.diagnostics import DiagnosticIssue
@@ -40,14 +41,14 @@ class Suspension(ABC):
     Base class for all suspension types.
 
     Subclasses define:
-    - Class-level attributes for geometry (required/optional points, shim support)
+    - Architecture and mechanism-specific point declarations
     - Instance-level storage for geometry and configuration
     - Methods for constraints, physical elements, and kinematic behavior
 
     This class implements the provider interface directly - no separate provider needed.
     """
 
-    TYPE_KEY: ClassVar[str] = ""
+    TYPE_KEY: ClassVar[SuspensionType]
     ALIASES: ClassVar[frozenset[str]] = frozenset()
     REQUIRED_POINTS: ClassVar[frozenset[PointID]] = frozenset()
     OPTIONAL_POINTS: ClassVar[frozenset[PointID]] = frozenset()
@@ -72,16 +73,22 @@ class Suspension(ABC):
         """Validate instance after creation."""
         self.validate_hardpoints()
 
-    @classmethod
-    def all_valid_points(cls) -> frozenset[PointID]:
-        """All points valid for this suspension type."""
-        return cls.REQUIRED_POINTS | cls.OPTIONAL_POINTS
+    def required_points(self) -> frozenset[PointID]:
+        """Return authored points required by this suspension instance."""
+        return self.REQUIRED_POINTS
+
+    def optional_points(self) -> frozenset[PointID]:
+        """Return additional authored points accepted by this suspension instance."""
+        return self.OPTIONAL_POINTS
+
+    def all_valid_points(self) -> frozenset[PointID]:
+        """Return every authored point accepted by this suspension instance."""
+        return self.required_points() | self.optional_points()
 
     @classmethod
     def matches_type(cls, type_key: str) -> bool:
         """Check if this class handles the given type key."""
-        key_lower = type_key.lower()
-        return key_lower == cls.TYPE_KEY or key_lower in cls.ALIASES
+        return type_key == cls.TYPE_KEY.value or type_key in cls.ALIASES
 
     @abstractmethod
     def initial_state(self) -> SuspensionState:
@@ -162,12 +169,17 @@ class Suspension(ABC):
         ...
 
     def validate_hardpoints(self) -> None:
-        """Validate that required hardpoints are present."""
+        """Validate the exact authored point set for this suspension instance."""
         present = set(self.hardpoints.keys())
-        missing = self.REQUIRED_POINTS - present
+        missing = self.required_points() - present
         if missing:
             missing_names = sorted(p.name for p in missing)
             raise ValueError(f"Missing required hardpoints: {', '.join(missing_names)}")
+
+        unknown = present - self.all_valid_points()
+        if unknown:
+            unknown_names = sorted(point.name for point in unknown)
+            raise ValueError(f"Invalid hardpoints: {', '.join(unknown_names)}")
 
     def get_hardpoints_copy(self) -> dict[PointKey, Point3]:
         """
@@ -178,10 +190,9 @@ class Suspension(ABC):
         """
         return {pid: pos.copy() for pid, pos in self.hardpoints.items()}
 
-    @property
-    def has_strut(self) -> bool:
-        """Whether this explicit topology includes a spring/damper element."""
-        return False
+    def damper_points(self) -> tuple[PointKey, PointKey] | None:
+        """Return installed spring/damper endpoints, if present."""
+        return None
 
     @property
     def is_axle(self) -> bool:

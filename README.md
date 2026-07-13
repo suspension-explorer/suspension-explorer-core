@@ -111,15 +111,15 @@ A typical sweep file defines the targets, range, and number of steps:
 version: 1
 steps: 41
 targets:
-  - point: TRACKROD_INBOARD # Drive trackrod inboard position.
+  - point: trackrod_inboard # Drive trackrod inboard position.
     direction:
-      axis: Y
+      axis: y
     mode: relative
     start: -40
     stop: 40
-  - point: WHEEL_CENTER # Drive vertical wheel travel.
+  - point: wheel_center # Drive vertical wheel travel.
     direction:
-      axis: Z
+      axis: z
     start: -40
     stop: 120
 ```

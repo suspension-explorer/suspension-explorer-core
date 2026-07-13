@@ -89,11 +89,18 @@ class TestSuspensionBase:
     Tests for Suspension base class.
     """
 
-    def test_all_valid_points(self):
+    def test_all_valid_points(self, valid_hardpoints, valid_config):
         """
         Test all_valid_points combines required and optional.
         """
-        valid = DoubleWishboneSuspension.all_valid_points()
+        suspension = DoubleWishboneSuspension(
+            name="test",
+            units=Units.MILLIMETERS,
+            side=Side.LEFT,
+            hardpoints=valid_hardpoints,
+            config=valid_config,
+        )
+        valid = suspension.all_valid_points()
         # Check required points are included
         assert PointID.LOWER_WISHBONE_OUTBOARD in valid
         assert PointID.UPPER_WISHBONE_OUTBOARD in valid
@@ -103,10 +110,10 @@ class TestSuspensionBase:
 
     def test_matches_type(self):
         """
-        Test exact, case-insensitive type matching.
+        Test exact, case-sensitive type matching.
         """
         assert DoubleWishboneSuspension.matches_type("double_wishbone")
-        assert DoubleWishboneSuspension.matches_type("DOUBLE_WISHBONE")
+        assert not DoubleWishboneSuspension.matches_type("DOUBLE_WISHBONE")
         assert DoubleWishboneSuspension.matches_type("double_wishbone_front")
         assert not DoubleWishboneSuspension.matches_type("macpherson_strut")
 
@@ -299,7 +306,7 @@ class TestRegistry:
         """
         types = list_supported_types()
         assert "double_wishbone" in types
-        assert "double_wishbone_coilover" in types
+        assert "double_wishbone_axle" in types
         assert "double_wishbone_front" in types
 
     def test_get_suspension_class(self):
@@ -310,10 +317,7 @@ class TestRegistry:
         assert cls is not None
         assert cls == DoubleWishboneSuspension
 
-        # Test case insensitivity
-        cls2 = get_suspension_class("DOUBLE_WISHBONE")
-        assert cls2 is not None
-        assert cls2 == DoubleWishboneSuspension
+        assert get_suspension_class("DOUBLE_WISHBONE") is None
 
     def test_get_suspension_class_not_found(self):
         """
@@ -336,22 +340,24 @@ class TestYAMLLoading:
         """
         yaml_content = """
 type: double_wishbone
-side: LEFT
+side: left
 name: "Test"
 version: "1.0.0"
-units: MILLIMETERS
+units: millimeters
+actuation: {type: direct}
+spring: {type: none}
 
 hardpoints:
-  LOWER_WISHBONE_INBOARD_FRONT: [250, 400, 200]
-  LOWER_WISHBONE_INBOARD_REAR: [-250, 450, 200]
-  LOWER_WISHBONE_OUTBOARD: [0, 900, 200]
-  UPPER_WISHBONE_INBOARD_FRONT: [225, 350, 500]
-  UPPER_WISHBONE_INBOARD_REAR: [-275, 350, 500]
-  UPPER_WISHBONE_OUTBOARD: [-25, 750, 500]
-  TRACKROD_INBOARD: [50, 200, 250]
-  TRACKROD_OUTBOARD: [150, 800, 275]
-  AXLE_INBOARD: [-20, 800, 308.426]
-  AXLE_OUTBOARD: [-20, 950, 313.426]
+  lower_wishbone_inboard_front: [250, 400, 200]
+  lower_wishbone_inboard_rear: [-250, 450, 200]
+  lower_wishbone_outboard: [0, 900, 200]
+  upper_wishbone_inboard_front: [225, 350, 500]
+  upper_wishbone_inboard_rear: [-275, 350, 500]
+  upper_wishbone_outboard: [-25, 750, 500]
+  trackrod_inboard: [50, 200, 250]
+  trackrod_outboard: [150, 800, 275]
+  axle_inboard: [-20, 800, 308.426]
+  axle_outboard: [-20, 950, 313.426]
 
 config:
   steered: true
@@ -379,21 +385,23 @@ config:
         """
         yaml_content = """
 type: double_wishbone
-side: LEFT
+side: left
 name: "With Shim"
-units: MILLIMETERS
+units: millimeters
+actuation: {type: direct}
+spring: {type: none}
 
 hardpoints:
-  LOWER_WISHBONE_INBOARD_FRONT: [250, 400, 200]
-  LOWER_WISHBONE_INBOARD_REAR: [-250, 450, 200]
-  LOWER_WISHBONE_OUTBOARD: [0, 900, 200]
-  UPPER_WISHBONE_INBOARD_FRONT: [225, 350, 500]
-  UPPER_WISHBONE_INBOARD_REAR: [-275, 350, 500]
-  UPPER_WISHBONE_OUTBOARD: [-25, 750, 500]
-  TRACKROD_INBOARD: [50, 200, 250]
-  TRACKROD_OUTBOARD: [150, 800, 275]
-  AXLE_INBOARD: [-20, 800, 308.426]
-  AXLE_OUTBOARD: [-20, 950, 313.426]
+  lower_wishbone_inboard_front: [250, 400, 200]
+  lower_wishbone_inboard_rear: [-250, 450, 200]
+  lower_wishbone_outboard: [0, 900, 200]
+  upper_wishbone_inboard_front: [225, 350, 500]
+  upper_wishbone_inboard_rear: [-275, 350, 500]
+  upper_wishbone_outboard: [-25, 750, 500]
+  trackrod_inboard: [50, 200, 250]
+  trackrod_outboard: [150, 800, 275]
+  axle_inboard: [-20, 800, 308.426]
+  axle_outboard: [-20, 950, 313.426]
 
 config:
   steered: true
@@ -450,9 +458,11 @@ config:
         """
         yaml_content = """
 type: double_wishbone
-side: LEFT
+side: left
+actuation: {type: direct}
+spring: {type: none}
 hardpoints:
-  LOWER_WISHBONE_INBOARD_FRONT: [250, 400, 200]
+  lower_wishbone_inboard_front: [250, 400, 200]
   # Missing most required points!
 
 config:

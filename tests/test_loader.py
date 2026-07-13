@@ -26,10 +26,12 @@ def invalid_yaml_geometry_file(tmp_path: Path):
 def invalid_geometry_file(tmp_path: Path):
     data = {
         "type": "double_wishbone",
-        "side": "LEFT",
+        "side": "left",
+        "actuation": {"type": "direct"},
+        "spring": {"type": "none"},
         "hardpoints": {
             # Missing most required hardpoints
-            "LOWER_WISHBONE_INBOARD_FRONT": [0, 0, 0],
+            "lower_wishbone_inboard_front": [0, 0, 0],
         },
         "config": {
             "steered": True,

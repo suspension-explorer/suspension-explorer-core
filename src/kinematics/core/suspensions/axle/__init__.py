@@ -3,6 +3,11 @@
 from kinematics.core.suspensions.axle.double_wishbone import (
     DoubleWishboneAxleSuspension,
 )
-from kinematics.core.suspensions.axle.double_wishbone_pushrod_rocker import (
-    DoubleWishbonePushrodRockerAxleSuspension,
+from kinematics.core.suspensions.axle.mechanisms import (
+    ArbNone,
+    ArbUBar,
+    AxleArb,
+    AxleHeaveLink,
+    HeaveLinkNone,
+    HeaveLinkRockerToRocker,
 )

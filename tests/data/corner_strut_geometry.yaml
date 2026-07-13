@@ -1,8 +1,13 @@
-type: double_wishbone_coilover
-side: LEFT
+type: double_wishbone
+side: left
 name: "corner strut (outboard)"
 version: "0.0.1"
-units: MILLIMETERS
+units: millimeters
+
+actuation:
+  type: direct
+spring:
+  type: coilover
 
 # Single left corner with an outboard spring/damper mounted on the lower
 # wishbone. STRUT_TOP is chassis-fixed and STRUT_BOTTOM moves rigidly with the

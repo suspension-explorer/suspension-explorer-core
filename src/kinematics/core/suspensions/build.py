@@ -1,37 +1,50 @@
-"""Build concrete suspensions from validated geometry specifications."""
+"""Build composed suspensions from validated geometry specifications."""
 
 from typing import cast
 
+from kinematics.core.elements import RockerPickup, RockerPickupType
 from kinematics.core.primitives.enums import PointID, ShimType
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import PointKey, Side
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.schema.geometry import (
+    ActuationSpec,
     AxleHardpointsSpec,
+    CornerSpringSpec,
     DoubleWishboneAxleGeometrySpec,
-    DoubleWishboneCoiloverGeometrySpec,
     DoubleWishboneGeometrySpec,
-    DoubleWishbonePushrodRockerArbGeometrySpec,
-    DoubleWishbonePushrodRockerAxleGeometrySpec,
-    DoubleWishbonePushrodRockerGeometrySpec,
     GeometrySpecBase,
 )
-from kinematics.core.suspensions.axle import (
-    DoubleWishboneAxleSuspension,
-    DoubleWishbonePushrodRockerAxleSuspension,
+from kinematics.core.suspensions.axle import DoubleWishboneAxleSuspension
+from kinematics.core.suspensions.axle.mechanisms import (
+    ArbNone,
+    ArbUBar,
+    AxleArb,
+    AxleHeaveLink,
+    HeaveLinkNone,
+    HeaveLinkRockerToRocker,
 )
 from kinematics.core.suspensions.base import Suspension
-from kinematics.core.suspensions.corner import (
-    DoubleWishboneCoiloverSuspension,
-    DoubleWishbonePushrodRockerArbSuspension,
-    DoubleWishbonePushrodRockerSuspension,
-    DoubleWishboneSuspension,
-    RockerSpringType,
+from kinematics.core.suspensions.corner import DoubleWishboneSuspension
+from kinematics.core.suspensions.corner.mechanisms import (
+    Actuation,
+    ActuationDirect,
+    ActuationPushrodRocker,
+    CornerSpring,
+    CornerSpringCoilover,
+    CornerSpringNone,
+    CornerSpringTorsionBar,
+)
+from kinematics.core.suspensions.enums import (
+    ActuationType,
+    ArbType,
+    CornerSpringType,
+    HeaveLinkType,
 )
 
 
 def build_suspension(spec: GeometrySpecBase) -> Suspension:
-    """Construct a suspension using the registered type definition."""
+    """Construct a suspension using the registered architecture definition."""
     from kinematics.core.suspensions.registry import get_suspension_definition
 
     definition = get_suspension_definition(spec.type)
@@ -46,45 +59,44 @@ def build_suspension(spec: GeometrySpecBase) -> Suspension:
 
 
 def build_double_wishbone(spec: GeometrySpecBase) -> Suspension:
-    """Build the basic double-wishbone corner."""
+    """Build one double-wishbone corner with composed mechanisms."""
     typed = cast(DoubleWishboneGeometrySpec, spec)
-    return _build_corner(typed, DoubleWishboneSuspension)
-
-
-def build_double_wishbone_coilover(spec: GeometrySpecBase) -> Suspension:
-    """Build the lower-wishbone-mounted coilover corner."""
-    typed = cast(DoubleWishboneCoiloverGeometrySpec, spec)
-    return _build_corner(typed, DoubleWishboneCoiloverSuspension)
-
-
-def build_double_wishbone_pushrod_rocker(spec: GeometrySpecBase) -> Suspension:
-    """Build an explicit pushrod-rocker corner."""
-    typed = cast(DoubleWishbonePushrodRockerGeometrySpec, spec)
-    return _build_rocker_corner(
-        typed,
-        DoubleWishbonePushrodRockerSuspension,
-        typed.spring.type,
-    )
-
-
-def build_double_wishbone_pushrod_rocker_arb(spec: GeometrySpecBase) -> Suspension:
-    """Build a pushrod-rocker corner with a rocker-side ARB pickup."""
-    typed = cast(DoubleWishbonePushrodRockerArbGeometrySpec, spec)
-    return _build_rocker_corner(
-        typed,
-        DoubleWishbonePushrodRockerArbSuspension,
-        typed.spring.type,
-    )
+    actuation = build_actuation(typed.actuation)
+    spring = build_corner_spring(typed.spring)
+    return _build_corner(typed, actuation, spring)
 
 
 def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
-    """Build a basic two-corner double-wishbone axle."""
+    """Build two composed corners and their shared axle mechanisms."""
     typed = cast(DoubleWishboneAxleGeometrySpec, spec)
-    _check_shim_support(typed.config, DoubleWishboneSuspension)
     side_points = _build_axle_side_points(typed.hardpoints)
 
-    for points in side_points.values():
-        _check_valid_points(points, DoubleWishboneSuspension)
+    external_pickups: list[RockerPickup] = []
+    droplink_arb_points: dict[Side, Point3] = {}
+    if typed.anti_roll.type is ArbType.U_BAR:
+        external_pickups.append(
+            RockerPickup(PointID.DROPLINK_ROCKER, RockerPickupType.DROPLINK)
+        )
+        for side, points in side_points.items():
+            try:
+                droplink_arb_points[side] = points.pop(PointID.DROPLINK_ARB)
+            except KeyError as error:
+                raise ValueError(f"{side.name} U-bar requires DROPLINK_ARB") from error
+
+    if typed.heave_link.type is HeaveLinkType.ROCKER_TO_ROCKER:
+        external_pickups.append(
+            RockerPickup(
+                PointID.HEAVE_LINK_ROCKER,
+                RockerPickupType.HEAVE_LINK,
+            )
+        )
+
+    actuation = build_actuation(
+        typed.corner.actuation,
+        external_pickups=tuple(external_pickups),
+    )
+    spring = build_corner_spring(typed.corner.spring)
+    _check_shim_support(typed.config, DoubleWishboneSuspension)
 
     side_configs = {
         Side.LEFT: typed.config,
@@ -96,12 +108,19 @@ def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
             version=typed.version,
             units=typed.units,
             side=side,
-            # A corner keys strictly on PointID; widen to the base PointKey field.
             hardpoints=cast("dict[PointKey, Point3]", points),
             config=side_configs[side],
+            actuation=actuation,
+            spring=spring,
         )
         for side, points in side_points.items()
     }
+
+    anti_roll = build_anti_roll(
+        typed,
+        droplink_arb_points,
+    )
+    heave_link = build_heave_link(typed)
     return DoubleWishboneAxleSuspension(
         name=typed.name,
         version=typed.version,
@@ -110,60 +129,85 @@ def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
         hardpoints={},
         config=typed.config,
         corners=corners,
+        anti_roll=anti_roll,
+        heave_link=heave_link,
     )
 
 
-def build_double_wishbone_pushrod_rocker_axle(
-    spec: GeometrySpecBase,
-) -> Suspension:
-    """Build two ARB-ready rocker corners and their shared anti-roll bar."""
-    typed = cast(DoubleWishbonePushrodRockerAxleGeometrySpec, spec)
-    corner_type = DoubleWishbonePushrodRockerArbSuspension
-    _check_shim_support(typed.config, corner_type)
-    side_points = _build_axle_side_points(typed.hardpoints)
-    droplink_arb_points: dict[Side, Point3] = {}
-    for side, points in side_points.items():
-        try:
-            droplink_arb_points[side] = points.pop(PointID.DROPLINK_ARB)
-        except KeyError as error:
+def build_actuation(
+    spec: ActuationSpec,
+    *,
+    external_pickups: tuple[RockerPickup, ...] = (),
+) -> Actuation:
+    """Build one typed corner actuation mechanism."""
+    if spec.type is ActuationType.DIRECT:
+        if external_pickups:
+            raise ValueError("Direct actuation does not accept rocker pickups")
+        return ActuationDirect()
+    if spec.type is ActuationType.PUSHROD_ROCKER:
+        return ActuationPushrodRocker(external_pickups=external_pickups)
+    raise TypeError(f"Unsupported actuation type: {spec.type}")
+
+
+def build_corner_spring(spec: CornerSpringSpec) -> CornerSpring:
+    """Build one typed corner spring mechanism."""
+    if spec.type is CornerSpringType.NONE:
+        return CornerSpringNone()
+    if spec.type is CornerSpringType.COILOVER:
+        return CornerSpringCoilover()
+    if spec.type is CornerSpringType.TORSION_BAR:
+        return CornerSpringTorsionBar()
+    raise TypeError(f"Unsupported corner spring type: {spec.type}")
+
+
+def build_anti_roll(
+    spec: DoubleWishboneAxleGeometrySpec,
+    droplink_points: dict[Side, Point3],
+) -> AxleArb:
+    """Build the selected shared anti-roll mechanism."""
+    center_points = _copy_points(spec.hardpoints.center)
+    if spec.anti_roll.type is ArbType.NONE:
+        if center_points:
             raise ValueError(
-                f"{side.name} rocker axle requires DROPLINK_ARB"
-            ) from error
-        _check_valid_points(points, corner_type)
-
-    center_points = _copy_points(typed.hardpoints.center)
-    expected_center = {PointID.ARB_AXIS_A, PointID.ARB_AXIS_B}
-    if set(center_points) != expected_center:
-        names = ", ".join(sorted(point.name for point in expected_center))
-        raise ValueError(f"Rocker axle center points must be exactly: {names}")
-
-    side_configs = {
-        Side.LEFT: typed.config,
-        Side.RIGHT: _mirror_config(typed.config),
-    }
-    corners = {
-        side: corner_type(
-            name=f"{typed.name}_{side.name.lower()}",
-            version=typed.version,
-            units=typed.units,
-            side=side,
-            # A corner keys strictly on PointID; widen to the base PointKey field.
-            hardpoints=cast("dict[PointKey, Point3]", points),
-            config=side_configs[side],
-            spring_type=typed.spring.type,
+                "Axle without anti-roll hardware does not accept center points"
+            )
+        return ArbNone()
+    if spec.anti_roll.type is ArbType.U_BAR:
+        return ArbUBar(
+            center_points=center_points,
+            droplink_points=droplink_points,
         )
-        for side, points in side_points.items()
-    }
-    return DoubleWishbonePushrodRockerAxleSuspension(
-        name=typed.name,
-        version=typed.version,
-        units=typed.units,
-        side=Side.CENTER,
-        hardpoints={},
-        config=typed.config,
-        corners=corners,
-        center_points=center_points,
-        droplink_arb_points=droplink_arb_points,
+    raise TypeError(f"Unsupported anti-roll type: {spec.anti_roll.type}")
+
+
+def build_heave_link(spec: DoubleWishboneAxleGeometrySpec) -> AxleHeaveLink:
+    """Build the selected shared heave mechanism."""
+    if spec.heave_link.type is HeaveLinkType.NONE:
+        return HeaveLinkNone()
+    if spec.heave_link.type is HeaveLinkType.ROCKER_TO_ROCKER:
+        return HeaveLinkRockerToRocker()
+    raise TypeError(f"Unsupported heave-link type: {spec.heave_link.type}")
+
+
+def _build_corner(
+    spec: DoubleWishboneGeometrySpec,
+    actuation: Actuation,
+    spring: CornerSpring,
+) -> DoubleWishboneSuspension:
+    """Build one corner after mechanism-aware point validation."""
+    _validate_side_signs(spec.hardpoints, spec.side)
+    _check_shim_support(spec.config, DoubleWishboneSuspension)
+    return DoubleWishboneSuspension(
+        name=spec.name,
+        version=spec.version,
+        units=spec.units,
+        side=spec.side,
+        hardpoints={
+            point: position.copy() for point, position in spec.hardpoints.items()
+        },
+        config=spec.config,
+        actuation=actuation,
+        spring=spring,
     )
 
 
@@ -197,49 +241,6 @@ def _build_axle_side_points(
     for side, points in side_points.items():
         _validate_side_signs(points, side)
     return side_points
-
-
-def _build_corner(
-    spec: DoubleWishboneGeometrySpec | DoubleWishboneCoiloverGeometrySpec,
-    cls: type[DoubleWishboneSuspension],
-) -> DoubleWishboneSuspension:
-    """Build one concrete corner after exact point validation."""
-    _check_valid_points(spec.hardpoints, cls)
-    _validate_side_signs(spec.hardpoints, spec.side)
-    _check_shim_support(spec.config, cls)
-    return cls(
-        name=spec.name,
-        version=spec.version,
-        units=spec.units,
-        side=spec.side,
-        hardpoints={
-            point: position.copy() for point, position in spec.hardpoints.items()
-        },
-        config=spec.config,
-    )
-
-
-def _build_rocker_corner(
-    spec: DoubleWishbonePushrodRockerGeometrySpec
-    | DoubleWishbonePushrodRockerArbGeometrySpec,
-    cls: type[DoubleWishbonePushrodRockerSuspension],
-    spring_type: RockerSpringType,
-) -> DoubleWishbonePushrodRockerSuspension:
-    """Build one rocker corner with an explicitly typed spring medium."""
-    _check_valid_points(spec.hardpoints, cls)
-    _validate_side_signs(spec.hardpoints, spec.side)
-    _check_shim_support(spec.config, cls)
-    return cls(
-        name=spec.name,
-        version=spec.version,
-        units=spec.units,
-        side=spec.side,
-        hardpoints={
-            point: position.copy() for point, position in spec.hardpoints.items()
-        },
-        config=spec.config,
-        spring_type=spring_type,
-    )
 
 
 def _copy_points(points: dict[PointID, Point3]) -> dict[PointID, Point3]:
@@ -296,16 +297,11 @@ def _mirror_config(config: SuspensionConfig) -> SuspensionConfig:
     return config.model_copy(update={"camber_shim": mirrored_shim})
 
 
-def _check_valid_points(points: dict[PointID, Point3], cls: type[Suspension]) -> None:
-    """Reject points the concrete suspension class does not define."""
-    unknown = set(points) - set(cls.all_valid_points())
-    if unknown:
-        names = ", ".join(sorted(point.name for point in unknown))
-        raise ValueError(f"Invalid hardpoints for {cls.TYPE_KEY}: {names}")
-
-
-def _check_shim_support(config: SuspensionConfig, cls: type[Suspension]) -> None:
-    """Reject a camber shim config on a type that does not support shims."""
+def _check_shim_support(
+    config: SuspensionConfig,
+    cls: type[Suspension],
+) -> None:
+    """Reject a camber shim config on an architecture without shim support."""
     if (
         config.camber_shim is not None
         and ShimType.OUTBOARD_CAMBER not in cls.SUPPORTED_SHIMS

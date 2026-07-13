@@ -28,6 +28,7 @@ class ElementType(StrEnum):
     ANTI_ROLL_BAR = "anti_roll_bar"
     TORSION_BAR = "torsion_bar"
     DROPLINK = "droplink"
+    HEAVE_LINK = "heave_link"
 
 
 class RockerPickupType(StrEnum):
@@ -37,6 +38,7 @@ class RockerPickupType(StrEnum):
 
     PUSHROD = "pushrod"
     DROPLINK = "droplink"
+    HEAVE_LINK = "heave_link"
 
 
 @dataclass(frozen=True)
@@ -143,8 +145,12 @@ class VariableLengthLinkElement(SuspensionElement):
         """
         Require a variable-length link type.
         """
-        if self.type is not ElementType.SPRING_DAMPER:
-            raise ValueError(f"Invalid variable-length element type: {self.type.value}")
+        valid_types = {ElementType.SPRING_DAMPER, ElementType.HEAVE_LINK}
+        if self.type not in valid_types:
+            raise ValueError(
+                "Variable-length links require type 'spring_damper' or "
+                f"'heave_link', got '{self.type.value}'."
+            )
 
     @property
     def point_keys(self) -> tuple[PointKey, ...]:

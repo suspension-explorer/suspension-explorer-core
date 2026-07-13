@@ -39,6 +39,7 @@ ELEMENT_STYLES = {
     ElementType.PUSHROD: LinkStyle("crimson"),
     ElementType.DROPLINK: LinkStyle("goldenrod"),
     ElementType.SPRING_DAMPER: LinkStyle("seagreen"),
+    ElementType.HEAVE_LINK: LinkStyle("darkmagenta", linestyle="--"),
     ElementType.RACK: LinkStyle("purple"),
     ElementType.UPRIGHT: LinkStyle("slategrey"),
     ElementType.ROCKER: LinkStyle("mediumvioletred"),

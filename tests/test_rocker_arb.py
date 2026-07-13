@@ -13,8 +13,11 @@ from kinematics.core.metrics.main import AxleMetricRows
 from kinematics.core.primitives.enums import PointID
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointRef, Side
-from kinematics.core.suspensions.axle import DoubleWishbonePushrodRockerAxleSuspension
-from kinematics.core.suspensions.corner import DoubleWishbonePushrodRockerSuspension
+from kinematics.core.suspensions.axle import ArbUBar, DoubleWishboneAxleSuspension
+from kinematics.core.suspensions.corner import (
+    ActuationPushrodRocker,
+    DoubleWishboneSuspension,
+)
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
 
 
@@ -30,8 +33,10 @@ def test_corner_spring_type_owns_derivative_declarations(
 ) -> None:
     torsion = load_geometry(test_data_dir / "corner_rocker_geometry.yaml")
     coilover = load_geometry(test_data_dir / "corner_strut_rocker_geometry.yaml")
-    assert isinstance(torsion, DoubleWishbonePushrodRockerSuspension)
-    assert isinstance(coilover, DoubleWishbonePushrodRockerSuspension)
+    assert isinstance(torsion, DoubleWishboneSuspension)
+    assert isinstance(coilover, DoubleWishboneSuspension)
+    assert isinstance(torsion.actuation, ActuationPushrodRocker)
+    assert isinstance(coilover.actuation, ActuationPushrodRocker)
 
     assert _definition_names(torsion) == {
         "deriv_rocker_angle_wrt_hub_z",
@@ -54,19 +59,33 @@ def test_corner_derivative_rejects_coincident_rocker_axis(
     test_data_dir: Path,
 ) -> None:
     corner = load_geometry(test_data_dir / "corner_rocker_geometry.yaml")
-    assert isinstance(corner, DoubleWishbonePushrodRockerSuspension)
-    corner.hardpoints[PointID.ROCKER_AXIS_REAR] = corner.hardpoints[
-        PointID.ROCKER_AXIS_FRONT
-    ]
+    assert isinstance(corner, DoubleWishboneSuspension)
+    assert isinstance(corner.actuation, ActuationPushrodRocker)
+    corner.hardpoints[PointID.ROCKER_AXIS_B] = corner.hardpoints[PointID.ROCKER_AXIS_A]
 
     with pytest.raises(ValueError, match="distinct rocker axis points"):
         corner.derivative_metric_definitions()
 
 
+def test_pushrod_outboard_is_required_but_not_rocker_mounted(
+    test_data_dir: Path,
+) -> None:
+    corner = load_geometry(test_data_dir / "corner_rocker_geometry.yaml")
+    assert isinstance(corner, DoubleWishboneSuspension)
+    assert isinstance(corner.actuation, ActuationPushrodRocker)
+
+    assert PointID.PUSHROD_OUTBOARD in corner.actuation.required_points
+    assert PointID.PUSHROD_OUTBOARD not in corner.actuation.rocker_mounted_point_ids
+    assert PointID.PUSHROD_INBOARD in corner.actuation.rocker_mounted_point_ids
+
+
 def test_axle_derivative_rejects_coincident_arb_axis(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
-    assert isinstance(axle, DoubleWishbonePushrodRockerAxleSuspension)
-    axle.center_points[PointID.ARB_AXIS_B] = axle.center_points[PointID.ARB_AXIS_A]
+    assert isinstance(axle, DoubleWishboneAxleSuspension)
+    assert isinstance(axle.anti_roll, ArbUBar)
+    axle.anti_roll.center_points[PointID.ARB_AXIS_B] = axle.anti_roll.center_points[
+        PointID.ARB_AXIS_A
+    ]
 
     with pytest.raises(ValueError, match="distinct ARB axis points"):
         axle.derivative_metric_definitions()
@@ -74,7 +93,8 @@ def test_axle_derivative_rejects_coincident_arb_axis(test_data_dir: Path) -> Non
 
 def test_arb_axle_uses_chirality_constraints(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
-    assert isinstance(axle, DoubleWishbonePushrodRockerAxleSuspension)
+    assert isinstance(axle, DoubleWishboneAxleSuspension)
+    assert isinstance(axle.anti_roll, ArbUBar)
 
     chirality = [
         constraint
@@ -87,7 +107,8 @@ def test_arb_axle_uses_chirality_constraints(test_data_dir: Path) -> None:
 
 def test_arb_axle_emits_hub_relative_derivatives(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
-    assert isinstance(axle, DoubleWishbonePushrodRockerAxleSuspension)
+    assert isinstance(axle, DoubleWishboneAxleSuspension)
+    assert isinstance(axle.anti_roll, ArbUBar)
     sweep = load_sweep(test_data_dir / "axle_rocker_sweep.yaml", axle)
     states, _ = solve_sweep(axle, sweep)
 
@@ -117,7 +138,7 @@ def test_arb_axle_emits_hub_relative_derivatives(test_data_dir: Path) -> None:
 
 def test_arb_diagnostics_detect_mirrored_arm_branch(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
-    assert isinstance(axle, DoubleWishbonePushrodRockerAxleSuspension)
+    assert isinstance(axle, DoubleWishboneAxleSuspension)
     sweep = load_sweep(test_data_dir / "axle_rocker_sweep.yaml", axle)
     states, stats = solve_sweep(axle, sweep)
     step = len(states) // 2
@@ -144,7 +165,7 @@ def test_arb_diagnostics_detect_mirrored_arm_branch(test_data_dir: Path) -> None
 
 def test_arb_diagnostics_detect_chirality_boundary(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
-    assert isinstance(axle, DoubleWishbonePushrodRockerAxleSuspension)
+    assert isinstance(axle, DoubleWishboneAxleSuspension)
     sweep = load_sweep(test_data_dir / "axle_rocker_sweep.yaml", axle)
     states, stats = solve_sweep(axle, sweep)
     step = len(states) // 2

@@ -66,6 +66,14 @@ _AXLE_SPECS = (
         "axle",
     ),
     MetricSpec("arb_twist", "ARB Twist", MetricUnit.DEG, "state", "axle", "arb"),
+    MetricSpec(
+        "heave_link_length",
+        "Heave Link Length",
+        MetricUnit.MM,
+        "state",
+        "axle",
+        "heave_link",
+    ),
 )
 
 _TOPOLOGY_SPECS = (

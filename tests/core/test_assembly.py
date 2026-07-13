@@ -12,6 +12,7 @@ from kinematics.core.elements import (
     RockerPickupType,
     TorsionElement,
     UprightElement,
+    VariableLengthLinkElement,
 )
 from kinematics.core.points.derived.manager import DerivedPointsSpec
 from kinematics.core.primitives.enums import PointID
@@ -88,6 +89,56 @@ def test_assembly_accepts_shared_element_points() -> None:
     assert assembly.elements == (link_a, link_b)
     assert assembly.referenced_point_keys == (DERIVED_POINT, FIXED_POINT, FREE_POINT)
     assert [path.label for path in assembly.element_paths] == ["Link A", "Link B"]
+
+
+def test_assembly_accepts_variable_length_heave_link() -> None:
+    heave_link = VariableLengthLinkElement(
+        label="Heave Link",
+        type=ElementType.HEAVE_LINK,
+        point_a=FIXED_POINT,
+        point_b=FREE_POINT,
+    )
+
+    assembly = SuspensionAssembly.from_state(
+        make_state(),
+        make_derived_spec(),
+        (heave_link,),
+        (DERIVED_POINT,),
+    )
+
+    assert heave_link.point_keys == (FIXED_POINT, FREE_POINT)
+    assert assembly.element_paths[0].type is ElementType.HEAVE_LINK
+    assert assembly.element_paths[0].points == (FIXED_POINT, FREE_POINT)
+
+
+def test_variable_length_link_rejects_rigid_element_type() -> None:
+    message = "require type 'spring_damper' or 'heave_link'"
+    with pytest.raises(ValueError, match=message):
+        VariableLengthLinkElement(
+            label="Invalid Variable Link",
+            type=ElementType.WISHBONE,
+            point_a=FIXED_POINT,
+            point_b=FREE_POINT,
+        )
+
+
+def test_rocker_heave_link_pickup_has_named_arm_path() -> None:
+    rocker = RockerElement(
+        label="Rocker",
+        rotation_axis=(FIXED_POINT, FREE_POINT),
+        pickups=(RockerPickup(DERIVED_POINT, RockerPickupType.HEAVE_LINK),),
+    )
+    assembly = SuspensionAssembly.from_state(
+        make_state(),
+        make_derived_spec(),
+        (rocker,),
+        (DERIVED_POINT,),
+    )
+
+    assert [path.label for path in assembly.element_paths] == [
+        "Rocker Axis",
+        "Rocker Heave Link Arm",
+    ]
 
 
 def test_point_catalog_rejects_derived_point_marked_free() -> None:

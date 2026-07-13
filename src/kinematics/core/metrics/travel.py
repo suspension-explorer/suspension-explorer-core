@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from kinematics.core.primitives.enums import Axis, PointID
+from kinematics.core.primitives.enums import Axis
 
 if TYPE_CHECKING:
     from kinematics.core.metrics.context import MetricContext
@@ -53,9 +53,10 @@ def calculate_damper_length(ctx: "MetricContext") -> float | None:
 
         damper_length = |STRUT_TOP - STRUT_BOTTOM|
     """
-    if not ctx.suspension.has_strut:
+    damper_points = ctx.suspension.damper_points()
+    if damper_points is None:
         return None
-    top = ctx.state.get(PointID.STRUT_TOP)
-    bottom = ctx.state.get(PointID.STRUT_BOTTOM)
+    top = ctx.state.get(damper_points[0])
+    bottom = ctx.state.get(damper_points[1])
     # Euclidean distance between the two mounts (a Point3 - Point3 -> Vector3).
     return float((top - bottom).norm())

@@ -1,8 +1,10 @@
-type: double_wishbone_pushrod_rocker
+type: double_wishbone
 side: left
 name: corner rocker
 version: 0.0.1
-units: MILLIMETERS
+units: millimeters
+actuation:
+  type: pushrod_rocker
 spring:
   type: torsion_bar
 hardpoints:
@@ -18,8 +20,8 @@ hardpoints:
   axle_outboard: {x: -20, y: 950, z: 313.426}
   pushrod_outboard: {x: 0, y: 870, z: 240}
   pushrod_inboard: {x: 0, y: 340, z: 500}
-  rocker_axis_front: {x: 100, y: 340, z: 450}
-  rocker_axis_rear: {x: -100, y: 340, z: 450}
+  rocker_axis_a: {x: 100, y: 340, z: 450}
+  rocker_axis_b: {x: -100, y: 340, z: 450}
 config:
   steered: true
   wheel:

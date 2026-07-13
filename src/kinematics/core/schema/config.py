@@ -7,7 +7,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from kinematics.core.primitives.constants import MM_PER_INCH
-from kinematics.core.schema.coercion import PydanticDirection3, PydanticPoint3
+from kinematics.core.primitives.enums import PointID
+from kinematics.core.primitives.geometry import Direction3, Point3
 
 
 class TireConfig(BaseModel):
@@ -56,9 +57,9 @@ class CamberShimConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True, extra="forbid")
 
-    shim_face_point_a: PydanticPoint3
-    shim_face_point_b: PydanticPoint3
-    shim_face_normal: PydanticDirection3
+    shim_face_point_a: Point3
+    shim_face_point_b: Point3
+    shim_face_normal: Direction3
     design_thickness: float
     setup_thickness: float
 
@@ -79,15 +80,15 @@ class SuspensionConfig(BaseModel):
 
     steered: bool
     wheel: WheelConfig
-    cg_position: PydanticPoint3
+    cg_position: Point3
     wheelbase: float
     camber_shim: CamberShimConfig | None = None
-    upright_mounted_points: list[str] = Field(
+    upright_mounted_points: list[PointID] = Field(
         default_factory=lambda: [
-            "axle_inboard",
-            "axle_outboard",
-            "pushrod_outboard",
-            "trackrod_outboard",
+            PointID.AXLE_INBOARD,
+            PointID.AXLE_OUTBOARD,
+            PointID.PUSHROD_OUTBOARD,
+            PointID.TRACKROD_OUTBOARD,
         ]
     )
     axle_position: Literal["front", "rear"] | None = None

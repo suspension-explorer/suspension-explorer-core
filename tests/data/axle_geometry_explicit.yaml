@@ -1,7 +1,16 @@
 type: double_wishbone_axle
 name: "test axle explicit"
 version: "0.0.1"
-units: MILLIMETERS
+units: millimeters
+corner:
+  actuation:
+    type: direct
+  spring:
+    type: none
+anti_roll:
+  type: none
+heave_link:
+  type: none
 hardpoints:
   left:
     lower_wishbone_inboard_front: {x: 250, y: 400, z: 200}

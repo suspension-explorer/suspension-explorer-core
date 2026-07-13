@@ -1,15 +1,16 @@
 """
 Double-wishbone corner suspension implementation.
 
-This module defines the DoubleWishboneSuspension class which combines topology
-definition, geometry storage, and kinematic behavior in a single unified class.
+This module defines the stable double-wishbone locating architecture. Installed
+actuation and spring behavior is composed through typed mechanism fields.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections import OrderedDict
+from dataclasses import dataclass, field
 from functools import partial
-from typing import ClassVar, Sequence, cast
+from typing import TYPE_CHECKING, ClassVar, Sequence, cast
 
 from kinematics.core.constraints import (
     AngleConstraint,
@@ -51,21 +52,25 @@ from kinematics.core.primitives.vector_utils.geometric import (
 from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.suspensions.config.shims import solve_camber_shim_assembly
+from kinematics.core.suspensions.corner.mechanisms import (
+    Actuation,
+    ActuationDirect,
+    CornerSpring,
+    CornerSpringNone,
+)
+from kinematics.core.suspensions.enums import SuspensionType
 from kinematics.core.targeting import WorldAxisSystem
+
+if TYPE_CHECKING:
+    from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
+    from kinematics.core.metrics.main import MetricRow
 
 
 @dataclass
 class DoubleWishboneSuspension(Suspension):
-    """
-    Double wishbone suspension with all topology and behavior in one class.
+    """Double-wishbone locating geometry with composed corner mechanisms."""
 
-    This class:
-    - Defines valid points as class attributes (replacing SuspensionTemplate)
-    - Stores hardpoints and config as instance data (replacing TemplateGeometry)
-    - Implements constraints, visualization, and solver interface (replacing provider)
-    """
-
-    TYPE_KEY: ClassVar[str] = "double_wishbone"
+    TYPE_KEY: ClassVar[SuspensionType] = SuspensionType.DOUBLE_WISHBONE
     ALIASES: ClassVar[frozenset[str]] = frozenset(
         {"double_wishbone_front", "double_wishbone_rear"}
     )
@@ -110,15 +115,6 @@ class DoubleWishboneSuspension(Suspension):
         PointID.CONTACT_PATCH_CENTER,
     )
 
-    # Config names for points that should rotate with the upright body when a
-    # split camber shim is solved.
-    UPRIGHT_MOUNTED_POINT_IDS: ClassVar[dict[str, PointID]] = {
-        "axle_inboard": PointID.AXLE_INBOARD,
-        "axle_outboard": PointID.AXLE_OUTBOARD,
-        "pushrod_outboard": PointID.PUSHROD_OUTBOARD,
-        "trackrod_outboard": PointID.TRACKROD_OUTBOARD,
-    }
-
     # Free points that move during solving.
     FREE_POINTS: ClassVar[tuple[PointID, ...]] = (
         PointID.UPPER_WISHBONE_OUTBOARD,
@@ -129,9 +125,46 @@ class DoubleWishboneSuspension(Suspension):
         PointID.TRACKROD_INBOARD,
     )
 
+    actuation: Actuation = field(default_factory=ActuationDirect, kw_only=True)
+    spring: CornerSpring = field(default_factory=CornerSpringNone, kw_only=True)
+
+    def required_points(self) -> frozenset[PointID]:
+        """Return base and selected mechanism point requirements."""
+        return (
+            self.REQUIRED_POINTS
+            | self.actuation.required_points
+            | self.spring.required_points
+        )
+
+    def validate_hardpoints(self) -> None:
+        """Validate base geometry and selected mechanism compatibility."""
+        super().validate_hardpoints()
+        self.actuation.validate(self.hardpoints)
+        self.spring.validate(self.actuation)
+
     def free_points(self) -> Sequence[PointID]:
-        """Points that move during solving."""
-        return self.FREE_POINTS
+        """Return base and selected mechanism moving points."""
+        return (
+            *self.FREE_POINTS,
+            *self.actuation.free_points,
+            *self.spring.free_points,
+        )
+
+    def output_points(self) -> tuple[PointKey, ...]:
+        """Return base and selected mechanism output points."""
+        return tuple(
+            dict.fromkeys(
+                (
+                    *self.OUTPUT_POINTS,
+                    *self.actuation.output_points,
+                    *self.spring.output_points,
+                )
+            )
+        )
+
+    def damper_points(self) -> tuple[PointKey, PointKey] | None:
+        """Return selected linear spring/damper endpoints."""
+        return self.spring.damper_points
 
     def initial_state(self) -> SuspensionState:
         """Build initial state from hardpoints, applying shims if configured."""
@@ -219,7 +252,38 @@ class DoubleWishboneSuspension(Suspension):
             )
         )
 
+        constraints.extend(self.actuation.constraints(initial_state))
+        constraints.extend(self.spring.constraints(initial_state, self.actuation))
         return constraints
+
+    def derivative_metric_definitions(
+        self,
+    ) -> tuple[DerivativeMetricDefinition, ...]:
+        """Compose derivative declarations from actuation and spring mechanisms."""
+        initial = self.initial_state()
+        return (
+            *self.actuation.derivative_metric_definitions(initial, self.side),
+            *self.spring.derivative_metric_definitions(
+                initial,
+                self.actuation,
+                self.side,
+            ),
+        )
+
+    def topology_metric_values(self, state: SuspensionState) -> MetricRow:
+        """Compose state metrics from actuation and spring mechanisms."""
+        initial = self.initial_state()
+        row: MetricRow = OrderedDict()
+        row.update(self.actuation.topology_metric_values(state, initial, self.side))
+        row.update(
+            self.spring.topology_metric_values(
+                state,
+                initial,
+                self.actuation,
+                self.side,
+            )
+        )
+        return row
 
     def derived_spec(self) -> DerivedPointsSpec:
         """Specification for derived points (wheel center, contact patch, etc.)."""
@@ -342,7 +406,7 @@ class DoubleWishboneSuspension(Suspension):
 
     def elements(self) -> tuple[SuspensionElement, ...]:
         """Return the physical elements in this corner."""
-        return (
+        base_elements: tuple[SuspensionElement, ...] = (
             RigidLinkElement(
                 label="Upper Wishbone Front Leg",
                 type=ElementType.WISHBONE,
@@ -406,6 +470,11 @@ class DoubleWishboneSuspension(Suspension):
                 contact_patch=PointID.CONTACT_PATCH_CENTER,
             ),
         )
+        return (
+            *base_elements,
+            *self.actuation.elements(),
+            *self.spring.elements(self.actuation),
+        )
 
     def apply_camber_shim(self, positions: dict[PointKey, Point3]) -> None:
         """
@@ -442,9 +511,8 @@ class DoubleWishboneSuspension(Suspension):
         if assembly_solution.upright_body_rot_angle_rad > EPS_GEOMETRIC:
             lbj = positions[PointID.LOWER_WISHBONE_OUTBOARD]
             rot_axis = Direction3(assembly_solution.upright_body_rot_axis)
-            for point_name in self.config.upright_mounted_points:
-                point_id = self.UPRIGHT_MOUNTED_POINT_IDS.get(point_name)
-                if point_id is not None and point_id in positions:
+            for point_id in self.config.upright_mounted_points:
+                if point_id in positions:
                     positions[point_id] = rotate_point_about_axis(
                         positions[point_id],
                         lbj,

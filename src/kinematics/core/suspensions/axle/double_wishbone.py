@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar, Sequence
@@ -30,11 +31,20 @@ from kinematics.core.primitives.vector_utils.geometric import (
     compute_point_point_distance,
 )
 from kinematics.core.state import SuspensionState
+from kinematics.core.suspensions.axle.mechanisms import (
+    ArbNone,
+    AxleArb,
+    AxleHeaveLink,
+    HeaveLinkNone,
+)
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.suspensions.corner import DoubleWishboneSuspension
+from kinematics.core.suspensions.enums import SuspensionType
 
 if TYPE_CHECKING:
-    from kinematics.core.metrics.main import AxleMetricRows
+    from kinematics.core.diagnostics import DiagnosticIssue
+    from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
+    from kinematics.core.metrics.main import AxleMetricRows, MetricRow
     from kinematics.core.sensitivity import TangentField
 
 
@@ -61,15 +71,11 @@ class _CornerPositionView(Mapping[PointID, Any]):
 class DoubleWishboneAxleSuspension(Suspension):
     """Two double-wishbone corners coupled by their inboard trackrod points."""
 
-    TYPE_KEY: ClassVar[str] = "double_wishbone_axle"
+    TYPE_KEY: ClassVar[SuspensionType] = SuspensionType.DOUBLE_WISHBONE_AXLE
     REQUIRED_POINTS: ClassVar[frozenset[PointID]] = frozenset()
-    OUTPUT_POINTS: ClassVar[tuple[PointKey, ...]] = tuple(
-        PointRef(Side.LEFT, point) for point in DoubleWishboneSuspension.OUTPUT_POINTS
-    ) + tuple(
-        PointRef(Side.RIGHT, point) for point in DoubleWishboneSuspension.OUTPUT_POINTS
-    )
-
     corners: dict[Side, DoubleWishboneSuspension] = field(default_factory=dict)
+    anti_roll: AxleArb = field(default_factory=ArbNone, kw_only=True)
+    heave_link: AxleHeaveLink = field(default_factory=HeaveLinkNone, kw_only=True)
 
     @property
     def is_axle(self) -> bool:
@@ -87,6 +93,8 @@ class DoubleWishboneAxleSuspension(Suspension):
                     f"'{side.name.lower()}'."
                 )
             corner.validate_hardpoints()
+        self.anti_roll.validate(self)
+        self.heave_link.validate(self)
 
     def initial_state(self) -> SuspensionState:
         """Combine both corner states under side-qualified point keys."""
@@ -107,16 +115,29 @@ class DoubleWishboneAxleSuspension(Suspension):
                 PointRef(side, point) for point in corner_state.free_points
             )
 
-        self._initial_state = SuspensionState(positions, free_points)
+        state = SuspensionState(positions, free_points)
+        self.anti_roll.add_to_state(state)
+        state.free_points_order = sorted(state.free_points)
+        self._initial_state = state
         return self._initial_state
 
     def free_points(self) -> Sequence[PointKey]:
         """Return both corners' free points under side-qualified keys."""
-        return tuple(
+        corner_points = tuple(
             PointRef(side, point)
             for side, corner in self.corners.items()
             for point in corner.free_points()
         )
+        return (*corner_points, *self.anti_roll.free_points)
+
+    def output_points(self) -> tuple[PointKey, ...]:
+        """Return composed corner and shared mechanism output points."""
+        corner_points = tuple(
+            side_qualified(side, point)
+            for side in (Side.LEFT, Side.RIGHT)
+            for point in self.corners[side].output_points()
+        )
+        return tuple(dict.fromkeys((*corner_points, *self.anti_roll.output_points)))
 
     def constraints(self) -> list[Constraint]:
         """Combine remapped corner constraints and trackrod coupling."""
@@ -138,7 +159,31 @@ class DoubleWishboneAxleSuspension(Suspension):
                 compute_point_point_distance(left, right),
             )
         )
+        constraints.extend(self.anti_roll.constraints(self))
         return constraints
+
+    def derivative_metric_definitions(
+        self,
+    ) -> tuple[DerivativeMetricDefinition, ...]:
+        """Compose axle mechanism derivative declarations."""
+        return (
+            *self.anti_roll.derivative_metric_definitions(self),
+            *self.heave_link.derivative_metric_definitions(self),
+        )
+
+    def topology_metric_values(self, state: SuspensionState) -> MetricRow:
+        """Compose axle mechanism state metrics."""
+        row: MetricRow = OrderedDict()
+        row.update(self.anti_roll.topology_metric_values(self, state))
+        row.update(self.heave_link.topology_metric_values(state))
+        return row
+
+    def topology_diagnostics(
+        self,
+        states: list[SuspensionState],
+    ) -> list[DiagnosticIssue]:
+        """Return diagnostics owned by shared axle mechanisms."""
+        return self.anti_roll.topology_diagnostics(self, states)
 
     def derived_spec(self) -> DerivedPointsSpec:
         """Combine remapped corner derived-point specifications."""
@@ -223,11 +268,16 @@ class DoubleWishboneAxleSuspension(Suspension):
             for side, corner in self.corners.items()
             for element in corner.elements()
         )
-        return elements + (
+        base_elements = elements + (
             RackElement(
                 label="Steering Rack",
                 left_inner=PointRef(Side.LEFT, PointID.TRACKROD_INBOARD),
                 right_inner=PointRef(Side.RIGHT, PointID.TRACKROD_INBOARD),
                 translation_axis=Axis.Y,
             ),
+        )
+        return (
+            *base_elements,
+            *self.anti_roll.elements(self),
+            *self.heave_link.elements(),
         )

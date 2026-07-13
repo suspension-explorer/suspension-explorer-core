@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from kinematics.cli.io.loaders import load_geometry
-from kinematics.cli.visualization.main import renderer_elements
+from kinematics.cli.visualization.main import ELEMENT_STYLES, renderer_elements
 from kinematics.core.elements import (
     AxisProjection,
     ElementType,
@@ -44,8 +44,8 @@ def test_corner_rocker_paths_include_perpendicular_arm_projection(
     )
 
     assert rocker.rotation_axis == (
-        PointID.ROCKER_AXIS_FRONT,
-        PointID.ROCKER_AXIS_REAR,
+        PointID.ROCKER_AXIS_A,
+        PointID.ROCKER_AXIS_B,
     )
     assert all(isinstance(path.type, ElementType) for path in paths)
     assert all(not hasattr(path, "color") for path in paths)
@@ -113,3 +113,11 @@ def test_cli_renderer_adds_styles_to_unstyled_element_paths(
     )
     for label in {path.label for path in paths}:
         assert sum(link.label == label for link in rendered) == 1
+
+
+def test_cli_renderer_has_distinct_heave_link_style() -> None:
+    heave_style = ELEMENT_STYLES[ElementType.HEAVE_LINK]
+
+    assert heave_style != ELEMENT_STYLES[ElementType.SPRING_DAMPER]
+    assert heave_style.color
+    assert heave_style.linestyle == "--"
