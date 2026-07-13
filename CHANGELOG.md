@@ -11,12 +11,43 @@ All notable changes to this project will be documented in this file.
 - Declarative derivative metrics use analytical solution-manifold tangents and forward-mode automatic differentiation for arbitrary scalar responses and drivers.
 - Advisory sweep diagnostics report convergence, residual acceptance, branch continuity, derivative availability, rocker and anti-roll-bar chirality, and transmission margin.
 - Coupled axle models solve left and right corners together and support either mirrored or independently authored geometry.
-- The public `analyze_sweep()` and `initial_pose()` APIs return structured positions, metrics, locations, metadata, display topology, diagnostics, references, and solved frames.
+- The public `analyze_sweep()` and `initial_pose()` APIs return structured positions, metrics, locations, metadata, renderer-neutral element paths, diagnostics, references, and solved frames.
 
 ### Changed
 
+- Split the package into a transport-independent `kinematics.core` solver API and
+  a `kinematics.cli` adapter for YAML files, result writing, terminal behavior,
+  and optional visualization. CLI-only dependencies now live in the `cli` extra.
+- Core suspension models now compose explicit rigid-link, variable-link, rack,
+  upright, torsion, rocker, and wheel elements in a validated
+  `SuspensionAssembly`. Its identifier-only `PointCatalog` relates elements to
+  fixed, free, and derived points without duplicating solver state. Matplotlib
+  styles are owned by the CLI visualization adapter.
+- Sweep analysis can consume existing solved states, so CLI animation reuses the
+  primary solve instead of solving the same sweep twice.
+- File-based sweeps use a lean evaluated result containing solved states,
+  metrics, solver statistics, and diagnostics. Rich presentation analysis is
+  built only for consumers that request it.
+- The root `kinematics` package is no longer a second API facade. Public solver
+  workflows and value types are imported from their defining `kinematics.core`
+  modules, and transport flattening helpers live in `kinematics.core.export`.
+- Sweep target definitions and target-direction resolution now share the
+  canonical `kinematics.core.targeting` module. Presentation-model helpers live
+  in `kinematics.core.presentation`.
+- Optional diagnostic, derivative, and setup-reference failures are exposed as
+  structured advisory warnings instead of disappearing silently.
+- Diagnostic categories and severities use typed string enums across the core
+  and CLI boundary.
+- Physical elements and assemblies own renderer-neutral path topology. CLI plots
+  and animations add Matplotlib styling client-side, and structured analysis
+  exposes the same unstyled paths for external clients. Static visualization
+  supports both corner and axle assemblies and checks every wheel contact patch.
+- Core-only CI now exercises numerical, constraint, Jacobian, state, target,
+  derived-point, and rigid-body tests without CLI or visualization dependencies.
 - Derived-point target Jacobians now evaluate only the target's transitive dependency chain and seed only relevant free points, substantially reducing solve time.
-- Geometry parsing, validation, and construction now pass through `kinematics.schema` and the suspension registry; filesystem access remains in `kinematics.io`.
+- Geometry parsing, validation, and construction now pass through
+  `kinematics.core.schema` and the suspension registry; filesystem access remains
+  in `kinematics.cli.io`.
 - Metric identities are lowercase, unit-free `snake_case`. Units use typed metadata and are written in CSV metadata or Parquet field metadata.
 - Corner locations remain structural in the analysis API and are rendered as `_left` and `_right` suffixes only in flat result files.
 - Steering metrics use `roadwheel_angle`; the concrete steering input is `trackrod_inboard`, and wheel-center longitudinal motion is expressed directly as `deriv_wheel_center_x_wrt_hub_z`.
@@ -24,7 +55,14 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking changes
 
-- Removed suspension type aliases `double_wishbone_front` and `double_wishbone_rear`; use an explicit canonical type and configuration.
+- Moved implementation imports under `kinematics.core`; moved low-level geometry
+  and numerical types under `kinematics.core.primitives`.
+- Replaced visualization-specific suspension methods and style-bearing core links
+  with physical declarations in `core.elements` and `core.assembly`.
+- Removed package-level `kinematics.core` workflow re-exports and YAML loader
+  aliases; import workflows and adapters from their defining modules.
+- Suspension capabilities now come from the physical assembly instead of
+  matching free-form suspension type strings in visualization code.
 - Removed legacy geometry construction and loader paths in favor of validated schemas, `build_suspension()`, `load_geometry()`, and `load_sweep()`.
 - Renamed `SweepFile` to `SweepSpec`.
 - Removed units from metric keys and changed flat axle corner columns from side prefixes to side suffixes, for example `left_camber_deg` to `camber_left`.

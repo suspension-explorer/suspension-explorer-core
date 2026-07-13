@@ -3,14 +3,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from kinematics.constraints import DistanceConstraint
-from kinematics.core.constants import TEST_TOLERANCE
-from kinematics.core.enums import Axis, PointID, TargetPositionMode
-from kinematics.core.types import PointTargetAxis, SweepConfig
-from kinematics.io import load_geometry
-from kinematics.main import solve_sweep
-from kinematics.points.derived.manager import DerivedPointsManager
-from kinematics.solver import PointTarget
+from kinematics.cli.io.loaders import load_geometry
+from kinematics.core.constraints import DistanceConstraint
+from kinematics.core.points.derived.manager import DerivedPointsManager
+from kinematics.core.primitives.constants import TEST_TOLERANCE
+from kinematics.core.primitives.enums import Axis, PointID, TargetPositionMode
+from kinematics.core.sweep import solve_sweep
+from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
 
 
 @pytest.fixture
@@ -120,29 +119,17 @@ def test_run_solver(
     print("Creating animation...")
 
     # Defer visualization imports to avoid collection errors when matplotlib is missing.
-    from kinematics.visualization.animation import create_animation
-    from kinematics.visualization.main import SuspensionVisualizer, WheelVisualization
+    from kinematics.cli.visualization.animation import create_animation
+    from kinematics.cli.visualization.main import build_render_model
 
-    # Extract positions from SuspensionState objects for animation.
-    position_states_positions = [state.positions for state in position_states]
     output_path = (
         Path(__file__).parent.parent / "data" / "manual" / "suspension_motion.mp4"
     )
 
-    r_aspect = 0.55
-    x_section = 270
-    x_diameter = 13 * 25.4
-
-    wheel_config = WheelVisualization(
-        diameter=x_diameter + r_aspect * x_section * 2,
-        width=225,
-    )
-
-    visualization_links = suspension.get_visualization_links()
-    visualizer = SuspensionVisualizer(visualization_links, wheel_config)
+    render_model = build_render_model(suspension)
     create_animation(
-        position_states_positions,
-        initial_positions,
-        visualizer,
+        [render_model.positions(state) for state in position_states],
+        render_model.positions(suspension.initial_state()),
+        render_model.visualizer,
         output_path,
     )

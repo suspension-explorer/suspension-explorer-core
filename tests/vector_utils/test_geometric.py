@@ -3,9 +3,14 @@ import math
 import numpy as np
 import pytest
 
-from kinematics.core.constants import TEST_TOLERANCE
-from kinematics.core.geometry import Direction3, Point3, Vector3
-from kinematics.core.vector_utils.geometric import (
+from kinematics.cli.visualization.vector_utils import (
+    plot_line_plane_intersection,
+    plot_plane_from_points,
+    plot_plane_intersection,
+)
+from kinematics.core.primitives.constants import TEST_TOLERANCE
+from kinematics.core.primitives.geometry import Direction3, Point3, Vector3
+from kinematics.core.primitives.vector_utils.geometric import (
     compute_point_point_distance,
     compute_point_point_midpoint,
     compute_point_to_line_distance,
@@ -17,11 +22,6 @@ from kinematics.core.vector_utils.geometric import (
     intersect_line_with_vertical_plane,
     intersect_two_planes,
     plane_from_three_points,
-)
-from kinematics.core.vector_utils.visualization import (
-    plot_line_plane_intersection,
-    plot_plane_from_points,
-    plot_plane_intersection,
 )
 
 

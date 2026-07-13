@@ -1,1 +1,0 @@
-# Rigid body component implementations.

@@ -5,17 +5,17 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from kinematics.constraints import ScalarTripleProductConstraint
-from kinematics.core.enums import PointID
-from kinematics.core.geometry import Point3
-from kinematics.core.point_ref import PointRef, Side
-from kinematics.diagnostics import diagnose_sweep
-from kinematics.io import load_geometry
-from kinematics.io.sweep_loader import parse_sweep_file
-from kinematics.main import compute_sweep_metrics, solve_sweep
-from kinematics.metrics.main import AxleMetricRows
-from kinematics.suspensions.axle import DoubleWishbonePushrodRockerAxleSuspension
-from kinematics.suspensions.corner import DoubleWishbonePushrodRockerSuspension
+from kinematics.cli.io.loaders import load_geometry
+from kinematics.cli.io.sweep_loader import load_sweep
+from kinematics.core.constraints import ScalarTripleProductConstraint
+from kinematics.core.diagnostics import diagnose_sweep
+from kinematics.core.metrics.main import AxleMetricRows
+from kinematics.core.primitives.enums import PointID
+from kinematics.core.primitives.geometry import Point3
+from kinematics.core.primitives.point_ref import PointRef, Side
+from kinematics.core.suspensions.axle import DoubleWishbonePushrodRockerAxleSuspension
+from kinematics.core.suspensions.corner import DoubleWishbonePushrodRockerSuspension
+from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
 
 
 def _definition_names(suspension) -> set[str]:
@@ -88,7 +88,7 @@ def test_arb_axle_uses_chirality_constraints(test_data_dir: Path) -> None:
 def test_arb_axle_emits_hub_relative_derivatives(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
     assert isinstance(axle, DoubleWishbonePushrodRockerAxleSuspension)
-    sweep = parse_sweep_file(test_data_dir / "axle_rocker_sweep.yaml", axle)
+    sweep = load_sweep(test_data_dir / "axle_rocker_sweep.yaml", axle)
     states, _ = solve_sweep(axle, sweep)
 
     result = compute_sweep_metrics(axle, sweep, states)
@@ -118,7 +118,7 @@ def test_arb_axle_emits_hub_relative_derivatives(test_data_dir: Path) -> None:
 def test_arb_diagnostics_detect_mirrored_arm_branch(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
     assert isinstance(axle, DoubleWishbonePushrodRockerAxleSuspension)
-    sweep = parse_sweep_file(test_data_dir / "axle_rocker_sweep.yaml", axle)
+    sweep = load_sweep(test_data_dir / "axle_rocker_sweep.yaml", axle)
     states, stats = solve_sweep(axle, sweep)
     step = len(states) // 2
     state = states[step].copy()
@@ -145,7 +145,7 @@ def test_arb_diagnostics_detect_mirrored_arm_branch(test_data_dir: Path) -> None
 def test_arb_diagnostics_detect_chirality_boundary(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry_rocker.yaml")
     assert isinstance(axle, DoubleWishbonePushrodRockerAxleSuspension)
-    sweep = parse_sweep_file(test_data_dir / "axle_rocker_sweep.yaml", axle)
+    sweep = load_sweep(test_data_dir / "axle_rocker_sweep.yaml", axle)
     states, stats = solve_sweep(axle, sweep)
     step = len(states) // 2
     state = states[step].copy()

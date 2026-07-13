@@ -4,17 +4,17 @@ from pathlib import Path
 
 import pytest
 
-from kinematics.core.enums import Axis, PointID
-from kinematics.core.point_ref import PointRef, Side
-from kinematics.io import load_geometry
-from kinematics.io.sweep_loader import parse_sweep_file
-from kinematics.main import compute_sweep_metrics, solve_sweep
-from kinematics.metrics import (
+from kinematics.cli.io.loaders import load_geometry
+from kinematics.cli.io.sweep_loader import load_sweep
+from kinematics.core.metrics import (
     AxleMetricRows,
     compute_metrics_for_state_from_suspension,
     compute_metrics_for_sweep,
 )
-from kinematics.suspensions.axle import DoubleWishboneAxleSuspension
+from kinematics.core.primitives.enums import Axis, PointID
+from kinematics.core.primitives.point_ref import PointRef, Side
+from kinematics.core.suspensions.axle import DoubleWishboneAxleSuspension
+from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
 
 
 def test_mirrored_axle_builds_two_explicit_corners(test_data_dir: Path) -> None:
@@ -33,7 +33,7 @@ def test_basic_axle_sweep_solves_and_emits_structural_metrics(
 ) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
     assert isinstance(axle, DoubleWishboneAxleSuspension)
-    sweep = parse_sweep_file(test_data_dir / "axle_sweep.yaml", axle)
+    sweep = load_sweep(test_data_dir / "axle_sweep.yaml", axle)
 
     states, stats = solve_sweep(axle, sweep)
     metrics = compute_sweep_metrics(axle, sweep, states)

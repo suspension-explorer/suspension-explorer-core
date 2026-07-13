@@ -13,17 +13,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
-from kinematics import load_geometry
-from kinematics.core.enums import PointID
-from kinematics.core.geometry import extract_array
-from kinematics.schema import CamberShimConfig
-from kinematics.suspensions.base import Suspension
-from kinematics.visualization.api import visualize_geometry
-from kinematics.visualization.main import SuspensionVisualizer, WheelVisualization
-from kinematics.visualization.plots import (
+from kinematics.cli.io.loaders import load_geometry
+from kinematics.cli.visualization.api import visualize_geometry
+from kinematics.cli.visualization.main import (
+    SuspensionVisualizer,
+    build_render_model,
+)
+from kinematics.cli.visualization.plots import (
     compute_bounds_from_positions,
     configure_3d_axis,
 )
+from kinematics.core.primitives.enums import PointID
+from kinematics.core.primitives.geometry import extract_array
+from kinematics.core.schema import CamberShimConfig
+from kinematics.core.suspensions.base import Suspension
 
 # Shim configuration constants.
 DESIGN_SHIM_THICKNESS = 30.0  # mm - design/baseline shim stack thickness.
@@ -130,27 +133,25 @@ def plot_front_view_comparison(
 
     # Helper: draw all elements for a suspension in a single color.
     def _draw_suspension(suspension, state, color: str, label: str) -> None:
-        wheel_cfg = suspension.config.wheel
-        wheel_config = WheelVisualization(
-            diameter=wheel_cfg.tire.nominal_radius * 2,
-            width=wheel_cfg.tire.section_width,
-        )
-        vis = SuspensionVisualizer(suspension.get_visualization_links(), wheel_config)
+        render_model = build_render_model(suspension)
+        vis = render_model.visualizer
+        displayed_positions = render_model.positions(state)
+        wheel_config = vis.wheel_config
 
         # Draw links.
         first = True
         for link in vis.links:
-            pts = np.stack([extract_array(state.positions[pid]) for pid in link.points])
+            pts = np.asarray([displayed_positions[name] for name in link.points])
             if len(link.points) > 1:
                 ax.plot(
                     pts[:, 0],
                     pts[:, 1],
                     pts[:, 2],
                     color=color,
-                    linewidth=link.linewidth,
-                    linestyle=link.linestyle,
-                    marker=link.marker,
-                    markersize=link.markersize,
+                    linewidth=link.style.linewidth,
+                    linestyle=link.style.linestyle,
+                    marker=link.style.marker,
+                    markersize=link.style.markersize,
                     label=label if first else None,
                 )
             else:
@@ -159,8 +160,8 @@ def plot_front_view_comparison(
                     pts[0, 1],
                     pts[0, 2],
                     color=color,
-                    s=int(link.markersize**2),
-                    marker=link.marker,
+                    s=int(link.style.markersize**2),
+                    marker=link.style.marker,
                     label=label if first else None,
                 )
             first = False

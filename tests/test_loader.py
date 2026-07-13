@@ -3,9 +3,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from kinematics.core.point_ref import Side
-from kinematics.io import load_geometry
-from kinematics.suspensions.base import Suspension
+from kinematics.cli.io.loaders import load_geometry
+from kinematics.core.primitives.point_ref import Side
+from kinematics.core.suspensions.base import Suspension
 
 
 @pytest.fixture

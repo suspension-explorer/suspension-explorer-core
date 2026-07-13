@@ -9,15 +9,15 @@ upright-mounted points.
 
 import numpy as np
 
-from kinematics.core.constants import TEST_TOLERANCE
-from kinematics.core.enums import Axis, PointID
-from kinematics.core.geometry import Direction3, Point3
-from kinematics.core.vector_utils.geometric import rotate_point_about_axis
-from kinematics.io import load_geometry
-from kinematics.schema.config import CamberShimConfig
-from kinematics.suspensions.base import Suspension
-from kinematics.suspensions.config.shims import solve_camber_shim_assembly
-from kinematics.suspensions.corner import DoubleWishboneSuspension
+from kinematics.cli.io.loaders import load_geometry
+from kinematics.core.primitives.constants import TEST_TOLERANCE
+from kinematics.core.primitives.enums import Axis, PointID
+from kinematics.core.primitives.geometry import Direction3, Point3
+from kinematics.core.primitives.vector_utils.geometric import rotate_point_about_axis
+from kinematics.core.schema.config import CamberShimConfig
+from kinematics.core.suspensions.base import Suspension
+from kinematics.core.suspensions.config.shims import solve_camber_shim_assembly
+from kinematics.core.suspensions.corner import DoubleWishboneSuspension
 
 # ---------------------------------------------------------------------------
 # rotate_point_about_axis

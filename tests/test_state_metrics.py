@@ -4,20 +4,24 @@ from typing import cast
 
 import pytest
 
-from kinematics.core.enums import PointID
-from kinematics.core.geometry import Point3
-from kinematics.core.types import SweepConfig
-from kinematics.io import load_geometry
-from kinematics.io.sweep_loader import parse_sweep_file
-from kinematics.main import compute_sweep_metrics, solve_sweep
-from kinematics.metrics.anti_geometry import (
+from kinematics.cli.io.loaders import load_geometry
+from kinematics.cli.io.sweep_loader import load_sweep
+from kinematics.core.metrics.anti_geometry import (
     calculate_anti_dive_pct,
     calculate_anti_lift_pct,
     calculate_anti_squat_pct,
 )
-from kinematics.metrics.context import MetricContext
-from kinematics.metrics.main import AxleMetricRows, MetricRow, compute_metrics_for_state
-from kinematics.schema.config import SuspensionConfig
+from kinematics.core.metrics.context import MetricContext
+from kinematics.core.metrics.main import (
+    AxleMetricRows,
+    MetricRow,
+    compute_metrics_for_state,
+)
+from kinematics.core.primitives.enums import PointID
+from kinematics.core.primitives.geometry import Point3
+from kinematics.core.schema.config import SuspensionConfig
+from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
+from kinematics.core.targeting import SweepConfig
 
 TEST_DATA = Path(__file__).parent / "data"
 
@@ -92,7 +96,7 @@ def test_coilover_damper_length_matches_mount_distance() -> None:
 def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     suspension = load_geometry(TEST_DATA / "corner_strut_geometry.yaml")
     assert suspension.config is not None
-    sweep = parse_sweep_file(TEST_DATA / "sweep.yaml")
+    sweep = load_sweep(TEST_DATA / "sweep.yaml")
     states, _ = solve_sweep(suspension, sweep)
 
     result = compute_sweep_metrics(suspension, sweep, states)
@@ -174,13 +178,13 @@ def test_tangent_failure_is_visible_and_preserves_base_metrics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     suspension = load_geometry(TEST_DATA / "geometry.yaml")
-    sweep = parse_sweep_file(TEST_DATA / "sweep.yaml")
+    sweep = load_sweep(TEST_DATA / "sweep.yaml")
     states, _ = solve_sweep(suspension, sweep)
 
     def fail_tangents(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("synthetic tangent failure")
 
-    monkeypatch.setattr("kinematics.main.compute_sweep_tangents", fail_tangents)
+    monkeypatch.setattr("kinematics.core.sweep.compute_sweep_tangents", fail_tangents)
     result = compute_sweep_metrics(suspension, sweep, states)
 
     assert result.derivative_error == "RuntimeError: synthetic tangent failure"

@@ -14,19 +14,23 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from kinematics.core.enums import PointID, ShimType, Units
-from kinematics.core.geometry import Direction3, Point3
-from kinematics.core.point_ref import Side
-from kinematics.io import load_geometry
-from kinematics.schema.config import (
+from kinematics.cli.io.loaders import load_geometry
+from kinematics.core.elements import UprightElement
+from kinematics.core.primitives.enums import PointID, ShimType, Units
+from kinematics.core.primitives.geometry import Direction3, Point3
+from kinematics.core.primitives.point_ref import Side
+from kinematics.core.schema.config import (
     CamberShimConfig,
     SuspensionConfig,
     TireConfig,
     WheelConfig,
 )
-from kinematics.suspensions.base import Suspension
-from kinematics.suspensions.corner import DoubleWishboneSuspension
-from kinematics.suspensions.registry import get_suspension_class, list_supported_types
+from kinematics.core.suspensions.base import Suspension
+from kinematics.core.suspensions.corner import DoubleWishboneSuspension
+from kinematics.core.suspensions.registry import (
+    get_suspension_class,
+    list_supported_types,
+)
 
 # Test fixtures
 
@@ -225,9 +229,9 @@ class TestDoubleWishboneSuspension:
         assert PointID.WHEEL_CENTER in spec.functions
         assert PointID.CONTACT_PATCH_CENTER in spec.functions
 
-    def test_visualization_links(self, valid_hardpoints, valid_config):
+    def test_suspension_elements(self, valid_hardpoints, valid_config):
         """
-        Test visualization link generation.
+        Test physical suspension element generation.
         """
         suspension = DoubleWishboneSuspension(
             name="test",
@@ -236,12 +240,30 @@ class TestDoubleWishboneSuspension:
             hardpoints=valid_hardpoints,
             config=valid_config,
         )
-        links = suspension.get_visualization_links()
-        assert len(links) > 0
-        # Check for expected link labels
-        labels = [link.label for link in links]
-        assert "Upper Wishbone" in labels
-        assert "Lower Wishbone" in labels
+        elements = suspension.elements()
+        assert len(elements) > 0
+        # Check for expected element labels.
+        labels = [element.label for element in elements]
+        assert "Upper Wishbone Front Leg" in labels
+        assert "Upper Wishbone Rear Leg" in labels
+        assert "Lower Wishbone Front Leg" in labels
+        assert "Lower Wishbone Rear Leg" in labels
+        upright = next(
+            element for element in elements if isinstance(element, UprightElement)
+        )
+        assert upright.hardpoints == (
+            PointID.UPPER_WISHBONE_OUTBOARD,
+            PointID.LOWER_WISHBONE_OUTBOARD,
+            PointID.TRACKROD_OUTBOARD,
+        )
+        assert upright.attachments == (
+            PointID.AXLE_INBOARD,
+            PointID.AXLE_OUTBOARD,
+        )
+        assembly = suspension.assembly()
+        assert PointID.UPPER_WISHBONE_INBOARD_FRONT in assembly.points.fixed
+        assert PointID.UPPER_WISHBONE_OUTBOARD in assembly.points.free
+        assert PointID.WHEEL_CENTER in assembly.points.derived
 
 
 class TestCamberShimConfig:

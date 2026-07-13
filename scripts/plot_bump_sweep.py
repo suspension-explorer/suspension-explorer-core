@@ -10,9 +10,12 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from kinematics import analyze_sweep, load_geometry, load_sweep, solve_sweep
-from kinematics.core.enums import PointID
-from kinematics.visualization.api import visualize_suspension_sweep
+from kinematics.cli.io.loaders import load_geometry
+from kinematics.cli.io.sweep_loader import load_sweep
+from kinematics.cli.visualization.api import visualize_suspension_sweep
+from kinematics.core.analysis import analyze_sweep
+from kinematics.core.primitives.enums import PointID
+from kinematics.core.sweep import solve_sweep
 
 GEOMETRY = Path("tests/data/geometry.yaml")
 SWEEP = Path("scripts/bump_sweep.yaml")
@@ -197,14 +200,11 @@ def main() -> None:
     plt.close("all")
 
     # Animation
-    wheel_cfg = config.wheel
     animation_path = OUTPUT_DIR / "bump_sweep.mp4"
     visualize_suspension_sweep(
         suspension=suspension,
         solution_states=states,
         output_path=animation_path,
-        wheel_diameter=wheel_cfg.tire.nominal_radius * 2,
-        wheel_width=wheel_cfg.tire.section_width,
         fps=20,
         show_live=False,
     )

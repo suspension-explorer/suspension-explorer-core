@@ -6,7 +6,7 @@ Uses SymPy to symbolically differentiate the residual expression for each
 constraint type, applies common-subexpression elimination, and prints the
 optimized CSE body (temporaries + return expression) to stdout.
 
-The output is meant to be pasted into `src/kinematics/jacobians.py`
+The output is meant to be pasted into `src/kinematics/core/jacobians.py`
 when a residual formula changes.
 
 Run

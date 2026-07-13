@@ -22,15 +22,16 @@ import numpy as np
 import pyarrow.parquet as pq
 import pytest
 
-from kinematics.cli import sweep as cli_sweep
-from kinematics.core.constants import TEST_TOLERANCE
+from kinematics.cli.app import sweep as cli_sweep
+from kinematics.core.primitives.constants import TEST_TOLERANCE
+from kinematics.core.sweep import solve_evaluated_sweep
 
 # Check if matplotlib is available for animation tests without importing it.
 HAS_MATPLOTLIB = find_spec("matplotlib") is not None
 
 requires_viz = pytest.mark.skipif(
     not HAS_MATPLOTLIB,
-    reason="matplotlib not installed (install with: uv pip install -e '.[viz]')",
+    reason="matplotlib not installed (install with: uv pip install -e '.[cli,viz]')",
 )
 
 # Columns that contain solver internals which vary across platforms.
@@ -391,6 +392,51 @@ class TestCliEndToEnd:
 
         assert not success, "CLI should fail with invalid sweep file"
         assert output  # Should have an error message
+
+    @requires_viz
+    def test_animation_reuses_the_primary_sweep_solution(
+        self,
+        temp_dir: Path,
+        geometry_file: Path,
+        sweep_file: Path,
+    ) -> None:
+        output_file = temp_dir / "test_output.csv"
+        animation_file = temp_dir / "test_animation.gif"
+
+        with (
+            patch(
+                "kinematics.cli.commands.sweep.solve_evaluated_sweep",
+                wraps=solve_evaluated_sweep,
+            ) as solve_mock,
+            patch("kinematics.cli.visualization.api.visualize_suspension_sweep"),
+        ):
+            success, output = run_cli_sweep_direct(
+                geometry_file,
+                sweep_file,
+                output_file,
+                animation_file,
+            )
+
+        assert success, output
+        assert solve_mock.call_count == 1
+
+    @requires_viz
+    def test_axle_geometry_visualization_uses_both_contact_patches(
+        self,
+        temp_dir: Path,
+        test_data_dir: Path,
+    ) -> None:
+        from kinematics.cli.io.loaders import load_geometry
+        from kinematics.cli.visualization.api import visualize_geometry
+
+        output_file = temp_dir / "axle_geometry.png"
+        suspension = load_geometry(test_data_dir / "axle_geometry.yaml")
+
+        result = visualize_geometry(suspension, output_file)
+
+        assert output_file.exists()
+        assert len(result.contact_patch_z) == 2
+        assert result.contact_patch_on_ground
 
     @requires_viz
     def test_csv_output_with_animation(

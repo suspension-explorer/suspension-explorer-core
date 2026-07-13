@@ -1,17 +1,17 @@
 import numpy as np
 
-from kinematics.core.constants import TEST_TOLERANCE
-from kinematics.core.enums import Axis, PointID
-from kinematics.core.point_ref import Side
-from kinematics.io import load_geometry
-from kinematics.io.sweep_loader import parse_sweep_file
-from kinematics.main import solve_sweep
-from kinematics.metrics.catalog import get_default_corner_metrics
-from kinematics.metrics.context import MetricContext
-from kinematics.metrics.main import compute_metrics_for_state_from_suspension
-from kinematics.metrics.units import MetricUnit
-from kinematics.points.derived.manager import DerivedPointsManager
-from kinematics.suspensions.corner import DoubleWishboneSuspension
+from kinematics.cli.io.loaders import load_geometry
+from kinematics.cli.io.sweep_loader import load_sweep
+from kinematics.core.metrics.catalog import get_default_corner_metrics
+from kinematics.core.metrics.context import MetricContext
+from kinematics.core.metrics.main import compute_metrics_for_state_from_suspension
+from kinematics.core.metrics.units import MetricUnit
+from kinematics.core.points.derived.manager import DerivedPointsManager
+from kinematics.core.primitives.constants import TEST_TOLERANCE
+from kinematics.core.primitives.enums import Axis, PointID
+from kinematics.core.primitives.point_ref import Side
+from kinematics.core.suspensions.corner import DoubleWishboneSuspension
+from kinematics.core.sweep import solve_sweep
 
 
 def test_metric_side_sign_uses_declared_side(
@@ -46,7 +46,7 @@ def _shift_x(point: object, delta_x: float):
     Returns a Point3 so it can be used with Pydantic's `model_copy(update=...)`
     which does not re-run field validators.
     """
-    from kinematics.core.geometry import Point3, Vector3, extract_array
+    from kinematics.core.primitives.geometry import Point3, Vector3, extract_array
 
     return Point3(extract_array(point)) + Vector3([delta_x, 0.0, 0.0])
 
@@ -61,7 +61,7 @@ def _translate_double_wishbone_x(
     are shifted together so the translated suspension is geometrically
     identical to the original one.
     """
-    from kinematics.core.geometry import Vector3
+    from kinematics.core.primitives.geometry import Vector3
 
     translation = Vector3([delta_x, 0.0, 0.0])
     hardpoints = {
@@ -108,7 +108,7 @@ def test_front_view_metrics_are_invariant_to_rigid_x_translation(
     suspension = load_geometry(double_wishbone_geometry_file)
     assert isinstance(suspension, DoubleWishboneSuspension)
 
-    sweep_config = parse_sweep_file(test_data_dir / "sweep.yaml")
+    sweep_config = load_sweep(test_data_dir / "sweep.yaml")
     states, _ = solve_sweep(suspension, sweep_config)
 
     translated = _translate_double_wishbone_x(suspension, 100.0)
@@ -148,7 +148,7 @@ def test_parallel_wishbone_planes_produce_null_ic_metrics(
     suspension = load_geometry(double_wishbone_geometry_file)
     assert isinstance(suspension, DoubleWishboneSuspension)
 
-    from kinematics.core.geometry import Vector3
+    from kinematics.core.primitives.geometry import Vector3
 
     state = suspension.initial_state().copy()
     plane_offset = Vector3([0.0, 0.0, 300.0])
@@ -191,7 +191,7 @@ def test_steering_axis_ground_intersection_uses_contact_patch_height(
     assert isinstance(suspension, DoubleWishboneSuspension)
     assert suspension.config is not None
 
-    from kinematics.core.geometry import Point3
+    from kinematics.core.primitives.geometry import Point3
 
     state = suspension.initial_state().copy()
 
@@ -249,7 +249,7 @@ def test_scrub_radius_uses_ground_plane_wheel_lateral_direction(
     assert isinstance(suspension, DoubleWishboneSuspension)
     assert suspension.config is not None
 
-    from kinematics.core.geometry import Vector3
+    from kinematics.core.primitives.geometry import Vector3
 
     state = suspension.initial_state().copy()
     axle_inboard = state.get(PointID.AXLE_INBOARD).copy()
@@ -407,7 +407,7 @@ class TestSignConventionsAndKnownValues:
         sweep step produces a positive angle for the left-side suspension.
         """
         suspension = load_geometry(double_wishbone_geometry_file)
-        sweep_config = parse_sweep_file(test_data_dir / "sweep.yaml")
+        sweep_config = load_sweep(test_data_dir / "sweep.yaml")
         states, _ = solve_sweep(suspension, sweep_config)
 
         first_metrics = compute_metrics_for_state_from_suspension(states[0], suspension)

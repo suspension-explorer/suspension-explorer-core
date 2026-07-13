@@ -4,14 +4,15 @@ from pathlib import Path
 
 import pytest
 
-from kinematics.core.enums import PointID
-from kinematics.core.point_ref import PointRef, Side
-from kinematics.io import load_geometry
-from kinematics.io.sweep_loader import parse_sweep_file
-from kinematics.main import solve_sweep
-from kinematics.suspensions.axle import (
+from kinematics.cli.io.loaders import load_geometry
+from kinematics.cli.io.sweep_loader import load_sweep
+from kinematics.core.elements import TorsionElement
+from kinematics.core.primitives.enums import PointID
+from kinematics.core.primitives.point_ref import PointRef, Side
+from kinematics.core.suspensions.axle import (
     DoubleWishbonePushrodRockerAxleSuspension,
 )
+from kinematics.core.sweep import solve_sweep
 
 
 @pytest.fixture
@@ -30,10 +31,14 @@ def test_arb_points_are_owned_by_axle(
 
     assert PointRef(Side.CENTER, PointID.ARB_AXIS_A) in state.positions
     assert PointRef(Side.CENTER, PointID.ARB_AXIS_B) in state.positions
+    assembly = rocker_axle.assembly()
+    assert PointRef(Side.CENTER, PointID.ARB_AXIS_A) in assembly.points.fixed
+    assert PointRef(Side.CENTER, PointID.ARB_AXIS_B) in assembly.points.fixed
     for side in (Side.LEFT, Side.RIGHT):
         arm_point = PointRef(side, PointID.DROPLINK_ARB)
         assert arm_point in state.positions
         assert arm_point in state.free_points
+        assert arm_point in assembly.points.free
 
 
 def test_roll_sweep_conserves_both_droplink_lengths(
@@ -49,7 +54,7 @@ def test_roll_sweep_conserves_both_droplink_lengths(
         ).norm()
         for side in (Side.LEFT, Side.RIGHT)
     }
-    sweep = parse_sweep_file(test_data_dir / "axle_rocker_sweep.yaml", rocker_axle)
+    sweep = load_sweep(test_data_dir / "axle_rocker_sweep.yaml", rocker_axle)
 
     states, stats = solve_sweep(rocker_axle, sweep)
 
@@ -63,18 +68,19 @@ def test_roll_sweep_conserves_both_droplink_lengths(
             assert length == pytest.approx(design_lengths[side], abs=1e-5)
 
 
-def test_arb_visualization_is_one_bar_and_two_droplinks(
+def test_arb_assembly_is_one_bar_and_two_droplinks(
     rocker_axle: DoubleWishbonePushrodRockerAxleSuspension,
 ) -> None:
     """Render the shared ARB as one continuous series."""
-    links = rocker_axle.get_visualization_links()
-    arb_links = [link for link in links if link.label == "Anti-Roll Bar"]
-    droplinks = [link for link in links if link.label.endswith("Droplink")]
+    elements = rocker_axle.elements()
+    arb_elements = [element for element in elements if element.label == "Anti-Roll Bar"]
+    droplinks = [element for element in elements if element.label.endswith("Droplink")]
 
-    assert len(arb_links) == 1
-    assert arb_links[0].points[0] == PointRef(Side.LEFT, PointID.DROPLINK_ARB)
-    assert arb_links[0].points[-1] == PointRef(Side.RIGHT, PointID.DROPLINK_ARB)
-    assert {link.label for link in droplinks} == {
+    assert len(arb_elements) == 1
+    assert isinstance(arb_elements[0], TorsionElement)
+    assert arb_elements[0].path[0] == PointRef(Side.LEFT, PointID.DROPLINK_ARB)
+    assert arb_elements[0].path[-1] == PointRef(Side.RIGHT, PointID.DROPLINK_ARB)
+    assert {element.label for element in droplinks} == {
         "Left Droplink",
         "Right Droplink",
     }

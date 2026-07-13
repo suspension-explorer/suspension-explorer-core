@@ -1,13 +1,25 @@
 """Tests for the structured high-level analysis API."""
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from kinematics.analysis import analyze_sweep, initial_pose, sweep_parameters
-from kinematics.io import load_geometry, load_sweep
-from kinematics.main import compute_sweep_metrics, solve_sweep
-from kinematics.metrics.main import AxleMetricRows, flatten_metric_rows
+from kinematics.cli.io.loaders import load_geometry
+from kinematics.cli.io.sweep_loader import load_sweep
+from kinematics.core.analysis import (
+    analyze_evaluated_sweep,
+    analyze_solved_sweep,
+    analyze_sweep,
+    initial_pose,
+    sweep_parameters,
+)
+from kinematics.core.metrics.main import AxleMetricRows, flatten_metric_rows
+from kinematics.core.sweep import (
+    compute_sweep_metrics,
+    solve_evaluated_sweep,
+    solve_sweep,
+)
 
 DATA_DIR = Path(__file__).parent / "data"
 
@@ -85,12 +97,33 @@ def test_initial_pose_contains_display_geometry() -> None:
     pose = initial_pose(suspension)
     assert "wheel_center" in pose.positions
     assert pose.wheel is not None
-    assert pose.links
-    assert pose.wheel_anchors
+    assert pose.elements
+    assert pose.wheel_references
+
+
+def test_analyze_solved_sweep_rejects_mismatched_solver_stats() -> None:
+    suspension = load_geometry(DATA_DIR / "corner_strut_geometry.yaml")
+    sweep = load_sweep(DATA_DIR / "sweep.yaml", suspension)
+    states, solver_stats = solve_sweep(suspension, sweep)
+
+    with pytest.raises(ValueError, match="counts must match"):
+        analyze_solved_sweep(suspension, sweep, states, solver_stats[:-1])
+
+
+def test_evaluated_sweep_rejects_mismatched_metric_rows() -> None:
+    suspension = load_geometry(DATA_DIR / "corner_strut_geometry.yaml")
+    sweep = load_sweep(DATA_DIR / "sweep.yaml", suspension)
+    evaluated = solve_evaluated_sweep(suspension, sweep)
+
+    with pytest.raises(ValueError, match="metric counts must match"):
+        replace(
+            evaluated,
+            metrics=replace(evaluated.metrics, rows=evaluated.metrics.rows[:-1]),
+        )
 
 
 def test_tangent_failure_is_visible_without_losing_metrics(monkeypatch) -> None:
-    import kinematics.main as main
+    import kinematics.core.sweep as main
 
     def fail_tangents(*_args, **_kwargs):
         raise RuntimeError("synthetic tangent failure")
@@ -109,16 +142,41 @@ def test_tangent_failure_is_visible_without_losing_metrics(monkeypatch) -> None:
 
 
 def test_diagnostic_failure_is_advisory(monkeypatch) -> None:
-    import kinematics.analysis as analysis_module
+    import kinematics.core.sweep as sweep_module
 
     def fail_diagnostics(*_args, **_kwargs):
         raise RuntimeError("synthetic diagnostic failure")
 
-    monkeypatch.setattr(analysis_module, "diagnose_sweep", fail_diagnostics)
+    monkeypatch.setattr(sweep_module, "diagnose_sweep", fail_diagnostics)
     suspension = load_geometry(DATA_DIR / "corner_strut_geometry.yaml")
     sweep = load_sweep(DATA_DIR / "sweep.yaml", suspension)
     analysis = analyze_sweep(suspension, sweep)
     assert analysis.frames
-    assert not [
-        issue for issue in analysis.diagnostics if issue.category != "derivatives"
+    issues = [
+        issue for issue in analysis.diagnostics if issue.category == "diagnostics"
     ]
+    assert len(issues) == 1
+    assert "synthetic diagnostic failure" in issues[0].message
+
+
+def test_setup_reference_failure_is_visible(monkeypatch) -> None:
+    import kinematics.core.analysis as analysis_module
+
+    suspension = load_geometry(DATA_DIR / "corner_strut_geometry.yaml")
+    sweep = load_sweep(DATA_DIR / "sweep.yaml", suspension)
+    evaluated = solve_evaluated_sweep(suspension, sweep)
+
+    def fail_reference(*_args, **_kwargs):
+        raise RuntimeError("synthetic reference failure")
+
+    monkeypatch.setattr(
+        analysis_module,
+        "solve_sweep",
+        fail_reference,
+    )
+    analysis = analyze_evaluated_sweep(suspension, sweep, evaluated)
+
+    assert "setup" not in analysis.references
+    issues = [issue for issue in analysis.diagnostics if issue.category == "reference"]
+    assert len(issues) == 1
+    assert "synthetic reference failure" in issues[0].message

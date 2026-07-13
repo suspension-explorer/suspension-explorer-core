@@ -1,1 +1,3 @@
-# Core kinematics foundations: types, enums, constants, and base classes.
+"""
+Transport-independent suspension solver package.
+"""

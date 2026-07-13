@@ -18,8 +18,10 @@ import cProfile
 import pstats
 from pathlib import Path
 
-from kinematics import analyze_sweep, solve_sweep
-from kinematics.io import load_geometry, load_sweep
+from kinematics.cli.io.loaders import load_geometry
+from kinematics.cli.io.sweep_loader import load_sweep
+from kinematics.core.analysis import analyze_sweep
+from kinematics.core.sweep import solve_sweep
 
 DATA_DIR = Path(__file__).parent.parent / "tests" / "data"
 GEOMETRY_FILE = DATA_DIR / "axle_geometry_rocker.yaml"
