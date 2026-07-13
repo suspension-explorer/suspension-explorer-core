@@ -1,7 +1,10 @@
 import ast
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 PROJECT_ROOT = Path(__file__).parent.parent
 CORE_PACKAGE = PROJECT_ROOT / "src" / "kinematics" / "core"
@@ -68,6 +71,10 @@ def test_low_level_core_import_does_not_load_solver_stack() -> None:
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.skipif(
+    importlib.util.find_spec("typer") is None,
+    reason="Requires the CLI extra; the core-only CI environment omits typer.",
+)
 def test_cli_app_import_does_not_load_sweep_runtime() -> None:
     script = (
         "import sys\n"
