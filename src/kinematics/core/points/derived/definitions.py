@@ -21,6 +21,18 @@ from kinematics.core.schema.config import WheelConfig
 from kinematics.core.targeting import WorldAxisSystem
 
 
+def get_point_along_line(
+    positions: dict[PointKey, Any],
+    start_point: PointKey,
+    end_point: PointKey,
+    distance_from_start: float,
+) -> Any:
+    """Place a point at a fixed distance along a line between two other points."""
+    start = positions[start_point]
+    line_direction = normalize_vector(positions[end_point] - start)
+    return start + line_direction * distance_from_start
+
+
 def get_wheel_plane_down_vector(positions: dict[PointKey, Any]) -> Any:
     """
     Calculates the 'down' direction vector in the wheel's plane of rotation.

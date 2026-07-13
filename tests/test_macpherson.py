@@ -40,6 +40,9 @@ def test_macpherson_declares_expected_point_roles(macpherson):
         PointID.AXLE_OUTBOARD,
     )
     assert macpherson.damper_points() == (PointID.STRUT_TOP, PointID.STRUT_BOTTOM)
+    assert PointID.STRUT_TOP not in macpherson.free_points()
+    assert PointID.STRUT_BOTTOM not in macpherson.free_points()
+    assert PointID.STRUT_BOTTOM in macpherson.derived_spec().functions
 
 
 def test_static_state_reproduces_input_geometry(macpherson):
@@ -80,8 +83,9 @@ def test_sweep_solves_with_physical_invariants(macpherson):
     ]
     for state in states:
         # Fixed chassis mount.
-        assert (state.get(PointID.STRUT_TOP) - design.get(PointID.STRUT_TOP)).norm(
-        ) == pytest.approx(0.0)
+        assert (
+            state.get(PointID.STRUT_TOP) - design.get(PointID.STRUT_TOP)
+        ).norm() == pytest.approx(0.0)
         # Rigid links and upright keep their authored lengths.
         for point_a, point_b in rigid_pairs:
             assert _distance(state, point_a, point_b) == pytest.approx(
@@ -108,6 +112,8 @@ def test_sweep_metrics_and_derivatives(macpherson):
     metrics = compute_sweep_metrics(macpherson, sweep, states)
 
     assert metrics.derivative_error is None
+    assert metrics.tangent_solve_infos is not None
+    assert all(not info.rank_deficient for info in metrics.tangent_solve_infos)
     droop_row = metrics.rows[0]
     bump_row = metrics.rows[-1]
     # A corner sweep yields plain metric rows, never axle row bundles.
@@ -119,6 +125,7 @@ def test_sweep_metrics_and_derivatives(macpherson):
 
     # Steered corner: the bump-steer derivative is declared and evaluated.
     assert bump_row["deriv_roadwheel_angle_wrt_rack_displacement"] is not None
+    assert bump_row["deriv_damper_length_wrt_hub_z"] is not None
 
     # The damper length metric reads the strut through damper_points().
     assert bump_row["damper_length"] == pytest.approx(

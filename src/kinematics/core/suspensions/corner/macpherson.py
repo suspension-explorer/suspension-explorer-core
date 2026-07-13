@@ -11,26 +11,24 @@ rigid-upright approach used by the double wishbone:
   axis to reduce spring side load; this model deliberately ignores that
   offset. The authored strut clamp point (STRUT_BOTTOM) must therefore lie
   on the ball-joint-to-top-mount line at design, with only small authoring
-  deviations tolerated, and is projected exactly onto the axis before
-  solving.
-- The strut clamp rides rigidly on the upright, and one parallelism
-  constraint keeps the fixed top mount on the body-fixed axis through the
-  ball joint and clamp. The unconstrained clamp-to-top distance is the
-  telescoping strut degree of freedom, presented as one variable-length
-  spring/damper link.
+  deviations tolerated. Its authored distance from the ball joint is retained.
+- The strut clamp is derived at that fixed distance along the line from the
+  lower ball joint to the fixed top mount. The upright is held rigidly to the
+  derived clamp, while the unconstrained clamp-to-top distance is the
+  telescoping strut degree of freedom, presented as one variable-length link.
 - The trackrod resolves rotation about the steering axis.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 from typing import ClassVar, Sequence
 
 from kinematics.core.constraints import (
     Constraint,
     DistanceConstraint,
     PointOnLineConstraint,
-    VectorsParallelConstraint,
 )
 from kinematics.core.elements import (
     ElementType,
@@ -41,7 +39,16 @@ from kinematics.core.elements import (
     WheelElement,
 )
 from kinematics.core.enums import Axis, PointID, SuspensionType
-from kinematics.core.points.derived.definitions import build_wheel_derived_spec
+from kinematics.core.metrics.derivatives import (
+    DerivativeMetricDefinition,
+    PointCoordinateResponse,
+    PointDistanceResponse,
+)
+from kinematics.core.metrics.units import MetricUnit
+from kinematics.core.points.derived.definitions import (
+    build_wheel_derived_spec,
+    get_point_along_line,
+)
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
@@ -111,11 +118,9 @@ class MacPhersonSuspension(CornerSuspension):
     )
 
     # Free points that move during solving. The strut top is a fixed chassis
-    # mount; the upright group (including the strut clamp) and both trackrod
-    # ends move.
+    # mount and the strut clamp is derived from the lower ball joint and top.
     FREE_POINTS: ClassVar[tuple[PointID, ...]] = (
         PointID.LOWER_WISHBONE_OUTBOARD,
-        PointID.STRUT_BOTTOM,
         PointID.AXLE_INBOARD,
         PointID.AXLE_OUTBOARD,
         PointID.TRACKROD_OUTBOARD,
@@ -149,6 +154,22 @@ class MacPhersonSuspension(CornerSuspension):
                 "intentionally offset strut is not supported."
             )
 
+        axial_offset = self._strut_clamp_offset()
+        if axial_offset <= EPS_GEOMETRIC or axial_offset >= (
+            axis_length - EPS_GEOMETRIC
+        ):
+            raise ValueError(
+                "STRUT_BOTTOM must lie between LOWER_WISHBONE_OUTBOARD and "
+                "STRUT_TOP along the strut axis"
+            )
+
+    def _strut_clamp_offset(self) -> float:
+        """Return the authored ball-joint-to-clamp distance along the strut axis."""
+        ball_joint = self.hardpoints[PointID.LOWER_WISHBONE_OUTBOARD]
+        strut_axis = (self.hardpoints[PointID.STRUT_TOP] - ball_joint).normalize()
+        clamp_vector = self.hardpoints[PointID.STRUT_BOTTOM] - ball_joint
+        return float(clamp_vector.data.dot(strut_axis.data))
+
     def free_points(self) -> Sequence[PointID]:
         """Return the moving upright group and trackrod points."""
         return self.FREE_POINTS
@@ -165,25 +186,33 @@ class MacPhersonSuspension(CornerSuspension):
         """The strut is the spring/damper: top mount to upright clamp."""
         return (PointID.STRUT_TOP, PointID.STRUT_BOTTOM)
 
+    def derivative_metric_definitions(
+        self,
+    ) -> tuple[DerivativeMetricDefinition, ...]:
+        """Declare strut length relative to hub vertical travel."""
+        return (
+            DerivativeMetricDefinition(
+                response=PointDistanceResponse(
+                    PointID.STRUT_TOP,
+                    PointID.STRUT_BOTTOM,
+                    name="damper_length",
+                    unit=MetricUnit.MM,
+                ),
+                driver=PointCoordinateResponse.from_world_axis(
+                    PointID.WHEEL_CENTER,
+                    Axis.Z,
+                    name="hub_z",
+                    unit=MetricUnit.MM,
+                ),
+            ),
+        )
+
     def initial_state(self) -> SuspensionState:
         """Build the initial state from hardpoints plus derived points."""
         if self._initial_state is not None:
             return self._initial_state
 
         positions = self.get_hardpoints_copy()
-
-        # Project the authored clamp exactly onto the design steering axis so
-        # the parallelism constraint starts satisfied. validate_hardpoints
-        # has already bounded how far the authored point may sit off-axis.
-        ball_joint = positions[PointID.LOWER_WISHBONE_OUTBOARD]
-        axis_vector = positions[PointID.STRUT_TOP] - ball_joint
-        clamp_offset = positions[PointID.STRUT_BOTTOM] - ball_joint
-        axial_fraction = float(
-            clamp_offset.data.dot(axis_vector.data)
-            / axis_vector.data.dot(axis_vector.data)
-        )
-        positions[PointID.STRUT_BOTTOM] = ball_joint + axial_fraction * axis_vector
-
         derived_manager = DerivedPointsManager(self.derived_spec())
         derived_manager.update_in_place(positions)
 
@@ -234,11 +263,9 @@ class MacPhersonSuspension(CornerSuspension):
             )
         )
 
-        # The strut clamps to the upright: the clamp point rides rigidly on
-        # the upright body with authored handedness, and the fixed top mount
-        # must stay on the body-fixed ball-joint-to-clamp axis. The
-        # clamp-to-top distance is unconstrained, which is the telescoping
-        # strut degree of freedom.
+        # The derived strut clamp lies on the lower-balljoint-to-top line at a
+        # fixed offset from the ball joint. Holding the upright to that datum
+        # leaves the clamp-to-top distance free to telescope.
         constraints.extend(
             chiral_rigid_point_constraints(
                 initial_state,
@@ -248,14 +275,6 @@ class MacPhersonSuspension(CornerSuspension):
                     PointID.AXLE_INBOARD,
                     PointID.AXLE_OUTBOARD,
                 ),
-            )
-        )
-        constraints.append(
-            VectorsParallelConstraint(
-                v1_start=PointID.LOWER_WISHBONE_OUTBOARD,
-                v1_end=PointID.STRUT_BOTTOM,
-                v2_start=PointID.LOWER_WISHBONE_OUTBOARD,
-                v2_end=PointID.STRUT_TOP,
             )
         )
 
@@ -270,10 +289,27 @@ class MacPhersonSuspension(CornerSuspension):
         return constraints
 
     def derived_spec(self) -> DerivedPointsSpec:
-        """Standard wheel derived points from the axle pair."""
+        """Derived strut clamp and standard wheel points."""
         if self.config is None:
             raise ValueError("Cannot compute derived spec without config")
-        return build_wheel_derived_spec(self.config.wheel)
+        wheel_spec = build_wheel_derived_spec(self.config.wheel)
+        functions = {
+            PointID.STRUT_BOTTOM: partial(
+                get_point_along_line,
+                start_point=PointID.LOWER_WISHBONE_OUTBOARD,
+                end_point=PointID.STRUT_TOP,
+                distance_from_start=self._strut_clamp_offset(),
+            ),
+            **wheel_spec.functions,
+        }
+        dependencies = {
+            PointID.STRUT_BOTTOM: {
+                PointID.LOWER_WISHBONE_OUTBOARD,
+                PointID.STRUT_TOP,
+            },
+            **wheel_spec.dependencies,
+        }
+        return DerivedPointsSpec(functions, dependencies)
 
     def compute_instant_axis(
         self, state: SuspensionState

@@ -282,17 +282,18 @@ class ResidualComputer:
         """
         Pre-compute the Jacobian function and distribution mapping for constraint.
 
-        Returns `(compute_fn, distribution)` where:
+        Returns `(compute_fn, point_ids)` where:
         - `compute_fn(positions_dict)` returns the partial-derivative array
           for all involved point coordinates (3 entries per point, in point order).
-        - `distribution` is a list of `(deriv_offset, jac_col)` tuples indicating
-          where to copy each 3-wide block into the Jacobian row.  Only free
-          points appear in the distribution list.
+        - `point_ids` gives the point owning each consecutive 3-wide block.
+
+        The final distribution to solver-variable columns happens during each
+        Jacobian evaluation because a constraint may reference a derived point,
+        whose chain-rule blocks depend on the current positions.
 
         Jacobian functions operate on raw ndarrays, so Point3 positions are
         unwrapped via .data before being passed.
         """
-        offsets = self.point_var_offsets
         compute_fn: Callable[[dict[PointKey, Point3]], np.ndarray]
 
         if isinstance(constraint, (DistanceConstraint, SphericalJointConstraint)):
@@ -496,15 +497,7 @@ class ResidualComputer:
                 f"No Jacobian implementation for {type(constraint).__name__}"
             )
 
-        # Map each involved point's 3-wide derivative block to its Jacobian
-        # column offset.  Points that are not free are omitted (their partials
-        # are structurally zero in the Jacobian).
-        distribution = []
-        for i, pid in enumerate(point_ids):
-            if pid in offsets:
-                distribution.append((3 * i, offsets[pid]))
-
-        return compute_fn, distribution
+        return compute_fn, point_ids
 
     def compute_jacobian(
         self,
@@ -526,9 +519,23 @@ class ResidualComputer:
         jac[:] = 0.0
 
         positions = self.state_buffer.positions
+        derived_jacobians: dict[PointKey, dict[PointKey, np.ndarray]] = {}
+
+        def derived_point_jacobian(
+            point_id: PointKey,
+        ) -> dict[PointKey, np.ndarray]:
+            blocks = derived_jacobians.get(point_id)
+            if blocks is None:
+                blocks = self.derived_manager.compute_point_jacobian(
+                    point_id,
+                    positions,
+                    self.point_var_offsets.keys(),
+                )
+                derived_jacobians[point_id] = blocks
+            return blocks
 
         # Constraint rows.
-        for i, (compute_fn, distribution) in enumerate(self.jac_plan):
+        for i, (compute_fn, point_ids) in enumerate(self.jac_plan):
             try:
                 derivs = compute_fn(positions)
             except ZeroDivisionError:
@@ -536,8 +543,19 @@ class ResidualComputer:
                 # already on the line).  The residual is zero so this row's
                 # contribution to J^T r is zero -- safe to leave as zeros.
                 continue
-            for d_start, j_col in distribution:
-                jac[i, j_col : j_col + 3] = derivs[d_start : d_start + 3]
+
+            for point_index, point_id in enumerate(point_ids):
+                d_start = 3 * point_index
+                point_partial = derivs[d_start : d_start + 3]
+                direct_col = self.point_var_offsets.get(point_id)
+                if direct_col is not None:
+                    jac[i, direct_col : direct_col + 3] += point_partial
+                    continue
+                if point_id not in self.derived_manager.spec.functions:
+                    continue
+                for dependency, block in derived_point_jacobian(point_id).items():
+                    dependency_col = self.point_var_offsets[dependency]
+                    jac[i, dependency_col : dependency_col + 3] += point_partial @ block
 
         # Target rows: residual = dot(position, direction) - value.
         offset = self.n_constraints
@@ -553,11 +571,7 @@ class ResidualComputer:
             else:
                 # Delegate derived-point chain-rule blocks to the manager, then
                 # project them through the target direction.
-                point_jacobian = self.derived_manager.compute_point_jacobian(
-                    target.point_id,
-                    positions,
-                    self.point_var_offsets.keys(),
-                )
+                point_jacobian = derived_point_jacobian(target.point_id)
                 for pid, block in point_jacobian.items():
                     col = self.point_var_offsets[pid]
                     # d(dot(position, direction)) / d(input) is the target
