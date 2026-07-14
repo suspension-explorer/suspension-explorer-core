@@ -6,7 +6,12 @@ from dataclasses import dataclass
 from typing import Iterable, Mapping
 
 from kinematics.core.enums import Scope
-from kinematics.core.metrics.registry import MetricSpec, split_flat_key
+from kinematics.core.metrics.registry import (
+    MetricKind,
+    MetricSpec,
+    MetricUnits,
+    split_flat_key,
+)
 
 
 @dataclass(frozen=True)
@@ -15,9 +20,9 @@ class MetricDisplay:
 
     key: str
     label: str
-    unit: str
-    kind: str
-    scope: str
+    unit: MetricUnits
+    kind: MetricKind
+    scope: Scope
     component: str | None
     location: str | None
 
@@ -35,7 +40,7 @@ def metric_display(key: str, specs: Mapping[str, MetricSpec]) -> MetricDisplay |
     return MetricDisplay(
         key=key,
         label=f"{prefix}{spec.label}",
-        unit=spec.unit.symbol,
+        unit=spec.unit,
         kind=spec.kind,
         scope=spec.scope,
         component=spec.component,
