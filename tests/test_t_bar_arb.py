@@ -150,10 +150,19 @@ def test_roll_sweep_produces_differential_t_bar_twist(
 
     result = compute_sweep_metrics(t_bar_axle, sweep, states)
     assert result.derivative_error is None
+    expected_derivatives = {
+        "deriv_t_bar_center_x_wrt_hub_z_left",
+        "deriv_t_bar_center_x_wrt_hub_z_right",
+        "deriv_arb_twist_wrt_hub_z_left",
+        "deriv_arb_twist_wrt_hub_z_right",
+    }
     twists = []
     for row in result.rows:
         assert isinstance(row, AxleMetricRows)
-        twist = row.axle["t_bar_twist"]
+        assert expected_derivatives <= row.axle.keys()
+        assert all(row.axle[key] is not None for key in expected_derivatives)
+        assert "t_bar_twist" not in row.axle
+        twist = row.axle["arb_twist"]
         assert twist is not None
         twists.append(float(twist))
 

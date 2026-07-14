@@ -99,6 +99,14 @@ _AXLE_SPECS = (
         "arb",
     ),
     MetricSpec(
+        "t_bar_heave_angle",
+        "T-Bar Heave Angle",
+        MetricUnit.DEG,
+        MetricKind.STATE,
+        Scope.AXLE,
+        "arb",
+    ),
+    MetricSpec(
         "heave_link_length",
         "Heave Link Length",
         MetricUnit.MM,

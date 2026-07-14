@@ -12,6 +12,8 @@ def test_static_metric_specs_use_unit_free_identities() -> None:
     assert specs["camber"].scope == "corner"
     assert specs["track"].unit is MetricUnit.MM
     assert specs["track"].scope == "axle"
+    assert specs["t_bar_heave_angle"].label == "T-Bar Heave Angle"
+    assert specs["t_bar_heave_angle"].component == "arb"
     assert "camber_deg" not in specs
     assert "track_mm" not in specs
 

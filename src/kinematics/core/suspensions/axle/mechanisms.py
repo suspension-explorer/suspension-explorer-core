@@ -39,6 +39,7 @@ from kinematics.core.metrics.units import MetricUnit
 from kinematics.core.points.derived.manager import (
     DerivedPointsSpec,
 )
+from kinematics.core.primitives import dual
 from kinematics.core.primitives.constants import EPS_GEOMETRIC, MIN_CHIRALITY_VOLUME
 from kinematics.core.primitives.geometry import Direction3, Point3, extract_array
 from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
@@ -674,24 +675,44 @@ class ArbTBar:
         self,
         axle: AxleSuspension,
     ) -> tuple[DerivativeMetricDefinition, ...]:
-        """Declare T-bar center X motion relative to each hub Z."""
-        response = CallableScalarResponse(
+        """Declare T-bar motion and ARB twist relative to each hub Z."""
+        center_response = CallableScalarResponse(
             lambda positions: calculate_t_bar_crossbar_center(positions)[Axis.X],
             name="t_bar_center_x",
             unit=MetricUnit.MM,
         )
-        return tuple(
-            DerivativeMetricDefinition(
-                response=response,
-                driver=PointCoordinateResponse.from_world_axis(
-                    PointRef(side, PointID.WHEEL_CENTER),
-                    Axis.Z,
-                    name=f"hub_z_{side.name.lower()}",
-                    unit=MetricUnit.MM,
-                ),
-            )
-            for side in (Side.LEFT, Side.RIGHT)
+        lateral_reference = np.array([0.0, 1.0, 0.0])
+
+        def arb_twist(positions):
+            center = calculate_t_bar_crossbar_center(positions)
+            stem = center - positions[T_BAR_PIVOT_KEY]
+            stem /= dual.norm(stem)
+            crossbar = positions[T_BAR_LEFT_KEY] - positions[T_BAR_RIGHT_KEY]
+            crossbar -= stem * dual.dot(stem, crossbar)
+            sine = dual.dot(stem, dual.cross(lateral_reference, crossbar))
+            cosine = dual.dot(lateral_reference, crossbar)
+            return dual.degrees(dual.atan2(sine, cosine))
+
+        twist_response = CallableScalarResponse(
+            arb_twist,
+            name="arb_twist",
+            unit=MetricUnit.DEG,
         )
+        definitions: list[DerivativeMetricDefinition] = []
+        for side in (Side.LEFT, Side.RIGHT):
+            driver = PointCoordinateResponse.from_world_axis(
+                PointRef(side, PointID.WHEEL_CENTER),
+                Axis.Z,
+                name=f"hub_z_{side.name.lower()}",
+                unit=MetricUnit.MM,
+            )
+            definitions.extend(
+                (
+                    DerivativeMetricDefinition(center_response, driver),
+                    DerivativeMetricDefinition(twist_response, driver),
+                )
+            )
+        return tuple(definitions)
 
     def topology_metric_values(
         self,
@@ -714,7 +735,7 @@ class ArbTBar:
         return OrderedDict(
             (
                 ("t_bar_heave_angle", heave_angle),
-                ("t_bar_twist", degrees(current_twist - design_twist)),
+                ("arb_twist", degrees(current_twist - design_twist)),
             )
         )
 
