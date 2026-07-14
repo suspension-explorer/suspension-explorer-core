@@ -184,11 +184,13 @@ def get_default_corner_derivative_metrics(
         Axis.Z,
         name="hub_z",
         unit=MetricUnit.MM,
+        label="Hub Z",
     )
 
     def response(
         function: Callable[[DualPositions], object],
         name: str,
+        label: str,
         unit: MetricUnit,
     ) -> CallableScalarResponse:
         def evaluate(positions: DualPositions) -> DualScalar:
@@ -196,7 +198,7 @@ def get_default_corner_derivative_metrics(
             assert isinstance(result, DualScalar)
             return result
 
-        return CallableScalarResponse(evaluate, name=name, unit=unit)
+        return CallableScalarResponse(evaluate, name=name, unit=unit, label=label)
 
     definitions = [
         DerivativeMetricDefinition(
@@ -205,6 +207,7 @@ def get_default_corner_derivative_metrics(
                     positions, side_sign, axle_inboard, axle_outboard
                 ),
                 "camber",
+                "Camber",
                 MetricUnit.DEG,
             ),
             driver=hub_z_driver,
@@ -215,6 +218,7 @@ def get_default_corner_derivative_metrics(
                     positions, side_sign, axle_inboard, axle_outboard
                 ),
                 "roadwheel_angle",
+                "Roadwheel Angle",
                 MetricUnit.DEG,
             ),
             driver=hub_z_driver,
@@ -225,6 +229,7 @@ def get_default_corner_derivative_metrics(
                     positions, lower_pivot, upper_pivot
                 ),
                 "caster",
+                "Caster",
                 MetricUnit.DEG,
             ),
             driver=hub_z_driver,
@@ -235,6 +240,7 @@ def get_default_corner_derivative_metrics(
                     positions, side_sign, lower_pivot, upper_pivot
                 ),
                 "kpi",
+                "KPI",
                 MetricUnit.DEG,
             ),
             driver=hub_z_driver,
@@ -245,6 +251,7 @@ def get_default_corner_derivative_metrics(
                 (0.0, side_sign, 0.0),
                 name="half_track",
                 unit=MetricUnit.MM,
+                label="Half-Track",
             ),
             driver=hub_z_driver,
         ),
@@ -254,6 +261,7 @@ def get_default_corner_derivative_metrics(
                 (1.0, 0.0, 0.0),
                 name="wheel_center_x",
                 unit=MetricUnit.MM,
+                label="Wheel Center X",
             ),
             driver=hub_z_driver,
         ),
@@ -267,6 +275,7 @@ def get_default_corner_derivative_metrics(
             Axis.Y,
             name="rack_displacement",
             unit=MetricUnit.MM,
+            label="Rack Displacement",
         )
         definitions.extend(
             (
@@ -276,6 +285,7 @@ def get_default_corner_derivative_metrics(
                             positions, side_sign, axle_inboard, axle_outboard
                         ),
                         "roadwheel_angle",
+                        "Roadwheel Angle",
                         MetricUnit.DEG,
                     ),
                     driver=rack_displacement_driver,
@@ -286,6 +296,7 @@ def get_default_corner_derivative_metrics(
                             positions, side_sign, axle_inboard, axle_outboard
                         ),
                         "camber",
+                        "Camber",
                         MetricUnit.DEG,
                     ),
                     driver=rack_displacement_driver,

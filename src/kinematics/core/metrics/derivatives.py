@@ -43,6 +43,10 @@ class ScalarResponse(Protocol):
     def unit(self) -> MetricUnit:
         """Physical unit of the scalar value."""
 
+    @property
+    def label(self) -> str | None:
+        """Optional explicitly authored display label."""
+
     def evaluate(self, positions: DualPositions) -> DualScalar:
         """Evaluate the response value and directional derivative."""
 
@@ -63,6 +67,7 @@ class PointCoordinateResponse:
     axis: Direction3
     name: str
     unit: MetricUnit
+    label: str | None = None
 
     def __post_init__(self) -> None:
         _validate_semantics(self.name, self.unit)
@@ -80,11 +85,18 @@ class PointCoordinateResponse:
         *,
         name: str,
         unit: MetricUnit,
+        label: str | None = None,
     ) -> "PointCoordinateResponse":
         """Build a coordinate response along a principal world axis."""
         direction = np.zeros(3, dtype=np.float64)
         direction[int(axis)] = 1.0
-        return cls(point=point, axis=Direction3(direction), name=name, unit=unit)
+        return cls(
+            point=point,
+            axis=Direction3(direction),
+            name=name,
+            unit=unit,
+            label=label,
+        )
 
     @classmethod
     def from_axis(
@@ -94,15 +106,23 @@ class PointCoordinateResponse:
         *,
         name: str,
         unit: MetricUnit,
+        label: str | None = None,
     ) -> "PointCoordinateResponse":
         """Build a coordinate response, normalizing the supplied axis."""
         if isinstance(axis, Axis):
-            return cls.from_world_axis(point, axis, name=name, unit=unit)
+            return cls.from_world_axis(
+                point,
+                axis,
+                name=name,
+                unit=unit,
+                label=label,
+            )
         return cls(
             point=point,
             axis=Direction3(extract_array(axis)),
             name=name,
             unit=unit,
+            label=label,
         )
 
     def evaluate(self, positions: DualPositions) -> DualScalar:
@@ -121,6 +141,7 @@ class PointDistanceResponse:
     name: str
     unit: MetricUnit
     driving_point: PointKey | None = None
+    label: str | None = None
 
     def __post_init__(self) -> None:
         _validate_semantics(self.name, self.unit)
@@ -146,6 +167,7 @@ class PointDisplacementMagnitudeResponse:
     reference: np.ndarray
     name: str
     unit: MetricUnit
+    label: str | None = None
 
     def __post_init__(self) -> None:
         _validate_semantics(self.name, self.unit)
@@ -163,6 +185,7 @@ class PointDisplacementMagnitudeResponse:
         *,
         name: str,
         unit: MetricUnit,
+        label: str | None = None,
     ) -> "PointDisplacementMagnitudeResponse":
         """Build the response with a copied three-component reference."""
         raw_reference = extract_array(reference)
@@ -178,6 +201,7 @@ class PointDisplacementMagnitudeResponse:
             reference=copied_reference,
             name=name,
             unit=unit,
+            label=label,
         )
 
     def evaluate(self, positions: DualPositions) -> DualScalar:
@@ -198,6 +222,7 @@ class CallableScalarResponse:
     name: str
     unit: MetricUnit
     driving_point: PointKey | None = None
+    label: str | None = None
 
     def __post_init__(self) -> None:
         _validate_semantics(self.name, self.unit)

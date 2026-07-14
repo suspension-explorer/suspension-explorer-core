@@ -150,11 +150,16 @@ def derivative_spec(
     scope: Scope = Scope.CORNER,
 ) -> MetricSpec:
     """Derive metadata from a declarative derivative definition."""
-    response = definition.response.name.replace("_", " ").title()
-    driver = definition.driver.name.replace("_", " ").title()
+    response = definition.response.label
+    driver = definition.driver.label
+    label = (
+        f"{response} wrt. {driver}"
+        if response is not None and driver is not None
+        else definition.column_name
+    )
     return MetricSpec(
         definition.column_name,
-        f"{response} wrt {driver}",
+        label,
         definition.unit,
         MetricKind.DERIVATIVE,
         scope,

@@ -197,8 +197,7 @@ class ActuationPushrodRocker:
             EPS_GEOMETRIC
         ):
             raise ValueError(
-                "The first three pushrod outboard body anchors must not be "
-                "collinear"
+                "The first three pushrod outboard body anchors must not be collinear"
             )
         axis_a = hardpoints[PointID.ROCKER_AXIS_A]
         axis_b = hardpoints[PointID.ROCKER_AXIS_B]
@@ -279,13 +278,21 @@ class ActuationPushrodRocker:
         side: Side,
     ) -> tuple[DerivativeMetricDefinition, ...]:
         """Declare rocker rotation relative to hub vertical travel."""
-        return (self.rotation_derivative(initial, side, "rocker_angle"),)
+        return (
+            self.rotation_derivative(
+                initial,
+                side,
+                "rocker_angle",
+                "Rocker Angle",
+            ),
+        )
 
     def rotation_derivative(
         self,
         initial: SuspensionState,
         side: Side,
         response_name: str,
+        response_label: str,
     ) -> DerivativeMetricDefinition:
         """Build one rocker-rotation derivative with the requested response name."""
         axis_a = extract_array(initial.positions[PointID.ROCKER_AXIS_A])
@@ -313,12 +320,14 @@ class ActuationPushrodRocker:
                 rocker_rotation,
                 name=response_name,
                 unit=MetricUnit.DEG,
+                label=response_label,
             ),
             driver=PointCoordinateResponse.from_world_axis(
                 PointID.WHEEL_CENTER,
                 Axis.Z,
                 name="hub_z",
                 unit=MetricUnit.MM,
+                label="Hub Z",
             ),
         )
 
@@ -463,12 +472,14 @@ class CornerSpringCoilover:
                     PointID.STRUT_BOTTOM,
                     name="damper_length",
                     unit=MetricUnit.MM,
+                    label="Damper Length",
                 ),
                 driver=PointCoordinateResponse.from_world_axis(
                     PointID.WHEEL_CENTER,
                     Axis.Z,
                     name="hub_z",
                     unit=MetricUnit.MM,
+                    label="Hub Z",
                 ),
             ),
         )
@@ -528,7 +539,14 @@ class CornerSpringTorsionBar:
         """Declare torsion-bar twist relative to hub vertical travel."""
         if not isinstance(actuation, ActuationPushrodRocker):
             raise ValueError("Corner torsion-bar derivatives require rocker actuation")
-        return (actuation.rotation_derivative(initial, side, "torsion_bar_twist"),)
+        return (
+            actuation.rotation_derivative(
+                initial,
+                side,
+                "torsion_bar_twist",
+                "Torsion Bar Twist",
+            ),
+        )
 
     def topology_metric_values(
         self,

@@ -197,12 +197,14 @@ class MacPhersonSuspension(CornerSuspension):
                     PointID.STRUT_BOTTOM,
                     name="damper_length",
                     unit=MetricUnit.MM,
+                    label="Damper Length",
                 ),
                 driver=PointCoordinateResponse.from_world_axis(
                     PointID.WHEEL_CENTER,
                     Axis.Z,
                     name="hub_z",
                     unit=MetricUnit.MM,
+                    label="Hub Z",
                 ),
             ),
         )

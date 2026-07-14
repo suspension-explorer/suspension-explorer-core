@@ -341,6 +341,7 @@ class ArbUBar:
             arb_twist,
             name="arb_twist",
             unit=MetricUnit.DEG,
+            label="ARB Twist",
         )
         return tuple(
             DerivativeMetricDefinition(
@@ -350,6 +351,7 @@ class ArbUBar:
                     Axis.Z,
                     name=f"hub_z_{side.name.lower()}",
                     unit=MetricUnit.MM,
+                    label=f"{side.name.title()} Hub Z",
                 ),
             )
             for side in (Side.LEFT, Side.RIGHT)
@@ -680,6 +682,7 @@ class ArbTBar:
             lambda positions: calculate_t_bar_crossbar_center(positions)[Axis.X],
             name="t_bar_center_x",
             unit=MetricUnit.MM,
+            label="T-Bar Center X",
         )
         lateral_reference = np.array([0.0, 1.0, 0.0])
 
@@ -697,6 +700,7 @@ class ArbTBar:
             arb_twist,
             name="arb_twist",
             unit=MetricUnit.DEG,
+            label="ARB Twist",
         )
         definitions: list[DerivativeMetricDefinition] = []
         for side in (Side.LEFT, Side.RIGHT):
@@ -705,6 +709,7 @@ class ArbTBar:
                 Axis.Z,
                 name=f"hub_z_{side.name.lower()}",
                 unit=MetricUnit.MM,
+                label=f"{side.name.title()} Hub Z",
             )
             definitions.extend(
                 (
@@ -842,6 +847,7 @@ class HeaveLinkRockerToRocker:
             PointRef(Side.RIGHT, PointID.HEAVE_LINK_ROCKER),
             name="heave_link_length",
             unit=MetricUnit.MM,
+            label="Heave Link Length",
         )
         return tuple(
             DerivativeMetricDefinition(
@@ -851,6 +857,7 @@ class HeaveLinkRockerToRocker:
                     Axis.Z,
                     name=f"hub_z_{side.name.lower()}",
                     unit=MetricUnit.MM,
+                    label=f"{side.name.title()} Hub Z",
                 ),
             )
             for side in (Side.LEFT, Side.RIGHT)
