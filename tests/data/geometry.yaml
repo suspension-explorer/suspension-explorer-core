@@ -6,6 +6,7 @@ units: millimeters
 
 actuation:
   type: direct
+  mount: lower_wishbone
 spring:
   type: none
 

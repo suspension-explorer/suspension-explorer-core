@@ -113,6 +113,13 @@ class ActuationType(StrEnum):
     PUSHROD_ROCKER = "pushrod_rocker"
 
 
+class MountBody(StrEnum):
+    """Rigid corner bodies that a moving mechanism pickup can be fixed to."""
+
+    LOWER_WISHBONE = "lower_wishbone"
+    UPRIGHT = "upright"
+
+
 class CornerSpringType(StrEnum):
     """Supported corner spring mechanisms."""
 

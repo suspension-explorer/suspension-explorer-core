@@ -6,6 +6,7 @@ units: millimeters
 
 actuation:
   type: pushrod_rocker
+  mount: upright
 spring:
   type: torsion_bar
 anti_roll:

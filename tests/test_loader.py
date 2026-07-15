@@ -27,7 +27,7 @@ def invalid_geometry_file(tmp_path: Path):
     data = {
         "type": "double_wishbone",
         "side": "left",
-        "actuation": {"type": "direct"},
+        "actuation": {"type": "direct", "mount": "lower_wishbone"},
         "spring": {"type": "none"},
         "hardpoints": {
             # Missing most required hardpoints

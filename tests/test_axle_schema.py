@@ -63,7 +63,10 @@ def test_geometry_selectors_parse_as_enums_and_serialize_as_strings(
         "type": "double_wishbone",
         "scope": "axle",
     }
-    assert spec.actuation.model_dump(mode="json") == {"type": "pushrod_rocker"}
+    assert spec.actuation.model_dump(mode="json") == {
+        "type": "pushrod_rocker",
+        "mount": "upright",
+    }
     assert spec.spring.model_dump(mode="json") == {"type": "torsion_bar"}
     assert spec.anti_roll.model_dump(mode="json") == {"type": "u_bar"}
     assert spec.heave_link.model_dump(mode="json") == {"type": "none"}

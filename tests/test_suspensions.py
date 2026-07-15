@@ -346,7 +346,7 @@ side: left
 name: "Test"
 version: "1.0.0"
 units: millimeters
-actuation: {type: direct}
+actuation: {type: direct, mount: lower_wishbone}
 spring: {type: none}
 
 hardpoints:
@@ -390,7 +390,7 @@ type: double_wishbone
 side: left
 name: "With Shim"
 units: millimeters
-actuation: {type: direct}
+actuation: {type: direct, mount: lower_wishbone}
 spring: {type: none}
 
 hardpoints:
@@ -461,7 +461,7 @@ config:
         yaml_content = """
 type: double_wishbone
 side: left
-actuation: {type: direct}
+actuation: {type: direct, mount: lower_wishbone}
 spring: {type: none}
 hardpoints:
   lower_wishbone_inboard_front: [250, 400, 200]
@@ -563,7 +563,7 @@ class TestMechanismAttachmentInjection:
                 PointID.LOWER_WISHBONE_OUTBOARD,
             )
         )
-        with pytest.raises(ValueError, match="at least three outboard body anchors"):
+        with pytest.raises(ValueError, match="at least three mounting body anchors"):
             actuation.validate({})
 
     def test_double_wishbone_declares_mechanism_attachment_bodies(self):

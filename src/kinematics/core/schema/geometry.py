@@ -11,6 +11,7 @@ from kinematics.core.enums import (
     ArbType,
     CornerSpringType,
     HeaveLinkType,
+    MountBody,
     PointID,
     Scope,
     SuspensionType,
@@ -64,6 +65,9 @@ class ActuationSpec(MechanismSpecBase):
     """Selected corner actuation mechanism."""
 
     type: ActuationType
+    # The rigid corner body that carries the moving pickup: the spring pickup
+    # for direct actuation or the outboard pushrod end for pushrod-rocker.
+    mount: MountBody
 
 
 class CornerSpringSpec(MechanismSpecBase):

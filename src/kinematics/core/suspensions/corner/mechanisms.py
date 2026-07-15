@@ -40,7 +40,9 @@ from kinematics.core.primitives.vector_utils.geometric import (
 )
 from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.corner.attachments import (
+    anchored_rigid_point_constraints,
     chiral_rigid_point_constraints,
+    validate_rigid_anchor_points,
 )
 
 if TYPE_CHECKING:
@@ -58,13 +60,13 @@ class ActuationDirect:
     """
     Direct connection between a corner member and its selected spring.
 
-    The locating architecture supplies spring_pickup_body: three points on
-    the rigid body that carries the moving spring pickup (for a double
-    wishbone, the lower wishbone). The mechanism owns no architecture
-    geometry of its own.
+    The locating architecture supplies spring_pickup_body: at least three
+    points on the rigid body that carries the moving spring pickup (for a
+    double wishbone, the lower wishbone or the upright). The mechanism owns
+    no architecture geometry of its own.
     """
 
-    spring_pickup_body: tuple[PointID, PointID, PointID]
+    spring_pickup_body: tuple[PointID, ...]
 
     @property
     def required_points(self) -> frozenset[PointID]:
@@ -88,6 +90,9 @@ class ActuationDirect:
 
     def validate(self, hardpoints: Mapping[PointKey, Point3]) -> None:
         """Validate direct actuation geometry."""
+        validate_rigid_anchor_points(
+            hardpoints, self.spring_pickup_body, "Direct spring actuation"
+        )
 
     def constraints(self, initial: SuspensionState) -> list[Constraint]:
         """Direct actuation adds no constraint without a selected spring."""
@@ -95,7 +100,7 @@ class ActuationDirect:
 
     def spring_constraints(self, initial: SuspensionState) -> list[Constraint]:
         """Attach a moving coil-spring pickup rigidly to the supplied body."""
-        return chiral_rigid_point_constraints(
+        return anchored_rigid_point_constraints(
             initial,
             PointID.STRUT_BOTTOM,
             self.spring_pickup_body,
@@ -181,24 +186,9 @@ class ActuationPushrodRocker:
 
     def validate(self, hardpoints: Mapping[PointKey, Point3]) -> None:
         """Validate the outboard anchors, rocker axis, and pickup radii."""
-        # Three non-collinear anchors are the minimum to fix a point rigidly
-        # to a body; collinear anchors leave rotation about their line free.
-        if len(self.pushrod_outboard_body) < 3:
-            raise ValueError(
-                "Pushrod actuation requires at least three outboard body anchors"
-            )
-        anchor_a, anchor_b, anchor_c = (
-            hardpoints[point] for point in self.pushrod_outboard_body[:3]
+        validate_rigid_anchor_points(
+            hardpoints, self.pushrod_outboard_body, "Pushrod actuation"
         )
-        if compute_point_point_distance(anchor_a, anchor_b) <= EPS_GEOMETRIC:
-            raise ValueError("Pushrod outboard body anchors must be distinct")
-        anchor_line = (anchor_b - anchor_a).normalize()
-        if compute_point_to_line_distance(anchor_c, anchor_a, anchor_line) <= (
-            EPS_GEOMETRIC
-        ):
-            raise ValueError(
-                "The first three pushrod outboard body anchors must not be collinear"
-            )
         axis_a = hardpoints[PointID.ROCKER_AXIS_A]
         axis_b = hardpoints[PointID.ROCKER_AXIS_B]
         if compute_point_point_distance(axis_a, axis_b) <= EPS_GEOMETRIC:
@@ -222,22 +212,10 @@ class ActuationPushrodRocker:
                 compute_point_point_distance(positions[point_a], positions[point_b]),
             )
 
-        # The first three anchors hold the outboard pushrod end rigidly with
-        # authored handedness; further anchors add plain redundant distances.
-        primary_anchors = cast(
-            "tuple[PointID, PointID, PointID]",
-            self.pushrod_outboard_body[:3],
-        )
-        constraints: list[Constraint] = list(
-            chiral_rigid_point_constraints(
-                initial,
-                PointID.PUSHROD_OUTBOARD,
-                primary_anchors,
-            )
-        )
-        constraints.extend(
-            distance(PointID.PUSHROD_OUTBOARD, anchor)
-            for anchor in self.pushrod_outboard_body[3:]
+        constraints: list[Constraint] = anchored_rigid_point_constraints(
+            initial,
+            PointID.PUSHROD_OUTBOARD,
+            self.pushrod_outboard_body,
         )
         constraints.extend(
             (

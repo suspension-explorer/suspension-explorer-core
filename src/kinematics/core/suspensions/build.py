@@ -1,5 +1,6 @@
 """Build composed suspensions from validated geometry specifications."""
 
+from collections.abc import Mapping
 from typing import cast
 
 from kinematics.core.elements import RockerPickup, RockerPickupType
@@ -8,6 +9,7 @@ from kinematics.core.enums import (
     ArbType,
     CornerSpringType,
     HeaveLinkType,
+    MountBody,
     PointID,
     ShimType,
 )
@@ -74,8 +76,7 @@ def build_double_wishbone(spec: GeometrySpecBase) -> Suspension:
     typed = cast(DoubleWishboneGeometrySpec, spec)
     actuation = build_actuation(
         typed.actuation,
-        spring_pickup_body=DoubleWishboneSuspension.LOWER_WISHBONE_BODY,
-        pushrod_outboard_body=DoubleWishboneSuspension.UPRIGHT_BODY,
+        mount_bodies=DoubleWishboneSuspension.MOUNT_BODIES,
     )
     spring = build_corner_spring(typed.spring)
     return _build_corner(typed, actuation, spring)
@@ -106,8 +107,7 @@ def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
 
     actuation = build_actuation(
         typed.actuation,
-        spring_pickup_body=DoubleWishboneSuspension.LOWER_WISHBONE_BODY,
-        pushrod_outboard_body=DoubleWishboneSuspension.UPRIGHT_BODY,
+        mount_bodies=DoubleWishboneSuspension.MOUNT_BODIES,
         external_pickups=external_pickups,
     )
     spring = build_corner_spring(typed.spring)
@@ -219,24 +219,26 @@ def _assemble_axle(
 def build_actuation(
     spec: ActuationSpec,
     *,
-    spring_pickup_body: tuple[PointID, PointID, PointID],
-    pushrod_outboard_body: tuple[PointID, ...],
+    mount_bodies: Mapping[MountBody, tuple[PointID, ...]],
     external_pickups: tuple[RockerPickup, ...] = (),
 ) -> Actuation:
     """
     Build one typed corner actuation mechanism.
 
-    The attachment bodies come from the locating architecture: which points
-    carry the spring pickup and the outboard pushrod end is the caller's
-    knowledge, not the mechanism's.
+    The attachment bodies come from the locating architecture; the geometry
+    spec always selects which body carries the moving pickup.
     """
+    if spec.mount not in mount_bodies:
+        raise ValueError(
+            f"Architecture does not provide the '{spec.mount}' mounting body"
+        )
     if spec.type is ActuationType.DIRECT:
         if external_pickups:
             raise ValueError("Direct actuation does not accept rocker pickups")
-        return ActuationDirect(spring_pickup_body=spring_pickup_body)
+        return ActuationDirect(spring_pickup_body=mount_bodies[spec.mount])
     if spec.type is ActuationType.PUSHROD_ROCKER:
         return ActuationPushrodRocker(
-            pushrod_outboard_body=pushrod_outboard_body,
+            pushrod_outboard_body=mount_bodies[spec.mount],
             external_pickups=external_pickups,
         )
     raise TypeError(f"Unsupported actuation type: {spec.type}")

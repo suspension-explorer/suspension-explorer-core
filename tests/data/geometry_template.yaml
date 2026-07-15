@@ -7,6 +7,10 @@ units: millimeters
 
 actuation:
   type: direct
+  # Required mount: which rigid body carries the moving pickup (the spring
+  # pickup for direct, the outboard pushrod end for pushrod_rocker).
+  # Allowed values: lower_wishbone | upright.
+  mount: lower_wishbone
 spring:
   type: none
 

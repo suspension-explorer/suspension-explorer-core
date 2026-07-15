@@ -5,6 +5,7 @@ version: 0.0.1
 units: millimeters
 actuation:
   type: pushrod_rocker
+  mount: upright
 spring:
   type: coilover
 hardpoints:

@@ -24,7 +24,7 @@ from kinematics.core.elements import (
     UprightElement,
     WheelElement,
 )
-from kinematics.core.enums import Axis, PointID, ShimType, SuspensionType
+from kinematics.core.enums import Axis, MountBody, PointID, ShimType, SuspensionType
 from kinematics.core.points.derived.definitions import build_wheel_derived_spec
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
@@ -85,7 +85,8 @@ class DoubleWishboneSuspension(CornerSuspension):
 
     # Rigid bodies that composed mechanisms may attach to. The architecture
     # owns these; mechanisms receive them at construction and stay free of
-    # double-wishbone point names.
+    # double-wishbone point names. MOUNT_BODIES maps the user-selectable mount
+    # identifiers to those bodies so the geometry spec can choose one.
     LOWER_WISHBONE_BODY: ClassVar[tuple[PointID, PointID, PointID]] = (
         PointID.LOWER_WISHBONE_INBOARD_FRONT,
         PointID.LOWER_WISHBONE_INBOARD_REAR,
@@ -97,6 +98,10 @@ class DoubleWishboneSuspension(CornerSuspension):
         PointID.AXLE_INBOARD,
         PointID.AXLE_OUTBOARD,
     )
+    MOUNT_BODIES: ClassVar[dict[MountBody, tuple[PointID, ...]]] = {
+        MountBody.LOWER_WISHBONE: LOWER_WISHBONE_BODY,
+        MountBody.UPRIGHT: UPRIGHT_BODY,
+    }
 
     SUPPORTED_SHIMS: ClassVar[frozenset[ShimType]] = frozenset(
         {ShimType.OUTBOARD_CAMBER}
