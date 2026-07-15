@@ -150,10 +150,15 @@ def test_wheel_center_x_derivative_matches_finite_difference(
         - float(states[0].get(PointID.WHEEL_CENTER)[Axis.X])
     ) / (2 * FD_STEP)
 
+    # This derivative is near zero (~0.01 mm/mm), so the finite-difference
+    # baseline is dominated by solver convergence noise: position error over
+    # (2 * FD_STEP) is of order 1e-5 and varies by platform. Keep the absolute
+    # tolerance above that floor; a wrong tangent shows up orders of magnitude
+    # larger.
     assert definition.evaluate_from_tangents(state, tangents) == pytest.approx(
         finite_difference,
         rel=1e-3,
-        abs=1e-5,
+        abs=3e-5,
     )
 
 
