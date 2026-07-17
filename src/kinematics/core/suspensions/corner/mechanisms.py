@@ -69,6 +69,16 @@ class ActuationDirect:
     spring_pickup_body: tuple[PointID, ...]
 
     @property
+    def moving_pickup_point(self) -> PointID:
+        """Return the spring pickup carried by the selected corner body."""
+        return PointID.STRUT_BOTTOM
+
+    @property
+    def moving_pickup_body(self) -> tuple[PointID, ...]:
+        """Return the rigid body anchors that carry the spring pickup."""
+        return self.spring_pickup_body
+
+    @property
     def required_points(self) -> frozenset[PointID]:
         """Return points owned by direct actuation itself."""
         return frozenset()
@@ -140,6 +150,16 @@ class ActuationPushrodRocker:
 
     pushrod_outboard_body: tuple[PointID, ...]
     external_pickups: tuple[RockerPickup, ...] = ()
+
+    @property
+    def moving_pickup_point(self) -> PointID:
+        """Return the outboard pushrod pickup carried by the corner body."""
+        return PointID.PUSHROD_OUTBOARD
+
+    @property
+    def moving_pickup_body(self) -> tuple[PointID, ...]:
+        """Return the rigid body anchors that carry the pushrod pickup."""
+        return self.pushrod_outboard_body
 
     @property
     def external_point_ids(self) -> tuple[PointID, ...]:

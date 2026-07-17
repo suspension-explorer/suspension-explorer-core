@@ -49,9 +49,3 @@ config:
     shim_face_normal: {x: 0.0, y: 1.0, z: 0.0}
     design_thickness: 30.0
     setup_thickness: 30.0
-
-  # Points that move with the upright when camber shim is applied.
-  upright_mounted_points:
-    - axle_inboard
-    - axle_outboard
-    - trackrod_outboard

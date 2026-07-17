@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from kinematics.core.enums import AxlePosition, PointID
+from kinematics.core.enums import AxlePosition
 from kinematics.core.primitives.constants import MM_PER_INCH
 from kinematics.core.primitives.geometry import Direction3, Point3
 
@@ -81,14 +81,6 @@ class SuspensionConfig(BaseModel):
     cg_position: Point3
     wheelbase: float
     camber_shim: CamberShimConfig | None = None
-    upright_mounted_points: list[PointID] = Field(
-        default_factory=lambda: [
-            PointID.AXLE_INBOARD,
-            PointID.AXLE_OUTBOARD,
-            PointID.PUSHROD_OUTBOARD,
-            PointID.TRACKROD_OUTBOARD,
-        ]
-    )
     axle_position: AxlePosition | None = None
     front_brake_bias: float | None = None
     driven_axle: AxlePosition | None = None

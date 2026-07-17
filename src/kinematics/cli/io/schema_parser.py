@@ -76,11 +76,6 @@ def _parse_geometry_config(config: object) -> None:
     config_data = cast("dict[str, object]", config)
     if "cg_position" in config_data:
         config_data["cg_position"] = parse_point3(config_data["cg_position"])
-    mounted_points = config_data.get("upright_mounted_points")
-    if isinstance(mounted_points, list):
-        config_data["upright_mounted_points"] = [
-            parse_enum(PointID, point) for point in mounted_points
-        ]
 
     camber_shim = config_data.get("camber_shim")
     if not isinstance(camber_shim, dict):

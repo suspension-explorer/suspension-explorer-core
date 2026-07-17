@@ -98,6 +98,11 @@ class DoubleWishboneSuspension(CornerSuspension):
         PointID.AXLE_INBOARD,
         PointID.AXLE_OUTBOARD,
     )
+    UPRIGHT_ATTACHMENTS: ClassVar[tuple[PointID, ...]] = (
+        PointID.AXLE_INBOARD,
+        PointID.AXLE_OUTBOARD,
+        PointID.TRACKROD_OUTBOARD,
+    )
     MOUNT_BODIES: ClassVar[dict[MountBody, tuple[PointID, ...]]] = {
         MountBody.LOWER_WISHBONE: LOWER_WISHBONE_BODY,
         MountBody.UPRIGHT: UPRIGHT_BODY,
@@ -476,8 +481,8 @@ class DoubleWishboneSuspension(CornerSuspension):
         Solves the local split-body shim assembly to find how the camber block
         and upright body rotate when the shim thickness changes. Then:
         1. Writes the solved UBJ position back (it moves along the upper wishbone arc).
-        2. Rotates configured upright-mounted points about the fixed LBJ using the
-           solved upright-body rotation.
+        2. Rotates upright attachments about the fixed LBJ using the solved
+           upright-body rotation.
         3. Leaves all chassis-mounted points unchanged.
         """
         if self.config is None or self.config.camber_shim is None:
@@ -499,12 +504,12 @@ class DoubleWishboneSuspension(CornerSuspension):
             assembly_solution.ubj_position
         )
 
-        # Rotate each configured upright-mounted point about LBJ using the solved
-        # upright-body rotation axis and angle.
+        # Rotate each upright attachment about LBJ using the solved upright-body
+        # rotation axis and angle.
         if assembly_solution.upright_body_rot_angle_rad > EPS_GEOMETRIC:
             lbj = positions[PointID.LOWER_WISHBONE_OUTBOARD]
             rot_axis = Direction3(assembly_solution.upright_body_rot_axis)
-            for point_id in self.config.upright_mounted_points:
+            for point_id in self.upright_attachment_points():
                 if point_id in positions:
                     positions[point_id] = rotate_point_about_axis(
                         positions[point_id],
@@ -512,3 +517,9 @@ class DoubleWishboneSuspension(CornerSuspension):
                         rot_axis,
                         assembly_solution.upright_body_rot_angle_rad,
                     )
+
+    def upright_attachment_points(self) -> tuple[PointID, ...]:
+        """Return points carried by the upright during camber-shim setup."""
+        if self.actuation.moving_pickup_body == self.UPRIGHT_BODY:
+            return (*self.UPRIGHT_ATTACHMENTS, self.actuation.moving_pickup_point)
+        return self.UPRIGHT_ATTACHMENTS

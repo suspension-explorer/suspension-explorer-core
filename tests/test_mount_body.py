@@ -44,7 +44,12 @@ STRUT_GEOMETRY = DATA_DIR / "corner_strut_geometry.yaml"
 ROCKER_GEOMETRY = DATA_DIR / "corner_rocker_geometry.yaml"
 
 
-def _build_corner_with_mount(geometry_path: Path, mount: MountBody):
+def _build_corner_with_mount(
+    geometry_path: Path,
+    mount: MountBody,
+    *,
+    shim_setup_thickness: float | None = None,
+):
     """Load a corner geometry file with the actuation mount overridden.
 
     The mount key is always written, so this works whether or not the stock
@@ -53,6 +58,14 @@ def _build_corner_with_mount(geometry_path: Path, mount: MountBody):
     with open(geometry_path, "r", encoding="utf-8") as file:
         data = yaml.safe_load(file)
     data["actuation"]["mount"] = mount.value
+    if shim_setup_thickness is not None:
+        data["config"]["camber_shim"] = {
+            "shim_face_point_a": {"x": -25.0, "y": 750.0, "z": 510.0},
+            "shim_face_point_b": {"x": -25.0, "y": 750.0, "z": 490.0},
+            "shim_face_normal": {"x": 0.0, "y": 1.0, "z": 0.0},
+            "design_thickness": 30.0,
+            "setup_thickness": shim_setup_thickness,
+        }
     parsed = parse_geometry_data(data)
     spec = parse_geometry_spec(parsed)
     return build_suspension(spec)
@@ -189,6 +202,43 @@ class TestMountedSpringSolveInvariants:
     # the first three upright anchors, well clear of MIN_CHIRALITY_VOLUME, so
     # no coordinate adjustment is needed for the upright-mounted coilover.
     HEAVE_TARGETS = (-20.0, 0.0, 20.0, 40.0)
+
+    @pytest.mark.parametrize(
+        ("geometry_path", "moving_pickup"),
+        (
+            (STRUT_GEOMETRY, PointID.STRUT_BOTTOM),
+            (ROCKER_GEOMETRY, PointID.PUSHROD_OUTBOARD),
+        ),
+    )
+    @pytest.mark.parametrize(
+        ("mount", "should_move_with_shim"),
+        (
+            (MountBody.UPRIGHT, True),
+            (MountBody.LOWER_WISHBONE, False),
+        ),
+    )
+    def test_camber_shim_follows_actuation_mount_body(
+        self,
+        geometry_path: Path,
+        moving_pickup: PointID,
+        mount: MountBody,
+        should_move_with_shim: bool,
+    ):
+        design = _build_corner_with_mount(geometry_path, mount)
+        shimmed = _build_corner_with_mount(
+            geometry_path,
+            mount,
+            shim_setup_thickness=40.0,
+        )
+
+        design_position = design.initial_state().positions[moving_pickup]
+        shimmed_position = shimmed.initial_state().positions[moving_pickup]
+        movement = _distance_between(design_position, shimmed_position)
+
+        if should_move_with_shim:
+            assert movement > 0.1
+        else:
+            assert movement == pytest.approx(0.0, abs=TEST_TOLERANCE)
 
     def test_upright_mounted_coilover_holds_rigid_to_upright_body(self):
         suspension = _build_corner_with_mount(STRUT_GEOMETRY, MountBody.UPRIGHT)
