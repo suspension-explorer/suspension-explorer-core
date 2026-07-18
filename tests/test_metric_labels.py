@@ -8,6 +8,7 @@ without the CLI's YAML dependency.
 from pathlib import Path
 
 from kinematics.cli.io.loaders import load_geometry
+from kinematics.core.metrics.main import AxleMetricRows
 from kinematics.core.metrics.registry import (
     MetricKind,
     derivative_spec,
@@ -68,3 +69,32 @@ def test_current_derivative_specs_have_explicit_labels(test_data_dir: Path) -> N
         "deriv_torsion_bar_twist_wrt_hub_z": ("Torsion Bar Twist wrt. Hub Z"),
         "deriv_wheel_center_x_wrt_hub_z": "Wheel Center X wrt. Hub Z",
     }
+
+
+def test_state_metric_specs_match_selected_topology_values(
+    test_data_dir: Path,
+) -> None:
+    geometry_names = (
+        "geometry.yaml",
+        "macpherson_geometry.yaml",
+        "corner_rocker_geometry.yaml",
+        "axle_geometry.yaml",
+        "axle_geometry_rocker.yaml",
+        "axle_geometry_t_bar.yaml",
+    )
+    for geometry_name in geometry_names:
+        suspension = load_geometry(test_data_dir / geometry_name)
+        row = suspension.compute_state_metrics(suspension.initial_state())
+        if isinstance(row, AxleMetricRows):
+            emitted = set(row.axle)
+            for corner_row in row.corners.values():
+                emitted.update(corner_row)
+        else:
+            emitted = set(row)
+
+        declared = {
+            key
+            for key, spec in metric_specs_for_suspension(suspension).items()
+            if spec.kind is MetricKind.STATE
+        }
+        assert declared == emitted, geometry_name

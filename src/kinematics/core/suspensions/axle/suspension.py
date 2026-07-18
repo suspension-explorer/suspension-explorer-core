@@ -21,7 +21,7 @@ from kinematics.core.elements import (
     map_element_points,
 )
 from kinematics.core.enums import Axis, PointID, SuspensionType
-from kinematics.core.metrics.main import compute_metrics_for_axle_state
+from kinematics.core.metrics.main import AxleMetricRows, compute_metrics_for_axle_state
 from kinematics.core.points.derived.manager import (
     DerivedPointsSpec,
     PositionFn,
@@ -50,7 +50,7 @@ from kinematics.core.suspensions.corner.base import CornerSuspension
 if TYPE_CHECKING:
     from kinematics.core.diagnostics import DiagnosticIssue
     from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
-    from kinematics.core.metrics.main import AxleMetricRows, MetricRow
+    from kinematics.core.metrics.registry import MetricSpec
     from kinematics.core.sensitivity import TangentField
 
 
@@ -202,12 +202,24 @@ class AxleSuspension(Suspension):
             *self.heave_link.derivative_metric_definitions(self),
         )
 
-    def topology_metric_values(self, state: SuspensionState) -> MetricRow:
-        """Compose axle mechanism state metrics."""
-        row: MetricRow = OrderedDict()
-        row.update(self.anti_roll.topology_metric_values(self, state))
-        row.update(self.heave_link.topology_metric_values(state))
-        return row
+    def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
+        """Compose state metric metadata from installed axle mechanisms."""
+        return (
+            *self.anti_roll.topology_metric_specs(),
+            *self.heave_link.topology_metric_specs(),
+        )
+
+    def topology_metric_rows(self, state: SuspensionState) -> AxleMetricRows:
+        """Compose typed axle and per-corner mechanism metric rows."""
+        result = AxleMetricRows(axle=OrderedDict(), corners={})
+        for mechanism_rows in (
+            self.anti_roll.topology_metric_values(self, state),
+            self.heave_link.topology_metric_values(state),
+        ):
+            result.axle.update(mechanism_rows.axle)
+            for side, row in mechanism_rows.corners.items():
+                result.corners.setdefault(side, OrderedDict()).update(row)
+        return result
 
     def topology_diagnostics(
         self,

@@ -21,7 +21,7 @@ from kinematics.core.elements import (
     TorsionElement,
     VariableLengthLinkElement,
 )
-from kinematics.core.enums import Axis, PointID
+from kinematics.core.enums import Axis, PointID, Scope
 from kinematics.core.metrics import kernels
 from kinematics.core.metrics.derivatives import (
     CallableScalarResponse,
@@ -29,6 +29,7 @@ from kinematics.core.metrics.derivatives import (
     PointCoordinateResponse,
     PointDistanceResponse,
 )
+from kinematics.core.metrics.registry import MetricKind, MetricSpec
 from kinematics.core.metrics.units import MetricUnit
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
 from kinematics.core.primitives.geometry import Point3, extract_array
@@ -53,6 +54,23 @@ PUSHROD_POINTS = frozenset({PointID.PUSHROD_OUTBOARD, PointID.PUSHROD_INBOARD})
 # A -> B defines the axis direction; neither datum implies vehicle orientation.
 ROCKER_AXIS_POINTS = frozenset({PointID.ROCKER_AXIS_A, PointID.ROCKER_AXIS_B})
 COIL_SPRING_POINTS = frozenset({PointID.STRUT_TOP, PointID.STRUT_BOTTOM})
+
+ROCKER_ANGLE_SPEC = MetricSpec(
+    "rocker_angle",
+    "Rocker Angle",
+    MetricUnit.DEG,
+    MetricKind.STATE,
+    Scope.CORNER,
+    "rocker",
+)
+TORSION_BAR_TWIST_SPEC = MetricSpec(
+    "torsion_bar_twist",
+    "Torsion Bar Twist",
+    MetricUnit.DEG,
+    MetricKind.STATE,
+    Scope.CORNER,
+    "torsion_bar",
+)
 
 
 @dataclass(frozen=True)
@@ -122,6 +140,10 @@ class ActuationDirect:
         side: Side,
     ) -> tuple[DerivativeMetricDefinition, ...]:
         """Direct actuation adds no derivative metrics itself."""
+        return ()
+
+    def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
+        """Declare no direct-actuation state metrics."""
         return ()
 
     def topology_metric_values(
@@ -285,6 +307,10 @@ class ActuationPushrodRocker:
             ),
         )
 
+    def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
+        """Declare rocker rotation from the design state."""
+        return (ROCKER_ANGLE_SPEC,)
+
     def rotation_derivative(
         self,
         initial: SuspensionState,
@@ -415,6 +441,10 @@ class CornerSpringNone:
         """Add no spring derivative metrics."""
         return ()
 
+    def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
+        """Declare no spring state metrics."""
+        return ()
+
     def topology_metric_values(
         self,
         state: SuspensionState,
@@ -482,6 +512,10 @@ class CornerSpringCoilover:
             ),
         )
 
+    def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
+        """Declare no additional coilover state metrics."""
+        return ()
+
     def topology_metric_values(
         self,
         state: SuspensionState,
@@ -545,6 +579,10 @@ class CornerSpringTorsionBar:
                 "Torsion Bar Twist",
             ),
         )
+
+    def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
+        """Declare torsion-bar twist from the design state."""
+        return (TORSION_BAR_TWIST_SPEC,)
 
     def topology_metric_values(
         self,

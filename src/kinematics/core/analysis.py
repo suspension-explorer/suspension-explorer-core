@@ -175,7 +175,7 @@ def _split_metric_rows(
     rows: MetricRow | AxleMetricRows,
 ) -> tuple[MetricRow, dict[str, MetricRow]]:
     if isinstance(rows, AxleMetricRows):
-        return rows.axle, rows.corners
+        return rows.axle, {side.name.lower(): row for side, row in rows.corners.items()}
     return rows, {}
 
 

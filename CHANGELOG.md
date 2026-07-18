@@ -68,6 +68,8 @@ All notable changes to this project will be documented in this file.
   removes rack coupling, presentation, metrics, derivatives, and sweep targeting.
 - Metric identities are lowercase, unit-free `snake_case`. Units use typed metadata and are written in CSV metadata or Parquet field metadata.
 - Corner locations remain structural in the analysis API and are rendered as `_left` and `_right` suffixes only in flat result files.
+- Axle topology metrics now retain typed `Side` locations until analysis or export,
+  and installed mechanisms contribute only the state metric metadata they emit.
 - Steering metrics use `roadwheel_angle`; the concrete steering input is `trackrod_inboard`, and wheel-center longitudinal motion is expressed directly as `deriv_wheel_center_x_wrt_hub_z`.
 - Half-track is exported as the absolute `half_track` state metric rather than a design-condition delta.
 
@@ -90,6 +92,7 @@ All notable changes to this project will be documented in this file.
 - Replaced the `steered` boolean with `steering: {type: rack | none}`. Rack
   steering retains track-rod point and element identifiers; non-steered corners
   use distinct toe-link identifiers.
+- `AxleMetricRows.corners` now uses `Side` keys instead of serialized side names.
 
 ## [0.3.0] - 2026-04-09
 

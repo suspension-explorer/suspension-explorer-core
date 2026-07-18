@@ -148,9 +148,9 @@ def test_basic_axle_sweep_solves_and_emits_structural_metrics(
     assert metrics.derivative_error is None
     midpoint = metrics.rows[2]
     assert isinstance(midpoint, AxleMetricRows)
-    assert "camber" in midpoint.corners["left"]
-    assert "camber" in midpoint.corners["right"]
-    assert "camber_left" not in midpoint.corners["left"]
+    assert "camber" in midpoint.corners[Side.LEFT]
+    assert "camber" in midpoint.corners[Side.RIGHT]
+    assert "camber_left" not in midpoint.corners[Side.LEFT]
     assert "rack_displacement" in midpoint.axle
     assert midpoint.axle["heave"] == pytest.approx(0.0, abs=1e-5)
 
@@ -181,6 +181,6 @@ def test_generic_metric_helpers_preserve_structural_axle_rows(
 
     assert isinstance(state_metrics, AxleMetricRows)
     assert isinstance(sweep_metrics[0], AxleMetricRows)
-    assert state_metrics.corners.keys() == {"left", "right"}
+    assert state_metrics.corners.keys() == {Side.LEFT, Side.RIGHT}
     assert "track" in state_metrics.axle
-    assert "camber" in state_metrics.corners["left"]
+    assert "camber" in state_metrics.corners[Side.LEFT]

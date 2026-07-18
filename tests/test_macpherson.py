@@ -9,6 +9,7 @@ from kinematics.cli.io.sweep_loader import load_sweep
 from kinematics.core.enums import PointID
 from kinematics.core.metrics.main import AxleMetricRows
 from kinematics.core.primitives.geometry import Point3
+from kinematics.core.primitives.point_ref import Side
 from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.corner import MacPhersonSuspension
@@ -184,8 +185,8 @@ def test_macpherson_axle_composes_through_generic_axle():
     assert metrics.derivative_error is None
     midpoint = metrics.rows[len(metrics.rows) // 2]
     assert isinstance(midpoint, AxleMetricRows)
-    assert midpoint.corners["left"]["camber"] is not None
-    assert midpoint.corners["right"]["kpi"] is not None
+    assert midpoint.corners[Side.LEFT]["camber"] is not None
+    assert midpoint.corners[Side.RIGHT]["kpi"] is not None
     # Both corners are steered, so the axle carries the rigid rack coupling
     # and reports rack displacement.
     assert axle.rack_attachment_points() == (

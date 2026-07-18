@@ -58,7 +58,7 @@ def split_flat_key(key: str) -> tuple[str, str | None]:
     return key, None
 
 
-_AXLE_SPECS = (
+_AXLE_BASE_SPECS = (
     MetricSpec("heave", "Heave", MetricUnit.MM, MetricKind.STATE, Scope.AXLE),
     MetricSpec("roll", "Roll", MetricUnit.DEG, MetricKind.STATE, Scope.AXLE),
     MetricSpec(
@@ -90,57 +90,6 @@ _AXLE_SPECS = (
         MetricKind.STATE,
         Scope.AXLE,
     ),
-    MetricSpec(
-        "arb_twist",
-        "ARB Twist",
-        MetricUnit.DEG,
-        MetricKind.STATE,
-        Scope.AXLE,
-        "arb",
-    ),
-    MetricSpec(
-        "t_bar_heave_angle",
-        "T-Bar Heave Angle",
-        MetricUnit.DEG,
-        MetricKind.STATE,
-        Scope.AXLE,
-        "arb",
-    ),
-    MetricSpec(
-        "heave_link_length",
-        "Heave Link Length",
-        MetricUnit.MM,
-        MetricKind.STATE,
-        Scope.AXLE,
-        "heave_link",
-    ),
-)
-
-_TOPOLOGY_SPECS = (
-    MetricSpec(
-        "rocker_angle",
-        "Rocker Angle",
-        MetricUnit.DEG,
-        MetricKind.STATE,
-        Scope.CORNER,
-        "rocker",
-    ),
-    MetricSpec(
-        "torsion_bar_twist",
-        "Torsion Bar Twist",
-        MetricUnit.DEG,
-        MetricKind.STATE,
-        Scope.CORNER,
-        "torsion_bar",
-    ),
-    MetricSpec(
-        "arb_arm_angle",
-        "ARB Arm Angle",
-        MetricUnit.DEG,
-        MetricKind.STATE,
-        Scope.CORNER,
-        "arb",
-    ),
 )
 
 
@@ -167,7 +116,7 @@ def derivative_spec(
 
 
 def all_static_metric_specs() -> tuple[MetricSpec, ...]:
-    """Return every statically declared state metric."""
+    """Return topology-independent corner and axle state metrics."""
     corner = tuple(
         MetricSpec(
             metric.column_name,
@@ -178,17 +127,19 @@ def all_static_metric_specs() -> tuple[MetricSpec, ...]:
         )
         for metric in get_default_corner_metrics()
     )
-    specs = corner + _TOPOLOGY_SPECS + _AXLE_SPECS
+    specs = corner + _AXLE_BASE_SPECS
     _validate_unique(specs)
     return specs
 
 
 def specs_by_key(
     derivative_definitions: Sequence[DerivativeMetricDefinition] = (),
+    topology_specs: Sequence[MetricSpec] = (),
 ) -> dict[str, MetricSpec]:
-    """Return static and supplied derivative metadata keyed by identity."""
+    """Return base, supplied topology, and derivative metadata by identity."""
     specs = (
         *all_static_metric_specs(),
+        *topology_specs,
         *(derivative_spec(d) for d in derivative_definitions),
     )
     _validate_unique(specs)
@@ -197,10 +148,12 @@ def specs_by_key(
 
 def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpec]:
     """Return all metadata that the selected topology can emit."""
+    state_specs = list(all_static_metric_specs())
     derivatives: list[tuple[DerivativeMetricDefinition, Scope]] = []
     if suspension.is_axle:
         axle = cast("AxleSuspension", suspension)
         for corner in axle.corners.values():
+            state_specs.extend(corner.topology_metric_specs())
             derivatives.extend(
                 (definition, Scope.CORNER)
                 for definition in (
@@ -212,8 +165,11 @@ def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpe
             (definition, Scope.AXLE)
             for definition in axle.derivative_metric_definitions()
         )
+        state_specs.extend(axle.topology_metric_specs())
     else:
         corner = cast("CornerSuspension", suspension)
+        state_specs = [spec for spec in state_specs if spec.scope is Scope.CORNER]
+        state_specs.extend(corner.topology_metric_specs())
         derivatives.extend(
             (definition, Scope.CORNER)
             for definition in (
@@ -222,14 +178,24 @@ def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpe
             )
         )
 
-    result = {spec.key: spec for spec in all_static_metric_specs()}
+    result: dict[str, MetricSpec] = {}
+    _merge_specs(result, state_specs)
     for definition, scope in derivatives:
         spec = derivative_spec(definition, scope=scope)
+        _merge_specs(result, (spec,))
+    return result
+
+
+def _merge_specs(
+    result: dict[str, MetricSpec],
+    specs: Sequence[MetricSpec],
+) -> None:
+    """Merge identical declarations and reject conflicting metadata."""
+    for spec in specs:
         existing = result.get(spec.key)
         if existing is not None and existing != spec:
             raise ValueError(f"Conflicting metric specification: {spec.key}")
         result[spec.key] = spec
-    return result
 
 
 def flat_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpec]:

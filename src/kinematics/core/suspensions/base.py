@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from kinematics.core.diagnostics import DiagnosticIssue
     from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
     from kinematics.core.metrics.main import AxleMetricRows, MetricRow
+    from kinematics.core.metrics.registry import MetricSpec
     from kinematics.core.sensitivity import TangentField
 
 
@@ -210,6 +211,10 @@ class Suspension(ABC):
     def topology_metric_values(self, state: SuspensionState) -> "MetricRow":
         """Return non-derivative metrics owned by this topology."""
         return OrderedDict()
+
+    def topology_metric_specs(self) -> "tuple[MetricSpec, ...]":
+        """Return state metric metadata owned by this topology."""
+        return ()
 
     def topology_diagnostics(
         self,

@@ -27,7 +27,7 @@ from kinematics.core.elements import (
     TorsionElement,
     VariableLengthLinkElement,
 )
-from kinematics.core.enums import Axis, PointID
+from kinematics.core.enums import Axis, PointID, Scope
 from kinematics.core.metrics import kernels
 from kinematics.core.metrics.derivatives import (
     CallableScalarResponse,
@@ -35,6 +35,8 @@ from kinematics.core.metrics.derivatives import (
     PointCoordinateResponse,
     PointDistanceResponse,
 )
+from kinematics.core.metrics.main import AxleMetricRows
+from kinematics.core.metrics.registry import MetricKind, MetricSpec
 from kinematics.core.metrics.units import MetricUnit
 from kinematics.core.points.derived.manager import (
     DerivedPointsSpec,
@@ -52,7 +54,6 @@ from kinematics.core.primitives.vector_utils.geometric import (
 from kinematics.core.state import SuspensionState
 
 if TYPE_CHECKING:
-    from kinematics.core.metrics.main import MetricRow
     from kinematics.core.suspensions.axle.suspension import (
         AxleSuspension,
     )
@@ -71,6 +72,39 @@ TRANSMISSION_MARGIN_WARNING_THRESHOLD = 0.15
 T_BAR_PIVOT_KEY = PointRef(Side.CENTER, PointID.ARB_T_BAR_PIVOT)
 T_BAR_LEFT_KEY = PointRef(Side.LEFT, PointID.DROPLINK_T_BAR)
 T_BAR_RIGHT_KEY = PointRef(Side.RIGHT, PointID.DROPLINK_T_BAR)
+
+ARB_ARM_ANGLE_SPEC = MetricSpec(
+    "arb_arm_angle",
+    "ARB Arm Angle",
+    MetricUnit.DEG,
+    MetricKind.STATE,
+    Scope.CORNER,
+    "arb",
+)
+ARB_TWIST_SPEC = MetricSpec(
+    "arb_twist",
+    "ARB Twist",
+    MetricUnit.DEG,
+    MetricKind.STATE,
+    Scope.AXLE,
+    "arb",
+)
+T_BAR_HEAVE_ANGLE_SPEC = MetricSpec(
+    "t_bar_heave_angle",
+    "T-Bar Heave Angle",
+    MetricUnit.DEG,
+    MetricKind.STATE,
+    Scope.AXLE,
+    "arb",
+)
+HEAVE_LINK_LENGTH_SPEC = MetricSpec(
+    "heave_link_length",
+    "Heave Link Length",
+    MetricUnit.MM,
+    MetricKind.STATE,
+    Scope.AXLE,
+    "heave_link",
+)
 
 
 def calculate_t_bar_crossbar_center(
@@ -164,13 +198,17 @@ class ArbNone:
         """Add no anti-roll derivative metrics."""
         return ()
 
+    def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
+        """Declare no anti-roll state metrics."""
+        return ()
+
     def topology_metric_values(
         self,
         axle: AxleSuspension,
         state: SuspensionState,
-    ) -> MetricRow:
+    ) -> AxleMetricRows:
         """Add no anti-roll state metrics."""
-        return OrderedDict()
+        return AxleMetricRows(OrderedDict(), {})
 
     def topology_diagnostics(
         self,
@@ -357,11 +395,15 @@ class ArbUBar:
             for side in (Side.LEFT, Side.RIGHT)
         )
 
+    def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
+        """Declare per-corner arm angle and axle anti-roll twist."""
+        return (ARB_ARM_ANGLE_SPEC, ARB_TWIST_SPEC)
+
     def topology_metric_values(
         self,
         axle: AxleSuspension,
         state: SuspensionState,
-    ) -> MetricRow:
+    ) -> AxleMetricRows:
         """Return per-side U-bar arm rotation and total twist from design."""
         design = axle.initial_state()
         axis_a = design.get(PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_A))
@@ -379,12 +421,12 @@ class ArbUBar:
             )
             for side in (Side.LEFT, Side.RIGHT)
         }
-        return OrderedDict(
-            (
-                ("arb_arm_angle_left", angles[Side.LEFT]),
-                ("arb_arm_angle_right", angles[Side.RIGHT]),
-                ("arb_twist", angles[Side.LEFT] - angles[Side.RIGHT]),
-            )
+        return AxleMetricRows(
+            axle=OrderedDict([("arb_twist", angles[Side.LEFT] - angles[Side.RIGHT])]),
+            corners={
+                side: OrderedDict([("arb_arm_angle", angle)])
+                for side, angle in angles.items()
+            },
         )
 
     def topology_diagnostics(
@@ -719,11 +761,15 @@ class ArbTBar:
             )
         return tuple(definitions)
 
+    def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
+        """Declare T-bar heave angle and anti-roll twist."""
+        return (T_BAR_HEAVE_ANGLE_SPEC, ARB_TWIST_SPEC)
+
     def topology_metric_values(
         self,
         axle: AxleSuspension,
         state: SuspensionState,
-    ) -> MetricRow:
+    ) -> AxleMetricRows:
         """Return T-bar stem heave angle and shaft twist."""
         design = axle.initial_state()
         pivot = design.get(T_BAR_PIVOT_KEY)
@@ -737,11 +783,14 @@ class ArbTBar:
         )
         design_twist = self._shaft_twist(design)
         current_twist = self._shaft_twist(state)
-        return OrderedDict(
-            (
-                ("t_bar_heave_angle", heave_angle),
-                ("arb_twist", degrees(current_twist - design_twist)),
-            )
+        return AxleMetricRows(
+            axle=OrderedDict(
+                (
+                    ("t_bar_heave_angle", heave_angle),
+                    ("arb_twist", degrees(current_twist - design_twist)),
+                )
+            ),
+            corners={},
         )
 
     @staticmethod
@@ -812,12 +861,16 @@ class HeaveLinkNone:
         """Add no heave-link derivatives."""
         return ()
 
+    def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
+        """Declare no heave-link state metrics."""
+        return ()
+
     def topology_metric_values(
         self,
         state: SuspensionState,
-    ) -> MetricRow:
+    ) -> AxleMetricRows:
         """Add no heave-link state metrics."""
-        return OrderedDict()
+        return AxleMetricRows(OrderedDict(), {})
 
     def elements(self) -> tuple[SuspensionElement, ...]:
         """Add no heave-link element."""
@@ -863,11 +916,18 @@ class HeaveLinkRockerToRocker:
             for side in (Side.LEFT, Side.RIGHT)
         )
 
-    def topology_metric_values(self, state: SuspensionState) -> MetricRow:
+    def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
+        """Declare installed heave-link length."""
+        return (HEAVE_LINK_LENGTH_SPEC,)
+
+    def topology_metric_values(self, state: SuspensionState) -> AxleMetricRows:
         """Return installed heave-link length."""
         left = state.get(PointRef(Side.LEFT, PointID.HEAVE_LINK_ROCKER))
         right = state.get(PointRef(Side.RIGHT, PointID.HEAVE_LINK_ROCKER))
-        return OrderedDict([("heave_link_length", float((left - right).norm()))])
+        return AxleMetricRows(
+            axle=OrderedDict([("heave_link_length", float((left - right).norm()))]),
+            corners={},
+        )
 
     def elements(self) -> tuple[SuspensionElement, ...]:
         """Return one unconstrained variable-length rocker link."""

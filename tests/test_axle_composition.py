@@ -279,8 +279,8 @@ def test_stub_axle_solves_and_reports_metrics_through_role_hooks():
     # Scalar and derivative metrics both resolved the stub's wheel axis and
     # steering axis through the role hooks; the double-wishbone point names
     # do not exist in this state.
-    for location in ("left", "right"):
-        row = final.corners[location]
+    for side in (Side.LEFT, Side.RIGHT):
+        row = final.corners[side]
         assert row["camber"] is not None
         assert row["caster"] is not None
         assert row["deriv_camber_wrt_hub_z"] is not None

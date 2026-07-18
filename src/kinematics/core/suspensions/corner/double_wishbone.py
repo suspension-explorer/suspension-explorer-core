@@ -63,6 +63,7 @@ from kinematics.core.suspensions.corner.track_rod import TrackRod
 if TYPE_CHECKING:
     from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
     from kinematics.core.metrics.main import MetricRow
+    from kinematics.core.metrics.registry import MetricSpec
 
 
 @dataclass
@@ -330,6 +331,13 @@ class DoubleWishboneSuspension(CornerSuspension):
             )
         )
         return row
+
+    def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
+        """Compose state metric metadata from installed corner mechanisms."""
+        return (
+            *self.actuation.topology_metric_specs(),
+            *self.spring.topology_metric_specs(),
+        )
 
     def derived_spec(self) -> DerivedPointsSpec:
         """Standard wheel derived points from the axle pair."""

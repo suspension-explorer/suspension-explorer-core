@@ -132,8 +132,8 @@ def test_arb_axle_emits_hub_relative_derivatives(test_data_dir: Path) -> None:
         assert expected_axle <= row.axle.keys()
         assert all(row.axle[key] is not None for key in expected_axle)
         assert "arb_twist" in row.axle
-        for location in ("left", "right"):
-            corner = row.corners[location]
+        for side in (Side.LEFT, Side.RIGHT):
+            corner = row.corners[side]
             assert expected_corner <= corner.keys()
             assert all(corner[key] is not None for key in expected_corner)
             assert "rocker_angle" in corner
