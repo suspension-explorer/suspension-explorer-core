@@ -172,8 +172,9 @@ def get_default_corner_derivative_metrics(
     """
     Declare derivative metrics common to every supported corner.
 
-    Point roles are resolved through the corner's role hooks. The bump-steer
-    derivatives (driven by rack displacement) are omitted for an unsteered corner.
+    Point roles are resolved through the corner's role hooks. Wheel-travel
+    derivatives apply to every corner; rack-driven derivatives are omitted when
+    no steering rack is installed.
     """
     side_sign = suspension.side.lateral_sign
     axle_inboard, axle_outboard = suspension.wheel_axis_points()

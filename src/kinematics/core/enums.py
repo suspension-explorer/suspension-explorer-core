@@ -48,35 +48,37 @@ class PointID(IntEnum):
 
     TRACKROD_INBOARD = 9
     TRACKROD_OUTBOARD = 10
+    TOE_LINK_INBOARD = 11
+    TOE_LINK_OUTBOARD = 12
 
-    AXLE_INBOARD = 11
-    AXLE_OUTBOARD = 12
-    AXLE_MIDPOINT = 13
+    AXLE_INBOARD = 13
+    AXLE_OUTBOARD = 14
+    AXLE_MIDPOINT = 15
 
-    STRUT_TOP = 14
-    STRUT_BOTTOM = 15
+    STRUT_TOP = 16
+    STRUT_BOTTOM = 17
 
-    WHEEL_CENTER = 16
-    WHEEL_INBOARD = 17
-    WHEEL_OUTBOARD = 18
+    WHEEL_CENTER = 18
+    WHEEL_INBOARD = 19
+    WHEEL_OUTBOARD = 20
 
-    CONTACT_PATCH_CENTER = 19
+    CONTACT_PATCH_CENTER = 21
 
     # Outboard camber shim geometry. Datum points A and B lie on the design
     # mid-thickness plane; the face normal is perpendicular to that plane.
-    CAMBER_SHIM_FACE_POINT_A = 21
-    CAMBER_SHIM_FACE_POINT_B = 22
-    CAMBER_SHIM_FACE_NORMAL = 23
+    CAMBER_SHIM_FACE_POINT_A = 22
+    CAMBER_SHIM_FACE_POINT_B = 23
+    CAMBER_SHIM_FACE_NORMAL = 24
 
-    ROCKER_AXIS_A = 24
-    ROCKER_AXIS_B = 25
-    DROPLINK_ROCKER = 26
-    DROPLINK_U_BAR = 27
-    ARB_U_BAR_AXIS_A = 28
-    ARB_U_BAR_AXIS_B = 29
-    HEAVE_LINK_ROCKER = 30
-    ARB_T_BAR_PIVOT = 31
-    DROPLINK_T_BAR = 32
+    ROCKER_AXIS_A = 25
+    ROCKER_AXIS_B = 26
+    DROPLINK_ROCKER = 27
+    DROPLINK_U_BAR = 28
+    ARB_U_BAR_AXIS_A = 29
+    ARB_U_BAR_AXIS_B = 30
+    HEAVE_LINK_ROCKER = 31
+    ARB_T_BAR_PIVOT = 32
+    DROPLINK_T_BAR = 33
 
 
 class ShimType(StrEnum):
@@ -141,3 +143,10 @@ class HeaveLinkType(StrEnum):
 
     NONE = "none"
     ROCKER_TO_ROCKER = "rocker_to_rocker"
+
+
+class SteeringType(StrEnum):
+    """Supported axle steering actuators."""
+
+    NONE = "none"
+    RACK = "rack"

@@ -15,7 +15,6 @@ from kinematics.core.constraints import (
     AngleConstraint,
     Constraint,
     DistanceConstraint,
-    PointOnLineConstraint,
 )
 from kinematics.core.elements import (
     ElementType,
@@ -24,7 +23,14 @@ from kinematics.core.elements import (
     UprightElement,
     WheelElement,
 )
-from kinematics.core.enums import Axis, MountBody, PointID, ShimType, SuspensionType
+from kinematics.core.enums import (
+    Axis,
+    MountBody,
+    PointID,
+    ShimType,
+    SteeringType,
+    SuspensionType,
+)
 from kinematics.core.points.derived.definitions import build_wheel_derived_spec
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
@@ -51,7 +57,8 @@ from kinematics.core.suspensions.corner.mechanisms import (
     CornerSpring,
     CornerSpringNone,
 )
-from kinematics.core.targeting import WorldAxisSystem
+from kinematics.core.suspensions.corner.toe_link import ToeLink
+from kinematics.core.suspensions.corner.track_rod import TrackRod
 
 if TYPE_CHECKING:
     from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
@@ -71,8 +78,6 @@ class DoubleWishboneSuspension(CornerSuspension):
             PointID.UPPER_WISHBONE_INBOARD_FRONT,
             PointID.UPPER_WISHBONE_INBOARD_REAR,
             PointID.UPPER_WISHBONE_OUTBOARD,
-            PointID.TRACKROD_INBOARD,
-            PointID.TRACKROD_OUTBOARD,
             PointID.AXLE_INBOARD,
             PointID.AXLE_OUTBOARD,
         }
@@ -98,7 +103,6 @@ class DoubleWishboneSuspension(CornerSuspension):
     UPRIGHT_ATTACHMENTS: ClassVar[tuple[PointID, ...]] = (
         PointID.AXLE_INBOARD,
         PointID.AXLE_OUTBOARD,
-        PointID.TRACKROD_OUTBOARD,
     )
     MOUNT_BODIES: ClassVar[dict[MountBody, tuple[PointID, ...]]] = {
         MountBody.LOWER_WISHBONE: LOWER_WISHBONE_BODY,
@@ -111,15 +115,15 @@ class DoubleWishboneSuspension(CornerSuspension):
 
     # Points included in solver output (CSV/Parquet), in column order.
     # Hardpoints first, then derived points.
-    OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
+    LOCATING_OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
         PointID.LOWER_WISHBONE_INBOARD_FRONT,
         PointID.LOWER_WISHBONE_INBOARD_REAR,
         PointID.LOWER_WISHBONE_OUTBOARD,
         PointID.UPPER_WISHBONE_INBOARD_FRONT,
         PointID.UPPER_WISHBONE_INBOARD_REAR,
         PointID.UPPER_WISHBONE_OUTBOARD,
-        PointID.TRACKROD_INBOARD,
-        PointID.TRACKROD_OUTBOARD,
+    )
+    WHEEL_OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
         PointID.AXLE_INBOARD,
         PointID.AXLE_OUTBOARD,
         PointID.AXLE_MIDPOINT,
@@ -128,6 +132,10 @@ class DoubleWishboneSuspension(CornerSuspension):
         PointID.WHEEL_OUTBOARD,
         PointID.CONTACT_PATCH_CENTER,
     )
+    OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
+        *LOCATING_OUTPUT_POINTS,
+        *WHEEL_OUTPUT_POINTS,
+    )
 
     # Free points that move during solving.
     FREE_POINTS: ClassVar[tuple[PointID, ...]] = (
@@ -135,10 +143,9 @@ class DoubleWishboneSuspension(CornerSuspension):
         PointID.LOWER_WISHBONE_OUTBOARD,
         PointID.AXLE_INBOARD,
         PointID.AXLE_OUTBOARD,
-        PointID.TRACKROD_OUTBOARD,
-        PointID.TRACKROD_INBOARD,
     )
 
+    wheel_heading_link: TrackRod | ToeLink = field(init=False)
     actuation: Actuation = field(
         default_factory=lambda: ActuationDirect(
             spring_pickup_body=DoubleWishboneSuspension.LOWER_WISHBONE_BODY
@@ -147,10 +154,29 @@ class DoubleWishboneSuspension(CornerSuspension):
     )
     spring: CornerSpring = field(default_factory=CornerSpringNone, kw_only=True)
 
+    def __post_init__(self) -> None:
+        """Install a track rod or fixed toe link for wheel-heading control."""
+        if self.config is None:
+            raise ValueError("Double-wishbone suspension requires configuration")
+        # The four upright anchors already overdetermine this attachment, while
+        # the upright angle constraint preserves the authored assembly branch.
+        if self.config.steering.type is SteeringType.RACK:
+            self.wheel_heading_link = TrackRod(
+                self.UPRIGHT_BODY,
+                preserve_attachment_handedness=False,
+            )
+        else:
+            self.wheel_heading_link = ToeLink(
+                self.UPRIGHT_BODY,
+                preserve_attachment_handedness=False,
+            )
+        super().__post_init__()
+
     def required_points(self) -> frozenset[PointID]:
         """Return base and selected mechanism point requirements."""
         return (
             self.REQUIRED_POINTS
+            | self.wheel_heading_link.REQUIRED_POINTS
             | self.actuation.required_points
             | self.spring.required_points
         )
@@ -158,6 +184,7 @@ class DoubleWishboneSuspension(CornerSuspension):
     def validate_hardpoints(self) -> None:
         """Validate base geometry and selected mechanism compatibility."""
         super().validate_hardpoints()
+        self.wheel_heading_link.validate(self.hardpoints)
         self.actuation.validate(self.hardpoints)
         self.spring.validate(self.actuation)
 
@@ -165,6 +192,7 @@ class DoubleWishboneSuspension(CornerSuspension):
         """Return base and selected mechanism moving points."""
         return (
             *self.FREE_POINTS,
+            *self.wheel_heading_link.free_points,
             *self.actuation.free_points,
             *self.spring.free_points,
         )
@@ -174,7 +202,9 @@ class DoubleWishboneSuspension(CornerSuspension):
         return tuple(
             dict.fromkeys(
                 (
-                    *self.OUTPUT_POINTS,
+                    *self.LOCATING_OUTPUT_POINTS,
+                    *self.wheel_heading_link.OUTPUT_POINTS,
+                    *self.WHEEL_OUTPUT_POINTS,
                     *self.actuation.output_points,
                     *self.spring.output_points,
                 )
@@ -190,8 +220,10 @@ class DoubleWishboneSuspension(CornerSuspension):
         return (PointID.LOWER_WISHBONE_OUTBOARD, PointID.UPPER_WISHBONE_OUTBOARD)
 
     def rack_attachment_point(self) -> PointID | None:
-        """The inboard trackrod point rides on the steering rack."""
-        return PointID.TRACKROD_INBOARD
+        """Return the track-rod rack pickup for a steered corner."""
+        if isinstance(self.wheel_heading_link, TrackRod):
+            return self.wheel_heading_link.inboard_point
+        return None
 
     def initial_state(self) -> SuspensionState:
         """Build initial state from hardpoints, applying shims if configured."""
@@ -236,11 +268,6 @@ class DoubleWishboneSuspension(CornerSuspension):
             (PointID.AXLE_INBOARD, PointID.LOWER_WISHBONE_OUTBOARD),
             (PointID.AXLE_OUTBOARD, PointID.UPPER_WISHBONE_OUTBOARD),
             (PointID.AXLE_OUTBOARD, PointID.LOWER_WISHBONE_OUTBOARD),
-            (PointID.TRACKROD_INBOARD, PointID.TRACKROD_OUTBOARD),
-            (PointID.UPPER_WISHBONE_OUTBOARD, PointID.TRACKROD_OUTBOARD),
-            (PointID.LOWER_WISHBONE_OUTBOARD, PointID.TRACKROD_OUTBOARD),
-            (PointID.AXLE_INBOARD, PointID.TRACKROD_OUTBOARD),
-            (PointID.AXLE_OUTBOARD, PointID.TRACKROD_OUTBOARD),
         ]
 
         for p1, p2 in length_pairs:
@@ -270,15 +297,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             )
         )
 
-        # The rack constrains its attachment point to translate along world Y.
-        constraints.append(
-            PointOnLineConstraint(
-                point_id=PointID.TRACKROD_INBOARD,
-                line_point=initial_state.positions[PointID.TRACKROD_INBOARD],
-                line_direction=WorldAxisSystem.Y,
-            )
-        )
-
+        constraints.extend(self.wheel_heading_link.constraints(initial_state))
         constraints.extend(self.actuation.constraints(initial_state))
         constraints.extend(self.spring.constraints(initial_state, self.actuation))
         return constraints
@@ -401,6 +420,7 @@ class DoubleWishboneSuspension(CornerSuspension):
 
     def elements(self) -> tuple[SuspensionElement, ...]:
         """Return the physical elements in this corner."""
+        heading_link_outboard = self.wheel_heading_link.outboard_point
         base_elements: tuple[SuspensionElement, ...] = (
             RigidLinkElement(
                 label="Upper Wishbone Front Leg",
@@ -431,23 +451,17 @@ class DoubleWishboneSuspension(CornerSuspension):
                 hardpoints=(
                     PointID.UPPER_WISHBONE_OUTBOARD,
                     PointID.LOWER_WISHBONE_OUTBOARD,
-                    PointID.TRACKROD_OUTBOARD,
+                    heading_link_outboard,
                 ),
                 attachments=(PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD),
                 segments=(
-                    (PointID.TRACKROD_OUTBOARD, PointID.UPPER_WISHBONE_OUTBOARD),
+                    (heading_link_outboard, PointID.UPPER_WISHBONE_OUTBOARD),
                     (
                         PointID.UPPER_WISHBONE_OUTBOARD,
                         PointID.LOWER_WISHBONE_OUTBOARD,
                     ),
-                    (PointID.LOWER_WISHBONE_OUTBOARD, PointID.TRACKROD_OUTBOARD),
+                    (PointID.LOWER_WISHBONE_OUTBOARD, heading_link_outboard),
                 ),
-            ),
-            RigidLinkElement(
-                label="Track Rod",
-                type=ElementType.TRACK_ROD,
-                point_a=PointID.TRACKROD_INBOARD,
-                point_b=PointID.TRACKROD_OUTBOARD,
             ),
             RigidLinkElement(
                 label="Axle",
@@ -467,6 +481,7 @@ class DoubleWishboneSuspension(CornerSuspension):
         )
         return (
             *base_elements,
+            *self.wheel_heading_link.elements(),
             *self.actuation.elements(),
             *self.spring.elements(self.actuation),
         )
@@ -493,6 +508,8 @@ class DoubleWishboneSuspension(CornerSuspension):
         assembly_solution = solve_camber_shim_assembly(
             positions=cast("dict[PointID, Point3]", positions),
             shim_config=shim_config,
+            heading_link_inboard=self.wheel_heading_link.inboard_point,
+            heading_link_outboard=self.wheel_heading_link.outboard_point,
         )
 
         # Write the solved UBJ position back. The upper wishbone arc constraint
@@ -517,6 +534,10 @@ class DoubleWishboneSuspension(CornerSuspension):
 
     def upright_attachment_points(self) -> tuple[PointID, ...]:
         """Return points carried by the upright during camber-shim setup."""
+        base_attachments = (
+            *self.UPRIGHT_ATTACHMENTS,
+            self.wheel_heading_link.outboard_point,
+        )
         if self.actuation.moving_pickup_body == self.UPRIGHT_BODY:
-            return (*self.UPRIGHT_ATTACHMENTS, self.actuation.moving_pickup_point)
-        return self.UPRIGHT_ATTACHMENTS
+            return (*base_attachments, self.actuation.moving_pickup_point)
+        return base_attachments

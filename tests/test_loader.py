@@ -36,7 +36,7 @@ def invalid_geometry_file(tmp_path: Path):
             "lower_wishbone_inboard_front": [0, 0, 0],
         },
         "config": {
-            "steered": True,
+            "steering": {"type": "rack"},
             "wheel": {
                 "offset": 0,
                 "tire": {

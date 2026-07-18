@@ -108,7 +108,7 @@ class DoubleWishboneGeometrySpec(CornerGeometrySpecBase):
 
 
 class MacPhersonGeometrySpec(CornerGeometrySpecBase):
-    """MacPherson strut corner: lower arm, integral strut, and trackrod."""
+    """MacPherson strut corner with the configured wheel-heading link."""
 
     type: Literal[SuspensionType.MACPHERSON] = SuspensionType.MACPHERSON
     hardpoints: HardpointMap

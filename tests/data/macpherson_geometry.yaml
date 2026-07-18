@@ -16,7 +16,7 @@ hardpoints:
   strut_top: {x: -40, y: 700, z: 850}
   strut_bottom: {x: -14, y: 830, z: 427.5}
 
-  # Track Rod.
+  # Track rod.
   trackrod_inboard: {x: 50, y: 200, z: 250}
   trackrod_outboard: {x: 150, y: 800, z: 275}
 
@@ -26,7 +26,8 @@ hardpoints:
 
 # Configuration.
 config:
-  steered: true
+  steering:
+    type: rack
   wheel:
     offset: 0  # ET convention: positive is inboard.
     tire:

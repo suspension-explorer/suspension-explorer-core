@@ -26,7 +26,8 @@ hardpoints:
   strut_bottom: {x: 0, y: 300, z: 470}
   strut_top: {x: 0, y: 150, z: 500}
 config:
-  steered: true
+  steering:
+    type: rack
   wheel:
     offset: 0
     tire: {aspect_ratio: 0.55, section_width: 270, rim_diameter: 13}

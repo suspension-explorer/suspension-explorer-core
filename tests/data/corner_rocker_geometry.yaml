@@ -24,7 +24,8 @@ hardpoints:
   rocker_axis_a: {x: 100, y: 340, z: 450}
   rocker_axis_b: {x: -100, y: 340, z: 450}
 config:
-  steered: true
+  steering:
+    type: rack
   wheel:
     offset: 0
     tire: {aspect_ratio: 0.55, section_width: 270, rim_diameter: 13}

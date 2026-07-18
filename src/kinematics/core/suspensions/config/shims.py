@@ -19,7 +19,8 @@ With 10 residuals:
       (upright body face B - camber block face B = thickness * normal).
     - 3 scalar normal alignment
       (camber block and upright body face normals must match).
-    - 1 scalar trackrod length (preserves design trackrod length through shim change)
+    - 1 scalar wheel-heading link length (preserves its design length through
+      shim change).
 """
 
 from __future__ import annotations
@@ -83,8 +84,8 @@ class CamberShimAssemblyContext:
     shim_setup_thickness: float
     shim_face_normal_design: np.ndarray
     wishbone_axis: np.ndarray
-    trackrod_inboard_position: np.ndarray
-    trackrod_length: float
+    heading_link_inboard_position: np.ndarray
+    heading_link_length: float
     lbj_position: np.ndarray
     uwb_inboard_front_position: np.ndarray
     uwb_inboard_front_to_ubj_design: np.ndarray
@@ -92,7 +93,7 @@ class CamberShimAssemblyContext:
     ubj_to_camber_block_datum_b: np.ndarray
     lbj_to_upright_body_datum_a: np.ndarray
     lbj_to_upright_body_datum_b: np.ndarray
-    lbj_to_trackrod_outboard: np.ndarray
+    lbj_to_heading_link_outboard: np.ndarray
 
 
 def compute_camber_shim_assembly_residuals(
@@ -111,7 +112,7 @@ def compute_camber_shim_assembly_residuals(
         [0:3]  - Shim contact/datum A closure: p_lA - p_uA - t * n_u.
         [3:6]  - Shim contact/datum B closure: p_lB - p_uB - t * n_u.
         [6:9]  - Normal alignment: n_l - n_u.
-        [9]    - Trackrod length: |rotated_tro - tri| - L_trackrod.
+        [9]    - Heading-link length: |outboard - inboard| - design_length.
     """
     wishbone_angle = x[0]
     camber_block_rot_vec = x[1:4]
@@ -193,18 +194,21 @@ def compute_camber_shim_assembly_residuals(
         solved_upright_body_face_normal - solved_camber_block_face_normal
     )
 
-    # The trackrod remains a rigid link while its outboard pickup rotates with the
-    # lower body about LBJ.
-    rotated_trackrod_offset = _rotate_array_rodrigues(
-        assembly_context.lbj_to_trackrod_outboard,
+    # The installed track rod or toe link remains rigid while its outboard
+    # pickup rotates with the lower body about LBJ.
+    rotated_heading_link_offset = _rotate_array_rodrigues(
+        assembly_context.lbj_to_heading_link_outboard,
         upright_body_rot_vec,
     )
-    solved_trackrod_outboard = assembly_context.lbj_position + rotated_trackrod_offset
-    trackrod_length_residual = (
+    solved_heading_link_outboard = (
+        assembly_context.lbj_position + rotated_heading_link_offset
+    )
+    heading_link_length_residual = (
         np.linalg.norm(
-            solved_trackrod_outboard - assembly_context.trackrod_inboard_position
+            solved_heading_link_outboard
+            - assembly_context.heading_link_inboard_position
         )
-        - assembly_context.trackrod_length
+        - assembly_context.heading_link_length
     )
 
     return np.concatenate(
@@ -212,7 +216,7 @@ def compute_camber_shim_assembly_residuals(
             datum_a_closure_residual,
             datum_b_closure_residual,
             face_normal_alignment_residual,
-            np.array([trackrod_length_residual]),
+            np.array([heading_link_length_residual]),
         ]
     )
 
@@ -226,8 +230,6 @@ REQUIRED_POINT_IDS = frozenset(
         PointID.LOWER_WISHBONE_OUTBOARD,
         PointID.UPPER_WISHBONE_INBOARD_FRONT,
         PointID.UPPER_WISHBONE_INBOARD_REAR,
-        PointID.TRACKROD_OUTBOARD,
-        PointID.TRACKROD_INBOARD,
     }
 )
 
@@ -235,6 +237,8 @@ REQUIRED_POINT_IDS = frozenset(
 def solve_camber_shim_assembly(
     positions: dict[PointID, Point3],
     shim_config: CamberShimConfig,
+    heading_link_inboard: PointID,
+    heading_link_outboard: PointID,
     solver_config: SolverConfig = SolverConfig(),
 ) -> CamberShimAssemblySolution:
     """
@@ -243,11 +247,14 @@ def solve_camber_shim_assembly(
     Finds the configuration where the camber block (rotating about the UBJ) and
     upright body (rotating about the LBJ) produce parallel shim faces separated
     by the setup thickness, while the UBJ remains on the upper wishbone arc,
-    with trackrod length remaining equal to design condition.
+    with the installed track-rod or toe-link length remaining equal to the
+    design condition.
 
     Args:
         positions: Dict mapping PointID to Point3 positions.
         shim_config: Shim thickness configuration (design and setup thicknesses).
+        heading_link_inboard: Inboard pickup for the installed heading link.
+        heading_link_outboard: Upright pickup for the installed heading link.
         solver_config: Solver configuration (tolerances, verbosity, etc.).
 
     Returns:
@@ -258,7 +265,11 @@ def solve_camber_shim_assembly(
         RuntimeError: If the solver fails to converge.
         KeyError: If a required PointID is missing from positions.
     """
-    missing = REQUIRED_POINT_IDS - positions.keys()
+    required_points = REQUIRED_POINT_IDS | {
+        heading_link_inboard,
+        heading_link_outboard,
+    }
+    missing = required_points - positions.keys()
     if missing:
         names = sorted(p.name for p in missing)
         raise KeyError(f"Missing required PointIDs: {names}")
@@ -267,8 +278,8 @@ def solve_camber_shim_assembly(
     lower_ball_joint = positions[PointID.LOWER_WISHBONE_OUTBOARD].data
     upper_wishbone_pickup_front = positions[PointID.UPPER_WISHBONE_INBOARD_FRONT].data
     upper_wishbone_pickup_rear = positions[PointID.UPPER_WISHBONE_INBOARD_REAR].data
-    trackrod_outboard_design = positions[PointID.TRACKROD_OUTBOARD].data
-    trackrod_inboard = positions[PointID.TRACKROD_INBOARD].data
+    heading_link_outboard_design = positions[heading_link_outboard].data
+    heading_link_inboard_position = positions[heading_link_inboard].data
 
     # Shim geometry: datum points are Point3, normal is a unit Direction3.
     shim_face_datum_a = shim_config.shim_face_point_a.data
@@ -319,9 +330,11 @@ def solve_camber_shim_assembly(
         upper_ball_joint_design - upper_wishbone_pickup_front
     )
 
-    # Design-state trackrod length. The trackrod is a rigid link so this distance
-    # must be preserved through the shim change.
-    trackrod_length = float(np.linalg.norm(trackrod_outboard_design - trackrod_inboard))
+    # The installed heading link is rigid, so its design length must be
+    # preserved through the shim change.
+    heading_link_length = float(
+        np.linalg.norm(heading_link_outboard_design - heading_link_inboard_position)
+    )
 
     # Design-state pivot-to-datum vectors. These are the local vectors rotated by
     # the respective rotation vectors during the solve.
@@ -330,23 +343,23 @@ def solve_camber_shim_assembly(
     lbj_to_upright_body_datum_a = upright_body_datum_a_design - lower_ball_joint
     lbj_to_upright_body_datum_b = upright_body_datum_b_design - lower_ball_joint
 
-    # Trackrod outboard vector from LBJ (rotates with the upright body).
-    lbj_to_trackrod_outboard = trackrod_outboard_design - lower_ball_joint
+    # Heading-link outboard vector from LBJ, which rotates with the upright body.
+    lbj_to_heading_link_outboard = heading_link_outboard_design - lower_ball_joint
 
     assembly_context = CamberShimAssemblyContext(
         lbj_position=lower_ball_joint,
         uwb_inboard_front_position=upper_wishbone_pickup_front,
         wishbone_axis=wishbone_axis,
         uwb_inboard_front_to_ubj_design=upper_wishbone_pickup_front_to_ubj_design,
-        trackrod_inboard_position=trackrod_inboard,
+        heading_link_inboard_position=heading_link_inboard_position,
         shim_face_normal_design=design_face_normal,
         ubj_to_camber_block_datum_a=ubj_to_camber_block_datum_a,
         ubj_to_camber_block_datum_b=ubj_to_camber_block_datum_b,
         lbj_to_upright_body_datum_a=lbj_to_upright_body_datum_a,
         lbj_to_upright_body_datum_b=lbj_to_upright_body_datum_b,
-        lbj_to_trackrod_outboard=lbj_to_trackrod_outboard,
+        lbj_to_heading_link_outboard=lbj_to_heading_link_outboard,
         shim_setup_thickness=shim_config.setup_thickness,
-        trackrod_length=trackrod_length,
+        heading_link_length=heading_link_length,
     )
 
     # Seed from design condition: zero wishbone angle, zero rotations.

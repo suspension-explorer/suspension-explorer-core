@@ -15,6 +15,7 @@ from kinematics.core.enums import (
     HeaveLinkType,
     PointID,
     Scope,
+    SteeringType,
     SuspensionType,
     TargetPositionMode,
 )
@@ -50,7 +51,7 @@ def test_axle_geometry_uses_left_corner_as_mirror_source(
     assert spec.hardpoints.left[PointID.AXLE_OUTBOARD][Axis.Y] > 0.0
     assert spec.vehicle_config.wheelbase == pytest.approx(2500.0)
     assert spec.axle_config.axle_position is AxlePosition.FRONT
-    assert spec.axle_config.steered is True
+    assert spec.axle_config.steering.type is SteeringType.RACK
     assert spec.axle_config.wheel.tire.section_width == pytest.approx(270.0)
     assert spec.axle_config.left_setup.camber_shim is None
 
@@ -69,11 +70,13 @@ def test_geometry_selectors_parse_as_enums_and_serialize_as_strings(
     assert spec.axle_config.spring.type is CornerSpringType.TORSION_BAR
     assert spec.axle_config.anti_roll.type is ArbType.U_BAR
     assert spec.axle_config.heave_link.type is HeaveLinkType.NONE
+    assert spec.axle_config.steering.type is SteeringType.RACK
 
     assert spec.model_dump(mode="json", include={"type", "scope"}) == {
         "type": "double_wishbone",
         "scope": "axle",
     }
+    assert spec.axle_config.model_dump(mode="json")["steering"] == {"type": "rack"}
     assert spec.axle_config.actuation.model_dump(mode="json") == {
         "type": "pushrod_rocker",
         "mount": "upright",
@@ -81,6 +84,23 @@ def test_geometry_selectors_parse_as_enums_and_serialize_as_strings(
     assert spec.axle_config.spring.model_dump(mode="json") == {"type": "torsion_bar"}
     assert spec.axle_config.anti_roll.model_dump(mode="json") == {"type": "u_bar"}
     assert spec.axle_config.heave_link.model_dump(mode="json") == {"type": "none"}
+
+
+def test_axle_rejects_boolean_steering_flag(test_data_dir: Path) -> None:
+    data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
+    data["axle_config"].pop("steering")
+    data["axle_config"]["steered"] = True
+
+    with pytest.raises(ValueError, match="axle_config.steering"):
+        parse_geometry_spec(data)
+
+
+def test_axle_rejects_unknown_steering_type(test_data_dir: Path) -> None:
+    data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
+    data["axle_config"]["steering"] = {"type": "rear_steer_magic"}
+
+    with pytest.raises(ValueError, match="steering.type"):
+        parse_geometry_spec(data)
 
 
 def test_t_bar_selector_round_trips_without_heave_link(test_data_dir: Path) -> None:
@@ -229,7 +249,7 @@ def test_axle_left_corner_rejects_right_handed_geometry(test_data_dir: Path) -> 
         build_suspension(data)
 
 
-@pytest.mark.parametrize("field", ["steered", "wheel"])
+@pytest.mark.parametrize("field", ["steering", "wheel"])
 def test_axle_scoped_configuration_is_not_vehicle_configuration(
     test_data_dir: Path,
     field: str,

@@ -35,6 +35,7 @@ class LinkStyle:
 ELEMENT_STYLES = {
     ElementType.WISHBONE: LinkStyle("dodgerblue"),
     ElementType.TRACK_ROD: LinkStyle("darkorange"),
+    ElementType.TOE_LINK: LinkStyle("darkorange"),
     ElementType.AXLE: LinkStyle("forestgreen"),
     ElementType.PUSHROD: LinkStyle("crimson"),
     ElementType.DROPLINK: LinkStyle("goldenrod"),

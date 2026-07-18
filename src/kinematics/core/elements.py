@@ -19,6 +19,7 @@ class ElementType(StrEnum):
     WISHBONE = "wishbone"
     UPRIGHT = "upright"
     TRACK_ROD = "track_rod"
+    TOE_LINK = "toe_link"
     RACK = "rack"
     AXLE = "axle"
     CONTACT_PATCH = "contact_patch"
@@ -85,6 +86,7 @@ class RigidLinkElement(SuspensionElement):
         valid_types = {
             ElementType.WISHBONE,
             ElementType.TRACK_ROD,
+            ElementType.TOE_LINK,
             ElementType.AXLE,
             ElementType.PUSHROD,
             ElementType.DROPLINK,
@@ -132,7 +134,7 @@ class VariableLengthLinkElement(SuspensionElement):
 @dataclass(frozen=True)
 class RackElement(SuspensionElement):
     """
-    A steering rack connecting left and right inner trackrod joints.
+    A steering rack connecting left and right inner track-rod joints.
     """
 
     left_inner: PointKey

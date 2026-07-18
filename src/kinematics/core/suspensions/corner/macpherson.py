@@ -16,19 +16,18 @@ rigid-upright approach used by the double wishbone:
   lower ball joint to the fixed top mount. The upright is held rigidly to the
   derived clamp, while the unconstrained clamp-to-top distance is the
   telescoping strut degree of freedom, presented as one variable-length link.
-- The trackrod resolves rotation about the steering axis.
+- The installed track rod or toe link resolves rotation about the steering axis.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import partial
 from typing import ClassVar, Sequence
 
 from kinematics.core.constraints import (
     Constraint,
     DistanceConstraint,
-    PointOnLineConstraint,
 )
 from kinematics.core.elements import (
     ElementType,
@@ -38,7 +37,7 @@ from kinematics.core.elements import (
     VariableLengthLinkElement,
     WheelElement,
 )
-from kinematics.core.enums import Axis, PointID, SuspensionType
+from kinematics.core.enums import Axis, PointID, SteeringType, SuspensionType
 from kinematics.core.metrics.derivatives import (
     DerivativeMetricDefinition,
     PointCoordinateResponse,
@@ -69,7 +68,8 @@ from kinematics.core.suspensions.corner.attachments import (
     chiral_rigid_point_constraints,
 )
 from kinematics.core.suspensions.corner.base import CornerSuspension
-from kinematics.core.targeting import WorldAxisSystem
+from kinematics.core.suspensions.corner.toe_link import ToeLink
+from kinematics.core.suspensions.corner.track_rod import TrackRod
 
 # How far the authored strut clamp may sit off the design steering axis, in
 # millimetres, before the coincident-axis modelling choice is considered
@@ -81,9 +81,14 @@ STRUT_AXIS_ALIGNMENT_TOLERANCE_MM = 1.0
 
 @dataclass
 class MacPhersonSuspension(CornerSuspension):
-    """MacPherson strut locating geometry: lower arm, strut, and trackrod."""
+    """MacPherson strut with a selected track rod or fixed toe link."""
 
     TYPE_KEY: ClassVar[SuspensionType] = SuspensionType.MACPHERSON
+    UPRIGHT_BODY: ClassVar[tuple[PointID, PointID, PointID]] = (
+        PointID.LOWER_WISHBONE_OUTBOARD,
+        PointID.AXLE_INBOARD,
+        PointID.AXLE_OUTBOARD,
+    )
     REQUIRED_POINTS: ClassVar[frozenset[PointID]] = frozenset(
         {
             PointID.LOWER_WISHBONE_INBOARD_FRONT,
@@ -91,22 +96,20 @@ class MacPhersonSuspension(CornerSuspension):
             PointID.LOWER_WISHBONE_OUTBOARD,
             PointID.STRUT_TOP,
             PointID.STRUT_BOTTOM,
-            PointID.TRACKROD_INBOARD,
-            PointID.TRACKROD_OUTBOARD,
             PointID.AXLE_INBOARD,
             PointID.AXLE_OUTBOARD,
         }
     )
 
     # Points included in solver output, hardpoints first, then derived.
-    OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
+    LOCATING_OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
         PointID.LOWER_WISHBONE_INBOARD_FRONT,
         PointID.LOWER_WISHBONE_INBOARD_REAR,
         PointID.LOWER_WISHBONE_OUTBOARD,
         PointID.STRUT_TOP,
         PointID.STRUT_BOTTOM,
-        PointID.TRACKROD_INBOARD,
-        PointID.TRACKROD_OUTBOARD,
+    )
+    WHEEL_OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
         PointID.AXLE_INBOARD,
         PointID.AXLE_OUTBOARD,
         PointID.AXLE_MIDPOINT,
@@ -115,6 +118,10 @@ class MacPhersonSuspension(CornerSuspension):
         PointID.WHEEL_OUTBOARD,
         PointID.CONTACT_PATCH_CENTER,
     )
+    OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
+        *LOCATING_OUTPUT_POINTS,
+        *WHEEL_OUTPUT_POINTS,
+    )
 
     # Free points that move during solving. The strut top is a fixed chassis
     # mount and the strut clamp is derived from the lower ball joint and top.
@@ -122,13 +129,40 @@ class MacPhersonSuspension(CornerSuspension):
         PointID.LOWER_WISHBONE_OUTBOARD,
         PointID.AXLE_INBOARD,
         PointID.AXLE_OUTBOARD,
-        PointID.TRACKROD_OUTBOARD,
-        PointID.TRACKROD_INBOARD,
     )
+
+    wheel_heading_link: TrackRod | ToeLink = field(init=False)
+
+    def __post_init__(self) -> None:
+        """Install a track rod or fixed toe link for wheel-heading control."""
+        if self.config is None:
+            raise ValueError("MacPherson suspension requires configuration")
+        if self.config.steering.type is SteeringType.RACK:
+            self.wheel_heading_link = TrackRod(self.UPRIGHT_BODY)
+        else:
+            self.wheel_heading_link = ToeLink(self.UPRIGHT_BODY)
+        super().__post_init__()
+
+    def required_points(self) -> frozenset[PointID]:
+        """Return the strut and selected heading-link point requirements."""
+        return self.REQUIRED_POINTS | self.wheel_heading_link.REQUIRED_POINTS
+
+    def output_points(self) -> tuple[PointKey, ...]:
+        """Return authored, heading-link, and derived strut points."""
+        return tuple(
+            dict.fromkeys(
+                (
+                    *self.LOCATING_OUTPUT_POINTS,
+                    *self.wheel_heading_link.OUTPUT_POINTS,
+                    *self.WHEEL_OUTPUT_POINTS,
+                )
+            )
+        )
 
     def validate_hardpoints(self) -> None:
         """Validate the point set and the strut axis definition."""
         super().validate_hardpoints()
+        self.wheel_heading_link.validate(self.hardpoints)
         ball_joint = self.hardpoints[PointID.LOWER_WISHBONE_OUTBOARD]
         strut_top = self.hardpoints[PointID.STRUT_TOP]
         axis_length = compute_point_point_distance(ball_joint, strut_top)
@@ -170,16 +204,18 @@ class MacPhersonSuspension(CornerSuspension):
         return float(clamp_vector.data.dot(strut_axis.data))
 
     def free_points(self) -> Sequence[PointID]:
-        """Return the moving upright group and trackrod points."""
-        return self.FREE_POINTS
+        """Return the moving upright group and heading-link points."""
+        return (*self.FREE_POINTS, *self.wheel_heading_link.free_points)
 
     def steering_axis_points(self) -> tuple[PointID, PointID]:
         """The steering axis runs from the lower ball joint to the strut top."""
         return (PointID.LOWER_WISHBONE_OUTBOARD, PointID.STRUT_TOP)
 
     def rack_attachment_point(self) -> PointID | None:
-        """The inboard trackrod point rides on the steering rack."""
-        return PointID.TRACKROD_INBOARD
+        """Return the track-rod rack pickup for a steered corner."""
+        if isinstance(self.wheel_heading_link, TrackRod):
+            return self.wheel_heading_link.inboard_point
+        return None
 
     def damper_points(self) -> tuple[PointKey, PointKey] | None:
         """The strut is the spring/damper: top mount to upright clamp."""
@@ -224,7 +260,7 @@ class MacPhersonSuspension(CornerSuspension):
         return self._initial_state
 
     def constraints(self) -> list[Constraint]:
-        """Build the lower arm, upright, strut, and trackrod constraints."""
+        """Build lower-arm, upright, strut, and heading-link constraints."""
         initial_state = self.initial_state()
         positions = initial_state.positions
 
@@ -236,7 +272,7 @@ class MacPhersonSuspension(CornerSuspension):
             )
 
         # Lower arm legs locate the ball joint, and the rigid upright group
-        # (ball joint, axle pair, trackrod outboard) mirrors the
+        # (ball joint, axle pair, heading-link outboard) mirrors the
         # double-wishbone upright treatment.
         length_pairs = [
             (PointID.LOWER_WISHBONE_INBOARD_FRONT, PointID.LOWER_WISHBONE_OUTBOARD),
@@ -244,25 +280,10 @@ class MacPhersonSuspension(CornerSuspension):
             (PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD),
             (PointID.AXLE_INBOARD, PointID.LOWER_WISHBONE_OUTBOARD),
             (PointID.AXLE_OUTBOARD, PointID.LOWER_WISHBONE_OUTBOARD),
-            (PointID.TRACKROD_INBOARD, PointID.TRACKROD_OUTBOARD),
         ]
         constraints: list[Constraint] = [
             distance(point_a, point_b) for point_a, point_b in length_pairs
         ]
-
-        # The steering arm pickup rides rigidly on the upright with authored
-        # handedness, so the upright cannot reach a reflected assembly branch.
-        constraints.extend(
-            chiral_rigid_point_constraints(
-                initial_state,
-                PointID.TRACKROD_OUTBOARD,
-                (
-                    PointID.LOWER_WISHBONE_OUTBOARD,
-                    PointID.AXLE_INBOARD,
-                    PointID.AXLE_OUTBOARD,
-                ),
-            )
-        )
 
         # The derived strut clamp lies on the lower-balljoint-to-top line at a
         # fixed offset from the ball joint. Holding the upright to that datum
@@ -271,22 +292,11 @@ class MacPhersonSuspension(CornerSuspension):
             chiral_rigid_point_constraints(
                 initial_state,
                 PointID.STRUT_BOTTOM,
-                (
-                    PointID.LOWER_WISHBONE_OUTBOARD,
-                    PointID.AXLE_INBOARD,
-                    PointID.AXLE_OUTBOARD,
-                ),
+                self.UPRIGHT_BODY,
             )
         )
 
-        # The rack constrains its attachment point to translate along world Y.
-        constraints.append(
-            PointOnLineConstraint(
-                point_id=PointID.TRACKROD_INBOARD,
-                line_point=positions[PointID.TRACKROD_INBOARD],
-                line_direction=WorldAxisSystem.Y,
-            )
-        )
+        constraints.extend(self.wheel_heading_link.constraints(initial_state))
         return constraints
 
     def derived_spec(self) -> DerivedPointsSpec:
@@ -370,6 +380,7 @@ class MacPhersonSuspension(CornerSuspension):
 
     def elements(self) -> tuple[SuspensionElement, ...]:
         """Return the physical elements in this corner."""
+        heading_link_outboard = self.wheel_heading_link.outboard_point
         return (
             RigidLinkElement(
                 label="Lower Arm Front Leg",
@@ -393,20 +404,14 @@ class MacPhersonSuspension(CornerSuspension):
                 label="Upright",
                 hardpoints=(
                     PointID.LOWER_WISHBONE_OUTBOARD,
-                    PointID.TRACKROD_OUTBOARD,
+                    heading_link_outboard,
                     PointID.STRUT_BOTTOM,
                 ),
                 attachments=(PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD),
                 segments=(
-                    (PointID.LOWER_WISHBONE_OUTBOARD, PointID.TRACKROD_OUTBOARD),
+                    (PointID.LOWER_WISHBONE_OUTBOARD, heading_link_outboard),
                     (PointID.LOWER_WISHBONE_OUTBOARD, PointID.STRUT_BOTTOM),
                 ),
-            ),
-            RigidLinkElement(
-                label="Track Rod",
-                type=ElementType.TRACK_ROD,
-                point_a=PointID.TRACKROD_INBOARD,
-                point_b=PointID.TRACKROD_OUTBOARD,
             ),
             RigidLinkElement(
                 label="Axle",
@@ -423,4 +428,5 @@ class MacPhersonSuspension(CornerSuspension):
                 axle_outboard=PointID.AXLE_OUTBOARD,
                 contact_patch=PointID.CONTACT_PATCH_CENTER,
             ),
+            *self.wheel_heading_link.elements(),
         )

@@ -16,11 +16,12 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.elements import UprightElement
-from kinematics.core.enums import PointID, ShimType, Units
+from kinematics.core.enums import PointID, ShimType, SteeringType, Units
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import Side
 from kinematics.core.schema.config import (
     CamberShimConfig,
+    SteeringConfig,
     SuspensionConfig,
     TireConfig,
     WheelConfig,
@@ -63,7 +64,7 @@ def valid_config() -> SuspensionConfig:
     Valid suspension configuration.
     """
     return SuspensionConfig(
-        steered=True,
+        steering=SteeringConfig(type=SteeringType.RACK),
         wheel=WheelConfig(
             offset=0,
             tire=TireConfig(
@@ -127,7 +128,8 @@ class TestDoubleWishboneSuspension:
         assert DoubleWishboneSuspension.TYPE_KEY == "double_wishbone"
         assert ShimType.OUTBOARD_CAMBER in DoubleWishboneSuspension.SUPPORTED_SHIMS
 
-        # Check required points
+        # Check architecture-level required points. Steering-link points are
+        # selected from configuration at instance level.
         required = DoubleWishboneSuspension.REQUIRED_POINTS
         assert PointID.LOWER_WISHBONE_INBOARD_FRONT in required
         assert PointID.LOWER_WISHBONE_INBOARD_REAR in required
@@ -135,8 +137,6 @@ class TestDoubleWishboneSuspension:
         assert PointID.UPPER_WISHBONE_INBOARD_FRONT in required
         assert PointID.UPPER_WISHBONE_INBOARD_REAR in required
         assert PointID.UPPER_WISHBONE_OUTBOARD in required
-        assert PointID.TRACKROD_INBOARD in required
-        assert PointID.TRACKROD_OUTBOARD in required
         assert PointID.AXLE_INBOARD in required
         assert PointID.AXLE_OUTBOARD in required
 
@@ -351,7 +351,8 @@ hardpoints:
   axle_outboard: [-20, 950, 313.426]
 
 config:
-  steered: true
+  steering:
+    type: rack
   wheel:
     offset: 0
     tire:
@@ -395,7 +396,8 @@ hardpoints:
   axle_outboard: [-20, 950, 313.426]
 
 config:
-  steered: true
+  steering:
+    type: rack
   wheel:
     offset: 0
     tire:
@@ -427,7 +429,8 @@ config:
 type: unknown_suspension
 hardpoints: {}
 config:
-  steered: true
+  steering:
+    type: rack
   wheel:
     offset: 0
     tire:
@@ -457,7 +460,8 @@ hardpoints:
   # Missing most required points!
 
 config:
-  steered: true
+  steering:
+    type: rack
   wheel:
     offset: 0
     tire:
@@ -506,7 +510,7 @@ class TestIntegration:
         state = suspension.initial_state()
 
         # Verify all required points present
-        for point_id in DoubleWishboneSuspension.REQUIRED_POINTS:
+        for point_id in suspension.required_points():
             assert point_id in state.positions
 
         # Verify derived points calculated

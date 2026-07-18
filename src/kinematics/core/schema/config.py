@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from kinematics.core.enums import ArbType, AxlePosition, HeaveLinkType
+from kinematics.core.enums import ArbType, AxlePosition, HeaveLinkType, SteeringType
 from kinematics.core.primitives.constants import EPS_GEOMETRIC, MM_PER_INCH
 from kinematics.core.schema.decoding import Direction3Value, Point3Value
 
@@ -104,13 +104,21 @@ class HeaveLinkConfig(BaseModel):
     type: HeaveLinkType
 
 
+class SteeringConfig(BaseModel):
+    """Selected steering actuator for one axle."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: SteeringType
+
+
 class AxleConfig(BaseModel):
     """Configuration and shared mechanisms owned by one axle."""
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True, extra="forbid")
 
     axle_position: AxlePosition
-    steered: bool
+    steering: SteeringConfig
     wheel: WheelConfig
     anti_roll: AntiRollConfig
     heave_link: HeaveLinkConfig
@@ -127,7 +135,7 @@ class CornerConfig(BaseModel):
 class SuspensionConfig(VehicleConfig):
     """Complete runtime configuration for one built corner suspension."""
 
-    steered: bool
+    steering: SteeringConfig
     wheel: WheelConfig
     axle_position: AxlePosition | None = None
     camber_shim: CamberShimConfig | None = None
@@ -143,7 +151,7 @@ class SuspensionConfig(VehicleConfig):
         return cls.model_validate(
             {
                 **vehicle.model_dump(),
-                "steered": axle.steered,
+                "steering": axle.steering,
                 "wheel": axle.wheel,
                 "axle_position": axle.axle_position,
                 "camber_shim": corner.camber_shim,

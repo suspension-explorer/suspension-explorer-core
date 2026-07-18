@@ -10,7 +10,8 @@ vehicle_config:
 
 axle_config:
   axle_position: front
-  steered: true
+  steering:
+    type: rack
   anti_roll:
     type: none
   heave_link:

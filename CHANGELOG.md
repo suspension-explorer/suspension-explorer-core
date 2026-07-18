@@ -62,6 +62,10 @@ All notable changes to this project will be documented in this file.
 - Geometry configuration is separated by ownership: vehicle inputs hold CG,
   wheelbase, brake bias, and driven axle; axle inputs hold steering, wheel/tire,
   and axle-position data; corner inputs hold side-local setup such as camber shims.
+- Steering configuration now selects an explicit `rack` or `none` actuator.
+  Double-wishbone and MacPherson corners use a rack-driven track rod when
+  steered and a chassis-fixed toe link when non-steered. Selecting `none`
+  removes rack coupling, presentation, metrics, derivatives, and sweep targeting.
 - Metric identities are lowercase, unit-free `snake_case`. Units use typed metadata and are written in CSV metadata or Parquet field metadata.
 - Corner locations remain structural in the analysis API and are rendered as `_left` and `_right` suffixes only in flat result files.
 - Steering metrics use `roadwheel_angle`; the concrete steering input is `trackrod_inboard`, and wheel-center longitudinal motion is expressed directly as `deriv_wheel_center_x_wrt_hub_z`.
@@ -83,11 +87,14 @@ All notable changes to this project will be documented in this file.
 - Removed units from metric keys and changed flat axle corner columns from side prefixes to side suffixes, for example `left_camber_deg` to `camber_left`.
 - Replaced the flat axle configuration and corner blocks with explicit
   `vehicle_config`, `axle_config`, and `hardpoints` ownership blocks.
+- Replaced the `steered` boolean with `steering: {type: rack | none}`. Rack
+  steering retains track-rod point and element identifiers; non-steered corners
+  use distinct toe-link identifiers.
 
 ## [0.3.0] - 2026-04-09
 
 ### Added
-- Split-body camber shim assembly solver (`suspensions/config/shims.py`): solves for the outboard camber shim configuration using a least-squares formulation. The upper ball joint position, camber block rotation, and upright body rotation are solved simultaneously to satisfy wishbone arc constraints, shim face closure, normal alignment, and trackrod length preservation.
+- Split-body camber shim assembly solver (`suspensions/config/shims.py`): solves for the outboard camber shim configuration using a least-squares formulation. The upper ball joint position, camber block rotation, and upright body rotation are solved simultaneously to satisfy wishbone arc constraints, shim face closure, normal alignment, and heading-link length preservation.
 
 ### Changed
 - Relaxed `Vec3` type alias from `NDArray[np.float64]` to `NDArray[np.floating[Any]]` so that numpy arithmetic results satisfy the type checker without wrapping. `make_vec3` is retained at system boundaries (I/O, config loading, solver output extraction, dual-number passthrough) but removed from internal arithmetic call sites where it served only as type-checker appeasement.

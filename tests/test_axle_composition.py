@@ -28,7 +28,7 @@ from kinematics.core.elements import (
     RigidLinkElement,
     SuspensionElement,
 )
-from kinematics.core.enums import Axis, PointID, SuspensionType
+from kinematics.core.enums import Axis, PointID, SteeringType, SuspensionType
 from kinematics.core.metrics.context import MetricContext
 from kinematics.core.metrics.main import AxleMetricRows
 from kinematics.core.points.derived.manager import DerivedPointsSpec
@@ -37,7 +37,7 @@ from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
 from kinematics.core.primitives.vector_utils.geometric import (
     compute_point_point_distance,
 )
-from kinematics.core.schema.config import SuspensionConfig
+from kinematics.core.schema.config import SteeringConfig, SuspensionConfig
 from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.corner import DoubleWishboneSuspension
@@ -190,6 +190,10 @@ def build_stub_corner(
 
 
 def build_stub_axle(config: SuspensionConfig | None = None) -> AxleSuspension:
+    if config is not None:
+        config = config.model_copy(
+            update={"steering": SteeringConfig(type=SteeringType.NONE)}
+        )
     # The stub corners have no registered architecture; any member works as
     # the reported identity here.
     return AxleSuspension(
@@ -280,7 +284,7 @@ def test_stub_axle_solves_and_reports_metrics_through_role_hooks():
         assert row["camber"] is not None
         assert row["caster"] is not None
         assert row["deriv_camber_wrt_hub_z"] is not None
-        # Unsteered corners declare no bump-steer derivatives.
+        # Corners without a rack declare no rack-driven derivatives.
         assert "deriv_roadwheel_angle_wrt_rack_displacement" not in row
 
     assert final.axle["heave"] == pytest.approx(bump_values[-1], abs=1e-6)
@@ -313,7 +317,11 @@ def test_double_wishbone_declares_expected_point_roles():
 
 def test_metric_context_resolves_steering_axis_through_role_hooks():
     donor = load_geometry(TEST_DATA / "geometry.yaml")
-    corner = build_stub_corner(Side.LEFT, config=donor.config)
+    assert donor.config is not None
+    config = donor.config.model_copy(
+        update={"steering": SteeringConfig(type=SteeringType.NONE)}
+    )
+    corner = build_stub_corner(Side.LEFT, config=config)
     assert corner.config is not None
     ctx = MetricContext(
         state=corner.initial_state(),

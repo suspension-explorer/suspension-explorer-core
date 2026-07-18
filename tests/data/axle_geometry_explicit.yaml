@@ -10,7 +10,8 @@ vehicle_config:
 
 axle_config:
   axle_position: front
-  steered: true
+  steering:
+    type: rack
   actuation:
     type: direct
     mount: lower_wishbone
