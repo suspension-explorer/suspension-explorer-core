@@ -1,15 +1,30 @@
-# open-kinematics
+<p align="center">
+  <img
+    src="docs/logo-wordmark-paper.svg#gh-dark-mode-only"
+    alt="Suspension Explorer"
+    width="420"
+  >
+  <img
+    src="docs/logo-wordmark-ink.svg#gh-light-mode-only"
+    alt="Suspension Explorer"
+    width="420"
+  >
+</p>
+
+# Suspension Explorer: Core
 
 > ⚠️   
 >
-> **Note that this system is both experimental and still under development. I do not recommend using it for anything important.**
+> **Note that this system is experimental and still under active development.**
 
-`open-kinematics` is a Python-based geometric constraint solver for simulating the kinematic behavior of vehicle suspension systems. It allows users to analyze suspension geometries by running parametric sweeps, then offering exports of solved system positions alongside visualizations of suspension state.
+This repository contains a Python-based geometric constraint solver for simulating the kinematic behavior of vehicle suspension systems. It is the core library for the main Suspension Explorer product.
+
+This repo contains both the core solver and CLI-level wrapper, which allows users to analyze suspension geometries by running parametric sweeps, then export those solved system positions and associated metrics. It also allows for simple visualization of the suspension system's state.
 
 The tool is built around a numerical solver that determines the positions of all suspension components for a given set of boundary conditions, such as wheel height or track-rod inboard position.
 
 <p align="center">
-  <img src="/images/plot.png" alt="Design Condition Visualization" width="80%">
+  <img src="images/plot.png" alt="Design Condition Visualization" width="80%">
   <br>
   <em>Visualization of a double wishbone suspension at its design condition.</em>
 </p>
@@ -79,7 +94,7 @@ The package is not published to PyPI; install it from this repository.
 For the transport-independent solver API only:
 
 ```bash
-uv pip install "kinematics @ git+https://github.com/nickmccleery/open-kinematics.git"
+uv pip install "kinematics @ git+https://github.com/suspension-explorer/suspension-explorer-core.git"
 ```
 
 This installs NumPy, SciPy, and Pydantic. Importing `kinematics` or
@@ -90,7 +105,7 @@ This installs NumPy, SciPy, and Pydantic. Importing `kinematics` or
 To load YAML files and write CSV or Parquet results, install the `[cli]` extra:
 
 ```bash
-uv pip install "kinematics[cli] @ git+https://github.com/nickmccleery/open-kinematics.git"
+uv pip install "kinematics[cli] @ git+https://github.com/suspension-explorer/suspension-explorer-core.git"
 ```
 
 ### Full Installation (with Visualization)
@@ -98,7 +113,7 @@ uv pip install "kinematics[cli] @ git+https://github.com/nickmccleery/open-kinem
 To use the CLI and generate plots or animations, install both extras:
 
 ```bash
-uv pip install "kinematics[cli,viz] @ git+https://github.com/nickmccleery/open-kinematics.git"
+uv pip install "kinematics[cli,viz] @ git+https://github.com/suspension-explorer/suspension-explorer-core.git"
 ```
 
 ## Core Library API
@@ -171,7 +186,7 @@ uv run kinematics sweep --geometry tests/data/geometry.yaml --sweep tests/data/s
 This will produce a video like the one below, showing the suspension articulating through a range of bump, droop, and steering travel.
 
 <p align="center">
-  <img src="/images/animation.gif" alt="Kinematic Sweep Animation" width="80%">
+  <img src="images/animation.gif" alt="Kinematic Sweep Animation" width="80%">
   <br>
   <em>Animation of a full kinematic sweep.</em>
 </p>
