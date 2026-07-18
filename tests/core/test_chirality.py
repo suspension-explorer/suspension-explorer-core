@@ -4,19 +4,19 @@ import numpy as np
 import pytest
 
 from kinematics.core.constraints import ScalarTripleProductConstraint
+from kinematics.core.enums import PointID
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
 )
-from kinematics.core.primitives.enums import PointID
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.solver import ResidualComputer
 from kinematics.core.state import SuspensionState
 
 POINTS = (
-    PointID.ROCKER_AXIS_FRONT,
-    PointID.ROCKER_AXIS_REAR,
+    PointID.ROCKER_AXIS_A,
+    PointID.ROCKER_AXIS_B,
     PointID.PUSHROD_INBOARD,
     PointID.DROPLINK_ROCKER,
 )

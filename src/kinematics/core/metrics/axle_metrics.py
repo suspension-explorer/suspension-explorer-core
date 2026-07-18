@@ -5,20 +5,20 @@ from __future__ import annotations
 from math import atan2, degrees
 from typing import TYPE_CHECKING
 
+from kinematics.core.enums import Axis, PointID
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
-from kinematics.core.primitives.enums import Axis, PointID
 from kinematics.core.primitives.point_ref import PointRef, Side
 
 if TYPE_CHECKING:
     from kinematics.core.metrics.main import MetricRow
     from kinematics.core.state import SuspensionState
-    from kinematics.core.suspensions.axle import DoubleWishboneAxleSuspension
+    from kinematics.core.suspensions.axle import AxleSuspension
 
 
 def append_axle_state_metrics(
     row: MetricRow,
     state: SuspensionState,
-    axle: DoubleWishboneAxleSuspension,
+    axle: AxleSuspension,
 ) -> None:
     """Append all metrics defined at axle rather than corner scope."""
     wheel_delta_z: dict[Side, float] = {}
@@ -50,18 +50,21 @@ def append_axle_state_metrics(
     row["roll_center_y"] = roll_center_y
     row["roll_center_z"] = roll_center_z
 
-    design_trackrod_y = float(
-        axle.corners[Side.LEFT].initial_state().get(PointID.TRACKROD_INBOARD)[Axis.Y]
-    )
-    current_trackrod_y = float(
-        state.get(PointRef(Side.LEFT, PointID.TRACKROD_INBOARD))[Axis.Y]
-    )
-    row["trackrod_inboard_displacement"] = current_trackrod_y - design_trackrod_y
+    # Rack displacement is measured on the left corner rack attachment; the rack
+    # coupling makes the right corner move identically.
+    left_corner = axle.corners[Side.LEFT]
+    rack_attachment = left_corner.rack_attachment_point()
+    if rack_attachment is None:
+        row["rack_displacement"] = None
+    else:
+        design_rack_y = float(left_corner.initial_state().get(rack_attachment)[Axis.Y])
+        current_rack_y = float(state.get(PointRef(Side.LEFT, rack_attachment))[Axis.Y])
+        row["rack_displacement"] = current_rack_y - design_rack_y
 
 
 def _roll_center(
     state: SuspensionState,
-    axle: DoubleWishboneAxleSuspension,
+    axle: AxleSuspension,
 ) -> tuple[float | None, float | None]:
     """Intersect the two contact-patch-to-FVIC lines in the YZ plane."""
     lines: list[tuple[float, float, float, float]] = []

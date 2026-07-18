@@ -2,16 +2,30 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Mapping
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from kinematics.core.primitives.enums import Units
+from kinematics.core.enums import (
+    ActuationType,
+    ArbType,
+    CornerSpringType,
+    HeaveLinkType,
+    MountBody,
+    Scope,
+    SuspensionType,
+    Units,
+)
 from kinematics.core.primitives.point_ref import Side
-from kinematics.core.schema.coercion import CIPointID, CISide, CIUnits, PydanticPoint3
-from kinematics.core.schema.config import SuspensionConfig
+from kinematics.core.schema.config import (
+    AxleConfig,
+    CornerConfig,
+    SuspensionConfig,
+    VehicleConfig,
+)
+from kinematics.core.schema.decoding import Point3Value, PointIDValue, SideValue
 
-HardpointMap = dict[CIPointID, PydanticPoint3]
+HardpointMap = dict[PointIDValue, Point3Value]
 
 
 class GeometrySpecBase(BaseModel):
@@ -25,15 +39,17 @@ class GeometrySpecBase(BaseModel):
 
     name: str = "unnamed"
     version: str = "0.0.0"
-    units: CIUnits = Units.MILLIMETERS
-    type: str
-    config: SuspensionConfig
+    units: Units = Units.MILLIMETERS
+    type: SuspensionType
+    scope: Scope
 
 
 class CornerGeometrySpecBase(GeometrySpecBase):
     """Fields required by every explicitly sided corner geometry."""
 
-    side: CISide
+    scope: Literal[Scope.CORNER] = Scope.CORNER
+    side: SideValue = Side.LEFT
+    config: SuspensionConfig
 
     @model_validator(mode="after")
     def check_physical_side(self) -> "CornerGeometrySpecBase":
@@ -43,47 +59,87 @@ class CornerGeometrySpecBase(GeometrySpecBase):
         return self
 
 
-class DoubleWishboneGeometrySpec(CornerGeometrySpecBase):
-    """A basic double-wishbone corner."""
-
-    type: Literal["double_wishbone"] = "double_wishbone"
-    hardpoints: HardpointMap
-
-
-class DoubleWishboneCoiloverGeometrySpec(CornerGeometrySpecBase):
-    """A double-wishbone corner with a lower-wishbone-mounted coilover."""
-
-    type: Literal["double_wishbone_coilover"] = "double_wishbone_coilover"
-    hardpoints: HardpointMap
-
-
-class RockerSpringSpec(BaseModel):
-    """Explicit spring medium for a pushrod-rocker corner."""
+class MechanismSpecBase(BaseModel):
+    """Strict base for one explicitly selected suspension mechanism."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
-    type: Literal["torsion_bar", "coilover"]
 
 
-class DoubleWishbonePushrodRockerGeometrySpec(CornerGeometrySpecBase):
-    """A double-wishbone corner with pushrod and rocker actuation."""
+class ActuationSpec(MechanismSpecBase):
+    """Selected corner actuation mechanism."""
 
-    type: Literal["double_wishbone_pushrod_rocker"] = "double_wishbone_pushrod_rocker"
-    spring: RockerSpringSpec
+    type: ActuationType
+    # The rigid corner body that carries the moving pickup: the spring pickup
+    # for direct actuation or the outboard pushrod end for pushrod-rocker.
+    mount: MountBody
+
+
+class CornerSpringSpec(MechanismSpecBase):
+    """Selected corner spring mechanism."""
+
+    type: CornerSpringType
+
+
+def check_double_wishbone_mechanism_combination(
+    actuation: ActuationSpec,
+    spring: CornerSpringSpec,
+) -> None:
+    """Reject combinations whose physical connection is not implemented."""
+    if (
+        actuation.type is ActuationType.DIRECT
+        and spring.type is CornerSpringType.TORSION_BAR
+    ):
+        raise ValueError("Direct torsion-bar actuation is not implemented yet")
+
+
+class DoubleWishboneGeometrySpec(CornerGeometrySpecBase):
+    """Double-wishbone corner with composed actuation and spring mechanisms."""
+
+    type: Literal[SuspensionType.DOUBLE_WISHBONE] = SuspensionType.DOUBLE_WISHBONE
+    actuation: ActuationSpec
+    spring: CornerSpringSpec
+    hardpoints: HardpointMap
+
+    @model_validator(mode="after")
+    def check_mechanisms(self) -> "DoubleWishboneGeometrySpec":
+        """Validate the selected corner mechanism combination."""
+        check_double_wishbone_mechanism_combination(self.actuation, self.spring)
+        return self
+
+
+class MacPhersonGeometrySpec(CornerGeometrySpecBase):
+    """MacPherson strut corner with the configured wheel-heading link."""
+
+    type: Literal[SuspensionType.MACPHERSON] = SuspensionType.MACPHERSON
     hardpoints: HardpointMap
 
 
-class DoubleWishbonePushrodRockerArbGeometrySpec(CornerGeometrySpecBase):
-    """A pushrod-rocker corner with an explicit rocker-side ARB pickup."""
+class DoubleWishboneAxleConfig(AxleConfig):
+    """Shared double-wishbone axle topology and optional side-local setup."""
 
-    type: Literal["double_wishbone_pushrod_rocker_arb"] = (
-        "double_wishbone_pushrod_rocker_arb"
-    )
-    spring: RockerSpringSpec
-    hardpoints: HardpointMap
+    actuation: ActuationSpec
+    spring: CornerSpringSpec
+    left_setup: CornerConfig = Field(default_factory=CornerConfig)
+    right_setup: CornerConfig | None = None
+
+    @model_validator(mode="after")
+    def check_mechanisms(self) -> "DoubleWishboneAxleConfig":
+        """Validate the symmetric corner mechanisms and shared hardware."""
+        check_double_wishbone_mechanism_combination(self.actuation, self.spring)
+        has_rocker = self.actuation.type is ActuationType.PUSHROD_ROCKER
+        if self.anti_roll.type in (ArbType.U_BAR, ArbType.T_BAR) and not has_rocker:
+            raise ValueError(
+                "The implemented anti-roll mechanism requires pushrod-rocker actuation"
+            )
+        if self.heave_link.type is HeaveLinkType.ROCKER_TO_ROCKER and not has_rocker:
+            raise ValueError(
+                "A rocker-to-rocker heave link requires pushrod-rocker actuation"
+            )
+        return self
 
 
 class AxleHardpointsSpec(BaseModel):
-    """Either one mirrored corner map or explicit left and right maps."""
+    """Left, optional explicit right, and shared center axle hardpoints."""
 
     model_config = ConfigDict(
         frozen=True,
@@ -91,94 +147,69 @@ class AxleHardpointsSpec(BaseModel):
         extra="forbid",
     )
 
-    points: HardpointMap | None = None
-    side: CISide | None = None
-    left: HardpointMap | None = None
+    left: HardpointMap
     right: HardpointMap | None = None
-
-    @model_validator(mode="after")
-    def check_mode(self) -> "AxleHardpointsSpec":
-        """Require exactly one unambiguous axle hardpoint mode."""
-        explicit = self.left is not None or self.right is not None
-        if explicit:
-            if self.points is not None:
-                raise ValueError(
-                    "Give either a mirror-mode 'points' block or explicit "
-                    "'left'/'right' blocks, not both."
-                )
-            if self.left is None or self.right is None:
-                raise ValueError(
-                    "Explicit-mode axle hardpoints require both 'left' and "
-                    "'right' blocks."
-                )
-            if self.side is not None:
-                raise ValueError("Explicit axle hardpoints do not accept 'side'.")
-        else:
-            if self.points is None:
-                raise ValueError(
-                    "Axle hardpoints require a mirror-mode 'points' block "
-                    "or explicit 'left'/'right' blocks."
-                )
-            if self.side is None:
-                raise ValueError("Mirror-mode axle hardpoints require 'side'.")
-            if self.side == Side.CENTER:
-                raise ValueError("Mirror source side must be 'left' or 'right'.")
-        return self
-
-    @property
-    def is_explicit(self) -> bool:
-        """Whether both sides are specified instead of generated by mirroring."""
-        return self.left is not None
+    center: HardpointMap = Field(default_factory=dict)
 
 
-class DoubleWishboneAxleGeometrySpec(GeometrySpecBase):
-    """A full axle composed from two basic double-wishbone corners."""
+class AxleGeometrySpecBase(GeometrySpecBase):
+    """Fields shared by every composed full-axle geometry."""
 
-    type: Literal["double_wishbone_axle"] = "double_wishbone_axle"
+    scope: Literal[Scope.AXLE] = Scope.AXLE
+    vehicle_config: VehicleConfig
+    axle_config: AxleConfig
     hardpoints: AxleHardpointsSpec
 
 
-class RockerAxleHardpointsSpec(AxleHardpointsSpec):
-    """Mirrored or explicit rocker corners plus axle-owned ARB axis points."""
+class DoubleWishboneAxleGeometrySpec(AxleGeometrySpecBase):
+    """Double-wishbone axle with corner mechanisms and shared hardware."""
 
-    center: HardpointMap
+    type: Literal[SuspensionType.DOUBLE_WISHBONE] = SuspensionType.DOUBLE_WISHBONE
+    axle_config: DoubleWishboneAxleConfig
+
+    @model_validator(mode="after")
+    def check_right_setup(self) -> "DoubleWishboneAxleGeometrySpec":
+        """Keep explicit asymmetric geometry and side-local setup paired."""
+        if self.axle_config.right_setup is not None and self.hardpoints.right is None:
+            raise ValueError(
+                "axle_config.right_setup requires explicit hardpoints.right"
+            )
+        if (
+            self.hardpoints.right is not None
+            and self.axle_config.left_setup.camber_shim is not None
+            and self.axle_config.right_setup is None
+        ):
+            raise ValueError(
+                "Explicit hardpoints.right requires axle_config.right_setup when "
+                "axle_config.left_setup contains side-local setup"
+            )
+        return self
 
 
-class DoubleWishbonePushrodRockerAxleGeometrySpec(GeometrySpecBase):
-    """A rocker axle with a shared anti-roll bar."""
+class MacPhersonAxleGeometrySpec(AxleGeometrySpecBase):
+    """MacPherson axle with a left and optional explicit right strut corner."""
 
-    type: Literal["double_wishbone_pushrod_rocker_axle"] = (
-        "double_wishbone_pushrod_rocker_axle"
-    )
-    spring: RockerSpringSpec
-    hardpoints: RockerAxleHardpointsSpec
+    type: Literal[SuspensionType.MACPHERSON] = SuspensionType.MACPHERSON
+
+    @model_validator(mode="after")
+    def check_axle_mechanisms(self) -> "MacPhersonAxleGeometrySpec":
+        """Reject shared hardware that needs a rocker corner."""
+        if self.axle_config.anti_roll.type in (ArbType.U_BAR, ArbType.T_BAR):
+            raise ValueError(
+                "The implemented anti-roll mechanism requires pushrod-rocker "
+                "actuation, which a MacPherson corner does not provide"
+            )
+        if self.axle_config.heave_link.type is HeaveLinkType.ROCKER_TO_ROCKER:
+            raise ValueError(
+                "A rocker-to-rocker heave link requires pushrod-rocker "
+                "actuation, which a MacPherson corner does not provide"
+            )
+        return self
 
 
 GeometrySpec = (
     DoubleWishboneGeometrySpec
-    | DoubleWishboneCoiloverGeometrySpec
+    | MacPhersonGeometrySpec
     | DoubleWishboneAxleGeometrySpec
-    | DoubleWishbonePushrodRockerGeometrySpec
-    | DoubleWishbonePushrodRockerArbGeometrySpec
-    | DoubleWishbonePushrodRockerAxleGeometrySpec
+    | MacPhersonAxleGeometrySpec
 )
-
-
-def parse_geometry_spec(data: Mapping[str, Any]) -> GeometrySpecBase:
-    """Validate a raw mapping as the explicitly selected corner type."""
-    if "type" not in data:
-        raise ValueError("Geometry type not specified")
-
-    normalized = dict(data)
-    type_key = str(normalized["type"]).lower()
-    normalized["type"] = type_key
-    from kinematics.core.suspensions.registry import get_suspension_definition
-
-    definition = get_suspension_definition(type_key)
-    if definition is None:
-        raise ValueError(f"Unsupported geometry type: '{type_key}'")
-    normalized["type"] = definition.type_key
-    try:
-        return definition.spec_type.model_validate(normalized)
-    except Exception as error:
-        raise ValueError(f"Invalid geometry specification: {error}") from error

@@ -5,9 +5,9 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.constraints import DistanceConstraint
+from kinematics.core.enums import Axis, PointID, SuspensionType, TargetPositionMode
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.constants import TEST_TOLERANCE
-from kinematics.core.primitives.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.sweep import solve_sweep
 from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
 
@@ -65,11 +65,7 @@ def test_run_solver(
     hub_displacements, _ = displacements
 
     suspension = load_geometry(double_wishbone_geometry_file)
-    if suspension.TYPE_KEY not in (
-        "double_wishbone",
-        "double_wishbone_front",
-        "double_wishbone_rear",
-    ):
+    if suspension.reported_type_key() is not SuspensionType.DOUBLE_WISHBONE:
         raise ValueError("Manual viz test only supports double wishbone suspensions")
 
     # Solve for all positions.

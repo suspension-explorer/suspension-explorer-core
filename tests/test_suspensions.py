@@ -16,17 +16,21 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.elements import UprightElement
-from kinematics.core.primitives.enums import PointID, ShimType, Units
+from kinematics.core.enums import PointID, ShimType, SteeringType, Units
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import Side
 from kinematics.core.schema.config import (
     CamberShimConfig,
+    SteeringConfig,
     SuspensionConfig,
     TireConfig,
     WheelConfig,
 )
 from kinematics.core.suspensions.base import Suspension
-from kinematics.core.suspensions.corner import DoubleWishboneSuspension
+from kinematics.core.suspensions.corner import (
+    ActuationPushrodRocker,
+    DoubleWishboneSuspension,
+)
 from kinematics.core.suspensions.registry import (
     get_suspension_class,
     list_supported_types,
@@ -60,7 +64,7 @@ def valid_config() -> SuspensionConfig:
     Valid suspension configuration.
     """
     return SuspensionConfig(
-        steered=True,
+        steering=SteeringConfig(type=SteeringType.RACK),
         wheel=WheelConfig(
             offset=0,
             tire=TireConfig(
@@ -89,26 +93,24 @@ class TestSuspensionBase:
     Tests for Suspension base class.
     """
 
-    def test_all_valid_points(self):
+    def test_all_valid_points(self, valid_hardpoints, valid_config):
         """
         Test all_valid_points combines required and optional.
         """
-        valid = DoubleWishboneSuspension.all_valid_points()
+        suspension = DoubleWishboneSuspension(
+            name="test",
+            units=Units.MILLIMETERS,
+            side=Side.LEFT,
+            hardpoints=valid_hardpoints,
+            config=valid_config,
+        )
+        valid = suspension.all_valid_points()
         # Check required points are included
         assert PointID.LOWER_WISHBONE_OUTBOARD in valid
         assert PointID.UPPER_WISHBONE_OUTBOARD in valid
         # Variant-specific points are excluded from the basic topology.
         assert PointID.PUSHROD_OUTBOARD not in valid
         assert PointID.STRUT_BOTTOM not in valid
-
-    def test_matches_type(self):
-        """
-        Test exact, case-insensitive type matching.
-        """
-        assert DoubleWishboneSuspension.matches_type("double_wishbone")
-        assert DoubleWishboneSuspension.matches_type("DOUBLE_WISHBONE")
-        assert DoubleWishboneSuspension.matches_type("double_wishbone_front")
-        assert not DoubleWishboneSuspension.matches_type("macpherson_strut")
 
 
 # Test DoubleWishboneSuspension
@@ -124,10 +126,10 @@ class TestDoubleWishboneSuspension:
         Test class-level attributes are correctly defined.
         """
         assert DoubleWishboneSuspension.TYPE_KEY == "double_wishbone"
-        assert "double_wishbone_front" in DoubleWishboneSuspension.ALIASES
         assert ShimType.OUTBOARD_CAMBER in DoubleWishboneSuspension.SUPPORTED_SHIMS
 
-        # Check required points
+        # Check architecture-level required points. Steering-link points are
+        # selected from configuration at instance level.
         required = DoubleWishboneSuspension.REQUIRED_POINTS
         assert PointID.LOWER_WISHBONE_INBOARD_FRONT in required
         assert PointID.LOWER_WISHBONE_INBOARD_REAR in required
@@ -135,8 +137,6 @@ class TestDoubleWishboneSuspension:
         assert PointID.UPPER_WISHBONE_INBOARD_FRONT in required
         assert PointID.UPPER_WISHBONE_INBOARD_REAR in required
         assert PointID.UPPER_WISHBONE_OUTBOARD in required
-        assert PointID.TRACKROD_INBOARD in required
-        assert PointID.TRACKROD_OUTBOARD in required
         assert PointID.AXLE_INBOARD in required
         assert PointID.AXLE_OUTBOARD in required
 
@@ -298,9 +298,7 @@ class TestRegistry:
         Test listing supported types.
         """
         types = list_supported_types()
-        assert "double_wishbone" in types
-        assert "double_wishbone_coilover" in types
-        assert "double_wishbone_front" in types
+        assert types == ["double_wishbone", "macpherson"]
 
     def test_get_suspension_class(self):
         """
@@ -310,10 +308,7 @@ class TestRegistry:
         assert cls is not None
         assert cls == DoubleWishboneSuspension
 
-        # Test case insensitivity
-        cls2 = get_suspension_class("DOUBLE_WISHBONE")
-        assert cls2 is not None
-        assert cls2 == DoubleWishboneSuspension
+        assert get_suspension_class("DOUBLE_WISHBONE") is None
 
     def test_get_suspension_class_not_found(self):
         """
@@ -336,25 +331,28 @@ class TestYAMLLoading:
         """
         yaml_content = """
 type: double_wishbone
-side: LEFT
+side: left
 name: "Test"
 version: "1.0.0"
-units: MILLIMETERS
+units: millimeters
+actuation: {type: direct, mount: lower_wishbone}
+spring: {type: none}
 
 hardpoints:
-  LOWER_WISHBONE_INBOARD_FRONT: [250, 400, 200]
-  LOWER_WISHBONE_INBOARD_REAR: [-250, 450, 200]
-  LOWER_WISHBONE_OUTBOARD: [0, 900, 200]
-  UPPER_WISHBONE_INBOARD_FRONT: [225, 350, 500]
-  UPPER_WISHBONE_INBOARD_REAR: [-275, 350, 500]
-  UPPER_WISHBONE_OUTBOARD: [-25, 750, 500]
-  TRACKROD_INBOARD: [50, 200, 250]
-  TRACKROD_OUTBOARD: [150, 800, 275]
-  AXLE_INBOARD: [-20, 800, 308.426]
-  AXLE_OUTBOARD: [-20, 950, 313.426]
+  lower_wishbone_inboard_front: [250, 400, 200]
+  lower_wishbone_inboard_rear: [-250, 450, 200]
+  lower_wishbone_outboard: [0, 900, 200]
+  upper_wishbone_inboard_front: [225, 350, 500]
+  upper_wishbone_inboard_rear: [-275, 350, 500]
+  upper_wishbone_outboard: [-25, 750, 500]
+  trackrod_inboard: [50, 200, 250]
+  trackrod_outboard: [150, 800, 275]
+  axle_inboard: [-20, 800, 308.426]
+  axle_outboard: [-20, 950, 313.426]
 
 config:
-  steered: true
+  steering:
+    type: rack
   wheel:
     offset: 0
     tire:
@@ -379,24 +377,27 @@ config:
         """
         yaml_content = """
 type: double_wishbone
-side: LEFT
+side: left
 name: "With Shim"
-units: MILLIMETERS
+units: millimeters
+actuation: {type: direct, mount: lower_wishbone}
+spring: {type: none}
 
 hardpoints:
-  LOWER_WISHBONE_INBOARD_FRONT: [250, 400, 200]
-  LOWER_WISHBONE_INBOARD_REAR: [-250, 450, 200]
-  LOWER_WISHBONE_OUTBOARD: [0, 900, 200]
-  UPPER_WISHBONE_INBOARD_FRONT: [225, 350, 500]
-  UPPER_WISHBONE_INBOARD_REAR: [-275, 350, 500]
-  UPPER_WISHBONE_OUTBOARD: [-25, 750, 500]
-  TRACKROD_INBOARD: [50, 200, 250]
-  TRACKROD_OUTBOARD: [150, 800, 275]
-  AXLE_INBOARD: [-20, 800, 308.426]
-  AXLE_OUTBOARD: [-20, 950, 313.426]
+  lower_wishbone_inboard_front: [250, 400, 200]
+  lower_wishbone_inboard_rear: [-250, 450, 200]
+  lower_wishbone_outboard: [0, 900, 200]
+  upper_wishbone_inboard_front: [225, 350, 500]
+  upper_wishbone_inboard_rear: [-275, 350, 500]
+  upper_wishbone_outboard: [-25, 750, 500]
+  trackrod_inboard: [50, 200, 250]
+  trackrod_outboard: [150, 800, 275]
+  axle_inboard: [-20, 800, 308.426]
+  axle_outboard: [-20, 950, 313.426]
 
 config:
-  steered: true
+  steering:
+    type: rack
   wheel:
     offset: 0
     tire:
@@ -428,7 +429,8 @@ config:
 type: unknown_suspension
 hardpoints: {}
 config:
-  steered: true
+  steering:
+    type: rack
   wheel:
     offset: 0
     tire:
@@ -450,13 +452,16 @@ config:
         """
         yaml_content = """
 type: double_wishbone
-side: LEFT
+side: left
+actuation: {type: direct, mount: lower_wishbone}
+spring: {type: none}
 hardpoints:
-  LOWER_WISHBONE_INBOARD_FRONT: [250, 400, 200]
+  lower_wishbone_inboard_front: [250, 400, 200]
   # Missing most required points!
 
 config:
-  steered: true
+  steering:
+    type: rack
   wheel:
     offset: 0
     tire:
@@ -505,7 +510,7 @@ class TestIntegration:
         state = suspension.initial_state()
 
         # Verify all required points present
-        for point_id in DoubleWishboneSuspension.REQUIRED_POINTS:
+        for point_id in suspension.required_points():
             assert point_id in state.positions
 
         # Verify derived points calculated
@@ -539,3 +544,30 @@ class TestIntegration:
 
         # Should not be identical (shim rotates attachments)
         assert not np.allclose(original_axle.data, new_axle.data)
+
+
+class TestMechanismAttachmentInjection:
+    """Mechanisms receive attachment bodies from the architecture."""
+
+    def test_pushrod_actuation_rejects_insufficient_outboard_anchors(self):
+        actuation = ActuationPushrodRocker(
+            pushrod_outboard_body=(
+                PointID.UPPER_WISHBONE_OUTBOARD,
+                PointID.LOWER_WISHBONE_OUTBOARD,
+            )
+        )
+        with pytest.raises(ValueError, match="at least three mounting body anchors"):
+            actuation.validate({})
+
+    def test_double_wishbone_declares_mechanism_attachment_bodies(self):
+        assert DoubleWishboneSuspension.LOWER_WISHBONE_BODY == (
+            PointID.LOWER_WISHBONE_INBOARD_FRONT,
+            PointID.LOWER_WISHBONE_INBOARD_REAR,
+            PointID.LOWER_WISHBONE_OUTBOARD,
+        )
+        assert DoubleWishboneSuspension.UPRIGHT_BODY == (
+            PointID.UPPER_WISHBONE_OUTBOARD,
+            PointID.LOWER_WISHBONE_OUTBOARD,
+            PointID.AXLE_INBOARD,
+            PointID.AXLE_OUTBOARD,
+        )

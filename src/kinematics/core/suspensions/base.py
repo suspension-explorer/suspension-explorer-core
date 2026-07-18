@@ -16,13 +16,8 @@ from typing import TYPE_CHECKING, ClassVar, Sequence
 from kinematics.core.assembly import SuspensionAssembly
 from kinematics.core.constraints import Constraint
 from kinematics.core.elements import SuspensionElement
-from kinematics.core.metrics.main import (
-    AxleMetricRows,
-    MetricRow,
-    compute_metrics_for_state,
-)
+from kinematics.core.enums import PointID, ShimType, SuspensionType, Units
 from kinematics.core.points.derived.manager import DerivedPointsSpec
-from kinematics.core.primitives.enums import PointID, ShimType, Units
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointKey, Side
 from kinematics.core.schema.config import SuspensionConfig
@@ -31,7 +26,10 @@ from kinematics.core.state import SuspensionState
 if TYPE_CHECKING:
     from kinematics.core.diagnostics import DiagnosticIssue
     from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
+    from kinematics.core.metrics.main import AxleMetricRows, MetricRow
+    from kinematics.core.metrics.registry import MetricSpec
     from kinematics.core.sensitivity import TangentField
+    from kinematics.core.targeting import ActuatorDOF
 
 
 @dataclass
@@ -40,15 +38,13 @@ class Suspension(ABC):
     Base class for all suspension types.
 
     Subclasses define:
-    - Class-level attributes for geometry (required/optional points, shim support)
+    - Architecture and mechanism-specific point declarations
     - Instance-level storage for geometry and configuration
     - Methods for constraints, physical elements, and kinematic behavior
 
     This class implements the provider interface directly - no separate provider needed.
     """
 
-    TYPE_KEY: ClassVar[str] = ""
-    ALIASES: ClassVar[frozenset[str]] = frozenset()
     REQUIRED_POINTS: ClassVar[frozenset[PointID]] = frozenset()
     OPTIONAL_POINTS: ClassVar[frozenset[PointID]] = frozenset()
     OUTPUT_POINTS: ClassVar[tuple[PointKey, ...]] = ()
@@ -72,16 +68,22 @@ class Suspension(ABC):
         """Validate instance after creation."""
         self.validate_hardpoints()
 
-    @classmethod
-    def all_valid_points(cls) -> frozenset[PointID]:
-        """All points valid for this suspension type."""
-        return cls.REQUIRED_POINTS | cls.OPTIONAL_POINTS
+    def required_points(self) -> frozenset[PointID]:
+        """Return authored points required by this suspension instance."""
+        return self.REQUIRED_POINTS
 
-    @classmethod
-    def matches_type(cls, type_key: str) -> bool:
-        """Check if this class handles the given type key."""
-        key_lower = type_key.lower()
-        return key_lower == cls.TYPE_KEY or key_lower in cls.ALIASES
+    def optional_points(self) -> frozenset[PointID]:
+        """Return additional authored points accepted by this suspension instance."""
+        return self.OPTIONAL_POINTS
+
+    def all_valid_points(self) -> frozenset[PointID]:
+        """Return every authored point accepted by this suspension instance."""
+        return self.required_points() | self.optional_points()
+
+    @abstractmethod
+    def reported_type_key(self) -> SuspensionType:
+        """Return the public geometry type identity exported with results."""
+        ...
 
     @abstractmethod
     def initial_state(self) -> SuspensionState:
@@ -162,12 +164,17 @@ class Suspension(ABC):
         ...
 
     def validate_hardpoints(self) -> None:
-        """Validate that required hardpoints are present."""
+        """Validate the exact authored point set for this suspension instance."""
         present = set(self.hardpoints.keys())
-        missing = self.REQUIRED_POINTS - present
+        missing = self.required_points() - present
         if missing:
             missing_names = sorted(p.name for p in missing)
             raise ValueError(f"Missing required hardpoints: {', '.join(missing_names)}")
+
+        unknown = present - self.all_valid_points()
+        if unknown:
+            unknown_names = sorted(point.name for point in unknown)
+            raise ValueError(f"Invalid hardpoints: {', '.join(unknown_names)}")
 
     def get_hardpoints_copy(self) -> dict[PointKey, Point3]:
         """
@@ -178,25 +185,23 @@ class Suspension(ABC):
         """
         return {pid: pos.copy() for pid, pos in self.hardpoints.items()}
 
-    @property
-    def has_strut(self) -> bool:
-        """Whether this explicit topology includes a spring/damper element."""
-        return False
+    def damper_points(self) -> tuple[PointKey, PointKey] | None:
+        """Return installed spring/damper endpoints, if present."""
+        return None
 
     @property
     def is_axle(self) -> bool:
         """Whether this topology composes multiple corner suspensions."""
         return False
 
+    @abstractmethod
     def compute_state_metrics(
         self,
         state: SuspensionState,
         tangents: "Sequence[TangentField] | None" = None,
     ) -> "MetricRow | AxleMetricRows":
-        """Compute one metric row, including derivatives when tangents exist."""
-        if self.config is None:
-            raise ValueError("Suspension has no configuration")
-        return compute_metrics_for_state(state, self, self.config, tangents)
+        """Compute metric output for one solved state."""
+        ...
 
     def derivative_metric_definitions(
         self,
@@ -207,6 +212,10 @@ class Suspension(ABC):
     def topology_metric_values(self, state: SuspensionState) -> "MetricRow":
         """Return non-derivative metrics owned by this topology."""
         return OrderedDict()
+
+    def topology_metric_specs(self) -> "tuple[MetricSpec, ...]":
+        """Return state metric metadata owned by this topology."""
+        return ()
 
     def topology_diagnostics(
         self,
@@ -224,10 +233,15 @@ class Suspension(ABC):
         if side is not None:
             raise ValueError(
                 f"Sweep target for '{point.name}' specifies side "
-                f"'{side.name.lower()}', but suspension type '{self.TYPE_KEY}' "
+                f"'{side.name.lower()}', but suspension type "
+                f"'{self.reported_type_key()}' "
                 "is a single corner and does not accept a side."
             )
         return point
+
+    def actuator_dofs(self) -> "tuple[ActuatorDOF, ...]":
+        """Return physical actuator coordinates that every sweep must control."""
+        return ()
 
     def assembly(self) -> SuspensionAssembly:
         """Return the validated point and element composition."""

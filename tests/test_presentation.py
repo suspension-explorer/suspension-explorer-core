@@ -6,22 +6,25 @@ import numpy as np
 import pytest
 
 from kinematics.cli.io.loaders import load_geometry
-from kinematics.cli.visualization.main import renderer_elements
+from kinematics.cli.visualization.main import ELEMENT_STYLES, renderer_elements
 from kinematics.core.elements import (
-    AxisProjection,
     ElementType,
     RackElement,
     RockerElement,
     TorsionElement,
     WheelElement,
 )
+from kinematics.core.enums import Axis, PointID
 from kinematics.core.presentation import (
+    AxisProjection,
+    PointMidpoint,
     axis_projection_name,
+    element_paths,
     named_element_paths,
     named_point_keys,
+    point_midpoint_name,
     resolve_positions,
 )
-from kinematics.core.primitives.enums import Axis, PointID
 from kinematics.core.primitives.point_ref import PointRef, Side, point_key_name
 
 
@@ -38,14 +41,14 @@ def test_corner_rocker_paths_include_perpendicular_arm_projection(
     )
     projection = next(
         point
-        for path in assembly.element_paths
+        for path in element_paths(assembly)
         for point in path.points
         if isinstance(point, AxisProjection)
     )
 
     assert rocker.rotation_axis == (
-        PointID.ROCKER_AXIS_FRONT,
-        PointID.ROCKER_AXIS_REAR,
+        PointID.ROCKER_AXIS_A,
+        PointID.ROCKER_AXIS_B,
     )
     assert all(isinstance(path.type, ElementType) for path in paths)
     assert all(not hasattr(path, "color") for path in paths)
@@ -71,8 +74,14 @@ def test_axle_geometry_includes_shared_arb_and_side_keyed_rockers(
     assembly = suspension.assembly()
     positions = resolve_positions(suspension.initial_state().positions, assembly)
 
-    assert PointRef(Side.CENTER, PointID.ARB_AXIS_A) in assembly.referenced_point_keys
-    assert PointRef(Side.CENTER, PointID.ARB_AXIS_B) in assembly.referenced_point_keys
+    assert (
+        PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_A)
+        in assembly.referenced_point_keys
+    )
+    assert (
+        PointRef(Side.CENTER, PointID.ARB_U_BAR_AXIS_B)
+        in assembly.referenced_point_keys
+    )
     assert sum(isinstance(element, WheelElement) for element in assembly.elements) == 2
     rockers = [
         element for element in assembly.elements if isinstance(element, RockerElement)
@@ -88,6 +97,30 @@ def test_axle_geometry_includes_shared_arb_and_side_keyed_rockers(
         for pickup in rocker.pickups:
             projection = AxisProjection(pickup.point, rocker.rotation_axis)
             assert axis_projection_name(projection) in positions
+
+
+def test_t_bar_crossbar_midpoint_is_resolved_as_presentation_geometry(
+    test_data_dir: Path,
+) -> None:
+    suspension = load_geometry(test_data_dir / "axle_geometry_t_bar.yaml")
+    assembly = suspension.assembly()
+    positions = resolve_positions(suspension.initial_state().positions, assembly)
+    midpoint = PointMidpoint(
+        PointRef(Side.LEFT, PointID.DROPLINK_T_BAR),
+        PointRef(Side.RIGHT, PointID.DROPLINK_T_BAR),
+    )
+
+    midpoint_name = point_midpoint_name(midpoint)
+    assert midpoint_name in named_point_keys(assembly)
+    assert midpoint_name in positions
+    assert midpoint not in assembly.points.all
+    assert np.asarray(positions[midpoint_name]) == pytest.approx(
+        (
+            np.asarray(positions[point_key_name(midpoint.point_a)])
+            + np.asarray(positions[point_key_name(midpoint.point_b)])
+        )
+        / 2.0
+    )
 
 
 def test_cli_renderer_adds_styles_to_unstyled_element_paths(
@@ -113,3 +146,11 @@ def test_cli_renderer_adds_styles_to_unstyled_element_paths(
     )
     for label in {path.label for path in paths}:
         assert sum(link.label == label for link in rendered) == 1
+
+
+def test_cli_renderer_has_distinct_heave_link_style() -> None:
+    heave_style = ELEMENT_STYLES[ElementType.HEAVE_LINK]
+
+    assert heave_style != ELEMENT_STYLES[ElementType.SPRING_DAMPER]
+    assert heave_style.color
+    assert heave_style.linestyle == "--"

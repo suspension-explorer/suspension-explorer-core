@@ -2,13 +2,15 @@ import numpy as np
 import pytest
 
 from kinematics.core.constraints import DistanceConstraint
+from kinematics.core.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
 )
 from kinematics.core.primitives.constants import TEST_TOLERANCE
-from kinematics.core.primitives.enums import Axis, PointID, TargetPositionMode
+from kinematics.core.primitives.geometry import Point3
 from kinematics.core.solver import (
+    ResidualComputer,
     SolverConfig,
     solve_least_squares_problem,
     solve_suspension_sweep,
@@ -19,8 +21,6 @@ from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
 
 @pytest.fixture
 def simple_positions():
-    from kinematics.core.primitives.geometry import Point3
-
     positions_dict = {
         PointID.LOWER_WISHBONE_INBOARD_FRONT: Point3([-1.0, 0.0, 0.0]),
         PointID.LOWER_WISHBONE_INBOARD_REAR: Point3([1.0, 0.0, 0.0]),
@@ -82,6 +82,62 @@ def make_noop_derived_manager():
     # No derived points -> empty spec
     spec = DerivedPointsSpec(functions={}, dependencies={})
     return DerivedPointsManager(spec)
+
+
+def test_constraint_jacobian_propagates_through_derived_point():
+    positions = {
+        PointID.AXLE_INBOARD: Point3([0.0, 0.0, 0.0]),
+        PointID.AXLE_OUTBOARD: Point3([2.0, 0.0, 0.0]),
+        PointID.AXLE_MIDPOINT: Point3([1.0, 0.0, 0.0]),
+        PointID.LOWER_WISHBONE_OUTBOARD: Point3([0.0, 1.0, 0.0]),
+    }
+
+    def axle_midpoint(current_positions):
+        inboard = current_positions[PointID.AXLE_INBOARD]
+        outboard = current_positions[PointID.AXLE_OUTBOARD]
+        return inboard + (outboard - inboard) / 2.0
+
+    derived_manager = DerivedPointsManager(
+        DerivedPointsSpec(
+            functions={PointID.AXLE_MIDPOINT: axle_midpoint},
+            dependencies={
+                PointID.AXLE_MIDPOINT: {
+                    PointID.AXLE_INBOARD,
+                    PointID.AXLE_OUTBOARD,
+                }
+            },
+        )
+    )
+    state = SuspensionState(
+        positions=positions,
+        free_points={PointID.AXLE_OUTBOARD},
+    )
+    constraint = DistanceConstraint(
+        PointID.AXLE_MIDPOINT,
+        PointID.LOWER_WISHBONE_OUTBOARD,
+        target_distance=np.sqrt(2.0),
+    )
+    computer = ResidualComputer(
+        constraints=[constraint],
+        derived_manager=derived_manager,
+        state_buffer=state,
+        n_target_variables=0,
+    )
+
+    free_array = state.get_free_array()
+    analytical = computer.compute_jacobian(free_array, [])[0]
+    finite_difference = np.empty(3)
+    step = 1e-6
+    for dimension in range(3):
+        low = free_array.copy()
+        high = free_array.copy()
+        low[dimension] -= step
+        high[dimension] += step
+        finite_difference[dimension] = (
+            computer.compute(high, [])[0] - computer.compute(low, [])[0]
+        ) / (2.0 * step)
+
+    np.testing.assert_allclose(analytical, finite_difference, rtol=1e-6, atol=1e-8)
 
 
 def test_solve_sweep(

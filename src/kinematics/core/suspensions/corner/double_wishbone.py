@@ -1,21 +1,20 @@
 """
 Double-wishbone corner suspension implementation.
 
-This module defines the DoubleWishboneSuspension class which combines topology
-definition, geometry storage, and kinematic behavior in a single unified class.
+This module defines the stable double-wishbone locating architecture. Installed
+actuation and spring behavior is composed through typed mechanism fields.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from functools import partial
-from typing import ClassVar, Sequence, cast
+from collections import OrderedDict
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, ClassVar, Sequence, cast
 
 from kinematics.core.constraints import (
     AngleConstraint,
     Constraint,
     DistanceConstraint,
-    PointOnLineConstraint,
 )
 from kinematics.core.elements import (
     ElementType,
@@ -24,19 +23,20 @@ from kinematics.core.elements import (
     UprightElement,
     WheelElement,
 )
-from kinematics.core.points.derived.definitions import (
-    get_axle_midpoint,
-    get_contact_patch_center,
-    get_wheel_center,
-    get_wheel_inboard,
-    get_wheel_outboard,
+from kinematics.core.enums import (
+    Axis,
+    MountBody,
+    PointID,
+    ShimType,
+    SteeringType,
+    SuspensionType,
 )
+from kinematics.core.points.derived.definitions import build_wheel_derived_spec
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
 )
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
-from kinematics.core.primitives.enums import Axis, PointID, ShimType
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.primitives.vector_utils.geometric import (
@@ -49,26 +49,32 @@ from kinematics.core.primitives.vector_utils.geometric import (
     rotate_point_about_axis,
 )
 from kinematics.core.state import SuspensionState
-from kinematics.core.suspensions.base import Suspension
-from kinematics.core.suspensions.config.shims import solve_camber_shim_assembly
-from kinematics.core.targeting import WorldAxisSystem
+from kinematics.core.suspensions.config.shims import (
+    CamberShimRockerCoupling,
+    solve_camber_shim_assembly,
+)
+from kinematics.core.suspensions.corner.base import CornerSuspension
+from kinematics.core.suspensions.corner.mechanisms import (
+    Actuation,
+    ActuationDirect,
+    ActuationPushrodRocker,
+    CornerSpring,
+    CornerSpringNone,
+)
+from kinematics.core.suspensions.corner.toe_link import ToeLink
+from kinematics.core.suspensions.corner.track_rod import TrackRod
+
+if TYPE_CHECKING:
+    from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
+    from kinematics.core.metrics.main import MetricRow
+    from kinematics.core.metrics.registry import MetricSpec
 
 
 @dataclass
-class DoubleWishboneSuspension(Suspension):
-    """
-    Double wishbone suspension with all topology and behavior in one class.
+class DoubleWishboneSuspension(CornerSuspension):
+    """Double-wishbone locating geometry with composed corner mechanisms."""
 
-    This class:
-    - Defines valid points as class attributes (replacing SuspensionTemplate)
-    - Stores hardpoints and config as instance data (replacing TemplateGeometry)
-    - Implements constraints, visualization, and solver interface (replacing provider)
-    """
-
-    TYPE_KEY: ClassVar[str] = "double_wishbone"
-    ALIASES: ClassVar[frozenset[str]] = frozenset(
-        {"double_wishbone_front", "double_wishbone_rear"}
-    )
+    TYPE_KEY: ClassVar[SuspensionType] = SuspensionType.DOUBLE_WISHBONE
     REQUIRED_POINTS: ClassVar[frozenset[PointID]] = frozenset(
         {
             PointID.LOWER_WISHBONE_INBOARD_FRONT,
@@ -77,8 +83,6 @@ class DoubleWishboneSuspension(Suspension):
             PointID.UPPER_WISHBONE_INBOARD_FRONT,
             PointID.UPPER_WISHBONE_INBOARD_REAR,
             PointID.UPPER_WISHBONE_OUTBOARD,
-            PointID.TRACKROD_INBOARD,
-            PointID.TRACKROD_OUTBOARD,
             PointID.AXLE_INBOARD,
             PointID.AXLE_OUTBOARD,
         }
@@ -86,21 +90,45 @@ class DoubleWishboneSuspension(Suspension):
 
     OPTIONAL_POINTS: ClassVar[frozenset[PointID]] = frozenset()
 
+    # Rigid bodies that composed mechanisms may attach to. The architecture
+    # owns these; mechanisms receive them at construction and stay free of
+    # double-wishbone point names. MOUNT_BODIES maps the user-selectable mount
+    # identifiers to those bodies so the geometry spec can choose one.
+    LOWER_WISHBONE_BODY: ClassVar[tuple[PointID, PointID, PointID]] = (
+        PointID.LOWER_WISHBONE_INBOARD_FRONT,
+        PointID.LOWER_WISHBONE_INBOARD_REAR,
+        PointID.LOWER_WISHBONE_OUTBOARD,
+    )
+    UPRIGHT_BODY: ClassVar[tuple[PointID, ...]] = (
+        PointID.UPPER_WISHBONE_OUTBOARD,
+        PointID.LOWER_WISHBONE_OUTBOARD,
+        PointID.AXLE_INBOARD,
+        PointID.AXLE_OUTBOARD,
+    )
+    UPRIGHT_ATTACHMENTS: ClassVar[tuple[PointID, ...]] = (
+        PointID.AXLE_INBOARD,
+        PointID.AXLE_OUTBOARD,
+    )
+    MOUNT_BODIES: ClassVar[dict[MountBody, tuple[PointID, ...]]] = {
+        MountBody.LOWER_WISHBONE: LOWER_WISHBONE_BODY,
+        MountBody.UPRIGHT: UPRIGHT_BODY,
+    }
+
     SUPPORTED_SHIMS: ClassVar[frozenset[ShimType]] = frozenset(
         {ShimType.OUTBOARD_CAMBER}
     )
 
     # Points included in solver output (CSV/Parquet), in column order.
     # Hardpoints first, then derived points.
-    OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
+    LOCATING_OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
         PointID.LOWER_WISHBONE_INBOARD_FRONT,
         PointID.LOWER_WISHBONE_INBOARD_REAR,
         PointID.LOWER_WISHBONE_OUTBOARD,
         PointID.UPPER_WISHBONE_INBOARD_FRONT,
         PointID.UPPER_WISHBONE_INBOARD_REAR,
         PointID.UPPER_WISHBONE_OUTBOARD,
-        PointID.TRACKROD_INBOARD,
-        PointID.TRACKROD_OUTBOARD,
+    )
+    WHEEL_OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
         PointID.AXLE_INBOARD,
         PointID.AXLE_OUTBOARD,
         PointID.AXLE_MIDPOINT,
@@ -109,15 +137,10 @@ class DoubleWishboneSuspension(Suspension):
         PointID.WHEEL_OUTBOARD,
         PointID.CONTACT_PATCH_CENTER,
     )
-
-    # Config names for points that should rotate with the upright body when a
-    # split camber shim is solved.
-    UPRIGHT_MOUNTED_POINT_IDS: ClassVar[dict[str, PointID]] = {
-        "axle_inboard": PointID.AXLE_INBOARD,
-        "axle_outboard": PointID.AXLE_OUTBOARD,
-        "pushrod_outboard": PointID.PUSHROD_OUTBOARD,
-        "trackrod_outboard": PointID.TRACKROD_OUTBOARD,
-    }
+    OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
+        *LOCATING_OUTPUT_POINTS,
+        *WHEEL_OUTPUT_POINTS,
+    )
 
     # Free points that move during solving.
     FREE_POINTS: ClassVar[tuple[PointID, ...]] = (
@@ -125,13 +148,87 @@ class DoubleWishboneSuspension(Suspension):
         PointID.LOWER_WISHBONE_OUTBOARD,
         PointID.AXLE_INBOARD,
         PointID.AXLE_OUTBOARD,
-        PointID.TRACKROD_OUTBOARD,
-        PointID.TRACKROD_INBOARD,
     )
 
+    wheel_heading_link: TrackRod | ToeLink = field(init=False)
+    actuation: Actuation = field(
+        default_factory=lambda: ActuationDirect(
+            spring_pickup_body=DoubleWishboneSuspension.LOWER_WISHBONE_BODY
+        ),
+        kw_only=True,
+    )
+    spring: CornerSpring = field(default_factory=CornerSpringNone, kw_only=True)
+
+    def __post_init__(self) -> None:
+        """Install a track rod or fixed toe link for wheel-heading control."""
+        if self.config is None:
+            raise ValueError("Double-wishbone suspension requires configuration")
+        # The four upright anchors already overdetermine this attachment, while
+        # the upright angle constraint preserves the authored assembly branch.
+        if self.config.steering.type is SteeringType.RACK:
+            self.wheel_heading_link = TrackRod(
+                self.UPRIGHT_BODY,
+                preserve_attachment_handedness=False,
+            )
+        else:
+            self.wheel_heading_link = ToeLink(
+                self.UPRIGHT_BODY,
+                preserve_attachment_handedness=False,
+            )
+        super().__post_init__()
+
+    def required_points(self) -> frozenset[PointID]:
+        """Return base and selected mechanism point requirements."""
+        return (
+            self.REQUIRED_POINTS
+            | self.wheel_heading_link.REQUIRED_POINTS
+            | self.actuation.required_points
+            | self.spring.required_points
+        )
+
+    def validate_hardpoints(self) -> None:
+        """Validate base geometry and selected mechanism compatibility."""
+        super().validate_hardpoints()
+        self.wheel_heading_link.validate(self.hardpoints)
+        self.actuation.validate(self.hardpoints)
+        self.spring.validate(self.actuation)
+
     def free_points(self) -> Sequence[PointID]:
-        """Points that move during solving."""
-        return self.FREE_POINTS
+        """Return base and selected mechanism moving points."""
+        return (
+            *self.FREE_POINTS,
+            *self.wheel_heading_link.free_points,
+            *self.actuation.free_points,
+            *self.spring.free_points,
+        )
+
+    def output_points(self) -> tuple[PointKey, ...]:
+        """Return base and selected mechanism output points."""
+        return tuple(
+            dict.fromkeys(
+                (
+                    *self.LOCATING_OUTPUT_POINTS,
+                    *self.wheel_heading_link.OUTPUT_POINTS,
+                    *self.WHEEL_OUTPUT_POINTS,
+                    *self.actuation.output_points,
+                    *self.spring.output_points,
+                )
+            )
+        )
+
+    def damper_points(self) -> tuple[PointKey, PointKey] | None:
+        """Return selected linear spring/damper endpoints."""
+        return self.spring.damper_points
+
+    def steering_axis_points(self) -> tuple[PointID, PointID]:
+        """The steering axis runs between the two outboard ball joints."""
+        return (PointID.LOWER_WISHBONE_OUTBOARD, PointID.UPPER_WISHBONE_OUTBOARD)
+
+    def rack_attachment_point(self) -> PointID | None:
+        """Return the track-rod rack pickup for a steered corner."""
+        if isinstance(self.wheel_heading_link, TrackRod):
+            return self.wheel_heading_link.inboard_point
+        return None
 
     def initial_state(self) -> SuspensionState:
         """Build initial state from hardpoints, applying shims if configured."""
@@ -176,11 +273,6 @@ class DoubleWishboneSuspension(Suspension):
             (PointID.AXLE_INBOARD, PointID.LOWER_WISHBONE_OUTBOARD),
             (PointID.AXLE_OUTBOARD, PointID.UPPER_WISHBONE_OUTBOARD),
             (PointID.AXLE_OUTBOARD, PointID.LOWER_WISHBONE_OUTBOARD),
-            (PointID.TRACKROD_INBOARD, PointID.TRACKROD_OUTBOARD),
-            (PointID.UPPER_WISHBONE_OUTBOARD, PointID.TRACKROD_OUTBOARD),
-            (PointID.LOWER_WISHBONE_OUTBOARD, PointID.TRACKROD_OUTBOARD),
-            (PointID.AXLE_INBOARD, PointID.TRACKROD_OUTBOARD),
-            (PointID.AXLE_OUTBOARD, PointID.TRACKROD_OUTBOARD),
         ]
 
         for p1, p2 in length_pairs:
@@ -210,54 +302,52 @@ class DoubleWishboneSuspension(Suspension):
             )
         )
 
-        # Point-on-line constraint for rack travel.
-        constraints.append(
-            PointOnLineConstraint(
-                point_id=PointID.TRACKROD_INBOARD,
-                line_point=initial_state.positions[PointID.TRACKROD_INBOARD],
-                line_direction=WorldAxisSystem.Y,
-            )
-        )
-
+        constraints.extend(self.wheel_heading_link.constraints(initial_state))
+        constraints.extend(self.actuation.constraints(initial_state))
+        constraints.extend(self.spring.constraints(initial_state, self.actuation))
         return constraints
 
+    def derivative_metric_definitions(
+        self,
+    ) -> tuple[DerivativeMetricDefinition, ...]:
+        """Compose derivative declarations from actuation and spring mechanisms."""
+        initial = self.initial_state()
+        return (
+            *self.actuation.derivative_metric_definitions(initial, self.side),
+            *self.spring.derivative_metric_definitions(
+                initial,
+                self.actuation,
+                self.side,
+            ),
+        )
+
+    def topology_metric_values(self, state: SuspensionState) -> MetricRow:
+        """Compose state metrics from actuation and spring mechanisms."""
+        initial = self.initial_state()
+        row: MetricRow = OrderedDict()
+        row.update(self.actuation.topology_metric_values(state, initial, self.side))
+        row.update(
+            self.spring.topology_metric_values(
+                state,
+                initial,
+                self.actuation,
+                self.side,
+            )
+        )
+        return row
+
+    def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
+        """Compose state metric metadata from installed corner mechanisms."""
+        return (
+            *self.actuation.topology_metric_specs(),
+            *self.spring.topology_metric_specs(),
+        )
+
     def derived_spec(self) -> DerivedPointsSpec:
-        """Specification for derived points (wheel center, contact patch, etc.)."""
+        """Standard wheel derived points from the axle pair."""
         if self.config is None:
             raise ValueError("Cannot compute derived spec without config")
-
-        wheel_cfg = self.config.wheel
-        tire_radius = wheel_cfg.tire.nominal_radius
-
-        functions = {
-            PointID.AXLE_MIDPOINT: get_axle_midpoint,
-            PointID.WHEEL_CENTER: partial(
-                get_wheel_center, wheel_offset=wheel_cfg.offset
-            ),
-            PointID.WHEEL_INBOARD: partial(
-                get_wheel_inboard, wheel_width=wheel_cfg.tire.section_width
-            ),
-            PointID.WHEEL_OUTBOARD: partial(
-                get_wheel_outboard, wheel_width=wheel_cfg.tire.section_width
-            ),
-            PointID.CONTACT_PATCH_CENTER: partial(
-                get_contact_patch_center, tire_radius=tire_radius
-            ),
-        }
-
-        dependencies = {
-            PointID.AXLE_MIDPOINT: {PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD},
-            PointID.WHEEL_CENTER: {PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD},
-            PointID.WHEEL_INBOARD: {PointID.WHEEL_CENTER, PointID.AXLE_INBOARD},
-            PointID.WHEEL_OUTBOARD: {PointID.WHEEL_CENTER, PointID.AXLE_INBOARD},
-            PointID.CONTACT_PATCH_CENTER: {
-                PointID.WHEEL_CENTER,
-                PointID.AXLE_INBOARD,
-                PointID.AXLE_OUTBOARD,
-            },
-        }
-
-        return DerivedPointsSpec(functions=functions, dependencies=dependencies)
+        return build_wheel_derived_spec(self.config.wheel)
 
     def compute_side_view_instant_center(self, state: SuspensionState) -> Point3 | None:
         """
@@ -342,7 +432,8 @@ class DoubleWishboneSuspension(Suspension):
 
     def elements(self) -> tuple[SuspensionElement, ...]:
         """Return the physical elements in this corner."""
-        return (
+        heading_link_outboard = self.wheel_heading_link.outboard_point
+        base_elements: tuple[SuspensionElement, ...] = (
             RigidLinkElement(
                 label="Upper Wishbone Front Leg",
                 type=ElementType.WISHBONE,
@@ -372,23 +463,17 @@ class DoubleWishboneSuspension(Suspension):
                 hardpoints=(
                     PointID.UPPER_WISHBONE_OUTBOARD,
                     PointID.LOWER_WISHBONE_OUTBOARD,
-                    PointID.TRACKROD_OUTBOARD,
+                    heading_link_outboard,
                 ),
                 attachments=(PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD),
                 segments=(
-                    (PointID.TRACKROD_OUTBOARD, PointID.UPPER_WISHBONE_OUTBOARD),
+                    (heading_link_outboard, PointID.UPPER_WISHBONE_OUTBOARD),
                     (
                         PointID.UPPER_WISHBONE_OUTBOARD,
                         PointID.LOWER_WISHBONE_OUTBOARD,
                     ),
-                    (PointID.LOWER_WISHBONE_OUTBOARD, PointID.TRACKROD_OUTBOARD),
+                    (PointID.LOWER_WISHBONE_OUTBOARD, heading_link_outboard),
                 ),
-            ),
-            RigidLinkElement(
-                label="Track Rod",
-                type=ElementType.TRACK_ROD,
-                point_a=PointID.TRACKROD_INBOARD,
-                point_b=PointID.TRACKROD_OUTBOARD,
             ),
             RigidLinkElement(
                 label="Axle",
@@ -406,6 +491,12 @@ class DoubleWishboneSuspension(Suspension):
                 contact_patch=PointID.CONTACT_PATCH_CENTER,
             ),
         )
+        return (
+            *base_elements,
+            *self.wheel_heading_link.elements(),
+            *self.actuation.elements(),
+            *self.spring.elements(self.actuation),
+        )
 
     def apply_camber_shim(self, positions: dict[PointKey, Point3]) -> None:
         """
@@ -414,14 +505,32 @@ class DoubleWishboneSuspension(Suspension):
         Solves the local split-body shim assembly to find how the camber block
         and upright body rotate when the shim thickness changes. Then:
         1. Writes the solved UBJ position back (it moves along the upper wishbone arc).
-        2. Rotates configured upright-mounted points about the fixed LBJ using the
-           solved upright-body rotation.
-        3. Leaves all chassis-mounted points unchanged.
+        2. Rotates upright attachments about the fixed LBJ using the solved
+           upright-body rotation.
+        3. Rotates the rocker group by the solved angle when the pushrod is
+           upright-mounted.
+        4. Leaves all chassis-mounted points unchanged.
         """
         if self.config is None or self.config.camber_shim is None:
             return
 
         shim_config = self.config.camber_shim
+        rocker_actuation = (
+            self.actuation
+            if isinstance(self.actuation, ActuationPushrodRocker)
+            and self.actuation.moving_pickup_body == self.UPRIGHT_BODY
+            else None
+        )
+        rocker_coupling = (
+            CamberShimRockerCoupling(
+                axis_a=PointID.ROCKER_AXIS_A,
+                axis_b=PointID.ROCKER_AXIS_B,
+                pushrod_inboard=PointID.PUSHROD_INBOARD,
+                pushrod_outboard=PointID.PUSHROD_OUTBOARD,
+            )
+            if rocker_actuation is not None
+            else None
+        )
 
         # Shim face geometry is read directly from shim_config by the solver,
         # so the positions dict only needs the kinematic hardpoints.
@@ -429,6 +538,9 @@ class DoubleWishboneSuspension(Suspension):
         assembly_solution = solve_camber_shim_assembly(
             positions=cast("dict[PointID, Point3]", positions),
             shim_config=shim_config,
+            heading_link_inboard=self.wheel_heading_link.inboard_point,
+            heading_link_outboard=self.wheel_heading_link.outboard_point,
+            rocker_coupling=rocker_coupling,
         )
 
         # Write the solved UBJ position back. The upper wishbone arc constraint
@@ -437,17 +549,33 @@ class DoubleWishboneSuspension(Suspension):
             assembly_solution.ubj_position
         )
 
-        # Rotate each configured upright-mounted point about LBJ using the solved
-        # upright-body rotation axis and angle.
+        # Rotate each upright attachment about LBJ using the solved upright-body
+        # rotation axis and angle.
         if assembly_solution.upright_body_rot_angle_rad > EPS_GEOMETRIC:
             lbj = positions[PointID.LOWER_WISHBONE_OUTBOARD]
             rot_axis = Direction3(assembly_solution.upright_body_rot_axis)
-            for point_name in self.config.upright_mounted_points:
-                point_id = self.UPRIGHT_MOUNTED_POINT_IDS.get(point_name)
-                if point_id is not None and point_id in positions:
+            for point_id in self.upright_attachment_points():
+                if point_id in positions:
                     positions[point_id] = rotate_point_about_axis(
                         positions[point_id],
                         lbj,
                         rot_axis,
                         assembly_solution.upright_body_rot_angle_rad,
                     )
+
+        if rocker_actuation is not None:
+            rocker_actuation.rotate_rocker_group(
+                positions,
+                assembly_solution.rocker_angle_rad,
+                self.spring.rocker_mounted_points,
+            )
+
+    def upright_attachment_points(self) -> tuple[PointID, ...]:
+        """Return points carried by the upright during camber-shim setup."""
+        base_attachments = (
+            *self.UPRIGHT_ATTACHMENTS,
+            self.wheel_heading_link.outboard_point,
+        )
+        if self.actuation.moving_pickup_body == self.UPRIGHT_BODY:
+            return (*base_attachments, self.actuation.moving_pickup_point)
+        return base_attachments

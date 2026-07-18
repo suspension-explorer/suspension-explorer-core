@@ -1,14 +1,14 @@
 version: 1
 steps: 41
 targets:
-  - point: TRACKROD_INBOARD
+  - point: trackrod_inboard
     direction:
-      axis: Y
+      axis: y
     mode: relative
     start: -40
     stop: 40
-  - point: WHEEL_CENTER
+  - point: wheel_center
     direction:
-      axis: Z
+      axis: z
     start: -40
     stop: 120

@@ -8,13 +8,16 @@ from pathlib import Path
 import pyarrow.parquet as pq
 
 from kinematics.cli.io.results_writer import CsvWriter, ParquetWriter, SolutionFrame
-from kinematics.core.metrics.registry import MetricSpec
+from kinematics.core.enums import Scope
+from kinematics.core.metrics.registry import MetricKind, MetricSpec
 from kinematics.core.metrics.units import MetricUnit
 from kinematics.core.solver import SolverInfo
 
 
 def _frame() -> SolutionFrame:
-    spec = MetricSpec("camber", "Camber", MetricUnit.DEG, "state", "corner")
+    spec = MetricSpec(
+        "camber", "Camber", MetricUnit.DEG, MetricKind.STATE, Scope.CORNER
+    )
     return SolutionFrame(
         positions={"wheel_center": (1.0, 2.0, 3.0)},
         solver_info=SolverInfo(True, 3, 1e-8),

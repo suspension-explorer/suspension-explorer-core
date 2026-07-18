@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from kinematics.core.schema.sweep import SweepSpec, build_sweep_config
+from kinematics.core.input import build_sweep
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.targeting import SweepConfig
 
@@ -24,8 +24,4 @@ def load_sweep(
 
     if not isinstance(raw_data, dict):
         raise ValueError("Sweep file must contain a YAML mapping")
-    try:
-        spec = SweepSpec.model_validate(raw_data)
-    except Exception as error:
-        raise ValueError(f"Invalid sweep specification: {error}") from error
-    return build_sweep_config(spec, suspension)
+    return build_sweep(raw_data, suspension)

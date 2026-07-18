@@ -23,7 +23,7 @@ from kinematics.cli.visualization.plots import (
     compute_bounds_from_positions,
     configure_3d_axis,
 )
-from kinematics.core.primitives.enums import PointID
+from kinematics.core.enums import PointID
 from kinematics.core.primitives.geometry import extract_array
 from kinematics.core.schema import CamberShimConfig
 from kinematics.core.suspensions.base import Suspension
@@ -49,25 +49,7 @@ def main():
     # The shim face center should be at/near the upper ball joint for maximum effect.
     # This represents the mounting face of the upright-side bracket.
     # Normal points outboard (positive Y).
-    shim_config = CamberShimConfig(
-        shim_face_point_a={
-            "x": -25.0,  # Near upper ball joint X.
-            "y": 750.0,  # Near upper ball joint Y.
-            "z": 510.0,  # 10mm above mid-plane center.
-        },
-        shim_face_point_b={
-            "x": -25.0,  # Near upper ball joint X.
-            "y": 750.0,  # Near upper ball joint Y.
-            "z": 490.0,  # 10mm below mid-plane center.
-        },
-        shim_face_normal={
-            "x": 0.0,
-            "y": 1.0,  # Unit vector pointing outboard.
-            "z": 0.0,
-        },
-        design_thickness=DESIGN_SHIM_THICKNESS,
-        setup_thickness=SETUP_SHIM_THICKNESS,
-    )
+    shim_config = build_setup_shim_config()
 
     if suspension.config is None:
         raise ValueError("Suspension has no configuration")
@@ -88,6 +70,31 @@ def main():
         suspension, setup_suspension, comparison_output, shim_delta
     )
     print(f"Comparison visualization saved to: {comparison_output}")
+
+
+def build_setup_shim_config() -> CamberShimConfig:
+    """Build the script's setup shim from ordinary decoded values."""
+    return CamberShimConfig.model_validate(
+        {
+            "shim_face_point_a": {
+                "x": -25.0,  # Near upper ball joint X.
+                "y": 750.0,  # Near upper ball joint Y.
+                "z": 510.0,  # 10mm above mid-plane center.
+            },
+            "shim_face_point_b": {
+                "x": -25.0,  # Near upper ball joint X.
+                "y": 750.0,  # Near upper ball joint Y.
+                "z": 490.0,  # 10mm below mid-plane center.
+            },
+            "shim_face_normal": {
+                "x": 0.0,
+                "y": 1.0,  # Unit vector pointing outboard.
+                "z": 0.0,
+            },
+            "design_thickness": DESIGN_SHIM_THICKNESS,
+            "setup_thickness": SETUP_SHIM_THICKNESS,
+        }
+    )
 
 
 def create_setup_suspension(

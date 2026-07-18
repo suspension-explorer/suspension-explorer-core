@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from kinematics.core.primitives.enums import Axis
+from kinematics.core.enums import Axis
 from kinematics.core.targeting import WorldAxisSystem
 
 if TYPE_CHECKING:

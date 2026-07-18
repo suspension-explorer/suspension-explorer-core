@@ -15,6 +15,7 @@ from kinematics.core.diagnostics import (
     DiagnosticIssue,
     DiagnosticSeverity,
 )
+from kinematics.core.enums import TargetPositionMode
 from kinematics.core.metrics.main import AxleMetricRows, MetricRow
 from kinematics.core.metrics.metadata import MetricDisplay, metric_display_for_keys
 from kinematics.core.metrics.registry import metric_specs_for_suspension
@@ -28,7 +29,6 @@ from kinematics.core.presentation import (
     wheel_dimensions,
     wheel_references,
 )
-from kinematics.core.primitives.enums import TargetPositionMode
 from kinematics.core.primitives.point_ref import (
     PointRef,
     Side,
@@ -127,7 +127,7 @@ class SweepAnalysis:
 def _suspension_info(suspension: Suspension) -> SuspensionInfo:
     return SuspensionInfo(
         name=suspension.name,
-        type_key=suspension.TYPE_KEY,
+        type_key=suspension.reported_type_key(),
         units=suspension.units.symbol,
     )
 
@@ -175,7 +175,7 @@ def _split_metric_rows(
     rows: MetricRow | AxleMetricRows,
 ) -> tuple[MetricRow, dict[str, MetricRow]]:
     if isinstance(rows, AxleMetricRows):
-        return rows.axle, rows.corners
+        return rows.axle, {side.name.lower(): row for side, row in rows.corners.items()}
     return rows, {}
 
 
@@ -275,8 +275,10 @@ def analyze_evaluated_sweep(
             continue
         metric_keys = list(frame.metrics)
         locations = list(frame.corner_metrics)
-        if frame.corner_metrics:
-            corner_metric_keys = list(next(iter(frame.corner_metrics.values())))
+        for row in frame.corner_metrics.values():
+            for key in row:
+                if key not in corner_metric_keys:
+                    corner_metric_keys.append(key)
         break
 
     display_keys = corner_metric_keys + [

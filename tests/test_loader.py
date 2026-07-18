@@ -1,8 +1,10 @@
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
 
+import kinematics.cli.io.loaders as geometry_loaders
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.primitives.point_ref import Side
 from kinematics.core.suspensions.base import Suspension
@@ -26,13 +28,15 @@ def invalid_yaml_geometry_file(tmp_path: Path):
 def invalid_geometry_file(tmp_path: Path):
     data = {
         "type": "double_wishbone",
-        "side": "LEFT",
+        "side": "left",
+        "actuation": {"type": "direct", "mount": "lower_wishbone"},
+        "spring": {"type": "none"},
         "hardpoints": {
             # Missing most required hardpoints
-            "LOWER_WISHBONE_INBOARD_FRONT": [0, 0, 0],
+            "lower_wishbone_inboard_front": [0, 0, 0],
         },
         "config": {
-            "steered": True,
+            "steering": {"type": "rack"},
             "wheel": {
                 "offset": 0,
                 "tire": {
@@ -59,6 +63,27 @@ def test_load_geometry_valid(double_wishbone_geometry_file):
     assert suspension.config is not None
     assert suspension.side is Side.LEFT
     assert suspension.initial_state() is not None
+
+
+def test_load_geometry_delegates_decoded_mapping_to_core(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "geometry.yaml"
+    path.write_text("type: sentinel\nnested:\n  value: 3\n", encoding="utf-8")
+    sentinel = object()
+    captured: dict[str, Any] = {}
+
+    def fake_build_suspension(data: dict[str, Any]) -> Any:
+        captured.update(data)
+        return sentinel
+
+    monkeypatch.setattr(geometry_loaders, "build_suspension", fake_build_suspension)
+
+    result = load_geometry(path)
+
+    assert result is sentinel
+    assert captured == {"type": "sentinel", "nested": {"value": 3}}
 
 
 def test_load_geometry_empty(empty_geometry_file):

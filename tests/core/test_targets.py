@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from kinematics.core.primitives.enums import Axis
+from kinematics.core.enums import Axis
 from kinematics.core.primitives.geometry import Direction3
 from kinematics.core.targeting import (
     PointTargetAxis,

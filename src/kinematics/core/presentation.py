@@ -8,10 +8,55 @@ from typing import Mapping
 import numpy as np
 
 from kinematics.core.assembly import SuspensionAssembly
-from kinematics.core.elements import AxisProjection, ElementPathPoint, ElementType
+from kinematics.core.elements import (
+    ElementType,
+    RackElement,
+    RigidLinkElement,
+    RockerElement,
+    SuspensionElement,
+    TBarElement,
+    TorsionElement,
+    UprightElement,
+    VariableLengthLinkElement,
+    WheelElement,
+)
 from kinematics.core.export import flatten_positions
 from kinematics.core.primitives.point_ref import PointKey, point_key_name
 from kinematics.core.schema.config import SuspensionConfig
+
+
+@dataclass(frozen=True)
+class AxisProjection:
+    """
+    Presentation point projected onto a physical rotation axis.
+    """
+
+    point: PointKey
+    rotation_axis: tuple[PointKey, PointKey]
+
+
+@dataclass(frozen=True)
+class PointMidpoint:
+    """
+    Presentation midpoint of two physical element points.
+    """
+
+    point_a: PointKey
+    point_b: PointKey
+
+
+type ElementPathPoint = PointKey | AxisProjection | PointMidpoint
+
+
+@dataclass(frozen=True)
+class ElementPath:
+    """
+    Ordered renderer-neutral geometry for one part of an element.
+    """
+
+    points: tuple[ElementPathPoint, ...]
+    type: ElementType
+    label: str
 
 
 @dataclass(frozen=True)
@@ -61,13 +106,134 @@ def axis_projection_name(projection: AxisProjection) -> str:
     )
 
 
+def point_midpoint_name(midpoint: PointMidpoint) -> str:
+    """
+    Return a stable public name for the midpoint of two physical points.
+    """
+    point_names = sorted(
+        (point_key_name(midpoint.point_a), point_key_name(midpoint.point_b))
+    )
+    return f"{point_names[0]}_{point_names[1]}_midpoint"
+
+
 def _path_point_name(point: ElementPathPoint) -> str:
     """
     Resolve a physical or projected path point to its public name.
     """
     if isinstance(point, AxisProjection):
         return axis_projection_name(point)
+    if isinstance(point, PointMidpoint):
+        return point_midpoint_name(point)
     return point_key_name(point)
+
+
+def _element_paths(
+    element: SuspensionElement,
+    torsion_bar_axes: set[tuple[PointKey, PointKey]],
+) -> tuple[ElementPath, ...]:
+    """
+    Derive renderer-neutral geometry from one physical element.
+    """
+    if isinstance(element, RigidLinkElement | VariableLengthLinkElement):
+        return (
+            ElementPath(
+                points=(element.point_a, element.point_b),
+                type=element.type,
+                label=element.label,
+            ),
+        )
+    if isinstance(element, RackElement):
+        return (
+            ElementPath(
+                points=(element.left_inner, element.right_inner),
+                type=ElementType.RACK,
+                label=element.label,
+            ),
+        )
+    if isinstance(element, UprightElement):
+        return tuple(
+            ElementPath(segment, ElementType.UPRIGHT, element.label)
+            for segment in element.segments
+        )
+    if isinstance(element, TorsionElement):
+        points = element.rotation_axis
+        if element.type is ElementType.ANTI_ROLL_BAR:
+            points = (
+                element.attachments[0],
+                *element.rotation_axis,
+                element.attachments[1],
+            )
+        return (ElementPath(points, element.type, element.label),)
+    if isinstance(element, TBarElement):
+        midpoint = PointMidpoint(
+            element.left_attachment,
+            element.right_attachment,
+        )
+        return (
+            ElementPath(
+                (element.pivot, midpoint),
+                ElementType.ANTI_ROLL_BAR,
+                element.label,
+            ),
+            ElementPath(
+                (element.left_attachment, midpoint, element.right_attachment),
+                ElementType.ANTI_ROLL_BAR,
+                element.label,
+            ),
+        )
+    if isinstance(element, RockerElement):
+        paths: list[ElementPath] = []
+        if element.rotation_axis not in torsion_bar_axes:
+            paths.append(
+                ElementPath(
+                    element.rotation_axis,
+                    ElementType.ROCKER,
+                    f"{element.label} Axis",
+                )
+            )
+        for pickup in element.pickups:
+            pickup_name = pickup.type.value.replace("_", " ").title()
+            paths.append(
+                ElementPath(
+                    (
+                        pickup.point,
+                        AxisProjection(pickup.point, element.rotation_axis),
+                    ),
+                    ElementType.ROCKER,
+                    f"{element.label} {pickup_name} Arm",
+                )
+            )
+        return tuple(paths)
+    if isinstance(element, WheelElement):
+        return (
+            ElementPath(
+                (element.contact_patch,),
+                ElementType.CONTACT_PATCH,
+                f"{element.label} Contact Patch",
+            ),
+        )
+    raise TypeError(f"Unsupported suspension element: {type(element)!r}")
+
+
+def element_paths(assembly: SuspensionAssembly) -> tuple[ElementPath, ...]:
+    """
+    Derive renderer-neutral paths for an assembly's physical elements.
+    """
+    torsion_bar_axes = {
+        axis
+        for element in assembly.elements
+        if isinstance(element, TorsionElement)
+        and element.type is ElementType.TORSION_BAR
+        for axis in (
+            element.rotation_axis,
+            (element.rotation_axis[1], element.rotation_axis[0]),
+        )
+    }
+    return tuple(
+        path
+        for element in assembly.elements
+        for path in _element_paths(element, torsion_bar_axes)
+    )
 
 
 def named_element_paths(assembly: SuspensionAssembly) -> list[NamedElementPath]:
@@ -80,7 +246,7 @@ def named_element_paths(assembly: SuspensionAssembly) -> list[NamedElementPath]:
             type=path.type,
             label=path.label,
         )
-        for path in assembly.element_paths
+        for path in element_paths(assembly)
     ]
 
 
@@ -92,6 +258,9 @@ def named_point_keys(assembly: SuspensionAssembly) -> list[str]:
     names.extend(
         axis_projection_name(projection) for projection in _axis_projections(assembly)
     )
+    names.extend(
+        point_midpoint_name(midpoint) for midpoint in _point_midpoints(assembly)
+    )
     return names
 
 
@@ -101,12 +270,26 @@ def _axis_projections(assembly: SuspensionAssembly) -> tuple[AxisProjection, ...
     """
     projections: list[AxisProjection] = []
     seen: set[AxisProjection] = set()
-    for path in assembly.element_paths:
+    for path in element_paths(assembly):
         for point in path.points:
             if isinstance(point, AxisProjection) and point not in seen:
                 projections.append(point)
                 seen.add(point)
     return tuple(projections)
+
+
+def _point_midpoints(assembly: SuspensionAssembly) -> tuple[PointMidpoint, ...]:
+    """
+    Return unique midpoint references in assembly path order.
+    """
+    midpoints: list[PointMidpoint] = []
+    seen: set[PointMidpoint] = set()
+    for path in element_paths(assembly):
+        for point in path.points:
+            if isinstance(point, PointMidpoint) and point not in seen:
+                midpoints.append(point)
+                seen.add(point)
+    return tuple(midpoints)
 
 
 def resolve_positions(
@@ -152,6 +335,15 @@ def resolve_positions(
             float(projected[0]),
             float(projected[1]),
             float(projected[2]),
+        )
+    for midpoint in _point_midpoints(assembly):
+        point_a = np.asarray(named[point_key_name(midpoint.point_a)], dtype=np.float64)
+        point_b = np.asarray(named[point_key_name(midpoint.point_b)], dtype=np.float64)
+        position = point_a + (point_b - point_a) / 2.0
+        named[point_midpoint_name(midpoint)] = (
+            float(position[0]),
+            float(position[1]),
+            float(position[2]),
         )
     return named
 

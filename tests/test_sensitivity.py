@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 from kinematics.cli.io.loaders import load_geometry
+from kinematics.core.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.points.derived.manager import DerivedPointsManager
-from kinematics.core.primitives.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.primitives.geometry import extract_array
 from kinematics.core.sensitivity import (
     TangentField,

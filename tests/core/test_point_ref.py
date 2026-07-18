@@ -14,11 +14,11 @@ from kinematics.core.constraints import (
     VectorsParallelConstraint,
     VectorsPerpendicularConstraint,
 )
+from kinematics.core.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
 )
-from kinematics.core.primitives.enums import Axis, PointID
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import (
     PointKey,
@@ -330,8 +330,6 @@ def test_solve_with_point_ref_keys():
         PointTarget(b, PointTargetAxis(Axis.Y), 0.0),
         PointTarget(b, PointTargetAxis(Axis.Z), 0.0),
     ]
-    from kinematics.core.primitives.enums import TargetPositionMode
-
     targets = [t._replace(mode=TargetPositionMode.ABSOLUTE) for t in targets]
 
     computer = ResidualComputer(

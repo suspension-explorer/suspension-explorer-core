@@ -8,14 +8,29 @@ avoid code duplication.
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Any
 
 import numpy as np
 
-from kinematics.core.primitives.enums import PointID
+from kinematics.core.enums import PointID
+from kinematics.core.points.derived.manager import DerivedPointsSpec
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.primitives.vector_utils.generic import normalize_vector
+from kinematics.core.schema.config import WheelConfig
 from kinematics.core.targeting import WorldAxisSystem
+
+
+def get_point_along_line(
+    positions: dict[PointKey, Any],
+    start_point: PointKey,
+    end_point: PointKey,
+    distance_from_start: float,
+) -> Any:
+    """Place a point at a fixed distance along a line between two other points."""
+    start = positions[start_point]
+    line_direction = normalize_vector(positions[end_point] - start)
+    return start + line_direction * distance_from_start
 
 
 def get_wheel_plane_down_vector(positions: dict[PointKey, Any]) -> Any:
@@ -163,3 +178,39 @@ def get_contact_patch_center(positions: dict[PointKey, Any], tire_radius: float)
     contact_point = wheel_center + wheel_down_normalized * tire_radius
 
     return contact_point
+
+
+def build_wheel_derived_spec(wheel: "WheelConfig") -> "DerivedPointsSpec":
+    """
+    Build the standard wheel derived-point specification.
+
+    Every corner whose wheel spin axis is AXLE_INBOARD -> AXLE_OUTBOARD
+    derives the wheel center, rim faces, and contact patch the same way;
+    this is that shared declaration.
+    """
+    tire_radius = wheel.tire.nominal_radius
+    functions = {
+        PointID.AXLE_MIDPOINT: get_axle_midpoint,
+        PointID.WHEEL_CENTER: partial(get_wheel_center, wheel_offset=wheel.offset),
+        PointID.WHEEL_INBOARD: partial(
+            get_wheel_inboard, wheel_width=wheel.tire.section_width
+        ),
+        PointID.WHEEL_OUTBOARD: partial(
+            get_wheel_outboard, wheel_width=wheel.tire.section_width
+        ),
+        PointID.CONTACT_PATCH_CENTER: partial(
+            get_contact_patch_center, tire_radius=tire_radius
+        ),
+    }
+    dependencies = {
+        PointID.AXLE_MIDPOINT: {PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD},
+        PointID.WHEEL_CENTER: {PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD},
+        PointID.WHEEL_INBOARD: {PointID.WHEEL_CENTER, PointID.AXLE_INBOARD},
+        PointID.WHEEL_OUTBOARD: {PointID.WHEEL_CENTER, PointID.AXLE_INBOARD},
+        PointID.CONTACT_PATCH_CENTER: {
+            PointID.WHEEL_CENTER,
+            PointID.AXLE_INBOARD,
+            PointID.AXLE_OUTBOARD,
+        },
+    }
+    return DerivedPointsSpec(functions=functions, dependencies=dependencies)

@@ -23,8 +23,8 @@ from __future__ import annotations
 from math import atan, degrees
 from typing import TYPE_CHECKING
 
+from kinematics.core.enums import Axis, AxlePosition
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
-from kinematics.core.primitives.enums import Axis
 
 if TYPE_CHECKING:
     from kinematics.core.metrics.context import MetricContext
@@ -93,7 +93,9 @@ def calculate_anti_dive_pct(ctx: "MetricContext") -> float | None:
     the SVIC is undefined, the CG is not above ground, or the run is degenerate.
     """
     config = ctx.config
-    if config.axle_position != "front" or config.front_brake_bias is None:
+    if config.axle_position is not AxlePosition.FRONT or (
+        config.front_brake_bias is None
+    ):
         return None
 
     svic = ctx.side_view_ic
@@ -134,7 +136,9 @@ def calculate_anti_lift_pct(ctx: "MetricContext") -> float | None:
     the SVIC is undefined, the CG is not above ground, or the run is degenerate.
     """
     config = ctx.config
-    if config.axle_position != "rear" or config.front_brake_bias is None:
+    if config.axle_position is not AxlePosition.REAR or (
+        config.front_brake_bias is None
+    ):
         return None
 
     svic = ctx.side_view_ic
@@ -188,7 +192,7 @@ def calculate_anti_squat_pct(ctx: "MetricContext") -> float | None:
 
     # Front (FWD) and rear axles flip the sense of the horizontal run so that
     # positive tan_theta always means "resists the acceleration pitch".
-    if config.axle_position == "front":
+    if config.axle_position is AxlePosition.FRONT:
         run = float(wc[Axis.X]) - float(svic[Axis.X])
     else:
         run = float(svic[Axis.X]) - float(wc[Axis.X])

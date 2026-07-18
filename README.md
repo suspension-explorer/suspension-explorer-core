@@ -6,7 +6,7 @@
 
 `open-kinematics` is a Python-based geometric constraint solver for simulating the kinematic behavior of vehicle suspension systems. It allows users to analyze suspension geometries by running parametric sweeps, then offering exports of solved system positions alongside visualizations of suspension state.
 
-The tool is built around a numerical solver that determines the positions of all suspension components for a given set of boundary conditions, such as wheel height or trackrod inboard position.
+The tool is built around a numerical solver that determines the positions of all suspension components for a given set of boundary conditions, such as wheel height or track-rod inboard position.
 
 <p align="center">
   <img src="/images/plot.png" alt="Design Condition Visualization" width="80%">
@@ -17,13 +17,17 @@ The tool is built around a numerical solver that determines the positions of all
 ## Features
 
 - Geometric Constraint Solver: Uses a numerical approach (Levenberg-Marquardt) with analytical Jacobians to solve for the kinematic state of the system based on geometric constraints.
-- Parametric Sweeps: Simulate suspension motion by sweeping through a range of inputs, such as vertical wheel travel and trackrod inboard displacement.
+- Parametric Sweeps: Simulate suspension motion by sweeping through a range of inputs, such as vertical wheel travel and track-rod inboard displacement.
 - Explicit Suspension Models: Define double-wishbone corners and coupled axles with validated YAML. Supported topologies include direct and inboard coilovers, pushrod-rocker actuation, torsion bars, and a shared anti-roll bar.
-- Full-Axle Simulation: Solve left and right corners together with a fixed separation between their trackrod inboard points. Geometry can provide one explicitly sided corner to mirror or both sides independently.
+- Full-Axle Simulation: Solve left and right corners together with optional steering-rack coupling. Axle inputs separate vehicle configuration, axle configuration, and hardpoints. Steering, actuation, and spring selections are axle-wide and apply symmetrically to both corners; optional right hardpoints and side-local setup support asymmetric geometry and camber-shim settings.
 - Camber Shim Simulation: Model outboard camber shim configurations to simulate shimmed ball joint offsets.
 - Derived Points System: A dependency-aware system for calculating the position of non-kinematic points (like wheel centers) based on the solved positions of core hard points.
-- Suspension Metrics: Compute roadwheel angle, camber, caster, kingpin inclination, scrub radius, mechanical trail, instant-center geometry, wheel travel, half-track, damper length, and anti-pitch geometry. Axle models add track, roll center, heave, roll, ride-height change, trackrod inboard displacement, and anti-roll-bar metrics.
+- Suspension Metrics: Compute roadwheel angle, camber, caster, kingpin inclination, scrub radius, mechanical trail, instant-center geometry, wheel travel, half-track, damper length, and anti-pitch geometry. Axle models add track, roll center, heave, roll, ride-height change, rack displacement, and anti-roll-bar metrics.
 - Exact Derivatives: Evaluate declarative `d(response) / d(driver)` metrics, including wheel-center X with respect to wheel-center Z, camber, roadwheel angle, damper, rocker, torsion-bar, and anti-roll-bar ratios, using analytical constraint Jacobians and forward-mode automatic differentiation.
+
+See [Composable Suspension Mechanisms](docs/composable_suspensions.md) for a
+worked double-wishbone axle with pushrod-rocker actuation and a T-bar anti-roll
+bar.
 - Sweep Diagnostics: Report convergence, residual acceptance, branch continuity, derivative availability, mechanism chirality, and transmission-margin issues without discarding otherwise available results.
 - Structured Analysis API: Use `analyze_sweep()` and `initial_pose()` to obtain name-keyed positions, structural corner locations, metric metadata, renderer-neutral element paths, diagnostics, and solved frames.
 - Data Export: Save wide-format CSV or Apache Parquet results with lowercase `snake_case` columns. Units are metadata rather than part of metric names.
@@ -31,11 +35,38 @@ The tool is built around a numerical solver that determines the positions of all
 
 ## How it works
 
-The core of the tool is a numerical solver that treats the suspension as a collection of rigid bodies connected by ideal spherical joints. The geometric relationships, such as the fixed length of a wishbone or a track rod, are defined as a system of nonlinear equations.
+The core of the tool is a numerical solver that treats the suspension as a collection of rigid bodies connected by ideal spherical joints. The geometric relationships, such as the fixed length of a wishbone, track rod, or toe link, are defined as a system of nonlinear equations.
 
 For each step in a simulation sweep, the solver's objective is to find the 3D coordinates for all free-moving points that will drive the residuals of these constraint equations to zero. Though really a root-finding problem, it is approached as a nonlinear least squares problem using SciPy's `least_squares` implementation of the Levenberg-Marquardt algorithm.
 
-This numerical approach is highly flexible, allowing the system to be "driven" by various targets (e.g., wheel center height or trackrod inboard position), hard or derived, without needing to derive new analytical equations for each case.
+This numerical approach is highly flexible, allowing the system to be "driven" by various targets (e.g., wheel center height or track-rod inboard position), free or derived, without needing to derive new analytical equations for each case.
+
+### Steering and toe control
+
+Double-wishbone and MacPherson models select one of two distinct wheel-heading
+links from the axle steering configuration:
+
+- `rack` installs a track rod. Its inboard pickup translates with the steering
+  rack and may be used as a sweep target.
+- `none` installs a toe link. Its inboard pickup is fixed to the chassis and
+  cannot be used as a sweep target.
+
+```yaml
+steering:
+  type: rack
+```
+
+Rack geometries therefore provide `trackrod_inboard` and `trackrod_outboard`;
+non-steered geometries provide `toe_link_inboard` and `toe_link_outboard`.
+Steering is selected explicitly and is not inferred from whether the axle is
+front or rear. Every sweep of a rack-steered model must include exactly one
+`trackrod_inboard` target along Y. Use a relative target fixed at zero to hold
+the rack at its design position during a pure bump or roll sweep.
+
+When axle hardpoints contain an explicit asymmetric `right` map, side-local
+setup is also explicit: if `left_setup` contains a camber shim, `right_setup`
+must define the corresponding right-side geometry. Omitting both setup blocks
+remains valid for an axle without side-local setup.
 
 ## Installation
 
@@ -77,12 +108,10 @@ Python objects; callers own transport and filesystem behavior.
 
 ```python
 from kinematics.core.analysis import analyze_sweep
-from kinematics.core.schema.geometry import parse_geometry_spec
-from kinematics.core.schema.sweep import SweepSpec, build_sweep_config
-from kinematics.core.suspensions.build import build_suspension
+from kinematics.core.input import build_suspension, build_sweep
 
-suspension = build_suspension(parse_geometry_spec(geometry_data))
-sweep = build_sweep_config(SweepSpec.model_validate(sweep_data), suspension)
+suspension = build_suspension(geometry_data)
+sweep = build_sweep(sweep_data, suspension)
 analysis = analyze_sweep(suspension, sweep)
 ```
 
@@ -111,15 +140,15 @@ A typical sweep file defines the targets, range, and number of steps:
 version: 1
 steps: 41
 targets:
-  - point: TRACKROD_INBOARD # Drive trackrod inboard position.
+  - point: trackrod_inboard # Drive the steering-rack pickup.
     direction:
-      axis: Y
+      axis: y
     mode: relative
     start: -40
     stop: 40
-  - point: WHEEL_CENTER # Drive vertical wheel travel.
+  - point: wheel_center # Drive vertical wheel travel.
     direction:
-      axis: Z
+      axis: z
     start: -40
     stop: 120
 ```

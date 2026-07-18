@@ -2,7 +2,7 @@
 Side-qualified point references for multi-corner suspension models.
 
 The single-corner machinery keys every position, constraint, and derived point on
-the global :class:`~kinematics.core.primitives.enums.PointID`. To model a full axle (two
+the global :class:`~kinematics.core.enums.PointID`. To model a full axle (two
 corners solved together), the same points must exist twice -- once per side --
 without colliding. :class:`PointRef` pairs a :class:`Side` with a ``PointID`` to
 give each corner its own namespace while keeping the runtime machinery
@@ -18,7 +18,7 @@ ordering, and a ``.name`` for output columns.
 from enum import IntEnum
 from typing import NamedTuple
 
-from kinematics.core.primitives.enums import PointID
+from kinematics.core.enums import PointID
 
 
 class Side(IntEnum):

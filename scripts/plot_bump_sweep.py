@@ -14,7 +14,7 @@ from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.sweep_loader import load_sweep
 from kinematics.cli.visualization.api import visualize_suspension_sweep
 from kinematics.core.analysis import analyze_sweep
-from kinematics.core.primitives.enums import PointID
+from kinematics.core.enums import PointID
 from kinematics.core.sweep import solve_sweep
 
 GEOMETRY = Path("tests/data/geometry.yaml")

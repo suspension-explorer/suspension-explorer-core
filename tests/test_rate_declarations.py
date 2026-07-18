@@ -5,10 +5,10 @@ from pathlib import Path
 import pytest
 
 from kinematics.cli.io.loaders import load_geometry
+from kinematics.core.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.metrics.catalog import get_default_corner_derivative_metrics
 from kinematics.core.metrics.main import compute_metrics_for_state
 from kinematics.core.points.derived.manager import DerivedPointsManager
-from kinematics.core.primitives.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.sensitivity import compute_state_tangents
 from kinematics.core.sweep import solve_sweep
 from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
@@ -89,13 +89,15 @@ def _metric_rows_at(
         ("deriv_half_track_wrt_hub_z", "half_track", 1.0),
     ],
 )
+@pytest.mark.parametrize("geometry_name", ["geometry.yaml", "macpherson_geometry.yaml"])
 def test_hub_z_declarations_match_finite_difference(
     column: str,
     base_metric: str,
     sign: float,
+    geometry_name: str,
 ) -> None:
     corner, state, tangents, wheel_z, trackrod_inboard_y = _solve_with_tangents(
-        "geometry.yaml"
+        geometry_name
     )
     definition = _corner_definitions(corner)[column]
     low, high = _metric_rows_at(
@@ -112,9 +114,12 @@ def test_hub_z_declarations_match_finite_difference(
     )
 
 
-def test_wheel_center_x_derivative_matches_finite_difference() -> None:
+@pytest.mark.parametrize("geometry_name", ["geometry.yaml", "macpherson_geometry.yaml"])
+def test_wheel_center_x_derivative_matches_finite_difference(
+    geometry_name: str,
+) -> None:
     corner, state, tangents, wheel_z, trackrod_inboard_y = _solve_with_tangents(
-        "geometry.yaml"
+        geometry_name
     )
     definition = _corner_definitions(corner)["deriv_wheel_center_x_wrt_hub_z"]
     states = solve_sweep(
@@ -145,26 +150,33 @@ def test_wheel_center_x_derivative_matches_finite_difference() -> None:
         - float(states[0].get(PointID.WHEEL_CENTER)[Axis.X])
     ) / (2 * FD_STEP)
 
+    # This derivative is near zero (~0.01 mm/mm), so the finite-difference
+    # baseline is dominated by solver convergence noise: position error over
+    # (2 * FD_STEP) is of order 1e-5 and varies by platform. Keep the absolute
+    # tolerance above that floor; a wrong tangent shows up orders of magnitude
+    # larger.
     assert definition.evaluate_from_tangents(state, tangents) == pytest.approx(
         finite_difference,
         rel=1e-3,
-        abs=1e-5,
+        abs=3e-5,
     )
 
 
 @pytest.mark.parametrize(
     ("column", "base_metric"),
     [
-        ("deriv_roadwheel_angle_wrt_trackrod_inboard_y", "roadwheel_angle"),
-        ("deriv_camber_wrt_trackrod_inboard_y", "camber"),
+        ("deriv_roadwheel_angle_wrt_rack_displacement", "roadwheel_angle"),
+        ("deriv_camber_wrt_rack_displacement", "camber"),
     ],
 )
+@pytest.mark.parametrize("geometry_name", ["geometry.yaml", "macpherson_geometry.yaml"])
 def test_trackrod_inboard_y_declarations_match_finite_difference(
     column: str,
     base_metric: str,
+    geometry_name: str,
 ) -> None:
     corner, state, tangents, wheel_z, trackrod_inboard_y = _solve_with_tangents(
-        "geometry.yaml"
+        geometry_name
     )
     definition = _corner_definitions(corner)[column]
     low, high = _metric_rows_at(
@@ -184,9 +196,15 @@ def test_trackrod_inboard_y_declarations_match_finite_difference(
     )
 
 
-def test_damper_length_declaration_matches_finite_difference() -> None:
+@pytest.mark.parametrize(
+    "geometry_name",
+    ["corner_strut_geometry.yaml", "macpherson_geometry.yaml"],
+)
+def test_damper_length_declaration_matches_finite_difference(
+    geometry_name: str,
+) -> None:
     corner, state, tangents, wheel_z, trackrod_inboard_y = _solve_with_tangents(
-        "corner_strut_geometry.yaml"
+        geometry_name
     )
     definition = _corner_definitions(corner)["deriv_damper_length_wrt_hub_z"]
     low, high = _metric_rows_at(

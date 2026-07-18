@@ -10,12 +10,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
-from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
+from kinematics.core.enums import Axis, PointID
+from kinematics.core.metrics import kernels
+from kinematics.core.metrics.derivatives import (
+    CallableScalarResponse,
+    DerivativeMetricDefinition,
+    DualPositions,
+    PointCoordinateResponse,
+)
 from kinematics.core.metrics.units import MetricUnit
+from kinematics.core.primitives.dual import DualScalar
 
 if TYPE_CHECKING:
     from kinematics.core.metrics.context import MetricContext
-    from kinematics.core.suspensions.base import Suspension
+    from kinematics.core.suspensions.corner.base import CornerSuspension
 
 
 @dataclass(frozen=True)
@@ -67,7 +75,6 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
         calculate_half_track,
         calculate_wheel_travel,
     )
-    from kinematics.core.primitives.enums import Axis
 
     def _ic_coord(attr: str, axis: Axis) -> Callable[["MetricContext"], float | None]:
         def extract(ctx: "MetricContext") -> float | None:
@@ -160,36 +167,31 @@ def get_default_corner_metrics() -> tuple[MetricDefinition, ...]:
 
 
 def get_default_corner_derivative_metrics(
-    suspension: "Suspension",
+    suspension: "CornerSuspension",
 ) -> tuple[DerivativeMetricDefinition, ...]:
-    """Declare derivative metrics common to every supported corner."""
-    from kinematics.core.metrics import kernels
-    from kinematics.core.metrics.derivatives import (
-        CallableScalarResponse,
-        DerivativeMetricDefinition,
-        DualPositions,
-        PointCoordinateResponse,
-    )
-    from kinematics.core.primitives.dual import DualScalar
-    from kinematics.core.primitives.enums import Axis, PointID
+    """
+    Declare derivative metrics common to every supported corner.
 
+    Point roles are resolved through the corner's role hooks. Wheel-travel
+    derivatives apply to every corner; rack-driven derivatives are omitted when
+    no steering rack is installed.
+    """
     side_sign = suspension.side.lateral_sign
+    axle_inboard, axle_outboard = suspension.wheel_axis_points()
+    lower_pivot, upper_pivot = suspension.steering_axis_points()
+    rack_attachment = suspension.rack_attachment_point()
     hub_z_driver = PointCoordinateResponse.from_world_axis(
         PointID.WHEEL_CENTER,
         Axis.Z,
         name="hub_z",
         unit=MetricUnit.MM,
-    )
-    trackrod_inboard_y_driver = PointCoordinateResponse.from_world_axis(
-        PointID.TRACKROD_INBOARD,
-        Axis.Y,
-        name="trackrod_inboard_y",
-        unit=MetricUnit.MM,
+        label="Hub Z",
     )
 
     def response(
         function: Callable[[DualPositions], object],
         name: str,
+        label: str,
         unit: MetricUnit,
     ) -> CallableScalarResponse:
         def evaluate(positions: DualPositions) -> DualScalar:
@@ -197,33 +199,49 @@ def get_default_corner_derivative_metrics(
             assert isinstance(result, DualScalar)
             return result
 
-        return CallableScalarResponse(evaluate, name=name, unit=unit)
+        return CallableScalarResponse(evaluate, name=name, unit=unit, label=label)
 
-    return (
+    definitions = [
         DerivativeMetricDefinition(
             response=response(
-                lambda positions: kernels.camber_deg(positions, side_sign),
+                lambda positions: kernels.camber_deg(
+                    positions, side_sign, axle_inboard, axle_outboard
+                ),
                 "camber",
+                "Camber",
                 MetricUnit.DEG,
             ),
             driver=hub_z_driver,
         ),
         DerivativeMetricDefinition(
             response=response(
-                lambda positions: kernels.toe_deg(positions, side_sign),
+                lambda positions: kernels.toe_deg(
+                    positions, side_sign, axle_inboard, axle_outboard
+                ),
                 "roadwheel_angle",
+                "Roadwheel Angle",
                 MetricUnit.DEG,
             ),
             driver=hub_z_driver,
         ),
         DerivativeMetricDefinition(
-            response=response(kernels.caster_deg, "caster", MetricUnit.DEG),
+            response=response(
+                lambda positions: kernels.caster_deg(
+                    positions, lower_pivot, upper_pivot
+                ),
+                "caster",
+                "Caster",
+                MetricUnit.DEG,
+            ),
             driver=hub_z_driver,
         ),
         DerivativeMetricDefinition(
             response=response(
-                lambda positions: kernels.kpi_deg(positions, side_sign),
+                lambda positions: kernels.kpi_deg(
+                    positions, side_sign, lower_pivot, upper_pivot
+                ),
                 "kpi",
+                "KPI",
                 MetricUnit.DEG,
             ),
             driver=hub_z_driver,
@@ -234,6 +252,7 @@ def get_default_corner_derivative_metrics(
                 (0.0, side_sign, 0.0),
                 name="half_track",
                 unit=MetricUnit.MM,
+                label="Half-Track",
             ),
             driver=hub_z_driver,
         ),
@@ -243,23 +262,47 @@ def get_default_corner_derivative_metrics(
                 (1.0, 0.0, 0.0),
                 name="wheel_center_x",
                 unit=MetricUnit.MM,
+                label="Wheel Center X",
             ),
             driver=hub_z_driver,
         ),
-        DerivativeMetricDefinition(
-            response=response(
-                lambda positions: kernels.toe_deg(positions, side_sign),
-                "roadwheel_angle",
-                MetricUnit.DEG,
-            ),
-            driver=trackrod_inboard_y_driver,
-        ),
-        DerivativeMetricDefinition(
-            response=response(
-                lambda positions: kernels.camber_deg(positions, side_sign),
-                "camber",
-                MetricUnit.DEG,
-            ),
-            driver=trackrod_inboard_y_driver,
-        ),
-    )
+    ]
+
+    if rack_attachment is not None:
+        # Rack displacement is the rack attachment point world-Y offset;
+        # the corner constrains that point to translate along world Y.
+        rack_displacement_driver = PointCoordinateResponse.from_world_axis(
+            rack_attachment,
+            Axis.Y,
+            name="rack_displacement",
+            unit=MetricUnit.MM,
+            label="Rack Displacement",
+        )
+        definitions.extend(
+            (
+                DerivativeMetricDefinition(
+                    response=response(
+                        lambda positions: kernels.toe_deg(
+                            positions, side_sign, axle_inboard, axle_outboard
+                        ),
+                        "roadwheel_angle",
+                        "Roadwheel Angle",
+                        MetricUnit.DEG,
+                    ),
+                    driver=rack_displacement_driver,
+                ),
+                DerivativeMetricDefinition(
+                    response=response(
+                        lambda positions: kernels.camber_deg(
+                            positions, side_sign, axle_inboard, axle_outboard
+                        ),
+                        "camber",
+                        "Camber",
+                        MetricUnit.DEG,
+                    ),
+                    driver=rack_displacement_driver,
+                ),
+            )
+        )
+
+    return tuple(definitions)

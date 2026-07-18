@@ -43,6 +43,18 @@ def test_visualize_camber_shim_imports() -> None:
     assert callable(module.plot_front_view_comparison)
 
 
+def test_visualize_camber_shim_decodes_setup_config() -> None:
+    """Exercise the dictionary-backed shim construction used by main()."""
+    module = _load_script(VISUALIZE_CAMBER_SHIM)
+
+    shim = module.build_setup_shim_config()
+
+    assert shim.design_thickness == pytest.approx(module.DESIGN_SHIM_THICKNESS)
+    assert shim.setup_thickness == pytest.approx(module.SETUP_SHIM_THICKNESS)
+    assert shim.shim_face_point_a.data.tolist() == [-25.0, 750.0, 510.0]
+    assert shim.shim_face_normal.data.tolist() == [0.0, 1.0, 0.0]
+
+
 def test_camber_shim_setup_reconstruction_preserves_suspension_data(
     test_data_dir: Path,
 ) -> None:

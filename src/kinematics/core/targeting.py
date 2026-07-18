@@ -9,7 +9,8 @@ from typing import Final, NamedTuple, Union
 
 import numpy as np
 
-from kinematics.core.primitives.enums import Axis, TargetPositionMode
+from kinematics.core.enums import Axis, TargetPositionMode
+from kinematics.core.primitives.constants import EPS_GEOMETRIC
 from kinematics.core.primitives.geometry import Direction3
 from kinematics.core.primitives.point_ref import PointKey
 
@@ -145,3 +146,41 @@ def resolve_target(target: PointTargetDirection) -> Direction3:
         return target.vector
 
     raise TypeError(f"Unsupported target type: {type(target)!r}")
+
+
+@dataclass(frozen=True)
+class ActuatorDOF:
+    """One physical actuator coordinate that a sweep must control."""
+
+    name: str
+    point_keys: tuple[PointKey, ...]
+    direction: Direction3
+
+    def matches(self, target: PointTarget) -> bool:
+        """Whether a target controls this actuator coordinate."""
+        if target.point_id not in self.point_keys:
+            return False
+        target_direction = resolve_target(target.direction)
+        alignment = abs(float(np.dot(target_direction.data, self.direction.data)))
+        return alignment >= 1.0 - EPS_GEOMETRIC
+
+
+def validate_sweep_controls(
+    sweep_config: SweepConfig,
+    actuator_dofs: tuple[ActuatorDOF, ...],
+) -> None:
+    """Require exactly one target for every physical actuator coordinate."""
+    for actuator in actuator_dofs:
+        for step_index in range(sweep_config.n_steps):
+            step_targets = [
+                target_sweep[step_index] for target_sweep in sweep_config.target_sweeps
+            ]
+            matching_targets = [
+                target for target in step_targets if actuator.matches(target)
+            ]
+            if len(matching_targets) != 1:
+                raise ValueError(
+                    f"Sweep requires exactly one target for actuator "
+                    f"'{actuator.name}' along its motion axis; found "
+                    f"{len(matching_targets)} at step {step_index}."
+                )

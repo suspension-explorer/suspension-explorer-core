@@ -6,6 +6,7 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.sweep_loader import load_sweep
+from kinematics.core.enums import AxlePosition, PointID
 from kinematics.core.metrics.anti_geometry import (
     calculate_anti_dive_pct,
     calculate_anti_lift_pct,
@@ -17,9 +18,9 @@ from kinematics.core.metrics.main import (
     MetricRow,
     compute_metrics_for_state,
 )
-from kinematics.core.primitives.enums import PointID
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.schema.config import SuspensionConfig
+from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
 from kinematics.core.targeting import SweepConfig
 
@@ -67,6 +68,7 @@ def test_config_rejects_unknown_axle_selection(field: str) -> None:
 
 def test_design_state_travel_and_position_metrics() -> None:
     suspension = load_geometry(TEST_DATA / "geometry.yaml")
+    assert isinstance(suspension, CornerSuspension)
     assert suspension.config is not None
     state = suspension.initial_state()
 
@@ -84,6 +86,7 @@ def test_design_state_travel_and_position_metrics() -> None:
 
 def test_coilover_damper_length_matches_mount_distance() -> None:
     suspension = load_geometry(TEST_DATA / "corner_strut_geometry.yaml")
+    assert isinstance(suspension, CornerSuspension)
     assert suspension.config is not None
     state = suspension.initial_state()
 
@@ -95,6 +98,7 @@ def test_coilover_damper_length_matches_mount_distance() -> None:
 
 def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     suspension = load_geometry(TEST_DATA / "corner_strut_geometry.yaml")
+    assert isinstance(suspension, CornerSuspension)
     assert suspension.config is not None
     sweep = load_sweep(TEST_DATA / "sweep.yaml")
     states, _ = solve_sweep(suspension, sweep)
@@ -198,9 +202,9 @@ def test_tangent_failure_is_visible_and_preserves_base_metrics(
 def _anti_context(
     *,
     svic_x: float,
-    axle_position: str,
+    axle_position: AxlePosition,
     front_brake_bias: float = 0.6,
-    driven_axle: str | None = None,
+    driven_axle: AxlePosition | None = None,
 ) -> MetricContext:
     """Build the minimal synthetic context consumed by anti metrics."""
     return cast(
@@ -221,9 +225,9 @@ def _anti_context(
 
 
 def test_anti_dive_and_lift_follow_axle_and_svic_signs() -> None:
-    front_behind = _anti_context(svic_x=-500.0, axle_position="front")
-    front_ahead = _anti_context(svic_x=500.0, axle_position="front")
-    rear_ahead = _anti_context(svic_x=500.0, axle_position="rear")
+    front_behind = _anti_context(svic_x=-500.0, axle_position=AxlePosition.FRONT)
+    front_ahead = _anti_context(svic_x=500.0, axle_position=AxlePosition.FRONT)
+    rear_ahead = _anti_context(svic_x=500.0, axle_position=AxlePosition.REAR)
 
     anti_dive_behind = calculate_anti_dive_pct(front_behind)
     anti_dive_ahead = calculate_anti_dive_pct(front_ahead)
@@ -239,13 +243,13 @@ def test_anti_dive_and_lift_follow_axle_and_svic_signs() -> None:
 def test_anti_squat_requires_the_configured_driven_axle() -> None:
     driven_rear = _anti_context(
         svic_x=500.0,
-        axle_position="rear",
-        driven_axle="rear",
+        axle_position=AxlePosition.REAR,
+        driven_axle=AxlePosition.REAR,
     )
     non_driven_rear = _anti_context(
         svic_x=500.0,
-        axle_position="rear",
-        driven_axle="front",
+        axle_position=AxlePosition.REAR,
+        driven_axle=AxlePosition.FRONT,
     )
 
     assert calculate_anti_squat_pct(driven_rear) is not None

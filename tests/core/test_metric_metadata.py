@@ -1,7 +1,19 @@
 """Tests for canonical metric identities and display metadata."""
 
+from kinematics.core.enums import Axis, PointID, Scope
+from kinematics.core.metrics.derivatives import (
+    CallableScalarResponse,
+    DerivativeMetricDefinition,
+    PointCoordinateResponse,
+)
 from kinematics.core.metrics.metadata import metric_display
-from kinematics.core.metrics.registry import flat_key, specs_by_key, split_flat_key
+from kinematics.core.metrics.registry import (
+    MetricKind,
+    derivative_spec,
+    flat_key,
+    specs_by_key,
+    split_flat_key,
+)
 from kinematics.core.metrics.units import MetricUnit
 
 
@@ -9,9 +21,10 @@ def test_static_metric_specs_use_unit_free_identities() -> None:
     specs = specs_by_key()
 
     assert specs["camber"].unit is MetricUnit.DEG
-    assert specs["camber"].scope == "corner"
+    assert specs["camber"].scope is Scope.CORNER
     assert specs["track"].unit is MetricUnit.MM
-    assert specs["track"].scope == "axle"
+    assert specs["track"].scope is Scope.AXLE
+    assert "t_bar_heave_angle" not in specs
     assert "camber_deg" not in specs
     assert "track_mm" not in specs
 
@@ -30,9 +43,31 @@ def test_display_metadata_resolves_corner_location_without_changing_units() -> N
     assert display is not None
     assert display.key == "camber_right"
     assert display.label == "Right Camber"
-    assert display.unit == "deg"
+    assert display.unit is MetricUnit.DEG
+    assert display.kind is MetricKind.STATE
+    assert display.scope is Scope.CORNER
     assert display.location == "right"
 
 
 def test_axle_metric_rejects_corner_location() -> None:
     assert metric_display("track_left", specs_by_key()) is None
+
+
+def test_unlabelled_derivative_falls_back_to_exact_export_key() -> None:
+    definition = DerivativeMetricDefinition(
+        response=CallableScalarResponse(
+            lambda positions: positions[PointID.WHEEL_CENTER][Axis.X],
+            name="future_response",
+            unit=MetricUnit.MM,
+        ),
+        driver=PointCoordinateResponse.from_world_axis(
+            PointID.WHEEL_CENTER,
+            Axis.Z,
+            name="future_driver",
+            unit=MetricUnit.MM,
+        ),
+    )
+
+    spec = derivative_spec(definition)
+
+    assert spec.label == "deriv_future_response_wrt_future_driver"

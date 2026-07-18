@@ -11,6 +11,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Mapping, Sequence, cast, overload
 
+from kinematics.core.enums import PointID
 from kinematics.core.metrics.axle_metrics import append_axle_state_metrics
 from kinematics.core.metrics.catalog import (
     get_default_corner_derivative_metrics,
@@ -18,15 +19,17 @@ from kinematics.core.metrics.catalog import (
 )
 from kinematics.core.metrics.context import MetricContext
 from kinematics.core.metrics.derivatives import evaluate_derivative_metrics
-from kinematics.core.metrics.registry import flat_key, split_flat_key
-from kinematics.core.primitives.point_ref import PointRef, Side
+from kinematics.core.metrics.registry import flat_key
+from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.sensitivity import TangentField
 from kinematics.core.state import SuspensionState
 
 if TYPE_CHECKING:
-    from kinematics.core.suspensions.axle import DoubleWishboneAxleSuspension
+    from kinematics.core.suspensions.axle import AxleSuspension
     from kinematics.core.suspensions.base import Suspension
+    from kinematics.core.suspensions.corner.base import CornerSuspension
+    from kinematics.core.targeting import ActuatorDOF
 
 
 MetricRow = OrderedDict[str, float | None]
@@ -34,10 +37,10 @@ MetricRow = OrderedDict[str, float | None]
 
 @dataclass(frozen=True)
 class AxleMetricRows:
-    """Location-independent axle metrics plus one row per corner."""
+    """Location-independent axle metrics plus one typed row per corner."""
 
     axle: MetricRow
-    corners: dict[str, MetricRow]
+    corners: dict[Side, MetricRow]
 
     def flat_row(self) -> MetricRow:
         """Render the structured rows for a flat export boundary."""
@@ -46,26 +49,26 @@ class AxleMetricRows:
 
 def flatten_metric_rows(
     metrics: MetricRow,
-    corner_metrics: Mapping[str, MetricRow],
+    corner_metrics: Mapping[Side, MetricRow],
 ) -> MetricRow:
     """Flatten structural metric locations using side suffixes."""
     flat: MetricRow = OrderedDict()
-    for location, row in corner_metrics.items():
+    for side, row in corner_metrics.items():
         for key, value in row.items():
-            flat[flat_key(key, location)] = value
+            flat[flat_key(key, side.name.lower())] = value
     flat.update(metrics)
     return flat
 
 
 def compute_metrics_for_axle_state(
     state: SuspensionState,
-    axle: DoubleWishboneAxleSuspension,
+    axle: AxleSuspension,
     config: SuspensionConfig,
     tangents: "Sequence[TangentField] | None" = None,
 ) -> AxleMetricRows:
     """Compute structural per-corner rows followed by axle-level metrics."""
     axle_row: MetricRow = OrderedDict()
-    corner_rows: dict[str, MetricRow] = {}
+    corner_rows: dict[Side, MetricRow] = {}
     for side in (Side.LEFT, Side.RIGHT):
         corner = axle.corners[side]
         corner_state = axle.corner_state(state, side)
@@ -74,17 +77,17 @@ def compute_metrics_for_axle_state(
             corner_state,
             corner,
             corner_config,
-            _corner_tangents(tangents, side) if tangents else None,
+            _corner_tangents(tangents, side, axle.actuator_dofs())
+            if tangents
+            else None,
         )
-        corner_rows[side.name.lower()] = side_row
+        corner_rows[side] = side_row
 
     append_axle_state_metrics(axle_row, state, axle)
-    for key, value in axle.topology_metric_values(state).items():
-        base_key, location = _split_topology_location(key)
-        if location is None:
-            axle_row[base_key] = value
-        else:
-            corner_rows[location][base_key] = value
+    topology_rows = axle.topology_metric_rows(state)
+    axle_row.update(topology_rows.axle)
+    for side, row in topology_rows.corners.items():
+        corner_rows[side].update(row)
     if tangents:
         axle_row.update(
             evaluate_derivative_metrics(
@@ -96,25 +99,22 @@ def compute_metrics_for_axle_state(
     return AxleMetricRows(axle=axle_row, corners=corner_rows)
 
 
-def _split_topology_location(key: str) -> tuple[str, str | None]:
-    """Split topology-owned flat side keys while their hook is migrated."""
-    return split_flat_key(key)
-
-
 def _corner_tangents(
     tangents: "Sequence[TangentField]",
     side: Side,
+    actuator_dofs: "Sequence[ActuatorDOF]",
 ) -> list["TangentField"]:
-    """Strip one side's PointRef qualifiers from axle tangent fields."""
+    """Project axle tangents into one corner, including shared actuators."""
     result: list[TangentField] = []
     for tangent in tangents:
         target_key = tangent.target.point_id
-        if not isinstance(target_key, PointRef) or target_key.side is not side:
+        local_target = _local_tangent_target(target_key, side, actuator_dofs)
+        if local_target is None:
             continue
         result.append(
             TangentField(
                 target_index=tangent.target_index,
-                target=tangent.target._replace(point_id=target_key.point),
+                target=tangent.target._replace(point_id=local_target),
                 velocities={
                     key.point: velocity
                     for key, velocity in tangent.velocities.items()
@@ -125,9 +125,26 @@ def _corner_tangents(
     return result
 
 
+def _local_tangent_target(
+    target_key: PointKey,
+    side: Side,
+    actuator_dofs: "Sequence[ActuatorDOF]",
+) -> PointID | None:
+    """Resolve a side-local target or its equivalent shared actuator point."""
+    if isinstance(target_key, PointRef) and target_key.side is side:
+        return target_key.point
+    for actuator in actuator_dofs:
+        if target_key not in actuator.point_keys:
+            continue
+        for point_id in actuator.point_keys:
+            if isinstance(point_id, PointRef) and point_id.side is side:
+                return point_id.point
+    return None
+
+
 def compute_metrics_for_state(
     state: SuspensionState,
-    suspension: "Suspension",
+    suspension: "CornerSuspension",
     config: SuspensionConfig,
     tangents: "Sequence[TangentField] | None" = None,
 ) -> MetricRow:
@@ -136,7 +153,7 @@ def compute_metrics_for_state(
 
     Args:
         state: The solved SuspensionState to analyze.
-        suspension: The suspension instance for type-specific geometry.
+        suspension: The corner suspension instance for type-specific geometry.
         config: Suspension configuration with vehicle parameters.
         tangents: Optional solution-manifold tangents. Derivative columns are
             appended only when these are supplied.
@@ -169,7 +186,7 @@ def compute_metrics_for_state(
 @overload
 def compute_metrics_for_sweep(
     states: list[SuspensionState],
-    suspension: "DoubleWishboneAxleSuspension",
+    suspension: "AxleSuspension",
     config: SuspensionConfig,
     tangents_per_state: "Sequence[Sequence[TangentField]] | None" = None,
 ) -> list[AxleMetricRows]: ...
@@ -235,15 +252,16 @@ def _compute_metrics_for_suspension_state(
 ) -> MetricRow | AxleMetricRows:
     """Dispatch metric calculation without applying corner metrics to an axle."""
     if suspension.is_axle:
-        axle = cast("DoubleWishboneAxleSuspension", suspension)
+        axle = cast("AxleSuspension", suspension)
         return compute_metrics_for_axle_state(state, axle, config, tangents)
-    return compute_metrics_for_state(state, suspension, config, tangents)
+    corner = cast("CornerSuspension", suspension)
+    return compute_metrics_for_state(state, corner, config, tangents)
 
 
 @overload
 def compute_metrics_for_state_from_suspension(
     state: SuspensionState,
-    suspension: "DoubleWishboneAxleSuspension",
+    suspension: "AxleSuspension",
 ) -> AxleMetricRows: ...
 
 

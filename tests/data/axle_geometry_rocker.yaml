@@ -1,14 +1,35 @@
-type: double_wishbone_pushrod_rocker_axle
+type: double_wishbone
+scope: axle
 name: "test axle rocker"
 version: "0.0.1"
-units: MILLIMETERS
+units: millimeters
 
-spring:
-  type: torsion_bar
+vehicle_config:
+  cg_position: {x: 1250, y: 0, z: 450}
+  wheelbase: 2500.0
+
+axle_config:
+  axle_position: front
+  steering:
+    type: rack
+  actuation:
+    type: pushrod_rocker
+    mount: upright
+  spring:
+    type: torsion_bar
+  anti_roll:
+    type: u_bar
+  heave_link:
+    type: none
+  wheel:
+    offset: 0
+    tire:
+      aspect_ratio: 0.55
+      section_width: 270
+      rim_diameter: 13
 
 hardpoints:
-  side: left
-  points:
+  left:
     lower_wishbone_inboard_front: {x: 250, y: 400, z: 200}
     lower_wishbone_inboard_rear: {x: -250, y: 450, z: 200}
     lower_wishbone_outboard: {x: 0, y: 900, z: 200}
@@ -23,25 +44,14 @@ hardpoints:
     # Pushrod and rocker geometry.
     pushrod_outboard: {x: 0, y: 870, z: 240}
     pushrod_inboard: {x: 0, y: 430, z: 480}
-    rocker_axis_front: {x: 100, y: 340, z: 450}
-    rocker_axis_rear: {x: -100, y: 340, z: 450}
+    rocker_axis_a: {x: 100, y: 340, z: 450}
+    rocker_axis_b: {x: -100, y: 340, z: 450}
     droplink_rocker: {x: 0, y: 250, z: 450}
 
     # The per-side ARB arm point is mirrored with the corner geometry.
-    droplink_arb: {x: 80, y: 250, z: 300}
+    droplink_u_bar: {x: 80, y: 250, z: 300}
 
   # The shared transverse ARB axis is authored once at axle level.
   center:
-    arb_axis_a: {x: 0, y: 250, z: 300}
-    arb_axis_b: {x: 0, y: -250, z: 300}
-
-config:
-  steered: true
-  wheel:
-    offset: 0
-    tire:
-      aspect_ratio: 0.55
-      section_width: 270
-      rim_diameter: 13
-  cg_position: {x: 1250, y: 0, z: 450}
-  wheelbase: 2500.0
+    arb_u_bar_axis_a: {x: 0, y: 250, z: 300}
+    arb_u_bar_axis_b: {x: 0, y: -250, z: 300}

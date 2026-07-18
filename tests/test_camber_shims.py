@@ -8,15 +8,19 @@ upright-mounted points.
 """
 
 import numpy as np
+import pytest
 
 from kinematics.cli.io.loaders import load_geometry
+from kinematics.core.enums import Axis, PointID
 from kinematics.core.primitives.constants import TEST_TOLERANCE
-from kinematics.core.primitives.enums import Axis, PointID
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.vector_utils.geometric import rotate_point_about_axis
 from kinematics.core.schema.config import CamberShimConfig
 from kinematics.core.suspensions.base import Suspension
-from kinematics.core.suspensions.config.shims import solve_camber_shim_assembly
+from kinematics.core.suspensions.config.shims import (
+    CamberShimRockerCoupling,
+    solve_camber_shim_assembly,
+)
 from kinematics.core.suspensions.corner import DoubleWishboneSuspension
 
 # ---------------------------------------------------------------------------
@@ -71,7 +75,7 @@ def make_simple_geometry(
     Return positions and shim config for the shim assembly solver.
 
     Uses positions matching the test geometry YAML: UBJ at the tip of two upper
-    wishbone arms, LBJ below, trackrod connecting rack to upright.
+    wishbone arms, LBJ below, and track rod connecting rack to upright.
     """
     positions = {
         PointID.UPPER_WISHBONE_OUTBOARD: Point3([0.0, 750.0, 500.0]),
@@ -99,7 +103,9 @@ def test_design_thickness_returns_identity():
     positions, shim_config = make_simple_geometry(
         design_thickness=30.0, setup_thickness=30.0
     )
-    sol = solve_camber_shim_assembly(positions, shim_config)
+    sol = solve_camber_shim_assembly(
+        positions, shim_config, PointID.TRACKROD_INBOARD, PointID.TRACKROD_OUTBOARD
+    )
 
     np.testing.assert_allclose(
         sol.ubj_position,
@@ -120,7 +126,9 @@ def test_solver_converges():
     positions, shim_config = make_simple_geometry(
         design_thickness=30.0, setup_thickness=40.0
     )
-    sol = solve_camber_shim_assembly(positions, shim_config)
+    sol = solve_camber_shim_assembly(
+        positions, shim_config, PointID.TRACKROD_INBOARD, PointID.TRACKROD_OUTBOARD
+    )
 
     assert sol.constraint_residual_norm < 1e-5
 
@@ -141,7 +149,9 @@ def test_upper_arm_lengths_preserved():
         np.linalg.norm(ubj - positions[PointID.UPPER_WISHBONE_INBOARD_REAR])
     )
 
-    sol = solve_camber_shim_assembly(positions, shim_config)
+    sol = solve_camber_shim_assembly(
+        positions, shim_config, PointID.TRACKROD_INBOARD, PointID.TRACKROD_OUTBOARD
+    )
 
     solved_ubj = Point3(sol.ubj_position)
     solved_front = float(
@@ -162,7 +172,9 @@ def test_face_normals_parallel_at_solution():
     positions, shim_config = make_simple_geometry(
         design_thickness=30.0, setup_thickness=40.0
     )
-    sol = solve_camber_shim_assembly(positions, shim_config)
+    sol = solve_camber_shim_assembly(
+        positions, shim_config, PointID.TRACKROD_INBOARD, PointID.TRACKROD_OUTBOARD
+    )
 
     normal_camber_block = sol.camber_block_face_normal
     normal_upright = sol.upright_body_face_normal
@@ -179,7 +191,9 @@ def test_lbj_stays_fixed():
     positions, shim_config = make_simple_geometry(
         design_thickness=30.0, setup_thickness=40.0
     )
-    sol = solve_camber_shim_assembly(positions, shim_config)
+    sol = solve_camber_shim_assembly(
+        positions, shim_config, PointID.TRACKROD_INBOARD, PointID.TRACKROD_OUTBOARD
+    )
 
     # The solver doesn't move LBJ, but the lower rotation angle should be non-zero
     # (the body rotates about LBJ, LBJ itself stays put).
@@ -195,7 +209,9 @@ def test_nonzero_upright_body_rotation():
     positions, shim_config = make_simple_geometry(
         design_thickness=30.0, setup_thickness=40.0
     )
-    sol = solve_camber_shim_assembly(positions, shim_config)
+    sol = solve_camber_shim_assembly(
+        positions, shim_config, PointID.TRACKROD_INBOARD, PointID.TRACKROD_OUTBOARD
+    )
 
     assert sol.upright_body_rot_angle_rad > 1e-6
     assert np.linalg.norm(sol.upright_body_rot_vec) > 1e-6
@@ -203,7 +219,7 @@ def test_nonzero_upright_body_rotation():
 
 def test_trackrod_length_preserved():
     """
-    The trackrod is a rigid link. Its length must be unchanged after the shim solve.
+    The track rod is rigid. Its length must be unchanged after the shim solve.
     """
     positions, shim_config = make_simple_geometry(
         design_thickness=30.0, setup_thickness=40.0
@@ -214,9 +230,11 @@ def test_trackrod_length_preserved():
         )
     )
 
-    sol = solve_camber_shim_assembly(positions, shim_config)
+    sol = solve_camber_shim_assembly(
+        positions, shim_config, PointID.TRACKROD_INBOARD, PointID.TRACKROD_OUTBOARD
+    )
 
-    # Compute where trackrod outboard lands after upright-body rotation about LBJ.
+    # Compute where the track-rod outboard pickup lands after upright rotation.
     solved_tro = rotate_point_about_axis(
         positions[PointID.TRACKROD_OUTBOARD],
         positions[PointID.LOWER_WISHBONE_OUTBOARD],
@@ -228,9 +246,64 @@ def test_trackrod_length_preserved():
     )
 
     assert abs(solved_length - design_length) < 1e-4, (
-        f"Trackrod length changed: design={design_length:.4f}, "
+        f"Track-rod length changed: design={design_length:.4f}, "
         f"solved={solved_length:.4f}"
     )
+
+
+def test_upright_pushrod_adds_solved_rocker_rotation():
+    """The shim solve must preserve an upright-mounted pushrod's design length."""
+    positions, shim_config = make_simple_geometry(
+        design_thickness=30.0, setup_thickness=40.0
+    )
+    positions.update(
+        {
+            PointID.ROCKER_AXIS_A: Point3([100.0, 340.0, 450.0]),
+            PointID.ROCKER_AXIS_B: Point3([-100.0, 340.0, 450.0]),
+            PointID.PUSHROD_INBOARD: Point3([0.0, 340.0, 500.0]),
+            PointID.PUSHROD_OUTBOARD: Point3([0.0, 870.0, 240.0]),
+        }
+    )
+    rocker_coupling = CamberShimRockerCoupling(
+        axis_a=PointID.ROCKER_AXIS_A,
+        axis_b=PointID.ROCKER_AXIS_B,
+        pushrod_inboard=PointID.PUSHROD_INBOARD,
+        pushrod_outboard=PointID.PUSHROD_OUTBOARD,
+    )
+    design_length = float(
+        np.linalg.norm(
+            positions[PointID.PUSHROD_OUTBOARD] - positions[PointID.PUSHROD_INBOARD]
+        )
+    )
+
+    sol = solve_camber_shim_assembly(
+        positions,
+        shim_config,
+        PointID.TRACKROD_INBOARD,
+        PointID.TRACKROD_OUTBOARD,
+        rocker_coupling=rocker_coupling,
+    )
+
+    solved_pushrod_inboard = rotate_point_about_axis(
+        positions[PointID.PUSHROD_INBOARD],
+        positions[PointID.ROCKER_AXIS_A],
+        (
+            positions[PointID.ROCKER_AXIS_B] - positions[PointID.ROCKER_AXIS_A]
+        ).normalize(),
+        sol.rocker_angle_rad,
+    )
+    solved_pushrod_outboard = rotate_point_about_axis(
+        positions[PointID.PUSHROD_OUTBOARD],
+        positions[PointID.LOWER_WISHBONE_OUTBOARD],
+        Direction3(sol.upright_body_rot_axis),
+        sol.upright_body_rot_angle_rad,
+    )
+    solved_length = float(
+        np.linalg.norm(solved_pushrod_outboard - solved_pushrod_inboard)
+    )
+
+    assert abs(sol.rocker_angle_rad) > 1e-6
+    assert solved_length == pytest.approx(design_length, abs=1e-4)
 
 
 def test_ubj_moves_for_nonzero_shim_change():
@@ -240,7 +313,9 @@ def test_ubj_moves_for_nonzero_shim_change():
     positions, shim_config = make_simple_geometry(
         design_thickness=30.0, setup_thickness=40.0
     )
-    sol = solve_camber_shim_assembly(positions, shim_config)
+    sol = solve_camber_shim_assembly(
+        positions, shim_config, PointID.TRACKROD_INBOARD, PointID.TRACKROD_OUTBOARD
+    )
 
     displacement = np.linalg.norm(
         sol.ubj_position - positions[PointID.UPPER_WISHBONE_OUTBOARD].data
@@ -435,7 +510,7 @@ def test_upright_mounted_points_maintain_distance_from_lbj(
 
 def test_shim_preserves_trackrod_length(double_wishbone_geometry_file):
     """
-    The trackrod is a rigid link. Its length must be unchanged after shimming.
+    The track rod is rigid. Its length must be unchanged after shimming.
     """
     suspension = load_geometry(double_wishbone_geometry_file)
     initial_state = suspension.initial_state()
@@ -458,12 +533,14 @@ def test_shim_preserves_trackrod_length(double_wishbone_geometry_file):
     )
 
     assert abs(shimmed_trackrod_length - design_trackrod_length) < 0.01, (
-        f"Trackrod length changed: design={design_trackrod_length:.4f}mm, "
+        f"Track-rod length changed: design={design_trackrod_length:.4f}mm, "
         f"shimmed={shimmed_trackrod_length:.4f}mm"
     )
 
 
-def test_backward_compatibility_no_shim(double_wishbone_geometry_file):
+def test_equal_shim_thickness_builds_complete_design_state(
+    double_wishbone_geometry_file,
+):
     """
     Test that when design_thickness == setup_thickness, there's no effect.
     """

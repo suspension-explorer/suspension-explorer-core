@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
-from kinematics.core.primitives.enums import Axis
+from kinematics.core.enums import Axis
 from kinematics.core.primitives.point_ref import PointKey
 
 
@@ -19,6 +19,7 @@ class ElementType(StrEnum):
     WISHBONE = "wishbone"
     UPRIGHT = "upright"
     TRACK_ROD = "track_rod"
+    TOE_LINK = "toe_link"
     RACK = "rack"
     AXLE = "axle"
     CONTACT_PATCH = "contact_patch"
@@ -28,6 +29,7 @@ class ElementType(StrEnum):
     ANTI_ROLL_BAR = "anti_roll_bar"
     TORSION_BAR = "torsion_bar"
     DROPLINK = "droplink"
+    HEAVE_LINK = "heave_link"
 
 
 class RockerPickupType(StrEnum):
@@ -37,6 +39,7 @@ class RockerPickupType(StrEnum):
 
     PUSHROD = "pushrod"
     DROPLINK = "droplink"
+    HEAVE_LINK = "heave_link"
 
 
 @dataclass(frozen=True)
@@ -47,37 +50,6 @@ class RockerPickup:
 
     point: PointKey
     type: RockerPickupType
-
-
-@dataclass(frozen=True)
-class AxisProjection:
-    """
-    Projection of one point onto a physical rotation axis.
-    """
-
-    point: PointKey
-    rotation_axis: tuple[PointKey, PointKey]
-
-
-type ElementPathPoint = PointKey | AxisProjection
-
-
-@dataclass(frozen=True)
-class ElementPath:
-    """
-    Ordered physical geometry for one part of a suspension element.
-    """
-
-    points: tuple[ElementPathPoint, ...]
-    type: ElementType
-    label: str
-
-    def __post_init__(self) -> None:
-        """
-        Require at least one point in every element path.
-        """
-        if not self.points:
-            raise ValueError("Element paths must contain at least one point")
 
 
 @dataclass(frozen=True)
@@ -114,6 +86,7 @@ class RigidLinkElement(SuspensionElement):
         valid_types = {
             ElementType.WISHBONE,
             ElementType.TRACK_ROD,
+            ElementType.TOE_LINK,
             ElementType.AXLE,
             ElementType.PUSHROD,
             ElementType.DROPLINK,
@@ -143,8 +116,12 @@ class VariableLengthLinkElement(SuspensionElement):
         """
         Require a variable-length link type.
         """
-        if self.type is not ElementType.SPRING_DAMPER:
-            raise ValueError(f"Invalid variable-length element type: {self.type.value}")
+        valid_types = {ElementType.SPRING_DAMPER, ElementType.HEAVE_LINK}
+        if self.type not in valid_types:
+            raise ValueError(
+                "Variable-length links require type 'spring_damper' or "
+                f"'heave_link', got '{self.type.value}'."
+            )
 
     @property
     def point_keys(self) -> tuple[PointKey, ...]:
@@ -157,7 +134,7 @@ class VariableLengthLinkElement(SuspensionElement):
 @dataclass(frozen=True)
 class RackElement(SuspensionElement):
     """
-    A steering rack connecting left and right inner trackrod joints.
+    A steering rack connecting left and right inner track-rod joints.
     """
 
     left_inner: PointKey
@@ -200,7 +177,6 @@ class TorsionElement(SuspensionElement):
     type: ElementType
     rotation_axis: tuple[PointKey, PointKey]
     attachments: tuple[PointKey, ...]
-    path: tuple[PointKey, ...]
 
     def __post_init__(self) -> None:
         """
@@ -209,13 +185,35 @@ class TorsionElement(SuspensionElement):
         valid_types = {ElementType.ANTI_ROLL_BAR, ElementType.TORSION_BAR}
         if self.type not in valid_types:
             raise ValueError(f"Invalid torsion element type: {self.type.value}")
+        if self.type is ElementType.TORSION_BAR and self.attachments:
+            raise ValueError("A straight torsion bar does not accept attachments")
+        if self.type is ElementType.ANTI_ROLL_BAR and len(self.attachments) != 2:
+            raise ValueError("A U-bar requires two ordered arm attachments")
 
     @property
     def point_keys(self) -> tuple[PointKey, ...]:
         """
-        Return axis, attachment, and path points.
+        Return the rotation-axis and attachment points.
         """
-        return self.rotation_axis + self.attachments + self.path
+        return tuple(dict.fromkeys((*self.rotation_axis, *self.attachments)))
+
+
+@dataclass(frozen=True)
+class TBarElement(SuspensionElement):
+    """
+    A T-bar anti-roll member defined by its pivot and crossbar attachments.
+    """
+
+    pivot: PointKey
+    left_attachment: PointKey
+    right_attachment: PointKey
+
+    @property
+    def point_keys(self) -> tuple[PointKey, ...]:
+        """
+        Return the pivot and both crossbar endpoints.
+        """
+        return self.pivot, self.left_attachment, self.right_attachment
 
 
 @dataclass(frozen=True)
@@ -263,75 +261,6 @@ class WheelElement(SuspensionElement):
         )
 
 
-def element_paths(element: SuspensionElement) -> tuple[ElementPath, ...]:
-    """
-    Describe the renderer-neutral geometry of one physical element.
-    """
-    if isinstance(element, RigidLinkElement | VariableLengthLinkElement):
-        return (
-            ElementPath(
-                points=(element.point_a, element.point_b),
-                type=element.type,
-                label=element.label,
-            ),
-        )
-    if isinstance(element, RackElement):
-        return (
-            ElementPath(
-                points=(element.left_inner, element.right_inner),
-                type=ElementType.RACK,
-                label=element.label,
-            ),
-        )
-    if isinstance(element, UprightElement):
-        return tuple(
-            ElementPath(
-                points=segment,
-                type=ElementType.UPRIGHT,
-                label=element.label,
-            )
-            for segment in element.segments
-        )
-    if isinstance(element, TorsionElement):
-        return (
-            ElementPath(
-                points=element.path,
-                type=element.type,
-                label=element.label,
-            ),
-        )
-    if isinstance(element, RockerElement):
-        paths = [
-            ElementPath(
-                points=element.rotation_axis,
-                type=ElementType.ROCKER,
-                label=f"{element.label} Axis",
-            )
-        ]
-        for pickup in element.pickups:
-            pickup_name = pickup.type.value.replace("_", " ").title()
-            paths.append(
-                ElementPath(
-                    points=(
-                        pickup.point,
-                        AxisProjection(pickup.point, element.rotation_axis),
-                    ),
-                    type=ElementType.ROCKER,
-                    label=f"{element.label} {pickup_name} Arm",
-                )
-            )
-        return tuple(paths)
-    if isinstance(element, WheelElement):
-        return (
-            ElementPath(
-                points=(element.contact_patch,),
-                type=ElementType.CONTACT_PATCH,
-                label=f"{element.label} Contact Patch",
-            ),
-        )
-    raise TypeError(f"Unsupported suspension element: {type(element)!r}")
-
-
 def map_element_points(
     element: SuspensionElement,
     transform: Callable[[PointKey], PointKey],
@@ -370,9 +299,19 @@ def map_element_points(
         return replace(
             element,
             label=mapped_label,
-            rotation_axis=tuple(transform(point) for point in element.rotation_axis),
+            rotation_axis=(
+                transform(element.rotation_axis[0]),
+                transform(element.rotation_axis[1]),
+            ),
             attachments=tuple(transform(point) for point in element.attachments),
-            path=tuple(transform(point) for point in element.path),
+        )
+    if isinstance(element, TBarElement):
+        return replace(
+            element,
+            label=mapped_label,
+            pivot=transform(element.pivot),
+            left_attachment=transform(element.left_attachment),
+            right_attachment=transform(element.right_attachment),
         )
     if isinstance(element, RockerElement):
         return replace(

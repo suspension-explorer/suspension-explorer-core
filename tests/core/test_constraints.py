@@ -8,6 +8,7 @@ from kinematics.core.constraints import (
     DistanceConstraint,
     EqualDistanceConstraint,
     FixedAxisConstraint,
+    MidpointOnPlaneConstraint,
     PointOnLineConstraint,
     PointOnPlaneConstraint,
     SphericalJointConstraint,
@@ -15,8 +16,8 @@ from kinematics.core.constraints import (
     VectorsParallelConstraint,
     VectorsPerpendicularConstraint,
 )
+from kinematics.core.enums import Axis, PointID
 from kinematics.core.primitives.constants import TEST_TOLERANCE
-from kinematics.core.primitives.enums import Axis, PointID
 from kinematics.core.primitives.geometry import Direction3, Point3
 
 
@@ -429,6 +430,21 @@ def test_fixed_axis_constraint_satisfied_z():
 
     residual = constraint.residual(positions)
     assert math.isclose(residual, 0.0, abs_tol=TEST_TOLERANCE)
+
+
+def test_midpoint_on_plane_constraint_uses_both_endpoints():
+    positions = simple_positions()
+    constraint = MidpointOnPlaneConstraint(
+        PointID.LOWER_WISHBONE_INBOARD_FRONT,
+        PointID.LOWER_WISHBONE_INBOARD_REAR,
+        Point3([0.0, 0.0, 0.0]),
+        Direction3([0.0, 1.0, 0.0]),
+    )
+
+    assert constraint.residual(positions) == pytest.approx(0.0)
+
+    positions[PointID.LOWER_WISHBONE_INBOARD_REAR] = Point3([1.0, 0.5, 0.0])
+    assert constraint.residual(positions) == pytest.approx(0.25)
 
 
 def test_point_on_line_constraint_on_line():

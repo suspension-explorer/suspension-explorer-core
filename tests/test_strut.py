@@ -6,9 +6,10 @@ import yaml
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.constraints import ScalarTripleProductConstraint
-from kinematics.core.primitives.enums import PointID
+from kinematics.core.enums import PointID, SuspensionType
 from kinematics.core.suspensions.corner import (
-    DoubleWishboneCoiloverSuspension,
+    CornerSpringCoilover,
+    CornerSpringNone,
     DoubleWishboneSuspension,
 )
 from kinematics.core.suspensions.registry import (
@@ -41,23 +42,22 @@ def _mirror_hardpoint_y(data: dict[str, object]) -> None:
         coordinates["y"] = -coordinates["y"]
 
 
-def test_explicit_corner_types_select_distinct_models() -> None:
+def test_corner_spring_selection_composes_one_stable_model() -> None:
     basic = load_geometry(TEST_DATA / "geometry.yaml")
     coilover = load_geometry(TEST_DATA / "corner_strut_geometry.yaml")
 
     assert type(basic) is DoubleWishboneSuspension
-    assert type(coilover) is DoubleWishboneCoiloverSuspension
-    assert not basic.has_strut
-    assert coilover.has_strut
+    assert type(coilover) is DoubleWishboneSuspension
+    assert isinstance(basic.spring, CornerSpringNone)
+    assert isinstance(coilover.spring, CornerSpringCoilover)
 
 
-def test_type_selection_is_case_insensitive(tmp_path: Path) -> None:
+def test_type_selection_is_case_sensitive(tmp_path: Path) -> None:
     data = _read_geometry("corner_strut_geometry.yaml")
-    data["type"] = "DOUBLE_WISHBONE_COILOVER"
+    data["type"] = "DOUBLE_WISHBONE"
 
-    suspension = load_geometry(_write_geometry(tmp_path, data))
-
-    assert type(suspension) is DoubleWishboneCoiloverSuspension
+    with pytest.raises(ValueError, match="Unsupported geometry type"):
+        load_geometry(_write_geometry(tmp_path, data))
 
 
 @pytest.mark.parametrize(
@@ -113,42 +113,33 @@ def test_coilover_rejects_missing_required_hardpoint(
 
 def test_basic_type_rejects_coilover_hardpoints(tmp_path: Path) -> None:
     data = _read_geometry("corner_strut_geometry.yaml")
-    data["type"] = "double_wishbone"
+    data["spring"] = {"type": "none"}
 
     with pytest.raises(ValueError, match="Invalid hardpoints"):
         load_geometry(_write_geometry(tmp_path, data))
 
 
 def test_basic_type_does_not_accept_variant_points() -> None:
-    assert PointID.STRUT_TOP not in DoubleWishboneSuspension.all_valid_points()
-    assert PointID.STRUT_BOTTOM not in DoubleWishboneSuspension.all_valid_points()
+    suspension = load_geometry(TEST_DATA / "geometry.yaml")
+    assert PointID.STRUT_TOP not in suspension.all_valid_points()
+    assert PointID.STRUT_BOTTOM not in suspension.all_valid_points()
 
 
-def test_corner_registry_has_one_complete_definition_per_type() -> None:
+def test_corner_registry_has_one_complete_definition_per_architecture() -> None:
     expected_types = {
         "double_wishbone",
-        "double_wishbone_front",
-        "double_wishbone_rear",
-        "double_wishbone_coilover",
-        "double_wishbone_axle",
-        "double_wishbone_pushrod_rocker",
-        "double_wishbone_pushrod_rocker_arb",
-        "double_wishbone_pushrod_rocker_axle",
-    }
-    canonical_types = {
-        "double_wishbone",
-        "double_wishbone_coilover",
-        "double_wishbone_axle",
-        "double_wishbone_pushrod_rocker",
-        "double_wishbone_pushrod_rocker_arb",
-        "double_wishbone_pushrod_rocker_axle",
+        "macpherson",
     }
 
     assert set(list_supported_types()) == expected_types
     assert {definition.type_key for definition in SUSPENSION_DEFINITIONS} == (
-        canonical_types
+        expected_types
     )
-    for type_key in canonical_types:
+    assert all(
+        isinstance(definition.type_key, SuspensionType)
+        for definition in SUSPENSION_DEFINITIONS
+    )
+    for type_key in expected_types:
         definition = get_suspension_definition(type_key)
         assert definition is not None
         assert definition.suspension_type is get_suspension_class(type_key)
@@ -160,8 +151,8 @@ def test_coilover_topology_adds_moving_pickup_and_attachment_constraints() -> No
 
     assert PointID.STRUT_BOTTOM in suspension.free_points()
     assert PointID.STRUT_TOP not in suspension.free_points()
-    assert PointID.STRUT_TOP in suspension.OUTPUT_POINTS
-    assert PointID.STRUT_BOTTOM in suspension.OUTPUT_POINTS
+    assert PointID.STRUT_TOP in suspension.output_points()
+    assert PointID.STRUT_BOTTOM in suspension.output_points()
     constraints = suspension.constraints()
     assert len(constraints) == 21
     assert (
@@ -171,12 +162,3 @@ def test_coilover_topology_adds_moving_pickup_and_attachment_constraints() -> No
         )
         == 1
     )
-
-
-def test_legacy_configuration_key_remains_loadable(tmp_path: Path) -> None:
-    data = _read_geometry("geometry.yaml")
-    data["configuration"] = data.pop("config")
-
-    suspension = load_geometry(_write_geometry(tmp_path, data))
-
-    assert type(suspension) is DoubleWishboneSuspension

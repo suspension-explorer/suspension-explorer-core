@@ -1,8 +1,14 @@
 type: double_wishbone
-side: LEFT
+side: left
 name: "test"
 version: "0.0.1"
-units: MILLIMETERS
+units: millimeters
+
+actuation:
+  type: direct
+  mount: lower_wishbone
+spring:
+  type: none
 
 # Hardpoints: Wold Axis, Design Condition.
 hardpoints:
@@ -16,7 +22,7 @@ hardpoints:
   upper_wishbone_inboard_rear: {x: -275, y: 350, z: 500}
   upper_wishbone_outboard: {x: -25, y: 750, z: 500}
 
-  # Track Rod.
+  # Track rod.
   trackrod_inboard: {x: 50, y: 200, z: 250}
   trackrod_outboard: {x: 150, y: 800, z: 275}
 
@@ -26,7 +32,8 @@ hardpoints:
 
 # Configuration.
 config:
-  steered: true
+  steering:
+    type: rack
   wheel:
     offset: 0  # ET convention: positive is inboard.
     tire:
@@ -43,9 +50,3 @@ config:
     shim_face_normal: {x: 0.0, y: 1.0, z: 0.0}
     design_thickness: 30.0
     setup_thickness: 30.0
-
-  # Points that move with the upright when camber shim is applied.
-  upright_mounted_points:
-    - axle_inboard
-    - axle_outboard
-    - trackrod_outboard

@@ -1,0 +1,36 @@
+type: macpherson
+scope: axle
+name: "macpherson_axle_test"
+version: "0.0.1"
+units: millimeters
+
+vehicle_config:
+  cg_position: {x: 1250, y: 0, z: 450}
+  wheelbase: 2500.0
+
+axle_config:
+  axle_position: front
+  steering:
+    type: rack
+  anti_roll:
+    type: none
+  heave_link:
+    type: none
+  wheel:
+    offset: 0
+    tire:
+      aspect_ratio: 0.55
+      section_width: 270
+      rim_diameter: 13
+
+hardpoints:
+  left:
+    lower_wishbone_inboard_front: {x: 250, y: 400, z: 200}
+    lower_wishbone_inboard_rear: {x: -250, y: 450, z: 200}
+    lower_wishbone_outboard: {x: 0, y: 900, z: 200}
+    strut_top: {x: -40, y: 700, z: 850}
+    strut_bottom: {x: -14, y: 830, z: 427.5}
+    trackrod_inboard: {x: 50, y: 200, z: 250}
+    trackrod_outboard: {x: 150, y: 800, z: 275}
+    axle_inboard: {x: -20, y: 800, z: 308.426}
+    axle_outboard: {x: -20, y: 950, z: 313.426}

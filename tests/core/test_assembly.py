@@ -4,7 +4,6 @@ import pytest
 
 from kinematics.core.assembly import PointCatalog, SuspensionAssembly
 from kinematics.core.elements import (
-    AxisProjection,
     ElementType,
     RigidLinkElement,
     RockerElement,
@@ -12,9 +11,11 @@ from kinematics.core.elements import (
     RockerPickupType,
     TorsionElement,
     UprightElement,
+    VariableLengthLinkElement,
 )
+from kinematics.core.enums import PointID
 from kinematics.core.points.derived.manager import DerivedPointsSpec
-from kinematics.core.primitives.enums import PointID
+from kinematics.core.presentation import AxisProjection, element_paths
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.state import SuspensionState
 
@@ -87,7 +88,58 @@ def test_assembly_accepts_shared_element_points() -> None:
 
     assert assembly.elements == (link_a, link_b)
     assert assembly.referenced_point_keys == (DERIVED_POINT, FIXED_POINT, FREE_POINT)
-    assert [path.label for path in assembly.element_paths] == ["Link A", "Link B"]
+    assert [path.label for path in element_paths(assembly)] == ["Link A", "Link B"]
+
+
+def test_assembly_accepts_variable_length_heave_link() -> None:
+    heave_link = VariableLengthLinkElement(
+        label="Heave Link",
+        type=ElementType.HEAVE_LINK,
+        point_a=FIXED_POINT,
+        point_b=FREE_POINT,
+    )
+
+    assembly = SuspensionAssembly.from_state(
+        make_state(),
+        make_derived_spec(),
+        (heave_link,),
+        (DERIVED_POINT,),
+    )
+
+    assert heave_link.point_keys == (FIXED_POINT, FREE_POINT)
+    paths = element_paths(assembly)
+    assert paths[0].type is ElementType.HEAVE_LINK
+    assert paths[0].points == (FIXED_POINT, FREE_POINT)
+
+
+def test_variable_length_link_rejects_rigid_element_type() -> None:
+    message = "require type 'spring_damper' or 'heave_link'"
+    with pytest.raises(ValueError, match=message):
+        VariableLengthLinkElement(
+            label="Invalid Variable Link",
+            type=ElementType.WISHBONE,
+            point_a=FIXED_POINT,
+            point_b=FREE_POINT,
+        )
+
+
+def test_rocker_heave_link_pickup_has_named_arm_path() -> None:
+    rocker = RockerElement(
+        label="Rocker",
+        rotation_axis=(FIXED_POINT, FREE_POINT),
+        pickups=(RockerPickup(DERIVED_POINT, RockerPickupType.HEAVE_LINK),),
+    )
+    assembly = SuspensionAssembly.from_state(
+        make_state(),
+        make_derived_spec(),
+        (rocker,),
+        (DERIVED_POINT,),
+    )
+
+    assert [path.label for path in element_paths(assembly)] == [
+        "Rocker Axis",
+        "Rocker Heave Link Arm",
+    ]
 
 
 def test_point_catalog_rejects_derived_point_marked_free() -> None:
@@ -163,7 +215,6 @@ def test_torsion_bar_owns_matching_reversed_rocker_axis() -> None:
         type=ElementType.TORSION_BAR,
         rotation_axis=(FREE_POINT, FIXED_POINT),
         attachments=(),
-        path=(FREE_POINT, FIXED_POINT),
     )
     assembly = SuspensionAssembly.from_state(
         make_state(),
@@ -172,41 +223,24 @@ def test_torsion_bar_owns_matching_reversed_rocker_axis() -> None:
         (DERIVED_POINT,),
     )
 
-    assert [path.type for path in assembly.element_paths] == [
+    paths = element_paths(assembly)
+    assert [path.type for path in paths] == [
         ElementType.ROCKER,
         ElementType.TORSION_BAR,
     ]
-    assert assembly.element_paths[0].points == (
+    assert paths[0].points == (
         DERIVED_POINT,
         AxisProjection(DERIVED_POINT, rocker.rotation_axis),
     )
 
 
-def test_torsion_bar_does_not_hide_axis_that_its_path_does_not_render() -> None:
-    rocker = RockerElement(
-        label="Rocker",
-        rotation_axis=(FIXED_POINT, FREE_POINT),
-        pickups=(RockerPickup(DERIVED_POINT, RockerPickupType.PUSHROD),),
-    )
+def test_torsion_element_does_not_store_presentation_paths() -> None:
     torsion_bar = TorsionElement(
         label="Torsion Bar",
         type=ElementType.TORSION_BAR,
-        rotation_axis=rocker.rotation_axis,
+        rotation_axis=(FIXED_POINT, FREE_POINT),
         attachments=(),
-        path=(FIXED_POINT, DERIVED_POINT),
-    )
-    assembly = SuspensionAssembly.from_state(
-        make_state(),
-        make_derived_spec(),
-        (rocker, torsion_bar),
-        (DERIVED_POINT,),
     )
 
-    assert [path.points for path in assembly.element_paths] == [
-        rocker.rotation_axis,
-        (
-            DERIVED_POINT,
-            AxisProjection(DERIVED_POINT, rocker.rotation_axis),
-        ),
-        torsion_bar.path,
-    ]
+    assert torsion_bar.point_keys == (FIXED_POINT, FREE_POINT)
+    assert not hasattr(torsion_bar, "paths")

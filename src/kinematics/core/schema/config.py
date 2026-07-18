@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-
-from kinematics.core.primitives.constants import MM_PER_INCH
-from kinematics.core.schema.coercion import PydanticDirection3, PydanticPoint3
+from kinematics.core.enums import ArbType, AxlePosition, HeaveLinkType, SteeringType
+from kinematics.core.primitives.constants import EPS_GEOMETRIC, MM_PER_INCH
+from kinematics.core.schema.decoding import Direction3Value, Point3Value
 
 
 class TireConfig(BaseModel):
@@ -56,43 +55,29 @@ class CamberShimConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True, extra="forbid")
 
-    shim_face_point_a: PydanticPoint3
-    shim_face_point_b: PydanticPoint3
-    shim_face_normal: PydanticDirection3
+    shim_face_point_a: Point3Value
+    shim_face_point_b: Point3Value
+    shim_face_normal: Direction3Value
     design_thickness: float
     setup_thickness: float
 
     @model_validator(mode="after")
     def validate_face_definition(self) -> "CamberShimConfig":
-        from kinematics.core.primitives.constants import EPS_GEOMETRIC
-
         datum_separation = (self.shim_face_point_b - self.shim_face_point_a).norm()
         if datum_separation < EPS_GEOMETRIC:
             raise ValueError("shim_face_point_a and shim_face_point_b must be distinct")
         return self
 
 
-class SuspensionConfig(BaseModel):
-    """Configuration shared by the currently supported corner models."""
+class VehicleConfig(BaseModel):
+    """Vehicle-wide configuration shared across all axles."""
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True, extra="forbid")
 
-    steered: bool
-    wheel: WheelConfig
-    cg_position: PydanticPoint3
+    cg_position: Point3Value
     wheelbase: float
-    camber_shim: CamberShimConfig | None = None
-    upright_mounted_points: list[str] = Field(
-        default_factory=lambda: [
-            "axle_inboard",
-            "axle_outboard",
-            "pushrod_outboard",
-            "trackrod_outboard",
-        ]
-    )
-    axle_position: Literal["front", "rear"] | None = None
     front_brake_bias: float | None = None
-    driven_axle: Literal["front", "rear"] | None = None
+    driven_axle: AxlePosition | None = None
 
     @field_validator("front_brake_bias")
     @classmethod
@@ -101,3 +86,74 @@ class SuspensionConfig(BaseModel):
         if value is not None and not 0.0 <= value <= 1.0:
             raise ValueError(f"front_brake_bias must be in [0, 1], got {value}")
         return value
+
+
+class AntiRollConfig(BaseModel):
+    """Selected axle anti-roll mechanism."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: ArbType
+
+
+class HeaveLinkConfig(BaseModel):
+    """Selected axle heave-link mechanism."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: HeaveLinkType
+
+
+class SteeringConfig(BaseModel):
+    """Selected steering actuator for one axle."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: SteeringType
+
+
+class AxleConfig(BaseModel):
+    """Configuration and shared mechanisms owned by one axle."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True, extra="forbid")
+
+    axle_position: AxlePosition
+    steering: SteeringConfig
+    wheel: WheelConfig
+    anti_roll: AntiRollConfig
+    heave_link: HeaveLinkConfig
+
+
+class CornerConfig(BaseModel):
+    """Side-local setup applied to one corner model."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True, extra="forbid")
+
+    camber_shim: CamberShimConfig | None = None
+
+
+class SuspensionConfig(VehicleConfig):
+    """Complete runtime configuration for one built corner suspension."""
+
+    steering: SteeringConfig
+    wheel: WheelConfig
+    axle_position: AxlePosition | None = None
+    camber_shim: CamberShimConfig | None = None
+
+    @classmethod
+    def from_parts(
+        cls,
+        vehicle: VehicleConfig,
+        axle: AxleConfig,
+        corner: CornerConfig,
+    ) -> "SuspensionConfig":
+        """Combine shared vehicle data with one corner's local setup."""
+        return cls.model_validate(
+            {
+                **vehicle.model_dump(),
+                "steering": axle.steering,
+                "wheel": axle.wheel,
+                "axle_position": axle.axle_position,
+                "camber_shim": corner.camber_shim,
+            }
+        )

@@ -13,9 +13,10 @@ PUBLIC_CORE_MODULES = {
     "kinematics.core.assembly",
     "kinematics.core.elements",
     "kinematics.core.export",
+    "kinematics.core.input",
     "kinematics.core.metrics.main",
     "kinematics.core.metrics.registry",
-    "kinematics.core.primitives.enums",
+    "kinematics.core.enums",
     "kinematics.core.primitives.geometry",
     "kinematics.core.primitives.point_ref",
     "kinematics.core.presentation",
@@ -37,6 +38,7 @@ def test_core_import_succeeds_without_cli_dependencies() -> None:
         f"for name in ({blocked_modules},): sys.modules[name] = None\n"
         "import kinematics\n"
         "import kinematics.core\n"
+        "from kinematics.core.input import build_suspension, build_sweep\n"
     )
 
     result = subprocess.run(
@@ -53,7 +55,7 @@ def test_core_import_succeeds_without_cli_dependencies() -> None:
 def test_low_level_core_import_does_not_load_solver_stack() -> None:
     script = (
         "import sys\n"
-        "from kinematics.core.primitives.enums import Axis\n"
+        "from kinematics.core.enums import Axis\n"
         "assert Axis.X.value == 0\n"
         "assert 'scipy' not in sys.modules\n"
         "assert 'kinematics.core.analysis' not in sys.modules\n"
@@ -137,6 +139,26 @@ def test_core_does_not_import_cli_only_dependencies() -> None:
                 forbidden_imports.append(
                     f"{path.relative_to(PROJECT_ROOT)}:{getattr(node, 'lineno', 0)}"
                 )
+
+    assert forbidden_imports == []
+
+
+def test_schema_and_build_modules_do_not_hide_dispatch_imports() -> None:
+    forbidden_imports: list[str] = []
+    for relative_path in (
+        "schema/geometry.py",
+        "suspensions/build.py",
+    ):
+        path = CORE_PACKAGE / relative_path
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in tree.body:
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if any(
+                isinstance(child, (ast.Import, ast.ImportFrom))
+                for child in ast.walk(node)
+            ):
+                forbidden_imports.append(f"{relative_path}:{node.lineno}")
 
     assert forbidden_imports == []
 
