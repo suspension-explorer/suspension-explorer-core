@@ -200,14 +200,14 @@ def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpe
     derivatives: list[tuple[DerivativeMetricDefinition, Scope]] = []
     if suspension.is_axle:
         axle = cast("AxleSuspension", suspension)
-        representative = next(iter(axle.corners.values()))
-        derivatives.extend(
-            (definition, Scope.CORNER)
-            for definition in (
-                *get_default_corner_derivative_metrics(representative),
-                *representative.derivative_metric_definitions(),
+        for corner in axle.corners.values():
+            derivatives.extend(
+                (definition, Scope.CORNER)
+                for definition in (
+                    *get_default_corner_derivative_metrics(corner),
+                    *corner.derivative_metric_definitions(),
+                )
             )
-        )
         derivatives.extend(
             (definition, Scope.AXLE)
             for definition in axle.derivative_metric_definitions()

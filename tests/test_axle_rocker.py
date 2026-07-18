@@ -44,9 +44,10 @@ def _load_heave_axle(
             (test_data_dir / "axle_geometry_rocker.yaml").read_text(encoding="utf-8")
         ),
     )
-    data["heave_link"] = {"type": "rocker_to_rocker"}
+    axle_config = cast("dict[str, object]", data["axle_config"])
+    axle_config["heave_link"] = {"type": "rocker_to_rocker"}
     hardpoints = cast("dict[str, object]", data["hardpoints"])
-    points = cast("dict[str, object]", hardpoints["points"])
+    points = cast("dict[str, object]", hardpoints["left"])
     points["heave_link_rocker"] = {"x": 0, "y": 300, "z": 400}
     geometry_path = tmp_path / "axle_geometry_heave.yaml"
     geometry_path.write_text(yaml.safe_dump(data), encoding="utf-8")

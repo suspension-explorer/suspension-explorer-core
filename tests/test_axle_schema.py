@@ -10,6 +10,7 @@ from kinematics.core.enums import (
     ActuationType,
     ArbType,
     Axis,
+    AxlePosition,
     CornerSpringType,
     HeaveLinkType,
     PointID,
@@ -18,17 +19,18 @@ from kinematics.core.enums import (
     TargetPositionMode,
 )
 from kinematics.core.primitives.point_ref import Side
+from kinematics.core.schema.config import HeaveLinkConfig
 from kinematics.core.schema.geometry import (
-    AxleHardpointsSpec,
     DoubleWishboneAxleGeometrySpec,
-    HeaveLinkSpec,
+    DoubleWishboneGeometrySpec,
     parse_geometry_spec,
 )
 from kinematics.core.schema.sweep import SweepSpec, TargetSpec, build_sweep_config
+from kinematics.core.suspensions.build import build_suspension
 from kinematics.core.targeting import PointTargetAxis
 
 
-def test_mirrored_axle_geometry_parses_without_top_level_side(
+def test_axle_geometry_uses_left_corner_as_mirror_source(
     test_data_dir: Path,
 ) -> None:
     spec = parse_geometry_spec(
@@ -38,8 +40,13 @@ def test_mirrored_axle_geometry_parses_without_top_level_side(
     )
 
     assert isinstance(spec, DoubleWishboneAxleGeometrySpec)
-    assert spec.hardpoints.side is Side.LEFT
-    assert not spec.hardpoints.is_explicit
+    assert spec.hardpoints.right is None
+    assert spec.hardpoints.left[PointID.AXLE_OUTBOARD][Axis.Y] > 0.0
+    assert spec.vehicle_config.wheelbase == pytest.approx(2500.0)
+    assert spec.axle_config.axle_position is AxlePosition.FRONT
+    assert spec.axle_config.steered is True
+    assert spec.axle_config.wheel.tire.section_width == pytest.approx(270.0)
+    assert spec.axle_config.left_setup.camber_shim is None
 
 
 def test_geometry_selectors_parse_as_enums_and_serialize_as_strings(
@@ -54,22 +61,22 @@ def test_geometry_selectors_parse_as_enums_and_serialize_as_strings(
 
     assert spec.type is SuspensionType.DOUBLE_WISHBONE
     assert spec.scope is Scope.AXLE
-    assert spec.actuation.type is ActuationType.PUSHROD_ROCKER
-    assert spec.spring.type is CornerSpringType.TORSION_BAR
-    assert spec.anti_roll.type is ArbType.U_BAR
-    assert spec.heave_link.type is HeaveLinkType.NONE
+    assert spec.axle_config.actuation.type is ActuationType.PUSHROD_ROCKER
+    assert spec.axle_config.spring.type is CornerSpringType.TORSION_BAR
+    assert spec.axle_config.anti_roll.type is ArbType.U_BAR
+    assert spec.axle_config.heave_link.type is HeaveLinkType.NONE
 
     assert spec.model_dump(mode="json", include={"type", "scope"}) == {
         "type": "double_wishbone",
         "scope": "axle",
     }
-    assert spec.actuation.model_dump(mode="json") == {
+    assert spec.axle_config.actuation.model_dump(mode="json") == {
         "type": "pushrod_rocker",
         "mount": "upright",
     }
-    assert spec.spring.model_dump(mode="json") == {"type": "torsion_bar"}
-    assert spec.anti_roll.model_dump(mode="json") == {"type": "u_bar"}
-    assert spec.heave_link.model_dump(mode="json") == {"type": "none"}
+    assert spec.axle_config.spring.model_dump(mode="json") == {"type": "torsion_bar"}
+    assert spec.axle_config.anti_roll.model_dump(mode="json") == {"type": "u_bar"}
+    assert spec.axle_config.heave_link.model_dump(mode="json") == {"type": "none"}
 
 
 def test_t_bar_selector_round_trips_without_heave_link(test_data_dir: Path) -> None:
@@ -83,9 +90,9 @@ def test_t_bar_selector_round_trips_without_heave_link(test_data_dir: Path) -> N
     )
     assert isinstance(spec, DoubleWishboneAxleGeometrySpec)
 
-    assert spec.anti_roll.type is ArbType.T_BAR
-    assert spec.heave_link.type is HeaveLinkType.NONE
-    assert spec.anti_roll.model_dump(mode="json") == {"type": "t_bar"}
+    assert spec.axle_config.anti_roll.type is ArbType.T_BAR
+    assert spec.axle_config.heave_link.type is HeaveLinkType.NONE
+    assert spec.axle_config.anti_roll.model_dump(mode="json") == {"type": "t_bar"}
 
 
 def test_t_bar_requires_pushrod_rocker_actuation(test_data_dir: Path) -> None:
@@ -93,15 +100,15 @@ def test_t_bar_requires_pushrod_rocker_actuation(test_data_dir: Path) -> None:
         test_data_dir / "axle_geometry_t_bar.yaml",
         "Geometry",
     )
-    data["actuation"]["type"] = "direct"
-    data["spring"]["type"] = "none"
+    data["axle_config"]["actuation"]["type"] = "direct"
+    data["axle_config"]["spring"]["type"] = "none"
 
     with pytest.raises(ValueError, match="requires pushrod-rocker actuation"):
         parse_geometry_spec(parse_geometry_data(data))
 
 
 def test_rocker_to_rocker_heave_link_selector_round_trips() -> None:
-    spec = HeaveLinkSpec.model_validate({"type": "rocker_to_rocker"})
+    spec = HeaveLinkConfig.model_validate({"type": "rocker_to_rocker"})
 
     assert spec.type is HeaveLinkType.ROCKER_TO_ROCKER
     assert spec.model_dump(mode="json") == {"type": "rocker_to_rocker"}
@@ -142,24 +149,99 @@ def test_core_schema_does_not_parse_serialized_enum_names() -> None:
         )
 
 
-def test_explicit_axle_geometry_requires_both_sides() -> None:
-    with pytest.raises(ValueError, match="require both 'left' and 'right'"):
-        AxleHardpointsSpec.model_validate({"left": {}})
+def test_axle_geometry_requires_left_corner(test_data_dir: Path) -> None:
+    data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
+    data["hardpoints"].pop("left")
+
+    with pytest.raises(ValueError, match="left"):
+        parse_geometry_spec(parse_geometry_data(data))
 
 
-def test_mirror_flag_is_not_part_of_axle_schema() -> None:
+def test_axle_geometry_requires_front_or_rear_position(test_data_dir: Path) -> None:
+    data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
+    data["axle_config"].pop("axle_position")
+
+    with pytest.raises(ValueError, match="axle_position"):
+        parse_geometry_spec(parse_geometry_data(data))
+
+
+@pytest.mark.parametrize("axle_position", ["front", "rear"])
+def test_axle_position_accepts_front_or_rear(
+    test_data_dir: Path,
+    axle_position: str,
+) -> None:
+    data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
+    data["axle_config"]["axle_position"] = axle_position
+
+    spec = parse_geometry_spec(parse_geometry_data(data))
+
+    assert isinstance(spec, DoubleWishboneAxleGeometrySpec)
+    assert spec.axle_config.axle_position is AxlePosition(axle_position)
+    suspension = build_suspension(spec)
+    assert suspension.config is not None
+    assert suspension.config.axle_position is AxlePosition(axle_position)
+
+
+def test_right_setup_requires_explicit_right_hardpoints(
+    test_data_dir: Path,
+) -> None:
+    data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
+    data["axle_config"]["right_setup"] = {}
+
+    with pytest.raises(ValueError, match="right_setup requires explicit"):
+        parse_geometry_spec(parse_geometry_data(data))
+
+
+def test_axle_config_rejects_per_side_mechanisms(test_data_dir: Path) -> None:
+    data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
+    axle_config = data["axle_config"]
+    axle_config["left"] = {
+        "actuation": axle_config.pop("actuation"),
+        "spring": axle_config.pop("spring"),
+    }
+
     with pytest.raises(ValueError, match="Extra inputs are not permitted"):
-        AxleHardpointsSpec.model_validate({"points": {}, "mirror": True})
+        parse_geometry_spec(parse_geometry_data(data))
 
 
-def test_mirror_source_must_be_a_physical_side() -> None:
-    with pytest.raises(ValueError, match="Mirror source side"):
-        AxleHardpointsSpec.model_validate({"points": {}, "side": Side.CENTER})
+def test_legacy_axle_hardpoints_layout_is_rejected(test_data_dir: Path) -> None:
+    data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
+    left = data["hardpoints"].pop("left")
+    data["hardpoints"] = {"side": "left", "points": left}
+
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        parse_geometry_spec(parse_geometry_data(data))
 
 
-def test_mirror_source_side_is_required() -> None:
-    with pytest.raises(ValueError, match="require 'side'"):
-        AxleHardpointsSpec.model_validate({"points": {}})
+def test_standalone_corner_defaults_to_left(test_data_dir: Path) -> None:
+    data = _read_yaml_mapping(test_data_dir / "geometry.yaml", "Geometry")
+    data.pop("side")
+
+    spec = parse_geometry_spec(parse_geometry_data(data))
+
+    assert isinstance(spec, DoubleWishboneGeometrySpec)
+    assert spec.side is Side.LEFT
+
+
+def test_axle_left_corner_rejects_right_handed_geometry(test_data_dir: Path) -> None:
+    data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
+    data["hardpoints"]["left"]["axle_outboard"]["y"] = -950.0
+    spec = parse_geometry_spec(parse_geometry_data(data))
+
+    with pytest.raises(ValueError, match="Side 'left' requires AXLE_OUTBOARD Y > 0"):
+        build_suspension(spec)
+
+
+@pytest.mark.parametrize("field", ["steered", "wheel"])
+def test_axle_scoped_configuration_is_not_vehicle_configuration(
+    test_data_dir: Path,
+    field: str,
+) -> None:
+    data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
+    data["vehicle_config"][field] = data["axle_config"].pop(field)
+
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        parse_geometry_spec(parse_geometry_data(data))
 
 
 def test_side_target_requires_suspension_context() -> None:

@@ -8,7 +8,7 @@ from typing import Any, TypeVar, cast
 
 import numpy as np
 
-from kinematics.core.enums import Axis, PointID, TargetPositionMode, Units
+from kinematics.core.enums import Axis, PointID, Scope, TargetPositionMode, Units
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import Side
 
@@ -70,13 +70,20 @@ def _parse_hardpoint_map(points: object) -> object:
     }
 
 
-def _parse_geometry_config(config: object) -> None:
+def _parse_vehicle_config(config: object) -> None:
+    """Convert vehicle-wide serialized geometry values in place."""
     if not isinstance(config, dict):
         return
     config_data = cast("dict[str, object]", config)
     if "cg_position" in config_data:
         config_data["cg_position"] = parse_point3(config_data["cg_position"])
 
+
+def _parse_corner_config(config: object) -> None:
+    """Convert side-local serialized geometry values in place."""
+    if not isinstance(config, dict):
+        return
+    config_data = cast("dict[str, object]", config)
     camber_shim = config_data.get("camber_shim")
     if not isinstance(camber_shim, dict):
         return
@@ -90,6 +97,31 @@ def _parse_geometry_config(config: object) -> None:
         )
 
 
+def _parse_suspension_config(config: object) -> None:
+    """Convert a standalone corner's combined configuration in place."""
+    _parse_vehicle_config(config)
+    _parse_corner_config(config)
+
+
+def _parse_axle_config(config: object) -> None:
+    """Convert side-local values nested in an axle configuration in place."""
+    if not isinstance(config, dict):
+        return
+    config_data = cast("dict[str, object]", config)
+    _parse_corner_config(config_data.get("left_setup"))
+    _parse_corner_config(config_data.get("right_setup"))
+
+
+def _parse_axle_hardpoints(hardpoints: object) -> object:
+    """Convert left, right, and shared axle hardpoint maps."""
+    if not isinstance(hardpoints, dict):
+        return hardpoints
+    hardpoint_data = cast("dict[str, object]", hardpoints)
+    return {
+        field: _parse_hardpoint_map(points) for field, points in hardpoint_data.items()
+    }
+
+
 def parse_geometry_data(data: dict[str, Any]) -> dict[str, Any]:
     """Build domain objects from canonical values in geometry YAML data."""
     parsed = deepcopy(data)
@@ -98,24 +130,18 @@ def parse_geometry_data(data: dict[str, Any]) -> dict[str, Any]:
         parsed["units"] = parse_enum(Units, parsed["units"])
     if "side" in parsed:
         parsed["side"] = parse_enum(Side, parsed["side"])
-    _parse_geometry_config(parsed.get("config"))
-
-    hardpoints = parsed.get("hardpoints")
-    if not isinstance(hardpoints, dict):
+    raw_scope = parsed.get("scope", "corner")
+    is_axle = raw_scope is Scope.AXLE or raw_scope == Scope.AXLE.value
+    if is_axle:
+        _parse_vehicle_config(parsed.get("vehicle_config"))
+        _parse_axle_config(parsed.get("axle_config"))
+        if "hardpoints" in parsed:
+            parsed["hardpoints"] = _parse_axle_hardpoints(parsed["hardpoints"])
         return parsed
 
-    is_axle_layout = any(
-        field in hardpoints for field in ("points", "left", "right", "center")
-    )
-    if not is_axle_layout:
-        parsed["hardpoints"] = _parse_hardpoint_map(hardpoints)
-        return parsed
-
-    if "side" in hardpoints:
-        hardpoints["side"] = parse_enum(Side, hardpoints["side"])
-    for field in ("points", "left", "right", "center"):
-        if field in hardpoints:
-            hardpoints[field] = _parse_hardpoint_map(hardpoints[field])
+    _parse_suspension_config(parsed.get("config"))
+    if "hardpoints" in parsed:
+        parsed["hardpoints"] = _parse_hardpoint_map(parsed["hardpoints"])
     return parsed
 
 

@@ -275,8 +275,10 @@ def analyze_evaluated_sweep(
             continue
         metric_keys = list(frame.metrics)
         locations = list(frame.corner_metrics)
-        if frame.corner_metrics:
-            corner_metric_keys = list(next(iter(frame.corner_metrics.values())))
+        for row in frame.corner_metrics.values():
+            for key in row:
+                if key not in corner_metric_keys:
+                    corner_metric_keys.append(key)
         break
 
     display_keys = corner_metric_keys + [

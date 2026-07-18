@@ -48,6 +48,17 @@ All notable changes to this project will be documented in this file.
 - Geometry parsing, validation, and construction now pass through
   `kinematics.core.schema` and the suspension registry; filesystem access remains
   in `kinematics.cli.io`.
+- Axle inputs now group data under `vehicle_config`, `axle_config`, and
+  `hardpoints`. The axle configuration includes a required front/rear position,
+  wheel and tire data, steering state, shared mechanisms, and one symmetric
+  actuation and spring selection. Hardpoints contain a mandatory left map plus
+  optional explicit right and shared center maps.
+- Omitting right hardpoints and side-local setup mirrors the complete left geometry
+  and setup. Explicit right hardpoints support asymmetric geometry, while optional
+  `right_setup` supports a different camber-shim setup.
+- Geometry configuration is separated by ownership: vehicle inputs hold CG,
+  wheelbase, brake bias, and driven axle; axle inputs hold steering, wheel/tire,
+  and axle-position data; corner inputs hold side-local setup such as camber shims.
 - Metric identities are lowercase, unit-free `snake_case`. Units use typed metadata and are written in CSV metadata or Parquet field metadata.
 - Corner locations remain structural in the analysis API and are rendered as `_left` and `_right` suffixes only in flat result files.
 - Steering metrics use `roadwheel_angle`; the concrete steering input is `trackrod_inboard`, and wheel-center longitudinal motion is expressed directly as `deriv_wheel_center_x_wrt_hub_z`.
@@ -66,6 +77,8 @@ All notable changes to this project will be documented in this file.
 - Removed legacy geometry construction and loader paths in favor of validated schemas, `build_suspension()`, `load_geometry()`, and `load_sweep()`.
 - Renamed `SweepFile` to `SweepSpec`.
 - Removed units from metric keys and changed flat axle corner columns from side prefixes to side suffixes, for example `left_camber_deg` to `camber_left`.
+- Replaced the flat axle configuration and corner blocks with explicit
+  `vehicle_config`, `axle_config`, and `hardpoints` ownership blocks.
 
 ## [0.3.0] - 2026-04-09
 

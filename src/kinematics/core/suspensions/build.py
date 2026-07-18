@@ -1,7 +1,7 @@
 """Build composed suspensions from validated geometry specifications."""
 
 from collections.abc import Mapping
-from typing import cast
+from typing import TypeVar, cast
 
 from kinematics.core.elements import RockerPickup, RockerPickupType
 from kinematics.core.enums import (
@@ -14,8 +14,8 @@ from kinematics.core.enums import (
     ShimType,
 )
 from kinematics.core.primitives.geometry import Direction3, Point3
-from kinematics.core.primitives.point_ref import PointKey, Side
-from kinematics.core.schema.config import SuspensionConfig
+from kinematics.core.primitives.point_ref import Side
+from kinematics.core.schema.config import CornerConfig, SuspensionConfig
 from kinematics.core.schema.geometry import (
     ActuationSpec,
     AxleGeometrySpecBase,
@@ -60,9 +60,7 @@ def build_suspension(spec: GeometrySpecBase) -> Suspension:
 
     definition = get_suspension_definition(spec.type, spec.scope)
     if definition is None:
-        raise TypeError(
-            f"Unsupported geometry spec type: {spec.type} ({spec.scope})"
-        )
+        raise TypeError(f"Unsupported geometry spec type: {spec.type} ({spec.scope})")
     if not isinstance(spec, definition.spec_type):
         raise TypeError(
             f"Type '{spec.type}' requires {definition.spec_type.__name__}, "
@@ -74,12 +72,21 @@ def build_suspension(spec: GeometrySpecBase) -> Suspension:
 def build_double_wishbone(spec: GeometrySpecBase) -> Suspension:
     """Build one double-wishbone corner with composed mechanisms."""
     typed = cast(DoubleWishboneGeometrySpec, spec)
+    return _build_double_wishbone_corner(typed)
+
+
+def _build_double_wishbone_corner(
+    spec: DoubleWishboneGeometrySpec,
+    external_pickups: tuple[RockerPickup, ...] = (),
+) -> DoubleWishboneSuspension:
+    """Build one double-wishbone corner with optional axle attachments."""
     actuation = build_actuation(
-        typed.actuation,
+        spec.actuation,
         mount_bodies=DoubleWishboneSuspension.MOUNT_BODIES,
+        external_pickups=external_pickups,
     )
-    spring = build_corner_spring(typed.spring)
-    return _build_corner(typed, actuation, spring)
+    spring = build_corner_spring(spec.spring)
+    return _build_corner(spec, actuation, spring)
 
 
 def build_macpherson(spec: GeometrySpecBase) -> Suspension:
@@ -102,54 +109,53 @@ def build_macpherson(spec: GeometrySpecBase) -> Suspension:
 def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
     """Build a double-wishbone axle with composed shared hardware."""
     typed = cast(DoubleWishboneAxleGeometrySpec, spec)
+    corner_setups = _double_wishbone_axle_corner_setups(typed)
     side_points = _build_axle_side_points(typed.hardpoints)
     external_pickups, droplink_points = _extract_axle_pickups(typed, side_points)
 
-    actuation = build_actuation(
-        typed.actuation,
-        mount_bodies=DoubleWishboneSuspension.MOUNT_BODIES,
-        external_pickups=external_pickups,
-    )
-    spring = build_corner_spring(typed.spring)
-    _check_shim_support(typed.config, DoubleWishboneSuspension)
-
-    side_configs = _mirror_side_configs(typed.config)
-    corners: dict[Side, CornerSuspension] = {
-        side: DoubleWishboneSuspension(
+    corners: dict[Side, CornerSuspension] = {}
+    for side in (Side.LEFT, Side.RIGHT):
+        corner_setup = corner_setups[side]
+        corner_geometry = DoubleWishboneGeometrySpec(
             name=f"{typed.name}_{side.name.lower()}",
             version=typed.version,
             units=typed.units,
             side=side,
-            hardpoints=cast("dict[PointKey, Point3]", points),
-            config=side_configs[side],
-            actuation=actuation,
-            spring=spring,
+            config=SuspensionConfig.from_parts(
+                typed.vehicle_config,
+                typed.axle_config,
+                corner_setup,
+            ),
+            actuation=typed.axle_config.actuation,
+            spring=typed.axle_config.spring,
+            hardpoints=side_points[side],
         )
-        for side, points in side_points.items()
-    }
+        corners[side] = _build_double_wishbone_corner(
+            corner_geometry,
+            external_pickups,
+        )
     return _assemble_axle(typed, corners, droplink_points)
 
 
 def build_macpherson_axle(spec: GeometrySpecBase) -> Suspension:
-    """Build a MacPherson axle from two mirrored or explicit strut corners."""
+    """Build a MacPherson axle from a left and optional explicit right corner."""
     typed = cast(MacPhersonAxleGeometrySpec, spec)
     side_points = _build_axle_side_points(typed.hardpoints)
-    # The schema rejects shared hardware that needs a rocker corner, so a
-    # MacPherson axle has no pickup points to extract.
-    _check_shim_support(typed.config, MacPhersonSuspension)
-
-    side_configs = _mirror_side_configs(typed.config)
-    corners: dict[Side, CornerSuspension] = {
-        side: MacPhersonSuspension(
+    corners: dict[Side, CornerSuspension] = {}
+    for side in (Side.LEFT, Side.RIGHT):
+        corner_geometry = MacPhersonGeometrySpec(
             name=f"{typed.name}_{side.name.lower()}",
             version=typed.version,
             units=typed.units,
             side=side,
-            hardpoints=cast("dict[PointKey, Point3]", points),
-            config=side_configs[side],
+            config=SuspensionConfig.from_parts(
+                typed.vehicle_config,
+                typed.axle_config,
+                CornerConfig(),
+            ),
+            hardpoints=side_points[side],
         )
-        for side, points in side_points.items()
-    }
+        corners[side] = cast(CornerSuspension, build_macpherson(corner_geometry))
     return _assemble_axle(typed, corners, {})
 
 
@@ -160,25 +166,25 @@ def _extract_axle_pickups(
     """Collect rocker pickups and droplink points for shared hardware."""
     external_pickups: list[RockerPickup] = []
     droplink_points: dict[Side, Point3] = {}
-    if spec.anti_roll.type in (ArbType.U_BAR, ArbType.T_BAR):
+    if spec.axle_config.anti_roll.type in (ArbType.U_BAR, ArbType.T_BAR):
         external_pickups.append(
             RockerPickup(PointID.DROPLINK_ROCKER, RockerPickupType.DROPLINK)
         )
         droplink_point_id = (
             PointID.DROPLINK_U_BAR
-            if spec.anti_roll.type is ArbType.U_BAR
+            if spec.axle_config.anti_roll.type is ArbType.U_BAR
             else PointID.DROPLINK_T_BAR
         )
         for side, points in side_points.items():
             try:
                 droplink_points[side] = points.pop(droplink_point_id)
             except KeyError as error:
-                mechanism_name = spec.anti_roll.type.value.replace("_", "-")
+                mechanism_name = spec.axle_config.anti_roll.type.value.replace("_", "-")
                 raise ValueError(
                     f"{side.name} {mechanism_name} requires {droplink_point_id.name}"
                 ) from error
 
-    if spec.heave_link.type is HeaveLinkType.ROCKER_TO_ROCKER:
+    if spec.axle_config.heave_link.type is HeaveLinkType.ROCKER_TO_ROCKER:
         external_pickups.append(
             RockerPickup(
                 PointID.HEAVE_LINK_ROCKER,
@@ -186,14 +192,6 @@ def _extract_axle_pickups(
             )
         )
     return tuple(external_pickups), droplink_points
-
-
-def _mirror_side_configs(config: SuspensionConfig) -> dict[Side, SuspensionConfig]:
-    """Return the authored left config and its mirrored right counterpart."""
-    return {
-        Side.LEFT: config,
-        Side.RIGHT: _mirror_config(config),
-    }
 
 
 def _assemble_axle(
@@ -209,7 +207,7 @@ def _assemble_axle(
         units=spec.units,
         side=Side.CENTER,
         hardpoints={},
-        config=spec.config,
+        config=corners[Side.LEFT].config,
         corners=corners,
         anti_roll=build_anti_roll(spec, droplink_points),
         heave_link=build_heave_link(spec),
@@ -261,32 +259,32 @@ def build_anti_roll(
 ) -> AxleArb:
     """Build the selected shared anti-roll mechanism."""
     center_points = _copy_points(spec.hardpoints.center)
-    if spec.anti_roll.type is ArbType.NONE:
+    if spec.axle_config.anti_roll.type is ArbType.NONE:
         if center_points:
             raise ValueError(
                 "Axle without anti-roll hardware does not accept center points"
             )
         return ArbNone()
-    if spec.anti_roll.type is ArbType.U_BAR:
+    if spec.axle_config.anti_roll.type is ArbType.U_BAR:
         return ArbUBar(
             center_points=center_points,
             droplink_points=droplink_points,
         )
-    if spec.anti_roll.type is ArbType.T_BAR:
+    if spec.axle_config.anti_roll.type is ArbType.T_BAR:
         return ArbTBar(
             center_points=center_points,
             droplink_points=droplink_points,
         )
-    raise TypeError(f"Unsupported anti-roll type: {spec.anti_roll.type}")
+    raise TypeError(f"Unsupported anti-roll type: {spec.axle_config.anti_roll.type}")
 
 
 def build_heave_link(spec: AxleGeometrySpecBase) -> AxleHeaveLink:
     """Build the selected shared heave mechanism."""
-    if spec.heave_link.type is HeaveLinkType.NONE:
+    if spec.axle_config.heave_link.type is HeaveLinkType.NONE:
         return HeaveLinkNone()
-    if spec.heave_link.type is HeaveLinkType.ROCKER_TO_ROCKER:
+    if spec.axle_config.heave_link.type is HeaveLinkType.ROCKER_TO_ROCKER:
         return HeaveLinkRockerToRocker()
-    raise TypeError(f"Unsupported heave-link type: {spec.heave_link.type}")
+    raise TypeError(f"Unsupported heave-link type: {spec.axle_config.heave_link.type}")
 
 
 def _build_corner(
@@ -312,35 +310,27 @@ def _build_corner(
 
 
 def _build_axle_side_points(
-    blocks: AxleHardpointsSpec,
+    hardpoints: AxleHardpointsSpec,
 ) -> dict[Side, dict[PointID, Point3]]:
-    """Copy explicit axle corners or mirror one explicitly sided source."""
-    if blocks.is_explicit:
-        if blocks.left is None or blocks.right is None:
-            raise ValueError(
-                "Explicit axle hardpoints require both left and right point maps."
-            )
-        side_points = {
-            Side.LEFT: _copy_points(blocks.left),
-            Side.RIGHT: _copy_points(blocks.right),
-        }
+    """Return the authored left hardpoints and explicit or mirrored right map."""
+    left = _copy_points(hardpoints.left)
+    right = hardpoints.right
+    if right is None:
+        right_points = _mirror_hardpoints(left)
     else:
-        if blocks.points is None:
-            raise ValueError("Mirrored axle hardpoints require a source point map.")
-        source_side = blocks.side
-        if source_side not in (Side.LEFT, Side.RIGHT):
-            raise ValueError(
-                "Mirrored axle hardpoints require a left or right source side."
-            )
-        source_points = _copy_points(blocks.points)
-        other_side = Side.RIGHT if source_side is Side.LEFT else Side.LEFT
-        side_points = {
-            source_side: source_points,
-            other_side: _mirror_hardpoints(source_points),
-        }
-    for side, points in side_points.items():
-        _validate_side_signs(points, side)
-    return side_points
+        right_points = _copy_points(right)
+    return {Side.LEFT: left, Side.RIGHT: right_points}
+
+
+def _double_wishbone_axle_corner_setups(
+    spec: DoubleWishboneAxleGeometrySpec,
+) -> dict[Side, CornerConfig]:
+    """Return the authored left setup and explicit or mirrored right setup."""
+    left = spec.axle_config.left_setup
+    right = spec.axle_config.right_setup
+    if right is None:
+        right = _mirror_corner_config(left)
+    return {Side.LEFT: left, Side.RIGHT: right}
 
 
 def _copy_points(points: dict[PointID, Point3]) -> dict[PointID, Point3]:
@@ -379,8 +369,11 @@ def _mirror_hardpoints(
     return {point: _mirror_point(position) for point, position in hardpoints.items()}
 
 
-def _mirror_config(config: SuspensionConfig) -> SuspensionConfig:
-    """Mirror side-dependent camber-shim geometry for the right corner."""
+C = TypeVar("C", bound=CornerConfig)
+
+
+def _mirror_corner_config(config: C) -> C:
+    """Mirror side-dependent setup geometry for the right corner."""
     if config.camber_shim is None:
         return config
     shim = config.camber_shim

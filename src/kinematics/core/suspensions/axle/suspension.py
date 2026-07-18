@@ -1,9 +1,10 @@
 """Generic full axle composed from two explicit corner suspensions.
 
-There is one axle class for every corner architecture: the composer mirrors,
-side-qualifies, and couples whatever corners it is given, and reads the
+There is one axle class for every corner architecture: the composer
+side-qualifies and couples the two built corners it is given, and reads the
 corner role hooks for anything architecture-specific (currently the rack
-coupling). New locating architectures add a corner class, not an axle class.
+coupling). Input mirroring belongs to the builder. New locating architectures
+add a corner class, not an axle class.
 """
 
 from __future__ import annotations
