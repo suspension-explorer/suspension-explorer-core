@@ -49,11 +49,15 @@ from kinematics.core.primitives.vector_utils.geometric import (
     rotate_point_about_axis,
 )
 from kinematics.core.state import SuspensionState
-from kinematics.core.suspensions.config.shims import solve_camber_shim_assembly
+from kinematics.core.suspensions.config.shims import (
+    CamberShimRockerCoupling,
+    solve_camber_shim_assembly,
+)
 from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.suspensions.corner.mechanisms import (
     Actuation,
     ActuationDirect,
+    ActuationPushrodRocker,
     CornerSpring,
     CornerSpringNone,
 )
@@ -503,12 +507,30 @@ class DoubleWishboneSuspension(CornerSuspension):
         1. Writes the solved UBJ position back (it moves along the upper wishbone arc).
         2. Rotates upright attachments about the fixed LBJ using the solved
            upright-body rotation.
-        3. Leaves all chassis-mounted points unchanged.
+        3. Rotates the rocker group by the solved angle when the pushrod is
+           upright-mounted.
+        4. Leaves all chassis-mounted points unchanged.
         """
         if self.config is None or self.config.camber_shim is None:
             return
 
         shim_config = self.config.camber_shim
+        rocker_actuation = (
+            self.actuation
+            if isinstance(self.actuation, ActuationPushrodRocker)
+            and self.actuation.moving_pickup_body == self.UPRIGHT_BODY
+            else None
+        )
+        rocker_coupling = (
+            CamberShimRockerCoupling(
+                axis_a=PointID.ROCKER_AXIS_A,
+                axis_b=PointID.ROCKER_AXIS_B,
+                pushrod_inboard=PointID.PUSHROD_INBOARD,
+                pushrod_outboard=PointID.PUSHROD_OUTBOARD,
+            )
+            if rocker_actuation is not None
+            else None
+        )
 
         # Shim face geometry is read directly from shim_config by the solver,
         # so the positions dict only needs the kinematic hardpoints.
@@ -518,6 +540,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             shim_config=shim_config,
             heading_link_inboard=self.wheel_heading_link.inboard_point,
             heading_link_outboard=self.wheel_heading_link.outboard_point,
+            rocker_coupling=rocker_coupling,
         )
 
         # Write the solved UBJ position back. The upper wishbone arc constraint
@@ -539,6 +562,13 @@ class DoubleWishboneSuspension(CornerSuspension):
                         rot_axis,
                         assembly_solution.upright_body_rot_angle_rad,
                     )
+
+        if rocker_actuation is not None:
+            rocker_actuation.rotate_rocker_group(
+                positions,
+                assembly_solution.rocker_angle_rad,
+                self.spring.rocker_mounted_points,
+            )
 
     def upright_attachment_points(self) -> tuple[PointID, ...]:
         """Return points carried by the upright during camber-shim setup."""

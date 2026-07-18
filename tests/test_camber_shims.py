@@ -8,6 +8,7 @@ upright-mounted points.
 """
 
 import numpy as np
+import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.enums import Axis, PointID
@@ -16,7 +17,10 @@ from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.vector_utils.geometric import rotate_point_about_axis
 from kinematics.core.schema.config import CamberShimConfig
 from kinematics.core.suspensions.base import Suspension
-from kinematics.core.suspensions.config.shims import solve_camber_shim_assembly
+from kinematics.core.suspensions.config.shims import (
+    CamberShimRockerCoupling,
+    solve_camber_shim_assembly,
+)
 from kinematics.core.suspensions.corner import DoubleWishboneSuspension
 
 # ---------------------------------------------------------------------------
@@ -245,6 +249,61 @@ def test_trackrod_length_preserved():
         f"Track-rod length changed: design={design_length:.4f}, "
         f"solved={solved_length:.4f}"
     )
+
+
+def test_upright_pushrod_adds_solved_rocker_rotation():
+    """The shim solve must preserve an upright-mounted pushrod's design length."""
+    positions, shim_config = make_simple_geometry(
+        design_thickness=30.0, setup_thickness=40.0
+    )
+    positions.update(
+        {
+            PointID.ROCKER_AXIS_A: Point3([100.0, 340.0, 450.0]),
+            PointID.ROCKER_AXIS_B: Point3([-100.0, 340.0, 450.0]),
+            PointID.PUSHROD_INBOARD: Point3([0.0, 340.0, 500.0]),
+            PointID.PUSHROD_OUTBOARD: Point3([0.0, 870.0, 240.0]),
+        }
+    )
+    rocker_coupling = CamberShimRockerCoupling(
+        axis_a=PointID.ROCKER_AXIS_A,
+        axis_b=PointID.ROCKER_AXIS_B,
+        pushrod_inboard=PointID.PUSHROD_INBOARD,
+        pushrod_outboard=PointID.PUSHROD_OUTBOARD,
+    )
+    design_length = float(
+        np.linalg.norm(
+            positions[PointID.PUSHROD_OUTBOARD] - positions[PointID.PUSHROD_INBOARD]
+        )
+    )
+
+    sol = solve_camber_shim_assembly(
+        positions,
+        shim_config,
+        PointID.TRACKROD_INBOARD,
+        PointID.TRACKROD_OUTBOARD,
+        rocker_coupling=rocker_coupling,
+    )
+
+    solved_pushrod_inboard = rotate_point_about_axis(
+        positions[PointID.PUSHROD_INBOARD],
+        positions[PointID.ROCKER_AXIS_A],
+        (
+            positions[PointID.ROCKER_AXIS_B] - positions[PointID.ROCKER_AXIS_A]
+        ).normalize(),
+        sol.rocker_angle_rad,
+    )
+    solved_pushrod_outboard = rotate_point_about_axis(
+        positions[PointID.PUSHROD_OUTBOARD],
+        positions[PointID.LOWER_WISHBONE_OUTBOARD],
+        Direction3(sol.upright_body_rot_axis),
+        sol.upright_body_rot_angle_rad,
+    )
+    solved_length = float(
+        np.linalg.norm(solved_pushrod_outboard - solved_pushrod_inboard)
+    )
+
+    assert abs(sol.rocker_angle_rad) > 1e-6
+    assert solved_length == pytest.approx(design_length, abs=1e-4)
 
 
 def test_ubj_moves_for_nonzero_shim_change():

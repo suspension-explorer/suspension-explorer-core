@@ -6,11 +6,14 @@ The camber block rotates about the upper ball joint, the upright body rotates
 about the lower ball joint, and the two shim faces remain separated by the
 requested setup thickness.
 
-The solver uses a 7 variable overdetermined least-squares formulation:
+The base solver uses a 7 variable overdetermined least-squares formulation:
     - wishbone_angle (1): Rotation angle of UBJ about the upper wishbone axis.
       UBJ position is computed exactly on the wishbone arc by construction.
     - camber_block_rotvec (3): Rotation vector for the camber block about UBJ.
     - upright_body_rotvec (3): Rotation vector for the upright body about LBJ.
+
+An upright-mounted pushrod adds one variable:
+    - rocker_angle (1): Rotation of the complete rocker group about its fixed axis.
 
 With 10 residuals:
     - 3 scalar datum A closure
@@ -21,6 +24,7 @@ With 10 residuals:
       (camber block and upright body face normals must match).
     - 1 scalar wheel-heading link length (preserves its design length through
       shim change).
+    - 1 optional scalar pushrod length for upright-mounted pushrod actuation.
 """
 
 from __future__ import annotations
@@ -39,6 +43,27 @@ from kinematics.core.solver import SolverConfig, solve_least_squares_problem
 
 CAMBER_SHIM_N_VARS = 7
 CAMBER_SHIM_N_RESIDUALS = 10
+
+
+@dataclass(frozen=True)
+class CamberShimRockerCoupling:
+    """Point roles needed to include an upright-mounted pushrod in the solve."""
+
+    axis_a: PointID
+    axis_b: PointID
+    pushrod_inboard: PointID
+    pushrod_outboard: PointID
+
+
+@dataclass(frozen=True)
+class CamberShimRockerContext:
+    """Fixed rocker and pushrod geometry used by the assembly residual."""
+
+    axis_point: np.ndarray
+    axis_direction: np.ndarray
+    axis_to_pushrod_inboard: np.ndarray
+    lbj_to_pushrod_outboard: np.ndarray
+    pushrod_length: float
 
 
 def _rotate_array_rodrigues(v: np.ndarray, rotvec: np.ndarray) -> np.ndarray:
@@ -68,6 +93,7 @@ class CamberShimAssemblySolution:
     upright_body_face_normal: np.ndarray
     upright_body_rot_axis: np.ndarray
     upright_body_rot_angle_rad: float
+    rocker_angle_rad: float
     constraint_residual_norm: float
 
 
@@ -94,6 +120,7 @@ class CamberShimAssemblyContext:
     lbj_to_upright_body_datum_a: np.ndarray
     lbj_to_upright_body_datum_b: np.ndarray
     lbj_to_heading_link_outboard: np.ndarray
+    rocker: CamberShimRockerContext | None = None
 
 
 def compute_camber_shim_assembly_residuals(
@@ -103,16 +130,18 @@ def compute_camber_shim_assembly_residuals(
     """
     Compute the residual vector for the local camber shim assembly solve.
 
-    Variables (7):
+    Base variables (7):
         x[0]   - Wishbone angle: rotation of UBJ about the upper wishbone axis.
         x[1:4] - Camber block rotation vector about UBJ.
         x[4:7] - Upright body rotation vector about LBJ.
+        x[7]   - Optional rocker angle for an upright-mounted pushrod.
 
-    Residuals (10):
+    Base residuals (10):
         [0:3]  - Shim contact/datum A closure: p_lA - p_uA - t * n_u.
         [3:6]  - Shim contact/datum B closure: p_lB - p_uB - t * n_u.
         [6:9]  - Normal alignment: n_l - n_u.
         [9]    - Heading-link length: |outboard - inboard| - design_length.
+        [10]   - Optional pushrod length residual.
     """
     wishbone_angle = x[0]
     camber_block_rot_vec = x[1:4]
@@ -211,14 +240,32 @@ def compute_camber_shim_assembly_residuals(
         - assembly_context.heading_link_length
     )
 
-    return np.concatenate(
-        [
-            datum_a_closure_residual,
-            datum_b_closure_residual,
-            face_normal_alignment_residual,
-            np.array([heading_link_length_residual]),
-        ]
-    )
+    residuals = [
+        datum_a_closure_residual,
+        datum_b_closure_residual,
+        face_normal_alignment_residual,
+        np.array([heading_link_length_residual]),
+    ]
+    rocker = assembly_context.rocker
+    if rocker is not None:
+        rocker_angle = x[CAMBER_SHIM_N_VARS]
+        solved_pushrod_inboard = rocker.axis_point + _rotate_array_rodrigues(
+            rocker.axis_to_pushrod_inboard,
+            rocker.axis_direction * rocker_angle,
+        )
+        solved_pushrod_outboard = (
+            assembly_context.lbj_position
+            + _rotate_array_rodrigues(
+                rocker.lbj_to_pushrod_outboard,
+                upright_body_rot_vec,
+            )
+        )
+        pushrod_length_residual = (
+            np.linalg.norm(solved_pushrod_outboard - solved_pushrod_inboard)
+            - rocker.pushrod_length
+        )
+        residuals.append(np.array([pushrod_length_residual]))
+    return np.concatenate(residuals)
 
 
 # Kinematic hardpoints required to run the shim solve. Shim face geometry
@@ -239,6 +286,7 @@ def solve_camber_shim_assembly(
     shim_config: CamberShimConfig,
     heading_link_inboard: PointID,
     heading_link_outboard: PointID,
+    rocker_coupling: CamberShimRockerCoupling | None = None,
     solver_config: SolverConfig = SolverConfig(),
 ) -> CamberShimAssemblySolution:
     """
@@ -255,6 +303,7 @@ def solve_camber_shim_assembly(
         shim_config: Shim thickness configuration (design and setup thicknesses).
         heading_link_inboard: Inboard pickup for the installed heading link.
         heading_link_outboard: Upright pickup for the installed heading link.
+        rocker_coupling: Optional upright-mounted pushrod and rocker point roles.
         solver_config: Solver configuration (tolerances, verbosity, etc.).
 
     Returns:
@@ -269,6 +318,13 @@ def solve_camber_shim_assembly(
         heading_link_inboard,
         heading_link_outboard,
     }
+    if rocker_coupling is not None:
+        required_points |= {
+            rocker_coupling.axis_a,
+            rocker_coupling.axis_b,
+            rocker_coupling.pushrod_inboard,
+            rocker_coupling.pushrod_outboard,
+        }
     missing = required_points - positions.keys()
     if missing:
         names = sorted(p.name for p in missing)
@@ -296,6 +352,7 @@ def solve_camber_shim_assembly(
             upright_body_face_normal=design_face_normal.copy(),
             upright_body_rot_axis=np.array([0.0, 0.0, 1.0]),
             upright_body_rot_angle_rad=0.0,
+            rocker_angle_rad=0.0,
             constraint_residual_norm=0.0,
         )
 
@@ -346,6 +403,22 @@ def solve_camber_shim_assembly(
     # Heading-link outboard vector from LBJ, which rotates with the upright body.
     lbj_to_heading_link_outboard = heading_link_outboard_design - lower_ball_joint
 
+    rocker_context: CamberShimRockerContext | None = None
+    if rocker_coupling is not None:
+        rocker_axis_point = positions[rocker_coupling.axis_a].data
+        rocker_axis_direction = extract_array(
+            normalize_vector(positions[rocker_coupling.axis_b].data - rocker_axis_point)
+        )
+        pushrod_inboard = positions[rocker_coupling.pushrod_inboard].data
+        pushrod_outboard = positions[rocker_coupling.pushrod_outboard].data
+        rocker_context = CamberShimRockerContext(
+            axis_point=rocker_axis_point,
+            axis_direction=rocker_axis_direction,
+            axis_to_pushrod_inboard=pushrod_inboard - rocker_axis_point,
+            lbj_to_pushrod_outboard=pushrod_outboard - lower_ball_joint,
+            pushrod_length=float(np.linalg.norm(pushrod_outboard - pushrod_inboard)),
+        )
+
     assembly_context = CamberShimAssemblyContext(
         lbj_position=lower_ball_joint,
         uwb_inboard_front_position=upper_wishbone_pickup_front,
@@ -360,28 +433,40 @@ def solve_camber_shim_assembly(
         lbj_to_heading_link_outboard=lbj_to_heading_link_outboard,
         shim_setup_thickness=shim_config.setup_thickness,
         heading_link_length=heading_link_length,
+        rocker=rocker_context,
     )
 
     # Seed from design condition: zero wishbone angle, zero rotations.
-    x_0 = np.zeros(CAMBER_SHIM_N_VARS)
+    rocker_variable_count = int(rocker_context is not None)
+    x_0 = np.zeros(CAMBER_SHIM_N_VARS + rocker_variable_count)
 
     result = solve_least_squares_problem(
         residual_function=compute_camber_shim_assembly_residuals,
         x_0=x_0,
         args=(assembly_context,),
         solver_config=solver_config,
-        n_residuals=CAMBER_SHIM_N_RESIDUALS,
+        n_residuals=CAMBER_SHIM_N_RESIDUALS + rocker_variable_count,
     )
 
     if not result.success:
         raise RuntimeError(
             f"Camber shim assembly solve failed to converge.\nMessage: {result.message}"
         )
+    max_residual = float(np.max(np.abs(result.fun)))
+    if max_residual > solver_config.residual_tolerance:
+        raise RuntimeError(
+            "Camber shim assembly solve did not satisfy its constraints: "
+            f"maximum residual {max_residual:.6g} exceeds tolerance "
+            f"{solver_config.residual_tolerance:.6g}."
+        )
 
     # Extract solution. Recover UBJ position from the solved wishbone angle.
     solved_wishbone_angle_rad = result.x[0]
     camber_block_rot_vec = result.x[1:4].copy()
     upright_body_rot_vec = result.x[4:7].copy()
+    rocker_angle_rad = (
+        float(result.x[CAMBER_SHIM_N_VARS]) if rocker_context is not None else 0.0
+    )
 
     solved_ubj_position = upper_wishbone_pickup_front + _rotate_array_rodrigues(
         upper_wishbone_pickup_front_to_ubj_design,
@@ -411,5 +496,6 @@ def solve_camber_shim_assembly(
         upright_body_face_normal=solved_upright_body_face_normal,
         upright_body_rot_axis=upright_body_rot_axis,
         upright_body_rot_angle_rad=upright_body_rot_angle_rad,
+        rocker_angle_rad=rocker_angle_rad,
         constraint_residual_norm=float(np.linalg.norm(result.fun)),
     )

@@ -11,6 +11,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Mapping, Sequence, cast, overload
 
+from kinematics.core.enums import PointID
 from kinematics.core.metrics.axle_metrics import append_axle_state_metrics
 from kinematics.core.metrics.catalog import (
     get_default_corner_derivative_metrics,
@@ -19,7 +20,7 @@ from kinematics.core.metrics.catalog import (
 from kinematics.core.metrics.context import MetricContext
 from kinematics.core.metrics.derivatives import evaluate_derivative_metrics
 from kinematics.core.metrics.registry import flat_key
-from kinematics.core.primitives.point_ref import PointRef, Side
+from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.sensitivity import TangentField
 from kinematics.core.state import SuspensionState
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
     from kinematics.core.suspensions.axle import AxleSuspension
     from kinematics.core.suspensions.base import Suspension
     from kinematics.core.suspensions.corner.base import CornerSuspension
+    from kinematics.core.targeting import ActuatorDOF
 
 
 MetricRow = OrderedDict[str, float | None]
@@ -75,7 +77,9 @@ def compute_metrics_for_axle_state(
             corner_state,
             corner,
             corner_config,
-            _corner_tangents(tangents, side) if tangents else None,
+            _corner_tangents(tangents, side, axle.actuator_dofs())
+            if tangents
+            else None,
         )
         corner_rows[side] = side_row
 
@@ -98,17 +102,19 @@ def compute_metrics_for_axle_state(
 def _corner_tangents(
     tangents: "Sequence[TangentField]",
     side: Side,
+    actuator_dofs: "Sequence[ActuatorDOF]",
 ) -> list["TangentField"]:
-    """Strip one side's PointRef qualifiers from axle tangent fields."""
+    """Project axle tangents into one corner, including shared actuators."""
     result: list[TangentField] = []
     for tangent in tangents:
         target_key = tangent.target.point_id
-        if not isinstance(target_key, PointRef) or target_key.side is not side:
+        local_target = _local_tangent_target(target_key, side, actuator_dofs)
+        if local_target is None:
             continue
         result.append(
             TangentField(
                 target_index=tangent.target_index,
-                target=tangent.target._replace(point_id=target_key.point),
+                target=tangent.target._replace(point_id=local_target),
                 velocities={
                     key.point: velocity
                     for key, velocity in tangent.velocities.items()
@@ -117,6 +123,23 @@ def _corner_tangents(
             )
         )
     return result
+
+
+def _local_tangent_target(
+    target_key: PointKey,
+    side: Side,
+    actuator_dofs: "Sequence[ActuatorDOF]",
+) -> PointID | None:
+    """Resolve a side-local target or its equivalent shared actuator point."""
+    if isinstance(target_key, PointRef) and target_key.side is side:
+        return target_key.point
+    for actuator in actuator_dofs:
+        if target_key not in actuator.point_keys:
+            continue
+        for point_id in actuator.point_keys:
+            if isinstance(point_id, PointRef) and point_id.side is side:
+                return point_id.point
+    return None
 
 
 def compute_metrics_for_state(

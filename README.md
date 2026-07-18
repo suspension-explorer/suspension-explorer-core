@@ -59,7 +59,14 @@ steering:
 Rack geometries therefore provide `trackrod_inboard` and `trackrod_outboard`;
 non-steered geometries provide `toe_link_inboard` and `toe_link_outboard`.
 Steering is selected explicitly and is not inferred from whether the axle is
-front or rear.
+front or rear. Every sweep of a rack-steered model must include exactly one
+`trackrod_inboard` target along Y. Use a relative target fixed at zero to hold
+the rack at its design position during a pure bump or roll sweep.
+
+When axle hardpoints contain an explicit asymmetric `right` map, side-local
+setup is also explicit: if `left_setup` contains a camber shim, `right_setup`
+must define the corresponding right-side geometry. Omitting both setup blocks
+remains valid for an axle without side-local setup.
 
 ## Installation
 

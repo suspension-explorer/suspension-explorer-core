@@ -29,7 +29,7 @@ from kinematics.core.solver import (
 )
 from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.base import Suspension
-from kinematics.core.targeting import SweepConfig
+from kinematics.core.targeting import SweepConfig, validate_sweep_controls
 
 
 def solve_sweep(
@@ -51,6 +51,7 @@ def solve_sweep(
         Tuple containing the list of solved suspension states and corresponding
         solver information for each step in the sweep.
     """
+    validate_sweep_controls(sweep_config, suspension.actuator_dofs())
     derived_spec = suspension.derived_spec()
     derived_manager = DerivedPointsManager(derived_spec)
 

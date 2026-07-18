@@ -66,6 +66,14 @@ All notable changes to this project will be documented in this file.
   Double-wishbone and MacPherson corners use a rack-driven track rod when
   steered and a chassis-fixed toe link when non-steered. Selecting `none`
   removes rack coupling, presentation, metrics, derivatives, and sweep targeting.
+- Rack-steered sweeps now require exactly one explicit rack target. The shared
+  rack is one actuator coordinate across both axle corners, so rack-displacement
+  derivatives are emitted for both sides regardless of which pickup is targeted.
+- Explicit asymmetric right hardpoints now require explicit `right_setup` when
+  the left corner contains side-local setup geometry.
+- The camber-shim assembly solve includes rocker rotation when the pushrod is
+  upright-mounted, preserving pushrod length and rotating every rocker-mounted
+  pickup together.
 - Metric identities are lowercase, unit-free `snake_case`. Units use typed metadata and are written in CSV metadata or Parquet field metadata.
 - Corner locations remain structural in the analysis API and are rendered as `_left` and `_right` suffixes only in flat result files.
 - Axle topology metrics now retain typed `Side` locations until analysis or export,

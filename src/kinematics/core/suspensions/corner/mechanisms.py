@@ -37,6 +37,7 @@ from kinematics.core.primitives.point_ref import PointKey, Side
 from kinematics.core.primitives.vector_utils.geometric import (
     compute_point_point_distance,
     compute_point_to_line_distance,
+    rotate_point_about_axis,
     signed_angle_about_axis,
 )
 from kinematics.core.state import SuspensionState
@@ -243,6 +244,26 @@ class ActuationPushrodRocker:
             if radius <= EPS_GEOMETRIC:
                 raise ValueError(f"{point.name} must not lie on the rocker axis")
 
+    def rotate_rocker_group(
+        self,
+        positions: dict[PointKey, Point3],
+        angle_rad: float,
+        additional_rocker_points: tuple[PointID, ...] = (),
+    ) -> None:
+        """Rotate all rocker-mounted pickups by a solved setup angle."""
+        axis_a = positions[PointID.ROCKER_AXIS_A]
+        axis_b = positions[PointID.ROCKER_AXIS_B]
+        axis = (axis_b - axis_a).normalize()
+        for point in dict.fromkeys(
+            (*self.rocker_mounted_point_ids, *additional_rocker_points)
+        ):
+            positions[point] = rotate_point_about_axis(
+                positions[point],
+                axis_a,
+                axis,
+                angle_rad,
+            )
+
     def constraints(self, initial: SuspensionState) -> list[Constraint]:
         """Build fixed pushrod and rigid rocker pickup constraints."""
         positions = initial.positions
@@ -419,6 +440,7 @@ class CornerSpringNone:
     required_points: frozenset[PointID] = frozenset()
     free_points: tuple[PointID, ...] = ()
     output_points: tuple[PointID, ...] = ()
+    rocker_mounted_points: tuple[PointID, ...] = ()
     damper_points: tuple[PointID, PointID] | None = None
 
     def validate(self, actuation: Actuation) -> None:
@@ -470,6 +492,7 @@ class CornerSpringCoilover:
         PointID.STRUT_TOP,
         PointID.STRUT_BOTTOM,
     )
+    rocker_mounted_points: tuple[PointID, ...] = (PointID.STRUT_BOTTOM,)
     damper_points: tuple[PointID, PointID] = (
         PointID.STRUT_TOP,
         PointID.STRUT_BOTTOM,
@@ -545,6 +568,7 @@ class CornerSpringTorsionBar:
     required_points: frozenset[PointID] = frozenset()
     free_points: tuple[PointID, ...] = ()
     output_points: tuple[PointID, ...] = ()
+    rocker_mounted_points: tuple[PointID, ...] = ()
     damper_points: tuple[PointID, PointID] | None = None
 
     def validate(self, actuation: Actuation) -> None:

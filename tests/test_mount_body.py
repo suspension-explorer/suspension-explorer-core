@@ -41,6 +41,7 @@ from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
 DATA_DIR = Path(__file__).parent / "data"
 STRUT_GEOMETRY = DATA_DIR / "corner_strut_geometry.yaml"
 ROCKER_GEOMETRY = DATA_DIR / "corner_rocker_geometry.yaml"
+ROCKER_COILOVER_GEOMETRY = DATA_DIR / "corner_strut_rocker_geometry.yaml"
 
 
 def _build_corner_with_mount(
@@ -232,6 +233,68 @@ class TestMountedSpringSolveInvariants:
             assert movement > 0.1
         else:
             assert movement == pytest.approx(0.0, abs=TEST_TOLERANCE)
+
+    def test_camber_shim_preserves_upright_mounted_pushrod_length(self):
+        design = _build_corner_with_mount(ROCKER_GEOMETRY, MountBody.UPRIGHT)
+        shimmed = _build_corner_with_mount(
+            ROCKER_GEOMETRY,
+            MountBody.UPRIGHT,
+            shim_setup_thickness=40.0,
+        )
+        design_positions = design.initial_state().positions
+        shimmed_positions = shimmed.initial_state().positions
+
+        design_length = _distance(
+            design_positions,
+            PointID.PUSHROD_OUTBOARD,
+            PointID.PUSHROD_INBOARD,
+        )
+        shimmed_length = _distance(
+            shimmed_positions,
+            PointID.PUSHROD_OUTBOARD,
+            PointID.PUSHROD_INBOARD,
+        )
+
+        assert shimmed_length == pytest.approx(
+            design_length,
+            abs=TEST_TOLERANCE,
+        )
+        assert (
+            _distance_between(
+                design_positions[PointID.PUSHROD_INBOARD],
+                shimmed_positions[PointID.PUSHROD_INBOARD],
+            )
+            > TEST_TOLERANCE
+        )
+
+    def test_camber_shim_reindexes_all_rocker_mounted_pickups(self):
+        design = _build_corner_with_mount(
+            ROCKER_COILOVER_GEOMETRY,
+            MountBody.UPRIGHT,
+        )
+        shimmed = _build_corner_with_mount(
+            ROCKER_COILOVER_GEOMETRY,
+            MountBody.UPRIGHT,
+            shim_setup_thickness=40.0,
+        )
+        design_positions = design.initial_state().positions
+        shimmed_positions = shimmed.initial_state().positions
+
+        design_pickup_distance = _distance(
+            design_positions,
+            PointID.PUSHROD_INBOARD,
+            PointID.STRUT_BOTTOM,
+        )
+        shimmed_pickup_distance = _distance(
+            shimmed_positions,
+            PointID.PUSHROD_INBOARD,
+            PointID.STRUT_BOTTOM,
+        )
+
+        assert shimmed_pickup_distance == pytest.approx(
+            design_pickup_distance,
+            abs=TEST_TOLERANCE,
+        )
 
     def test_upright_mounted_coilover_holds_rigid_to_upright_body(self):
         suspension = _build_corner_with_mount(STRUT_GEOMETRY, MountBody.UPRIGHT)

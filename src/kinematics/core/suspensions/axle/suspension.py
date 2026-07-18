@@ -46,6 +46,7 @@ from kinematics.core.suspensions.axle.mechanisms import (
 )
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.suspensions.corner.base import CornerSuspension
+from kinematics.core.targeting import ActuatorDOF, WorldAxisSystem
 
 if TYPE_CHECKING:
     from kinematics.core.diagnostics import DiagnosticIssue
@@ -125,6 +126,22 @@ class AxleSuspension(Suspension):
         if left is None or right is None:
             return None
         return (left, right)
+
+    def actuator_dofs(self) -> tuple[ActuatorDOF, ...]:
+        """Require one shared rack coordinate for a steered axle."""
+        rack = self.rack_attachment_points()
+        if rack is None:
+            return ()
+        return (
+            ActuatorDOF(
+                name="steering rack",
+                point_keys=(
+                    PointRef(Side.LEFT, rack[0]),
+                    PointRef(Side.RIGHT, rack[1]),
+                ),
+                direction=WorldAxisSystem.Y,
+            ),
+        )
 
     def initial_state(self) -> SuspensionState:
         """Combine both corner states under side-qualified point keys."""

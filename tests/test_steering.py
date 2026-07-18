@@ -8,12 +8,13 @@ import yaml
 
 from kinematics.core.constraints import PointOnLineConstraint
 from kinematics.core.elements import ElementType, RackElement, RigidLinkElement
-from kinematics.core.enums import PointID, SteeringType
+from kinematics.core.enums import Axis, PointID, SteeringType
 from kinematics.core.input import build_suspension, build_sweep
 from kinematics.core.metrics.main import AxleMetricRows
 from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
+from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
 
 
 def _read_yaml_mapping(path: Path) -> dict[str, Any]:
@@ -64,6 +65,100 @@ def test_rack_steering_uses_track_rods_not_toe_links(
         isinstance(element, RigidLinkElement) and element.type is ElementType.TOE_LINK
         for element in axle.elements()
     )
+
+
+@pytest.mark.parametrize(
+    "geometry_name",
+    ["axle_geometry.yaml", "macpherson_axle_geometry.yaml"],
+)
+def test_steered_axle_requires_rack_control_target(
+    test_data_dir: Path,
+    geometry_name: str,
+) -> None:
+    axle = build_suspension(_read_yaml_mapping(test_data_dir / geometry_name))
+
+    with pytest.raises(ValueError, match="target for actuator 'steering rack'"):
+        build_sweep(
+            {
+                "version": 1,
+                "targets": [
+                    {
+                        "point": "wheel_center",
+                        "side": side,
+                        "direction": {"axis": "z"},
+                        "values": [0.0, 10.0],
+                    }
+                    for side in ("left", "right")
+                ],
+            },
+            axle,
+        )
+
+
+def test_solve_revalidates_required_rack_control(test_data_dir: Path) -> None:
+    axle = build_suspension(_read_yaml_mapping(test_data_dir / "axle_geometry.yaml"))
+    sweep = SweepConfig(
+        [
+            [
+                PointTarget(
+                    PointRef(side, PointID.WHEEL_CENTER),
+                    PointTargetAxis(Axis.Z),
+                    0.0,
+                )
+            ]
+            for side in (Side.LEFT, Side.RIGHT)
+        ]
+    )
+
+    with pytest.raises(ValueError, match="target for actuator 'steering rack'"):
+        solve_sweep(axle, sweep)
+
+
+@pytest.mark.parametrize(
+    "geometry_name",
+    ["axle_geometry.yaml", "macpherson_axle_geometry.yaml"],
+)
+@pytest.mark.parametrize("rack_side", ["left", "right"])
+def test_shared_rack_target_emits_derivatives_for_both_corners(
+    test_data_dir: Path,
+    geometry_name: str,
+    rack_side: str,
+) -> None:
+    axle = build_suspension(_read_yaml_mapping(test_data_dir / geometry_name))
+    sweep = build_sweep(
+        {
+            "version": 1,
+            "targets": [
+                *[
+                    {
+                        "point": "wheel_center",
+                        "side": side,
+                        "direction": {"axis": "z"},
+                        "values": [0.0],
+                    }
+                    for side in ("left", "right")
+                ],
+                {
+                    "point": "trackrod_inboard",
+                    "side": rack_side,
+                    "direction": {"axis": "y"},
+                    "values": [0.0],
+                },
+            ],
+        },
+        axle,
+    )
+
+    states, _ = solve_sweep(axle, sweep)
+    metrics = compute_sweep_metrics(axle, sweep, states)
+
+    assert metrics.derivative_error is None
+    row = metrics.rows[0]
+    assert isinstance(row, AxleMetricRows)
+    for side in (Side.LEFT, Side.RIGHT):
+        assert (
+            row.corners[side]["deriv_roadwheel_angle_wrt_rack_displacement"] is not None
+        )
 
 
 def test_steering_type_requires_matching_heading_link_hardpoints(

@@ -169,10 +169,19 @@ class DoubleWishboneAxleGeometrySpec(AxleGeometrySpecBase):
 
     @model_validator(mode="after")
     def check_right_setup(self) -> "DoubleWishboneAxleGeometrySpec":
-        """Require explicit right hardpoints when right-side setup is authored."""
+        """Keep explicit asymmetric geometry and side-local setup paired."""
         if self.axle_config.right_setup is not None and self.hardpoints.right is None:
             raise ValueError(
                 "axle_config.right_setup requires explicit hardpoints.right"
+            )
+        if (
+            self.hardpoints.right is not None
+            and self.axle_config.left_setup.camber_shim is not None
+            and self.axle_config.right_setup is None
+        ):
+            raise ValueError(
+                "Explicit hardpoints.right requires axle_config.right_setup when "
+                "axle_config.left_setup contains side-local setup"
             )
         return self
 

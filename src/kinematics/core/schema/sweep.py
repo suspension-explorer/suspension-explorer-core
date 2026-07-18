@@ -22,6 +22,7 @@ from kinematics.core.targeting import (
     PointTargetVector,
     SweepConfig,
     WorldAxisSystem,
+    validate_sweep_controls,
 )
 
 if TYPE_CHECKING:
@@ -189,4 +190,7 @@ def build_sweep_config(
                 for value in values
             ]
         )
-    return SweepConfig(dimensions)
+    sweep_config = SweepConfig(dimensions)
+    if suspension is not None:
+        validate_sweep_controls(sweep_config, suspension.actuator_dofs())
+    return sweep_config

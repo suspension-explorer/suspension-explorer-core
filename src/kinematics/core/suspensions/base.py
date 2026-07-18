@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.main import AxleMetricRows, MetricRow
     from kinematics.core.metrics.registry import MetricSpec
     from kinematics.core.sensitivity import TangentField
+    from kinematics.core.targeting import ActuatorDOF
 
 
 @dataclass
@@ -237,6 +238,10 @@ class Suspension(ABC):
                 "is a single corner and does not accept a side."
             )
         return point
+
+    def actuator_dofs(self) -> "tuple[ActuatorDOF, ...]":
+        """Return physical actuator coordinates that every sweep must control."""
+        return ()
 
     def assembly(self) -> SuspensionAssembly:
         """Return the validated point and element composition."""

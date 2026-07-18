@@ -220,6 +220,25 @@ def test_right_setup_requires_explicit_right_hardpoints(
         parse_geometry_spec(data)
 
 
+def test_explicit_right_hardpoints_require_explicit_side_local_setup(
+    test_data_dir: Path,
+) -> None:
+    data = _read_yaml_mapping(
+        test_data_dir / "axle_geometry_explicit.yaml",
+        "Geometry",
+    )
+    corner_data = _read_yaml_mapping(test_data_dir / "geometry.yaml", "Geometry")
+    data["axle_config"]["left_setup"] = {
+        "camber_shim": corner_data["config"]["camber_shim"]
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="hardpoints.right requires axle_config.right_setup",
+    ):
+        parse_geometry_spec(data)
+
+
 def test_axle_config_rejects_per_side_mechanisms(test_data_dir: Path) -> None:
     data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
     axle_config = data["axle_config"]
