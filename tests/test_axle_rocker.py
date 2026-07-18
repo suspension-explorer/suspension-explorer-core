@@ -16,6 +16,7 @@ from kinematics.core.elements import (
 )
 from kinematics.core.enums import PointID
 from kinematics.core.metrics.main import AxleMetricRows
+from kinematics.core.primitives.constants import EPS_GEOMETRIC
 from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.suspensions.axle import (
     ArbUBar,
@@ -37,6 +38,7 @@ def rocker_axle(test_data_dir: Path) -> AxleSuspension:
 def _load_heave_axle(
     tmp_path: Path,
     test_data_dir: Path,
+    pickup_y_mm: float = 300.0,
 ) -> AxleSuspension:
     data = cast(
         "dict[str, object]",
@@ -48,7 +50,7 @@ def _load_heave_axle(
     axle_config["heave_link"] = {"type": "rocker_to_rocker"}
     hardpoints = cast("dict[str, object]", data["hardpoints"])
     points = cast("dict[str, object]", hardpoints["left"])
-    points["heave_link_rocker"] = {"x": 0, "y": 300, "z": 400}
+    points["heave_link_rocker"] = {"x": 0, "y": pickup_y_mm, "z": 400}
     geometry_path = tmp_path / "axle_geometry_heave.yaml"
     geometry_path.write_text(yaml.safe_dump(data), encoding="utf-8")
 
@@ -57,6 +59,19 @@ def _load_heave_axle(
     assert isinstance(suspension.anti_roll, ArbUBar)
     assert isinstance(suspension.heave_link, HeaveLinkRockerToRocker)
     return suspension
+
+
+@pytest.mark.parametrize("pickup_y_mm", [0.0, EPS_GEOMETRIC / 4.0])
+def test_heave_link_rejects_undefined_design_distance(
+    tmp_path: Path,
+    test_data_dir: Path,
+    pickup_y_mm: float,
+) -> None:
+    with pytest.raises(
+        ValueError,
+        match="heave-link pickups must be separated in the design state",
+    ):
+        _load_heave_axle(tmp_path, test_data_dir, pickup_y_mm)
 
 
 def test_arb_points_are_owned_by_axle(

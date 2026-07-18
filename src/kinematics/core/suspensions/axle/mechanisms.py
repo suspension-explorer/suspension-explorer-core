@@ -882,13 +882,21 @@ class HeaveLinkRockerToRocker:
     """Variable-length link between left and right rocker pickups."""
 
     def validate(self, axle: AxleSuspension) -> None:
-        """Require a moving heave-link pickup on both corners."""
+        """Require distinct moving heave-link pickups in the design state."""
         for side, corner in axle.corners.items():
             if PointID.HEAVE_LINK_ROCKER not in corner.free_points():
                 raise ValueError(
                     f"{side.name} corner does not expose HEAVE_LINK_ROCKER "
                     "as a moving pickup"
                 )
+
+        left = axle.corners[Side.LEFT].initial_state().get(PointID.HEAVE_LINK_ROCKER)
+        right = axle.corners[Side.RIGHT].initial_state().get(PointID.HEAVE_LINK_ROCKER)
+        if compute_point_point_distance(left, right) <= EPS_GEOMETRIC:
+            raise ValueError(
+                "Rocker-to-rocker heave-link pickups must be separated in the "
+                "design state"
+            )
 
     def derivative_metric_definitions(
         self,

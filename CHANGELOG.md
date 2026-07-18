@@ -70,6 +70,8 @@ All notable changes to this project will be documented in this file.
 - Corner locations remain structural in the analysis API and are rendered as `_left` and `_right` suffixes only in flat result files.
 - Axle topology metrics now retain typed `Side` locations until analysis or export,
   and installed mechanisms contribute only the state metric metadata they emit.
+- Rocker-to-rocker heave links reject design-state pickup separations at or below
+  the geometric tolerance, where their length derivative would be undefined.
 - Steering metrics use `roadwheel_angle`; the concrete steering input is `trackrod_inboard`, and wheel-center longitudinal motion is expressed directly as `deriv_wheel_center_x_wrt_hub_z`.
 - Half-track is exported as the absolute `half_track` state metric rather than a design-condition delta.
 
