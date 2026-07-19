@@ -1,14 +1,10 @@
 [project]
 name = "kinematics"
-version = "0.3.0"
+version = "0.4.1"
 description = "Kinematics solver for suspension systems."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "numpy>=2.2.0",
-    "pydantic>=2.0",
-    "scipy>=1.14.1",
-]
+dependencies = ["numpy>=2.2.0", "pydantic>=2.0", "scipy>=1.14.1"]
 
 [project.scripts]
 kinematics = "kinematics.cli.bootstrap:main"
@@ -18,11 +14,7 @@ package = true
 
 [project.optional-dependencies]
 viz = ["matplotlib>=3.8"]
-cli = [
-    "pyarrow>=21.0.0",
-    "pyyaml>=6.0.2",
-    "typer>=0.19.2",
-]
+cli = ["pyarrow>=21.0.0", "pyyaml>=6.0.2", "typer>=0.19.2"]
 
 [dependency-groups]
 dev = [
@@ -72,8 +64,8 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["D103"]  # Test functions don't need docstrings
-"visualize_*.py" = ["D103"] # Script functions don't need docstrings
+"tests/**/*.py" = ["D103"]                 # Test functions don't need docstrings
+"visualize_*.py" = ["D103"]                # Script functions don't need docstrings
 "src/kinematics/**/__init__.py" = ["F401"] # Package imports define public APIs
 
 [tool.ruff.lint.pydocstyle]
