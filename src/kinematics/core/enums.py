@@ -62,7 +62,9 @@ class PointID(IntEnum):
     WHEEL_INBOARD = 19
     WHEEL_OUTBOARD = 20
 
-    CONTACT_PATCH_CENTER = 21
+    # Geometric support point where the wheel plane is tangent to the axle's
+    # shared, zero-grade road plane.
+    WHEEL_PLANE_ROAD_TANGENT = 21
 
     # Outboard camber shim geometry. Datum points A and B lie on the design
     # mid-thickness plane; the face normal is perpendicular to that plane.

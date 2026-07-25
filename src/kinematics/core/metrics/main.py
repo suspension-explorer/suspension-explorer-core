@@ -70,9 +70,9 @@ def compute_metrics_for_axle_state(
     """Compute structural per-corner rows followed by axle-level metrics."""
     axle_row: MetricRow = OrderedDict()
     corner_rows: dict[Side, MetricRow] = {}
-    ground = AxleGroundLine.from_contact_patches(
-        state.get(PointRef(Side.LEFT, PointID.CONTACT_PATCH_CENTER)),
-        state.get(PointRef(Side.RIGHT, PointID.CONTACT_PATCH_CENTER)),
+    ground = AxleGroundLine.from_wheel_plane_road_tangents(
+        state.get(PointRef(Side.LEFT, PointID.WHEEL_PLANE_ROAD_TANGENT)),
+        state.get(PointRef(Side.RIGHT, PointID.WHEEL_PLANE_ROAD_TANGENT)),
     )
     for side in (Side.LEFT, Side.RIGHT):
         corner = axle.corners[side]
@@ -166,7 +166,7 @@ def compute_metrics_for_state(
         tangents: Optional solution-manifold tangents. Derivative columns are
             appended only when these are supplied.
         axle_ground: Optional shared axle ground line. Standalone corner
-            callers omit this and use their contact patch as the local datum.
+            callers omit this and use their wheel-plane road tangent as the local datum.
 
     Returns:
         An ordered mapping of metric column names to values. Values are

@@ -1,4 +1,4 @@
-"""Tests for the axle-level ground-line primitive."""
+"""Tests for the axle-level road-line primitive."""
 
 from __future__ import annotations
 
@@ -15,7 +15,9 @@ from kinematics.core.primitives.geometry import Point3
 def _line(
     left: tuple[float, float, float], right: tuple[float, float, float]
 ) -> AxleGroundLine:
-    ground_line = AxleGroundLine.from_contact_patches(Point3(left), Point3(right))
+    ground_line = AxleGroundLine.from_wheel_plane_road_tangents(
+        Point3(left), Point3(right)
+    )
     assert ground_line is not None
     return ground_line
 
@@ -34,7 +36,7 @@ def test_flat_ground_line_has_upward_normal_and_expected_height():
     assert ground_line.plane_normal == pytest.approx((0.0, 0.0, 1.0))
 
 
-def test_signed_roll_is_positive_when_left_contact_patch_is_higher():
+def test_signed_roll_is_positive_when_left_road_tangent_is_higher():
     ground_line = _line((0.0, 500.0, 100.0), (0.0, -500.0, 0.0))
 
     assert ground_line.angle_deg == pytest.approx(np.degrees(np.arctan(0.1)))
@@ -62,9 +64,9 @@ def test_equal_z_translation_preserves_orientation_and_shifts_offset():
 def test_argument_order_and_x_coordinates_do_not_change_line():
     left = Point3((9999.0, 500.0, 100.0))
     right = Point3((-9999.0, -500.0, 0.0))
-    ordered = AxleGroundLine.from_contact_patches(left, right)
-    reversed_order = AxleGroundLine.from_contact_patches(right, left)
-    changed_x = AxleGroundLine.from_contact_patches(
+    ordered = AxleGroundLine.from_wheel_plane_road_tangents(left, right)
+    reversed_order = AxleGroundLine.from_wheel_plane_road_tangents(right, left)
+    changed_x = AxleGroundLine.from_wheel_plane_road_tangents(
         Point3((-1.0, 500.0, 100.0)), Point3((1.0, -500.0, 0.0))
     )
 
@@ -73,10 +75,10 @@ def test_argument_order_and_x_coordinates_do_not_change_line():
     assert changed_x == ordered
 
 
-def test_line_equation_contains_both_contact_patches_and_distance_is_signed():
+def test_line_equation_contains_both_road_tangents_and_distance_is_signed():
     left = Point3((0.0, 500.0, 100.0))
     right = Point3((0.0, -500.0, 0.0))
-    ground_line = AxleGroundLine.from_contact_patches(left, right)
+    ground_line = AxleGroundLine.from_wheel_plane_road_tangents(left, right)
     assert ground_line is not None
 
     assert ground_line.signed_distance_yz(left) == pytest.approx(0.0)
@@ -86,7 +88,7 @@ def test_line_equation_contains_both_contact_patches_and_distance_is_signed():
 
 
 def test_factory_rejects_collapsed_lateral_track_despite_height_difference():
-    ground_line = AxleGroundLine.from_contact_patches(
+    ground_line = AxleGroundLine.from_wheel_plane_road_tangents(
         Point3((0.0, 0.0, 10.0)), Point3((0.0, 0.0, 0.0))
     )
 
@@ -108,8 +110,11 @@ def test_direct_vertical_line_has_no_z_at_value():
         ((0.0, 1.0, np.inf), (1.0, -1.0, 0.0)),
     ],
 )
-def test_degenerate_or_nonfinite_contact_patches_return_none(left, right):
-    assert AxleGroundLine.from_contact_patches(Point3(left), Point3(right)) is None
+def test_degenerate_or_nonfinite_road_tangents_return_none(left, right):
+    assert (
+        AxleGroundLine.from_wheel_plane_road_tangents(Point3(left), Point3(right))
+        is None
+    )
 
 
 def test_ground_line_is_immutable():

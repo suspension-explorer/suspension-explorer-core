@@ -155,6 +155,10 @@ def test_core_schema_accepts_enum_objects() -> None:
 
 def test_core_enum_parser_is_case_sensitive() -> None:
     assert parse_enum(PointID, "wheel_center") is PointID.WHEEL_CENTER
+    assert (
+        parse_enum(PointID, "wheel_plane_road_tangent")
+        is PointID.WHEEL_PLANE_ROAD_TANGENT
+    )
 
     with pytest.raises(ValueError, match="Invalid PointID"):
         parse_enum(PointID, "WHEEL_CENTER")

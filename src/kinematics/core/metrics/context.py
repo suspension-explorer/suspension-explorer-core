@@ -2,7 +2,7 @@
 Metric computation context.
 
 Provides a single per-state object that resolves and caches shared geometry
-needed by multiple metric functions (wheel axis, contact patch, ICs, etc.).
+needed by multiple metric functions (wheel axis, wheel-plane road tangent, ICs, etc.).
 """
 
 from __future__ import annotations
@@ -49,9 +49,9 @@ class MetricContext:
         return self.design_state.get(PointID.WHEEL_CENTER)
 
     @cached_property
-    def design_contact_patch_center(self) -> Point3:
-        """Contact-patch position at the design condition."""
-        return self.design_state.get(PointID.CONTACT_PATCH_CENTER)
+    def design_wheel_plane_road_tangent(self) -> Point3:
+        """Wheel-plane road-tangent position at the design condition."""
+        return self.design_state.get(PointID.WHEEL_PLANE_ROAD_TANGENT)
 
     @cached_property
     def side_view_ic(self) -> Point3 | None:
@@ -75,11 +75,9 @@ class MetricContext:
         return self.state.get(PointID.WHEEL_CENTER)
 
     @cached_property
-    def contact_patch_center(self) -> Point3:
-        """
-        Contact patch center position.
-        """
-        return self.state.get(PointID.CONTACT_PATCH_CENTER)
+    def wheel_plane_road_tangent(self) -> Point3:
+        """Current wheel-plane road-tangent position."""
+        return self.state.get(PointID.WHEEL_PLANE_ROAD_TANGENT)
 
     @cached_property
     def wheel_axis(self) -> Direction3:
@@ -113,15 +111,17 @@ class MetricContext:
         Ground-line Z-height in the chassis-fixed frame.
 
         For an axle solve, this evaluates the shared axle ground line at this
-        corner's contact-patch Y coordinate. Standalone corner solves retain
-        the legacy corner-local contact-patch Z datum. In either case, the
+        corner's wheel-plane road-tangent Y coordinate. Standalone corner solves
+        retain the local tangent Z datum with a +Z road normal. In either case, the
         chassis-fixed ground datum is not generally at Z=0.
         """
         if self.axle_ground is not None:
-            ground_z = self.axle_ground.z_at(float(self.contact_patch_center[Axis.Y]))
+            ground_z = self.axle_ground.z_at(
+                float(self.wheel_plane_road_tangent[Axis.Y])
+            )
             if ground_z is not None:
                 return ground_z
-        return float(self.contact_patch_center[Axis.Z])
+        return float(self.wheel_plane_road_tangent[Axis.Z])
 
     @cached_property
     def steering_axis_ground_intersection(self) -> Point3 | None:

@@ -35,12 +35,12 @@ def calculate_half_track(ctx: "MetricContext") -> float | None:
     """
     Half-track at this corner in mm.
 
-    Half-track is the lateral distance of the contact patch from the vehicle
-    centerline, i.e. the magnitude of the contact-patch Y.
+    Half-track is the lateral distance of the wheel-plane road tangent from the
+    vehicle centerline, i.e. the magnitude of its Y coordinate.
 
         half_track = |CP_y(current)|
     """
-    return abs(float(ctx.contact_patch_center[Axis.Y]))
+    return abs(float(ctx.wheel_plane_road_tangent[Axis.Y]))
 
 
 def calculate_damper_length(ctx: "MetricContext") -> float | None:

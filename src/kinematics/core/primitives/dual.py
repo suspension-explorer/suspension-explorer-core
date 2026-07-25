@@ -481,6 +481,36 @@ def sqrt(x: DualScalar | float) -> DualScalar | float:
 
 
 @overload
+def sin(x: DualScalar) -> DualScalar: ...
+
+
+@overload
+def sin(x: float) -> float: ...
+
+
+def sin(x: DualScalar | float) -> DualScalar | float:
+    """Dual-aware sine."""
+    if isinstance(x, DualScalar):
+        return DualScalar(math.sin(x.val), math.cos(x.val) * x.deriv)
+    return math.sin(x)
+
+
+@overload
+def cos(x: DualScalar) -> DualScalar: ...
+
+
+@overload
+def cos(x: float) -> float: ...
+
+
+def cos(x: DualScalar | float) -> DualScalar | float:
+    """Dual-aware cosine."""
+    if isinstance(x, DualScalar):
+        return DualScalar(math.cos(x.val), -math.sin(x.val) * x.deriv)
+    return math.cos(x)
+
+
+@overload
 def atan2(y: DualScalar, x: DualScalar | float) -> DualScalar: ...
 
 

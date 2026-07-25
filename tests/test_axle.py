@@ -158,9 +158,9 @@ def test_basic_axle_sweep_solves_and_emits_structural_metrics(
     assert midpoint.axle["ground_line_normal_y"] == pytest.approx(0.0, abs=1e-10)
     assert midpoint.axle["ground_line_normal_z"] == pytest.approx(1.0)
     assert midpoint.axle["ground_line_angle"] == pytest.approx(0.0, abs=1e-8)
-    ground = AxleGroundLine.from_contact_patches(
-        midpoint_state.get(PointRef(Side.LEFT, PointID.CONTACT_PATCH_CENTER)),
-        midpoint_state.get(PointRef(Side.RIGHT, PointID.CONTACT_PATCH_CENTER)),
+    ground = AxleGroundLine.from_wheel_plane_road_tangents(
+        midpoint_state.get(PointRef(Side.LEFT, PointID.WHEEL_PLANE_ROAD_TANGENT)),
+        midpoint_state.get(PointRef(Side.RIGHT, PointID.WHEEL_PLANE_ROAD_TANGENT)),
     )
     assert ground is not None
     assert midpoint.axle["ground_z_centerline"] == pytest.approx(ground.z_at(0.0))
@@ -205,9 +205,9 @@ def test_axle_ground_metrics_are_undefined_without_a_valid_ground_line(
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
     assert isinstance(axle, AxleSuspension)
     state = axle.initial_state()
-    left_contact = PointRef(Side.LEFT, PointID.CONTACT_PATCH_CENTER)
-    right_contact = PointRef(Side.RIGHT, PointID.CONTACT_PATCH_CENTER)
-    state.set(left_contact, state.get(right_contact))
+    left_tangent = PointRef(Side.LEFT, PointID.WHEEL_PLANE_ROAD_TANGENT)
+    right_tangent = PointRef(Side.RIGHT, PointID.WHEEL_PLANE_ROAD_TANGENT)
+    state.set(left_tangent, state.get(right_tangent))
 
     rows = compute_metrics_for_state_from_suspension(state, axle)
 

@@ -87,10 +87,12 @@ move relative to them. There is currently no separate inertial/world frame or
 road-frame transform. Left-side hardpoints therefore normally have positive Y
 coordinates and right-side hardpoints normally have negative Y coordinates.
 
-For a solved two-corner axle, metrics also derive a shared chassis-frame ground line
-from both contact patches. Its optional plane interpretation is an X extrusion, so it
-contains no longitudinal road-grade information. The axle metric row exports its
-normal, offset, angle, and chassis-centerline height.
+For a solved two-corner axle, metrics also derive a shared chassis-frame road line in
+`YZ` from both wheel-plane road-tangent points. Its road-plane interpretation is the
+mathematical extrusion parallel to chassis `±X`, so longitudinal grade is assumed zero
+and is not inferred. This axle-local construction needs neither a rear axle nor a
+world frame; standalone corners instead assume a local `+Z` road normal. The axle
+metric row exports its normal, offset, angle, and chassis-centerline height.
 
 ## Installation
 
@@ -233,8 +235,9 @@ paired by index rather than expanded into a Cartesian product. Use `start`,
 uv run kinematics visualize --geometry geometry.yaml --output geometry.png
 ```
 
-This validates and builds the geometry, reports whether the derived contact
-patch lies on `Z = 0`, and writes a static image. It requires `[cli,viz]`.
+This validates and builds the geometry, reports whether the derived wheel-plane
+road-tangent point lies on `Z = 0`, and writes a static image. It requires
+`[cli,viz]`.
 
 ### 4. Solve and export the sweep
 

@@ -41,7 +41,7 @@ All notable changes to this project will be documented in this file.
 - Physical elements and assemblies own renderer-neutral path topology. CLI plots
   and animations add Matplotlib styling client-side, and structured analysis
   exposes the same unstyled paths for external clients. Static visualization
-  supports both corner and axle assemblies and checks every wheel contact patch.
+  supports both corner and axle assemblies and checks every wheel-plane road-tangent point.
 - Core-only CI now exercises numerical, constraint, Jacobian, state, target,
   derived-point, and rigid-body tests without CLI or visualization dependencies.
 - Derived-point target Jacobians now evaluate only the target's transitive dependency chain and seed only relevant free points, substantially reducing solve time.
@@ -128,14 +128,14 @@ All notable changes to this project will be documented in this file.
 - Front-view (Y-Z) comparison plot in `visualize_camber_shim.py` overlaying design and setup suspensions with distinct colors.
 - Direct sign and known-value tests for `camber_deg`, `caster_deg`, and `roadwheel_angle_deg`, plus catalog coverage for the trusted corner-metric export set.
 - Kingpin inclination metric (`kpi_deg`): steering axis angle in the front-view (YZ) plane.
-- Scrub radius metric (`scrub_radius_mm`): lateral offset from steering axis ground intersection to contact patch center.
-- Mechanical trail metric (`mechanical_trail_mm`): longitudinal offset from steering axis ground intersection to contact patch center.
+- Scrub radius metric (`scrub_radius_mm`): lateral offset from steering axis ground intersection to the wheel-plane road-tangent point.
+- Mechanical trail metric (`mechanical_trail_mm`): longitudinal offset from steering axis ground intersection to the wheel-plane road-tangent point.
 
 ### Removed
-- `WHEEL_CENTER_ON_GROUND` point and `get_wheel_center_on_ground` derived point function. The Z=0 ground plane assumption was incorrect in a chassis-fixed frame; ground-plane intersections now use the contact patch Z via `MetricContext.ground_z`.
+- `WHEEL_CENTER_ON_GROUND` point and `get_wheel_center_on_ground` derived point function. The Z=0 ground plane assumption was incorrect in a chassis-fixed frame; ground-plane intersections now use the wheel-plane road-tangent Z via `MetricContext.ground_z`.
 
 ### Fixed
 - Scrub radius now projects along the wheel axle direction in the ground plane instead of the global Y axis, giving correct values when the wheel is steered or cambered.
-- Scrub radius and mechanical trail now intersect the steering axis at the contact patch Z rather than Z=0, giving correct values through bump travel.
-- Clarified `get_contact_patch_center` docstring as the lowest point on an ideal tire circle in the wheel center plane.
+- Scrub radius and mechanical trail now intersect the steering axis at the wheel-plane road-tangent Z rather than Z=0, giving correct values through bump travel.
+- Clarified `get_wheel_plane_road_tangent` docstring as the lowest point on an ideal tire circle in the wheel center plane.
 - Dashboard plots now show KPI, mechanical trail, and scrub radius instead of swing arm lengths and FVIC height. Camber plot Y-axis tuned to [-2.5, -1.5] degrees.

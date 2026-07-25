@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
+from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar, Sequence
 
 from kinematics.core.constraints import Constraint, DistanceConstraint
@@ -23,9 +24,13 @@ from kinematics.core.elements import (
 from kinematics.core.enums import Axis, PointID, SuspensionType
 from kinematics.core.metrics.main import AxleMetricRows, compute_metrics_for_axle_state
 from kinematics.core.points.derived.manager import (
+    DerivedPointsManager,
     DerivedPointsSpec,
     PositionFn,
     PositionValue,
+)
+from kinematics.core.points.derived.road import (
+    get_axle_wheel_plane_road_tangent,
 )
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import (
@@ -164,6 +169,10 @@ class AxleSuspension(Suspension):
 
         state = SuspensionState(positions, free_points)
         self.anti_roll.add_to_state(state)
+        # Corners construct their own flat-road tangent points before they are
+        # composed. Re-run the composed spec after shared mechanism points are
+        # present so the axle's two tangents use one coupled road plane.
+        DerivedPointsManager(self.derived_spec()).update_in_place(state.positions)
         state.free_points_order = sorted(state.free_points)
         self._initial_state = state
         return self._initial_state
@@ -265,7 +274,69 @@ class AxleSuspension(Suspension):
         anti_roll_spec = self.anti_roll.derived_spec()
         functions.update(anti_roll_spec.functions)
         dependencies.update(anti_roll_spec.dependencies)
+        self._install_shared_wheel_plane_tangents(functions, dependencies)
         return DerivedPointsSpec(functions, dependencies)
+
+    def _install_shared_wheel_plane_tangents(
+        self,
+        functions: dict[PointKey, PositionFn],
+        dependencies: dict[PointKey, set[PointKey]],
+    ) -> None:
+        """Replace per-corner flat tangents with the shared axle road tangent."""
+        left_corner = self.corners[Side.LEFT]
+        right_corner = self.corners[Side.RIGHT]
+        if left_corner.config is None or right_corner.config is None:
+            # Minimal topology test doubles may author their own tangent points
+            # without a wheel configuration. They have no radius to couple.
+            return
+        if (
+            PointID.WHEEL_PLANE_ROAD_TANGENT in left_corner.free_points()
+            or PointID.WHEEL_PLANE_ROAD_TANGENT in right_corner.free_points()
+        ):
+            # A custom corner that solves an authored tangent as a free point
+            # owns that point's constraints and cannot be replaced safely.
+            return
+
+        left_axis_inboard, left_axis_outboard = left_corner.wheel_axis_points()
+        right_axis_inboard, right_axis_outboard = right_corner.wheel_axis_points()
+        left_center = PointRef(Side.LEFT, PointID.WHEEL_CENTER)
+        right_center = PointRef(Side.RIGHT, PointID.WHEEL_CENTER)
+        left_axis_inboard_ref = PointRef(Side.LEFT, left_axis_inboard)
+        left_axis_outboard_ref = PointRef(Side.LEFT, left_axis_outboard)
+        right_axis_inboard_ref = PointRef(Side.RIGHT, right_axis_inboard)
+        right_axis_outboard_ref = PointRef(Side.RIGHT, right_axis_outboard)
+        left_tangent = PointRef(Side.LEFT, PointID.WHEEL_PLANE_ROAD_TANGENT)
+        right_tangent = PointRef(Side.RIGHT, PointID.WHEEL_PLANE_ROAD_TANGENT)
+        shared_dependencies = {
+            left_center,
+            left_axis_inboard_ref,
+            left_axis_outboard_ref,
+            right_center,
+            right_axis_inboard_ref,
+            right_axis_outboard_ref,
+        }
+        shared_arguments = {
+            "left_center": left_center,
+            "left_axis_inboard": left_axis_inboard_ref,
+            "left_axis_outboard": left_axis_outboard_ref,
+            "left_radius": left_corner.config.wheel.tire.nominal_radius,
+            "right_center": right_center,
+            "right_axis_inboard": right_axis_inboard_ref,
+            "right_axis_outboard": right_axis_outboard_ref,
+            "right_radius": right_corner.config.wheel.tire.nominal_radius,
+        }
+        functions[left_tangent] = partial(
+            get_axle_wheel_plane_road_tangent,
+            **shared_arguments,
+            side="left",
+        )
+        functions[right_tangent] = partial(
+            get_axle_wheel_plane_road_tangent,
+            **shared_arguments,
+            side="right",
+        )
+        dependencies[left_tangent] = set(shared_dependencies)
+        dependencies[right_tangent] = set(shared_dependencies)
 
     @staticmethod
     def _wrap_derived(function: PositionFn, side: Side) -> PositionFn:

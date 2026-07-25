@@ -76,8 +76,8 @@ def visualize(
     Visualize a suspension geometry at its design condition.
 
     This command loads a single geometry file, calculates its initial state, and
-    generates a debug plot. It also reports whether the contact patch approximation
-    (minimum Z position on wheel center plane) is tangent to the ground plane (Z=0).
+    generates a debug plot. It also reports whether the wheel-plane road-tangent point
+    is at the design road height (Z=0).
 
     Example:
     uv run kinematics visualize --geometry=tests/data/geometry.yaml --output=plot.png
@@ -92,21 +92,22 @@ def visualize(
         suspension=suspension,
         output_path=output,
     )
-    contact_patch_z = ", ".join(f"{value:.3f}" for value in result.contact_patch_z)
-    if result.contact_patch_on_ground:
+    tangent_z = ", ".join(f"{value:.3f}" for value in result.wheel_plane_road_tangent_z)
+    if result.wheel_plane_road_tangent_on_ground:
         typer.secho(
-            "Geometry Check: OK. Contact patches at ground "
-            f"(Z = {contact_patch_z} mm).",
+            "Geometry Check: OK. Wheel-plane road tangents at the design road height "
+            f"(Z = {tangent_z} mm).",
             fg=typer.colors.GREEN,
         )
     else:
         typer.secho(
-            "Geometry Check: WARNING. Contact patch center is not on the ground.",
+            "Geometry Check: WARNING. Wheel-plane road tangent is not at the design "
+            "road height.",
             fg=typer.colors.RED,
         )
         typer.echo(
-            "The contact patch centers are currently located at "
-            f"Z = {contact_patch_z} mm."
+            "The wheel-plane road-tangent points are currently located at "
+            f"Z = {tangent_z} mm."
         )
     typer.secho(
         f"Visualization saved to: {result.output_path}",

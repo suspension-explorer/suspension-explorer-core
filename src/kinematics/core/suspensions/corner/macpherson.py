@@ -116,7 +116,7 @@ class MacPhersonSuspension(CornerSuspension):
         PointID.WHEEL_CENTER,
         PointID.WHEEL_INBOARD,
         PointID.WHEEL_OUTBOARD,
-        PointID.CONTACT_PATCH_CENTER,
+        PointID.WHEEL_PLANE_ROAD_TANGENT,
     )
     OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
         *LOCATING_OUTPUT_POINTS,
@@ -426,7 +426,7 @@ class MacPhersonSuspension(CornerSuspension):
                 outboard=PointID.WHEEL_OUTBOARD,
                 axle_inboard=PointID.AXLE_INBOARD,
                 axle_outboard=PointID.AXLE_OUTBOARD,
-                contact_patch=PointID.CONTACT_PATCH_CENTER,
+                wheel_plane_road_tangent=PointID.WHEEL_PLANE_ROAD_TANGENT,
             ),
             *self.wheel_heading_link.elements(),
         )

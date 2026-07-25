@@ -248,7 +248,7 @@ def get_default_corner_derivative_metrics(
         ),
         DerivativeMetricDefinition(
             response=PointCoordinateResponse.from_axis(
-                PointID.CONTACT_PATCH_CENTER,
+                PointID.WHEEL_PLANE_ROAD_TANGENT,
                 (0.0, side_sign, 0.0),
                 name="half_track",
                 unit=MetricUnit.MM,

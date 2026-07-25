@@ -69,18 +69,18 @@ class TrailingArmCorner(CornerSuspension):
             CHASSIS_REAR,
             KNUCKLE,
             PointID.WHEEL_CENTER,
-            PointID.CONTACT_PATCH_CENTER,
+            PointID.WHEEL_PLANE_ROAD_TANGENT,
         }
     )
     FREE_POINTS: ClassVar[tuple[PointID, ...]] = (
         KNUCKLE,
         PointID.WHEEL_CENTER,
-        PointID.CONTACT_PATCH_CENTER,
+        PointID.WHEEL_PLANE_ROAD_TANGENT,
     )
     OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
         KNUCKLE,
         PointID.WHEEL_CENTER,
-        PointID.CONTACT_PATCH_CENTER,
+        PointID.WHEEL_PLANE_ROAD_TANGENT,
     )
 
     def initial_state(self) -> SuspensionState:
@@ -112,8 +112,10 @@ class TrailingArmCorner(CornerSuspension):
             for anchor in (CHASSIS_FRONT, CHASSIS_REAR)
         ]
         constraints.append(distance(KNUCKLE, PointID.WHEEL_CENTER))
-        constraints.append(distance(PointID.WHEEL_CENTER, PointID.CONTACT_PATCH_CENTER))
-        constraints.append(distance(KNUCKLE, PointID.CONTACT_PATCH_CENTER))
+        constraints.append(
+            distance(PointID.WHEEL_CENTER, PointID.WHEEL_PLANE_ROAD_TANGENT)
+        )
+        constraints.append(distance(KNUCKLE, PointID.WHEEL_PLANE_ROAD_TANGENT))
         return constraints
 
     def derived_spec(self) -> DerivedPointsSpec:
@@ -184,7 +186,7 @@ def build_stub_corner(
             CHASSIS_REAR: Point3([-100.0, 0.3 * lateral, 150.0]),
             KNUCKLE: Point3([0.0, 0.9 * lateral, 50.0]),
             PointID.WHEEL_CENTER: Point3([0.0, lateral, 0.0]),
-            PointID.CONTACT_PATCH_CENTER: Point3([0.0, lateral, -200.0]),
+            PointID.WHEEL_PLANE_ROAD_TANGENT: Point3([0.0, lateral, -200.0]),
         },
     )
 

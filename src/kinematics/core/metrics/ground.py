@@ -1,4 +1,4 @@
-"""Axle-level road datum derived from the two tyre contact patches.
+"""Axle-level road datum derived from two wheel-plane road-tangent points.
 
 The chassis coordinate system remains the reference frame.  This primitive
 describes only the YZ ground line at one axle; its corresponding 3D plane is
@@ -24,7 +24,7 @@ class AxleGroundLine:
     The line equation is ``normal_y * y + normal_z * z + offset_mm = 0``.
     Its tangent convention points from vehicle right to left (nonnegative Y),
     which makes the normal's Z component nonnegative.  Extruding the line in
-    chassis X yields the axle-level, zero-grade ground plane.
+    chassis ±X yields the axle-level, zero-grade road plane.
     """
 
     tangent_y: float
@@ -75,8 +75,10 @@ class AxleGroundLine:
             raise ValueError("Axle ground-line tangent has a non-canonical orientation")
 
     @classmethod
-    def from_contact_patches(cls, left: Point3, right: Point3) -> AxleGroundLine | None:
-        """Construct the datum from current contact patches, ignoring X.
+    def from_wheel_plane_road_tangents(
+        cls, left: Point3, right: Point3
+    ) -> AxleGroundLine | None:
+        """Construct the datum from current wheel-plane road tangents, ignoring X.
 
         Returns ``None`` when the lateral track or YZ projection has
         insufficient separation, or any input/intermediate is non-finite.

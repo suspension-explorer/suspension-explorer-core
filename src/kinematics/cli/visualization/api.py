@@ -20,12 +20,12 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class GeometryVisualizationResult:
     """
-    Ground-plane check returned after rendering a static geometry.
+    Road-tangent check returned after rendering a static geometry.
     """
 
     output_path: Path
-    contact_patch_z: tuple[float, ...]
-    contact_patch_on_ground: bool
+    wheel_plane_road_tangent_z: tuple[float, ...]
+    wheel_plane_road_tangent_on_ground: bool
 
 
 def visualize_suspension_sweep(
@@ -82,12 +82,12 @@ def visualize_geometry(
     state = suspension.initial_state()
     render_model = build_render_model(suspension)
     positions = render_model.positions(state)
-    contact_patch_z = tuple(
-        float(positions[references.contact_patch][2])
+    wheel_plane_road_tangent_z = tuple(
+        float(positions[references.wheel_plane_road_tangent][2])
         for references in render_model.visualizer.wheel_references
     )
-    if not contact_patch_z:
-        raise ValueError("Suspension assembly has no wheel contact patches")
+    if not wheel_plane_road_tangent_z:
+        raise ValueError("Suspension assembly has no wheel-plane road-tangent points")
 
     # Create the four-view plot.
     create_four_view_plot(
@@ -100,8 +100,8 @@ def visualize_geometry(
 
     return GeometryVisualizationResult(
         output_path=output_path,
-        contact_patch_z=contact_patch_z,
-        contact_patch_on_ground=bool(
-            np.all(np.isclose(contact_patch_z, 0.0, atol=1e-2))
+        wheel_plane_road_tangent_z=wheel_plane_road_tangent_z,
+        wheel_plane_road_tangent_on_ground=bool(
+            np.all(np.isclose(wheel_plane_road_tangent_z, 0.0, atol=1e-2))
         ),
     )

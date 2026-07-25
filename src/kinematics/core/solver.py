@@ -254,8 +254,15 @@ class ResidualComputer:
         # Update state buffer in-place with current guess.
         self.state_buffer.update_from_array(free_array)
 
-        # Compute derived points in-place.
-        self.derived_manager.update_in_place(self.state_buffer.positions)
+        required_points = {
+            point
+            for constraint in self.constraints
+            for point in constraint.involved_points
+        }
+        required_points.update(target.point_id for target in step_targets)
+        self.derived_manager.update_required_in_place(
+            self.state_buffer.positions, required_points
+        )
 
         # Fill constraint residuals section: residuals[0:n_constraints].
         for i, constraint in enumerate(self.constraints):
@@ -513,7 +520,15 @@ class ResidualComputer:
         self.validate_target_count(step_targets)
 
         self.state_buffer.update_from_array(free_array)
-        self.derived_manager.update_in_place(self.state_buffer.positions)
+        required_points = {
+            point
+            for constraint in self.constraints
+            for point in constraint.involved_points
+        }
+        required_points.update(target.point_id for target in step_targets)
+        self.derived_manager.update_required_in_place(
+            self.state_buffer.positions, required_points
+        )
 
         jac = self.jac_buffer
         jac[:] = 0.0

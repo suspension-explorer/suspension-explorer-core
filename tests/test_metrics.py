@@ -180,12 +180,12 @@ def test_parallel_wishbone_planes_produce_null_ic_metrics(
     assert metrics["fvsa_length"] is None
 
 
-def test_steering_axis_ground_intersection_uses_contact_patch_height(
+def test_steering_axis_ground_intersection_uses_road_tangent_height(
     double_wishbone_geometry_file,
 ) -> None:
     """
     The steering-axis ground intersection should be evaluated on the
-    horizontal plane through the contact patch, not on world Z = 0.
+    horizontal plane through the wheel-plane road tangent, not on world Z = 0.
     """
     suspension = load_geometry(double_wishbone_geometry_file)
     assert isinstance(suspension, DoubleWishboneSuspension)
@@ -199,12 +199,12 @@ def test_steering_axis_ground_intersection_uses_contact_patch_height(
     upper = state.get(PointID.UPPER_WISHBONE_OUTBOARD).copy()
     direction = upper - lower
 
-    contact_patch_data = state.get(PointID.CONTACT_PATCH_CENTER).data.copy()
-    contact_patch_data[2] = 123.456
-    contact_patch = Point3(contact_patch_data)
-    state[PointID.CONTACT_PATCH_CENTER] = contact_patch
+    road_tangent_data = state.get(PointID.WHEEL_PLANE_ROAD_TANGENT).data.copy()
+    road_tangent_data[2] = 123.456
+    road_tangent = Point3(road_tangent_data)
+    state[PointID.WHEEL_PLANE_ROAD_TANGENT] = road_tangent
 
-    expected_t = (contact_patch[2] - lower[2]) / direction[2]
+    expected_t = (road_tangent[2] - lower[2]) / direction[2]
     expected_intersection = lower + expected_t * direction
 
     ctx = MetricContext(state=state, suspension=suspension, config=suspension.config)
@@ -215,7 +215,9 @@ def test_steering_axis_ground_intersection_uses_contact_patch_height(
         actual_intersection.data,
         expected_intersection.data,
         atol=TEST_TOLERANCE,
-        err_msg="Steering-axis intersection should use contact patch Z height",
+        err_msg=(
+            "Steering-axis intersection should use wheel-plane road-tangent Z height"
+        ),
     )
 
 
@@ -276,7 +278,7 @@ def test_scrub_radius_uses_ground_plane_wheel_lateral_direction(
     ground_pt = ctx.steering_axis_ground_intersection
     assert ground_pt is not None
 
-    displacement = (ground_pt - ctx.contact_patch_center).data
+    displacement = (ground_pt - ctx.wheel_plane_road_tangent).data
     wheel_lateral_ground = ctx.wheel_axis.data.copy()
     wheel_lateral_ground[2] = 0.0
     wheel_lateral_ground /= np.linalg.norm(wheel_lateral_ground)

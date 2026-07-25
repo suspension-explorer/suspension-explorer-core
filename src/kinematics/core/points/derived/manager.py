@@ -5,7 +5,17 @@ Derived point specifications and management.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Container, Generic, Mapping, Set, TypeAlias, TypeVar, cast
+from typing import (
+    Callable,
+    Container,
+    Generic,
+    Iterable,
+    Mapping,
+    Set,
+    TypeAlias,
+    TypeVar,
+    cast,
+)
 
 import numpy as np
 
@@ -102,6 +112,9 @@ class DerivedPointsManager:
         # Cache of single-point computation plans, built lazily.
         self._computation_plans: dict[
             PointKey, tuple[tuple[PointKey, ...], tuple[PointKey, ...]]
+        ] = {}
+        self._multi_computation_plans: dict[
+            frozenset[PointKey], tuple[PointKey, ...]
         ] = {}
 
     def _dependency_path_contains_cycle(
@@ -267,6 +280,23 @@ class DerivedPointsManager:
             positions[point_id] = cast(
                 _V, self.spec.functions[point_id](update_positions)
             )
+
+    def update_required_in_place(
+        self, positions: dict[PointKey, _V], required_points: Iterable[PointKey]
+    ) -> None:
+        """Update only derived chains needed to read ``required_points``."""
+        requested = frozenset(
+            point for point in required_points if point in self.spec.functions
+        )
+        chain = self._multi_computation_plans.get(requested)
+        if chain is None:
+            needed: set[PointKey] = set()
+            for point in requested:
+                point_chain, _ = self._get_computation_plan(point)
+                needed.update(point_chain)
+            chain = tuple(point for point in self.update_order if point in needed)
+            self._multi_computation_plans[requested] = chain
+        self._update_chain_in_place(positions, chain)
 
     def compute_point_jacobian(
         self,
