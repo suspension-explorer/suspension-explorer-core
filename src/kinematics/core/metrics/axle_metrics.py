@@ -10,6 +10,7 @@ from kinematics.core.primitives.constants import EPS_GEOMETRIC
 from kinematics.core.primitives.point_ref import PointRef, Side
 
 if TYPE_CHECKING:
+    from kinematics.core.metrics.ground import AxleGroundLine
     from kinematics.core.metrics.main import MetricRow
     from kinematics.core.state import SuspensionState
     from kinematics.core.suspensions.axle import AxleSuspension
@@ -19,8 +20,9 @@ def append_axle_state_metrics(
     row: MetricRow,
     state: SuspensionState,
     axle: AxleSuspension,
+    ground: "AxleGroundLine | None" = None,
 ) -> None:
-    """Append all metrics defined at axle rather than corner scope."""
+    """Append axle-scoped metrics, including an optional shared ground line."""
     wheel_delta_z: dict[Side, float] = {}
     contact_delta_z: dict[Side, float] = {}
     contact_y: dict[Side, float] = {}
@@ -49,6 +51,19 @@ def append_axle_state_metrics(
     roll_center_y, roll_center_z = _roll_center(state, axle)
     row["roll_center_y"] = roll_center_y
     row["roll_center_z"] = roll_center_z
+
+    if ground is None:
+        row["ground_line_normal_y"] = None
+        row["ground_line_normal_z"] = None
+        row["ground_line_offset"] = None
+        row["ground_line_angle"] = None
+        row["ground_z_centerline"] = None
+    else:
+        row["ground_line_normal_y"] = ground.normal_y
+        row["ground_line_normal_z"] = ground.normal_z
+        row["ground_line_offset"] = ground.offset_mm
+        row["ground_line_angle"] = ground.angle_deg
+        row["ground_z_centerline"] = ground.z_at(0.0)
 
     # Rack displacement is measured on the left corner rack attachment; the rack
     # coupling makes the right corner move identically.

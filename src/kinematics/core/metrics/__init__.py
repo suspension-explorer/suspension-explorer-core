@@ -6,6 +6,7 @@ Metrics are computed after solving, never inside the solve loop.
 """
 
 from kinematics.core.metrics.context import MetricContext
+from kinematics.core.metrics.ground import AxleGroundLine
 from kinematics.core.metrics.main import (
     AxleMetricRows,
     MetricRow,

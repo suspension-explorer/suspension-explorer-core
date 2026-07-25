@@ -18,6 +18,7 @@ from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.state import SuspensionState
 
 if TYPE_CHECKING:
+    from kinematics.core.metrics.ground import AxleGroundLine
     from kinematics.core.suspensions.corner.base import CornerSuspension
 
 
@@ -35,6 +36,7 @@ class MetricContext:
     state: SuspensionState
     suspension: "CornerSuspension"
     config: SuspensionConfig
+    axle_ground: "AxleGroundLine | None" = None
 
     @cached_property
     def design_state(self) -> SuspensionState:
@@ -108,14 +110,17 @@ class MetricContext:
     @cached_property
     def ground_z(self) -> float:
         """
-        Ground plane Z-height in the chassis-fixed frame.
+        Ground-line Z-height in the chassis-fixed frame.
 
-        In a chassis-fixed reference frame the ground is not at Z=0; it
-        follows the tire. We define ground level as the contact patch
-        center Z so that all ground-plane intersections (steering axis,
-        instant centers, etc.) are evaluated at the actual tire-road
-        interface.
+        For an axle solve, this evaluates the shared axle ground line at this
+        corner's contact-patch Y coordinate. Standalone corner solves retain
+        the legacy corner-local contact-patch Z datum. In either case, the
+        chassis-fixed ground datum is not generally at Z=0.
         """
+        if self.axle_ground is not None:
+            ground_z = self.axle_ground.z_at(float(self.contact_patch_center[Axis.Y]))
+            if ground_z is not None:
+                return ground_z
         return float(self.contact_patch_center[Axis.Z])
 
     @cached_property

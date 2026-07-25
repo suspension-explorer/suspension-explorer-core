@@ -60,6 +60,8 @@ def test_axle_metrics_keep_corner_location_structural(axle_analysis) -> None:
     assert set(frame.corner_metrics) == {"left", "right"}
     assert all(frame.corner_metrics.values())
     assert frame.metrics
+    assert "ground_line_angle" in frame.metrics
+    assert "ground_z_centerline" in frame.metrics
     assert not any(key.endswith("_left") for key in frame.corner_metrics["left"])
     assert set(axle_analysis.references["setup"].corner_metrics) == {
         "left",

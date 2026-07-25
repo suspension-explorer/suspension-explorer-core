@@ -19,6 +19,7 @@ from kinematics.core.metrics.catalog import (
 )
 from kinematics.core.metrics.context import MetricContext
 from kinematics.core.metrics.derivatives import evaluate_derivative_metrics
+from kinematics.core.metrics.ground import AxleGroundLine
 from kinematics.core.metrics.registry import flat_key
 from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
 from kinematics.core.schema.config import SuspensionConfig
@@ -69,6 +70,10 @@ def compute_metrics_for_axle_state(
     """Compute structural per-corner rows followed by axle-level metrics."""
     axle_row: MetricRow = OrderedDict()
     corner_rows: dict[Side, MetricRow] = {}
+    ground = AxleGroundLine.from_contact_patches(
+        state.get(PointRef(Side.LEFT, PointID.CONTACT_PATCH_CENTER)),
+        state.get(PointRef(Side.RIGHT, PointID.CONTACT_PATCH_CENTER)),
+    )
     for side in (Side.LEFT, Side.RIGHT):
         corner = axle.corners[side]
         corner_state = axle.corner_state(state, side)
@@ -80,10 +85,11 @@ def compute_metrics_for_axle_state(
             _corner_tangents(tangents, side, axle.actuator_dofs())
             if tangents
             else None,
+            axle_ground=ground,
         )
         corner_rows[side] = side_row
 
-    append_axle_state_metrics(axle_row, state, axle)
+    append_axle_state_metrics(axle_row, state, axle, ground)
     topology_rows = axle.topology_metric_rows(state)
     axle_row.update(topology_rows.axle)
     for side, row in topology_rows.corners.items():
@@ -147,6 +153,8 @@ def compute_metrics_for_state(
     suspension: "CornerSuspension",
     config: SuspensionConfig,
     tangents: "Sequence[TangentField] | None" = None,
+    *,
+    axle_ground: AxleGroundLine | None = None,
 ) -> MetricRow:
     """
     Compute all corner-level metrics for a single solved state.
@@ -157,6 +165,8 @@ def compute_metrics_for_state(
         config: Suspension configuration with vehicle parameters.
         tangents: Optional solution-manifold tangents. Derivative columns are
             appended only when these are supplied.
+        axle_ground: Optional shared axle ground line. Standalone corner
+            callers omit this and use their contact patch as the local datum.
 
     Returns:
         An ordered mapping of metric column names to values. Values are
@@ -167,6 +177,7 @@ def compute_metrics_for_state(
         state=state,
         suspension=suspension,
         config=config,
+        axle_ground=axle_ground,
     )
 
     catalog = get_default_corner_metrics()

@@ -81,9 +81,16 @@ Suspension Explorer uses the ISO 8855 vehicle coordinate system:
 - Angles use radians internally and degrees in configuration and output.
 - Wheel offset follows the ET convention: positive offset is inboard.
 
-Hardpoints describe the design-condition assembly in the world frame. Left-side
-hardpoints therefore normally have positive Y coordinates and right-side
-hardpoints normally have negative Y coordinates.
+Hardpoints describe the design-condition assembly in a chassis-fixed frame.
+Fixed chassis hardpoints remain fixed while suspension, wheel, and tire points
+move relative to them. There is currently no separate inertial/world frame or
+road-frame transform. Left-side hardpoints therefore normally have positive Y
+coordinates and right-side hardpoints normally have negative Y coordinates.
+
+For a solved two-corner axle, metrics also derive a shared chassis-frame ground line
+from both contact patches. Its optional plane interpretation is an X extrusion, so it
+contains no longitudinal road-grade information. The axle metric row exports its
+normal, offset, angle, and chassis-centerline height.
 
 ## Installation
 
@@ -213,7 +220,7 @@ targets:
 Every physical actuator must be controlled exactly once. A rack-steered model
 therefore needs one `trackrod_inboard` target along Y, even when the rack is
 held at zero displacement. `relative` values are measured from the authored
-design condition; `absolute` values are world coordinates.
+design condition; `absolute` values are coordinates in the chassis-fixed frame.
 
 All target sequences must have the same number of values. Multiple targets are
 paired by index rather than expanded into a Cartesian product. Use `start`,

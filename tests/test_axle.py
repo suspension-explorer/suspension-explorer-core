@@ -13,6 +13,8 @@ from kinematics.core.metrics import (
     compute_metrics_for_state_from_suspension,
     compute_metrics_for_sweep,
 )
+from kinematics.core.metrics import main as metrics_main
+from kinematics.core.metrics.ground import AxleGroundLine
 from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.corner import (
@@ -152,6 +154,16 @@ def test_basic_axle_sweep_solves_and_emits_structural_metrics(
     assert "camber" in midpoint.corners[Side.RIGHT]
     assert "camber_left" not in midpoint.corners[Side.LEFT]
     assert "rack_displacement" in midpoint.axle
+    midpoint_state = states[2]
+    assert midpoint.axle["ground_line_normal_y"] == pytest.approx(0.0, abs=1e-10)
+    assert midpoint.axle["ground_line_normal_z"] == pytest.approx(1.0)
+    assert midpoint.axle["ground_line_angle"] == pytest.approx(0.0, abs=1e-8)
+    ground = AxleGroundLine.from_contact_patches(
+        midpoint_state.get(PointRef(Side.LEFT, PointID.CONTACT_PATCH_CENTER)),
+        midpoint_state.get(PointRef(Side.RIGHT, PointID.CONTACT_PATCH_CENTER)),
+    )
+    assert ground is not None
+    assert midpoint.axle["ground_z_centerline"] == pytest.approx(ground.z_at(0.0))
     assert midpoint.axle["heave"] == pytest.approx(0.0, abs=1e-5)
 
     final = states[-1]
@@ -183,4 +195,50 @@ def test_generic_metric_helpers_preserve_structural_axle_rows(
     assert isinstance(sweep_metrics[0], AxleMetricRows)
     assert state_metrics.corners.keys() == {Side.LEFT, Side.RIGHT}
     assert "track" in state_metrics.axle
+    assert "ground_z_centerline" in state_metrics.axle
     assert "camber" in state_metrics.corners[Side.LEFT]
+
+
+def test_axle_ground_metrics_are_undefined_without_a_valid_ground_line(
+    test_data_dir: Path,
+) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+    state = axle.initial_state()
+    left_contact = PointRef(Side.LEFT, PointID.CONTACT_PATCH_CENTER)
+    right_contact = PointRef(Side.RIGHT, PointID.CONTACT_PATCH_CENTER)
+    state.set(left_contact, state.get(right_contact))
+
+    rows = compute_metrics_for_state_from_suspension(state, axle)
+
+    assert isinstance(rows, AxleMetricRows)
+    for key in (
+        "ground_line_normal_y",
+        "ground_line_normal_z",
+        "ground_line_offset",
+        "ground_line_angle",
+        "ground_z_centerline",
+    ):
+        assert rows.axle[key] is None
+
+
+def test_axle_metrics_share_one_ground_line_instance_with_both_corners(
+    monkeypatch: pytest.MonkeyPatch,
+    test_data_dir: Path,
+) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+    assert axle.config is not None
+    received_ground: list[AxleGroundLine | None] = []
+    original_compute = metrics_main.compute_metrics_for_state
+
+    def capture_ground(*args, **kwargs):
+        received_ground.append(kwargs["axle_ground"])
+        return original_compute(*args, **kwargs)
+
+    monkeypatch.setattr(metrics_main, "compute_metrics_for_state", capture_ground)
+    metrics_main.compute_metrics_for_axle_state(axle.initial_state(), axle, axle.config)
+
+    assert len(received_ground) == 2
+    assert received_ground[0] is not None
+    assert received_ground[0] is received_ground[1]

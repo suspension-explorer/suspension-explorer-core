@@ -100,7 +100,7 @@ def coordinate(
     axis: Axis,
 ) -> Scalar:
     """
-    A single world coordinate of a point (mm).
+    A single chassis-frame coordinate of a point (mm).
     """
     return _component(_vec(positions, point_id), axis)
 
