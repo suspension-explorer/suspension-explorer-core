@@ -290,6 +290,65 @@ def test_nonsteered_axle_solves_bump_without_a_rack_target(
         assert "deriv_roadwheel_angle_wrt_rack_displacement" not in corner
 
 
+@pytest.mark.parametrize("explicit_hold", [False, True])
+def test_nonsteered_axle_ignores_unavailable_design_rack_hold(
+    test_data_dir: Path,
+    explicit_hold: bool,
+) -> None:
+    axle = _build_fixed_toe_axle(test_data_dir, "axle_geometry.yaml")
+    rack_hold = {
+        "point": "trackrod_inboard",
+        "side": "left",
+        "direction": {"axis": "y"},
+        "mode": "relative",
+        "values": [0.0, 0.0],
+    }
+    if explicit_hold:
+        rack_hold["hold"] = True
+    sweep = build_sweep(
+        {
+            "version": 1,
+            "targets": [
+                *[
+                    {
+                        "point": "wheel_center",
+                        "side": side,
+                        "direction": {"axis": "z"},
+                        "mode": "relative",
+                        "values": [0.0, 10.0],
+                    }
+                    for side in ("left", "right")
+                ],
+                rack_hold,
+            ],
+        },
+        axle,
+    )
+
+    assert len(sweep.target_sweeps) == 2
+    states, solve_infos = solve_sweep(axle, sweep)
+    assert len(states) == 2
+    assert all(info.converged for info in solve_infos)
+
+
+def test_hold_target_must_be_relative_zero() -> None:
+    with pytest.raises(ValueError, match="must be a relative zero target"):
+        build_sweep(
+            {
+                "version": 1,
+                "targets": [
+                    {
+                        "point": "trackrod_inboard",
+                        "direction": {"axis": "y"},
+                        "mode": "relative",
+                        "values": [0.0, 1.0],
+                        "hold": True,
+                    }
+                ],
+            }
+        )
+
+
 @pytest.mark.parametrize(
     "geometry_name",
     ["axle_geometry.yaml", "macpherson_axle_geometry.yaml"],

@@ -24,6 +24,9 @@ from kinematics.core.schema.geometry import (
     GeometrySpecBase,
     MacPhersonAxleGeometrySpec,
     MacPhersonGeometrySpec,
+    TrailingArmAxleConfig,
+    TrailingArmAxleGeometrySpec,
+    TrailingArmGeometrySpec,
 )
 from kinematics.core.schema.sweep import (
     DirectionSpec,

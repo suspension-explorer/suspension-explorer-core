@@ -113,7 +113,7 @@ def test_assembly_accepts_variable_length_heave_link() -> None:
 
 
 def test_variable_length_link_rejects_rigid_element_type() -> None:
-    message = "require type 'spring_damper' or 'heave_link'"
+    message = "require type 'spring_damper', 'damper', or 'heave_link'"
     with pytest.raises(ValueError, match=message):
         VariableLengthLinkElement(
             label="Invalid Variable Link",

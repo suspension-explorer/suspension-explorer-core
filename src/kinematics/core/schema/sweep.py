@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Sequence
 import numpy as np
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from kinematics.core.enums import Axis, TargetPositionMode
+from kinematics.core.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.primitives.geometry import Direction3, extract_array
 from kinematics.core.primitives.point_ref import Side
 from kinematics.core.schema.decoding import (
@@ -84,12 +84,44 @@ class TargetSpec(BaseModel):
     start: float | None = None
     stop: float | None = None
     values: Sequence[float] | None = None
+    hold: bool = False
 
     @model_validator(mode="after")
-    def check_side(self) -> "TargetSpec":
+    def check_target(self) -> "TargetSpec":
+        """Validate side selection and design-position hold semantics."""
         if self.side == Side.CENTER:
             raise ValueError("Sweep target side must be 'left' or 'right'.")
+        if self.hold and not self.is_design_hold:
+            raise ValueError(
+                f"Hold target '{self.name or self.point.name}' must be a "
+                "relative zero target."
+            )
         return self
+
+    @property
+    def is_design_hold(self) -> bool:
+        """Whether this target holds a coordinate at its design position.
+
+        The explicit flag is the canonical representation. The exact legacy
+        steering-rack pattern remains recognized so existing saved profiles
+        continue to work across steered and unsteered geometries.
+        """
+        if self.mode is not TargetPositionMode.RELATIVE:
+            return False
+        if self.values is not None:
+            zero = bool(self.values) and all(
+                float(value) == 0.0 for value in self.values
+            )
+        else:
+            zero = self.start == 0.0 and self.stop == 0.0
+        if not zero:
+            return False
+        if self.hold:
+            return True
+        return (
+            self.point is PointID.TRACKROD_INBOARD
+            and self.direction.axis is Axis.Y
+        )
 
     def expand_values(self, default_steps: int | None) -> list[float]:
         """Expand explicit values or a start-stop range."""
@@ -162,11 +194,15 @@ def build_sweep_config(
             )
             point_catalog = suspension.assembly().points
             if point_key not in point_catalog.all:
+                if target_spec.is_design_hold:
+                    continue
                 raise ValueError(
                     f"Sweep target point '{point_key.name}' is not present in "
                     f"suspension type '{suspension.reported_type_key()}'."
                 )
             if point_key in point_catalog.fixed:
+                if target_spec.is_design_hold:
+                    continue
                 raise ValueError(
                     f"Sweep target point '{point_key.name}' is fixed in suspension "
                     f"type '{suspension.reported_type_key()}'."

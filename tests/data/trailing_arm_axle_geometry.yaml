@@ -1,0 +1,36 @@
+type: trailing_arm
+scope: axle
+name: "semi-trailing arm rear axle"
+version: "0.1.0"
+units: millimeters
+
+vehicle_config:
+  cg_position: {x: 1250, y: 0, z: 450}
+  wheelbase: 2500.0
+
+axle_config:
+  axle_position: rear
+  steering:
+    type: none
+  anti_roll:
+    type: none
+  heave_link:
+    type: none
+  spring:
+    type: coilover
+  wheel:
+    offset: 0
+    tire:
+      aspect_ratio: 0.55
+      section_width: 270
+      rim_diameter: 13
+
+hardpoints:
+  left:
+    trailing_arm_pivot_a: {x: 1000, y: 500, z: 300}
+    trailing_arm_pivot_b: {x: 900, y: 700, z: 300}
+    trailing_arm_outboard: {x: 500, y: 850, z: 250}
+    axle_inboard: {x: 500, y: 800, z: 350}
+    axle_outboard: {x: 500, y: 1000, z: 350}
+    strut_top: {x: 750, y: 650, z: 750}
+    strut_bottom: {x: 600, y: 850, z: 350}

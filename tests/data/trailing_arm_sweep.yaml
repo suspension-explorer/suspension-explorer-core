@@ -1,0 +1,9 @@
+version: 1
+steps: 41
+targets:
+  - point: wheel_center
+    direction:
+      axis: z
+    mode: relative
+    start: -40
+    stop: 80

@@ -114,6 +114,33 @@ class MacPhersonGeometrySpec(CornerGeometrySpecBase):
     hardpoints: HardpointMap
 
 
+def check_trailing_arm_spring(spring: CornerSpringSpec) -> None:
+    """Require one of the semi-trailing arm's implemented spring layouts."""
+    if spring.type not in (CornerSpringType.COILOVER, CornerSpringType.TORSION_BAR):
+        raise ValueError(
+            "Semi-trailing arm spring must be 'coilover' or 'torsion_bar'"
+        )
+
+
+class TrailingArmGeometrySpec(CornerGeometrySpecBase):
+    """Unsteered semi-trailing arm with coil or pivot-mounted torsion springing."""
+
+    type: Literal[SuspensionType.TRAILING_ARM] = SuspensionType.TRAILING_ARM
+    spring: CornerSpringSpec
+    hardpoints: HardpointMap
+
+    @model_validator(mode="after")
+    def check_mechanisms(self) -> "TrailingArmGeometrySpec":
+        """Reject spring choices without a trailing-arm implementation."""
+        check_trailing_arm_spring(self.spring)
+        if self.config.steering.type.value != "none":
+            raise ValueError(
+                "Semi-trailing arm geometry is unsteered; "
+                "config.steering.type must be 'none'"
+            )
+        return self
+
+
 class DoubleWishboneAxleConfig(AxleConfig):
     """Shared double-wishbone axle topology and optional side-local setup."""
 
@@ -207,9 +234,43 @@ class MacPhersonAxleGeometrySpec(AxleGeometrySpecBase):
         return self
 
 
+class TrailingArmAxleConfig(AxleConfig):
+    """Shared configuration for two unsteered semi-trailing-arm corners."""
+
+    spring: CornerSpringSpec
+
+    @model_validator(mode="after")
+    def check_mechanisms(self) -> "TrailingArmAxleConfig":
+        """Limit the axle to hardware represented by this locating model."""
+        check_trailing_arm_spring(self.spring)
+        if self.steering.type.value != "none":
+            raise ValueError(
+                "Semi-trailing arm axle is unsteered; "
+                "axle_config.steering.type must be 'none'"
+            )
+        if self.anti_roll.type is not ArbType.NONE:
+            raise ValueError(
+                "Semi-trailing arm axle does not support shared anti-roll hardware yet"
+            )
+        if self.heave_link.type is not HeaveLinkType.NONE:
+            raise ValueError(
+                "Semi-trailing arm axle does not support a shared heave link"
+            )
+        return self
+
+
+class TrailingArmAxleGeometrySpec(AxleGeometrySpecBase):
+    """Mirrored or explicit full axle of unsteered semi-trailing arms."""
+
+    type: Literal[SuspensionType.TRAILING_ARM] = SuspensionType.TRAILING_ARM
+    axle_config: TrailingArmAxleConfig
+
+
 GeometrySpec = (
     DoubleWishboneGeometrySpec
     | MacPhersonGeometrySpec
+    | TrailingArmGeometrySpec
     | DoubleWishboneAxleGeometrySpec
     | MacPhersonAxleGeometrySpec
+    | TrailingArmAxleGeometrySpec
 )
