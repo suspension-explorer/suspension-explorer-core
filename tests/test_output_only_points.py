@@ -59,8 +59,12 @@ def test_output_only_rejection_uses_the_point_declaration_guidance(
         build_sweep_config(spec, corner)
 
     message = str(error.value)
+    # The guidance names the honest control: wheel-centre Z is the heave
+    # input, and ride height is read back from the solved ground metrics.
     assert "'wheel_center'" in message
-    assert "'ground_z_centerline'" not in message
+    assert "heave input" in message
+    assert "'ride_height_change'" in message
+    assert "'ground_z_centerline'" in message
 
 
 def test_direct_sweep_config_cannot_bypass_output_only_validation(
@@ -164,8 +168,8 @@ def test_axle_catalog_marks_both_ground_tangents_output_only(
     )
 
     assert points.output_only == tangents
-    # The coupled tangents are post-solve closure outputs, so they are neither
-    # derived points nor solver free points, but they remain catalog points.
-    assert not tangents & points.derived
+    # The coupled tangents are post-solve closure outputs: computed from the
+    # state each solve, so published as derived — never free, never fixed.
+    assert tangents <= points.derived
     assert not tangents & points.free
-    assert tangents <= points.all
+    assert not tangents & points.fixed

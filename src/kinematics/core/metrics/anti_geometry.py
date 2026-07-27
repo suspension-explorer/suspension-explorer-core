@@ -7,14 +7,17 @@ braking), and anti-squat (driven axle under acceleration). All are expressed
 as a percentage where 100 percent means the geometry fully reacts the
 load-transfer pitch moment and 0 percent means it reacts none of it.
 
-All quantities are evaluated in the side view (the XZ plane). The ground plane
-is the YZ ground line extruded along chassis X, so it carries no longitudinal
-gradient and its roll tilt leaves these side-view X and Z components unchanged.
-The governing line is the line from a reaction point (wheel-ground tangent for
-outboard brakes, wheel center for inboard-sprung drive) to the side-view
-instant center
-(SVIC). Its inclination, expressed as tan(theta), together with the wheelbase
-L and CG height above ground h, sets the anti percentage.
+The anti percentages model brake and tractive forces relative to the road, so
+each governing line's rise is resolved along the ground-plane normal, via
+signed distances to the shared ground datum. The run stays the chassis-X
+difference: the ground plane is the YZ ground line extruded along chassis X,
+so chassis X lies exactly in the plane and carries no longitudinal gradient.
+On a level ground line the normal is +Z and each rise reduces exactly to the
+chassis-Z difference. The governing line runs from a reaction point
+(wheel-ground tangent for outboard brakes, wheel center for inboard-sprung
+drive) to the side-view instant center (SVIC). Its inclination, expressed as
+tan(theta), together with the wheelbase L and CG height above ground h, sets
+the anti percentage.
 
 Sign conventions follow ISO 8855 (X forward, Z up). Every metric returns None
 when the SVIC is undefined, a denominator is within EPS_GEOMETRIC of zero, the
@@ -53,8 +56,9 @@ def calculate_svsa_angle(ctx: "MetricContext") -> float | None:
         return None
     tangent = ctx.wheel_ground_tangent
 
-    # The ground plane is the YZ ground line extruded along chassis X, so its
-    # roll tilt leaves these side-view X and Z components untouched.
+    # Deliberately a chassis-frame side-view construction: this angle describes
+    # the linkage's XZ swing-arm line, not a road-relative force line. The anti
+    # percentages resolve their rise along the ground normal instead.
     run = float(svic[Axis.X]) - float(tangent[Axis.X])
     if abs(run) < EPS_GEOMETRIC:
         # Vertical side-view line: slope undefined.
@@ -87,13 +91,16 @@ def calculate_anti_dive_pct(ctx: "MetricContext") -> float | None:
 
     Only defined for a front axle with a known front brake bias. With outboard
     brakes the front suspension reacts the brake force along the wheel-plane
-    ground-tangent -> SVIC line. With L the wheelbase and h the CG height above
-    ground, the line inclination is taken about the tangent as:
+    ground-tangent -> SVIC line. With L the wheelbase, h the CG height above
+    ground, and n the ground plane's upward normal, the line inclination is
+    taken about the tangent as:
 
-        tan_theta = (SVIC_z - T_z) / (T_x - SVIC_x)
+        tan_theta = n . (SVIC - T) / (T_x - SVIC_x)
 
-    which is positive in the classic anti-dive layout (SVIC above and BEHIND
-    the front wheel-ground tangent). Then:
+    The tangent T lies on the ground plane, so the rise n . (SVIC - T) is the
+    SVIC's signed distance to that plane; on a level ground line it reduces
+    exactly to SVIC_z - T_z. tan_theta is positive in the classic anti-dive
+    layout (SVIC above and BEHIND the front wheel-ground tangent). Then:
 
         anti_dive_pct = 100 * front_brake_bias * (L / h) * tan_theta
 
@@ -120,7 +127,9 @@ def calculate_anti_dive_pct(ctx: "MetricContext") -> float | None:
     if height is None:
         return None
 
-    tan_theta = (float(svic[Axis.Z]) - float(tangent[Axis.Z])) / run
+    # The tangent lies on the ground plane, so the tangent -> SVIC rise along
+    # the ground normal is the SVIC's signed distance to that plane.
+    tan_theta = ctx.ground.signed_distance(svic) / run
     return 100.0 * config.front_brake_bias * (ctx.wheelbase / height) * tan_theta
 
 
@@ -131,12 +140,15 @@ def calculate_anti_lift_pct(ctx: "MetricContext") -> float | None:
     Only defined for a rear axle with a known front brake bias; the rear share
     of the braking force is (1 - front_brake_bias). With outboard brakes the
     rear suspension reacts the brake force along the wheel-ground tangent
-    -> SVIC line. The line inclination is taken about the tangent as:
+    -> SVIC line. With n the ground plane's upward normal, the line
+    inclination is taken about the tangent as:
 
-        tan_theta = (SVIC_z - T_z) / (SVIC_x - T_x)
+        tan_theta = n . (SVIC - T) / (SVIC_x - T_x)
 
-    which is positive when the SVIC sits above and AHEAD (+X) of the rear
-    wheel-ground tangent. Then:
+    The tangent T lies on the ground plane, so the rise n . (SVIC - T) is the
+    SVIC's signed distance to that plane; on a level ground line it reduces
+    exactly to SVIC_z - T_z. tan_theta is positive when the SVIC sits above
+    and AHEAD (+X) of the rear wheel-ground tangent. Then:
 
         anti_lift_pct = 100 * (1 - front_brake_bias) * (L / h) * tan_theta
 
@@ -162,7 +174,9 @@ def calculate_anti_lift_pct(ctx: "MetricContext") -> float | None:
         return None
 
     rear_brake_bias = 1.0 - config.front_brake_bias
-    tan_theta = (float(svic[Axis.Z]) - float(tangent[Axis.Z])) / run
+    # The tangent lies on the ground plane, so the tangent -> SVIC rise along
+    # the ground normal is the SVIC's signed distance to that plane.
+    tan_theta = ctx.ground.signed_distance(svic) / run
     return 100.0 * rear_brake_bias * (ctx.wheelbase / height) * tan_theta
 
 
@@ -174,13 +188,17 @@ def calculate_anti_squat_pct(ctx: "MetricContext") -> float | None:
     (driven_axle == axle_position, both non-None). With inboard-sprung drive
     (halfshafts) the tractive force reacts along the WHEEL-CENTER -> SVIC line,
     not the wheel-ground tangent line. The full drive torque is carried by
-    the driven axle. With L the wheelbase and h the CG height above ground:
+    the driven axle. With L the wheelbase, h the CG height above ground, and
+    n the ground plane's upward normal:
 
-        rear axle:  tan_theta = (SVIC_z - WC_z) / (SVIC_x - WC_x)
-        front axle: tan_theta = (SVIC_z - WC_z) / (WC_x - SVIC_x)
+        rear axle:  tan_theta = n . (SVIC - WC) / (SVIC_x - WC_x)
+        front axle: tan_theta = n . (SVIC - WC) / (WC_x - SVIC_x)
 
-    tan_theta is positive when the geometry resists the acceleration pitch
-    (squat at the rear, lift at the front). Then:
+    Neither endpoint lies on the ground plane, so the rise n . (SVIC - WC) is
+    the difference of their signed distances to it; on a level ground line it
+    reduces exactly to SVIC_z - WC_z. tan_theta is positive when the geometry
+    resists the acceleration pitch (squat at the rear, lift at the front).
+    Then:
 
         anti_squat_pct = 100 * (L / h) * tan_theta
 
@@ -210,5 +228,8 @@ def calculate_anti_squat_pct(ctx: "MetricContext") -> float | None:
     if height is None:
         return None
 
-    tan_theta = (float(svic[Axis.Z]) - float(wc[Axis.Z])) / run
+    # Neither endpoint lies on the ground plane, so the rise along the ground
+    # normal is the signed-distance difference (the plane offset cancels).
+    rise = ctx.ground.signed_distance(svic) - ctx.ground.signed_distance(wc)
+    tan_theta = rise / run
     return 100.0 * (ctx.wheelbase / height) * tan_theta

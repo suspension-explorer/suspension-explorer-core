@@ -684,6 +684,8 @@ def solve_suspension_sweep(
     sweep_config: SweepConfig,
     derived_manager: DerivedPointsManager,
     solver_config: SolverConfig = SolverConfig(),
+    *,
+    finalize_state: Callable[[dict[PointKey, Point3]], None],
 ) -> tuple[list[SuspensionState], list[SolverInfo]]:
     """
     Solves a series of kinematic states by sweeping through target
@@ -698,6 +700,15 @@ def solve_suspension_sweep(
         sweep_config: Configuration for the sweep, including step count and targets.
         derived_manager: Manager to compute derived points in-place.
         solver_config: Configuration parameters for the solver.
+        finalize_state: Required finaliser invoked on every accepted state's
+            positions, after the derived-point update and before the state is
+            stored. Suspensions with post-solve closure outputs (an axle's
+            coupled wheel-ground tangents) pass their closure here so no state
+            can leave the solver carrying stale closure values; suspensions
+            without closure outputs pass `Suspension.apply_ground_closure`,
+            which is a no-op for them. The parameter is deliberately required:
+            a caller that skips finalisation receives kinematic intermediates,
+            never complete-looking solved states.
 
     Returns:
         Tuple of (solved_states, solver_stats) where:
@@ -785,6 +796,7 @@ def solve_suspension_sweep(
         # The tradeoff is this explicit sync requirement.
         working_state.update_from_array(result.x)
         derived_manager.update_in_place(working_state.positions)
+        finalize_state(working_state.positions)
 
         # Store finalized state for this step.
         solution_states.append(working_state.copy())

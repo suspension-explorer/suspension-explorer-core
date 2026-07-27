@@ -154,22 +154,37 @@ def test_point_catalog_overlays_output_only_on_derived_points() -> None:
     assert catalog.all == frozenset({FIXED_POINT, FREE_POINT, DERIVED_POINT})
 
 
-def test_point_catalog_accepts_output_only_point_that_is_not_derived() -> None:
-    # An axle's coupled wheel-ground tangents are post-solve closure outputs:
-    # plain state points the solver never moves, marked output-only.
+def test_point_catalog_classifies_closure_outputs_as_derived() -> None:
+    # An axle's coupled wheel-ground tangents are post-solve closure outputs.
+    # The solver treats them as stationary, but they are computed from the
+    # state on every solve, so the catalog publishes them as derived rather
+    # than misstating moving geometry as fixed.
     catalog = PointCatalog.from_state(
         make_state(),
         make_derived_spec(),
-        (FIXED_POINT,),
+        output_only_points=(FIXED_POINT,),
+        closure_points=(FIXED_POINT,),
     )
 
     assert catalog.output_only == frozenset({FIXED_POINT})
-    assert catalog.output_only <= catalog.fixed
-    assert not catalog.output_only & catalog.derived
+    assert catalog.output_only <= catalog.derived
+    assert not catalog.output_only & catalog.fixed
+
+
+def test_output_only_policy_alone_does_not_reclassify_a_point() -> None:
+    # Targeting policy and computational classification are separate facts:
+    # marking a genuinely fixed point output-only must fail the derived-subset
+    # invariant rather than silently reclassifying it as derived.
+    with pytest.raises(ValueError, match="Output-only points must be derived points"):
+        PointCatalog.from_state(
+            make_state(),
+            make_derived_spec(),
+            output_only_points=(FIXED_POINT,),
+        )
 
 
 def test_point_catalog_rejects_output_only_point_that_is_free() -> None:
-    with pytest.raises(ValueError, match="Output-only points cannot be free points"):
+    with pytest.raises(ValueError, match="Output-only points must be derived points"):
         PointCatalog(
             fixed=frozenset({FIXED_POINT}),
             free=frozenset({FREE_POINT}),
@@ -179,7 +194,7 @@ def test_point_catalog_rejects_output_only_point_that_is_free() -> None:
 
 
 def test_point_catalog_rejects_output_only_point_absent_from_the_catalog() -> None:
-    with pytest.raises(ValueError, match="Output-only points must be catalog points"):
+    with pytest.raises(ValueError, match="Output-only points must be derived points"):
         PointCatalog(
             fixed=frozenset({FIXED_POINT}),
             free=frozenset({FREE_POINT}),

@@ -206,6 +206,15 @@ class AxleSuspension(Suspension):
             )
         )
 
+    def closure_points(self) -> tuple[PointKey, ...]:
+        """Return the coupled tangents when the ground closure owns them."""
+        if self._ground_closure_plan() is None:
+            return ()
+        return (
+            PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT),
+            PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT),
+        )
+
     @cached_property
     def design_ground(self) -> GroundDatum | None:
         """Return the immutable ground datum for the authored axle geometry."""

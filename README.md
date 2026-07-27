@@ -36,16 +36,16 @@ tool.
 
 ## What is supported
 
-| Area | Supported | Important limits |
-| --- | --- | --- |
-| Locating architectures | Double wishbone and MacPherson strut | Each may be built as one corner or a composed two-corner axle. |
-| Axle geometry | Mirrored or explicitly authored left and right corners | If `hardpoints.right` is omitted, the complete left geometry and side-local setup are mirrored through `Y = 0`. |
-| Wheel-heading control | Translating steering rack or fixed toe link | Select `steering.type: rack` or `steering.type: none`; front/rear position does not select steering automatically. |
-| Double-wishbone actuation | Direct or pushrod-rocker, mounted to the lower wishbone or upright | Direct actuation cannot be combined with a torsion bar. |
-| Double-wishbone springs | None, coilover, or torsion bar | A torsion bar requires pushrod-rocker actuation. |
-| Axle mechanisms | U-bar or T-bar anti-roll mechanism and rocker-to-rocker heave link | These mechanisms require a double-wishbone axle with pushrod-rocker actuation. |
-| Setup changes | Outboard camber shims on double-wishbone corners | Explicit asymmetric axle hardpoints require corresponding side-local setup when a shim is used. |
-| Outputs | Solved point positions, solver statistics, diagnostics, metrics, in either CSV or Parquet | Plotting and animation require the optional visualization dependencies. |
+| Area                      | Supported                                                                                 | Important limits                                                                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Locating architectures    | Double wishbone and MacPherson strut                                                      | Each may be built as one corner or a composed two-corner axle.                                                     |
+| Axle geometry             | Mirrored or explicitly authored left and right corners                                    | If `hardpoints.right` is omitted, the complete left geometry and side-local setup are mirrored through `Y = 0`.    |
+| Wheel-heading control     | Translating steering rack or fixed toe link                                               | Select `steering.type: rack` or `steering.type: none`; front/rear position does not select steering automatically. |
+| Double-wishbone actuation | Direct or pushrod-rocker, mounted to the lower wishbone or upright                        | Direct actuation cannot be combined with a torsion bar.                                                            |
+| Double-wishbone springs   | None, coilover, or torsion bar                                                            | A torsion bar requires pushrod-rocker actuation.                                                                   |
+| Axle mechanisms           | U-bar or T-bar anti-roll mechanism and rocker-to-rocker heave link                        | These mechanisms require a double-wishbone axle with pushrod-rocker actuation.                                     |
+| Setup changes             | Outboard camber shims on double-wishbone corners                                          | Explicit asymmetric axle hardpoints require corresponding side-local setup when a shim is used.                    |
+| Outputs                   | Solved point positions, solver statistics, diagnostics, metrics, in either CSV or Parquet | Plotting and animation require the optional visualization dependencies.                                            |
 
 The calculated metrics include wheel travel, longitudinal wheel-center travel,
 half-track and track, roadwheel angle, camber, caster, kingpin inclination,
@@ -118,6 +118,12 @@ asked to place. Sweeps that target it are rejected during validation; drive
 `wheel_center` instead, and read the resulting ground geometry from the axle
 ground-line metrics. A ground-space renderer transforms the solved
 chassis-space result for display; it does not change the solved state.
+
+Relating a solved state to world space (ISO 8855 earth-fixed axis system) requires a
+gravity direction, which one axle cannot measure. The pose module therefore reports the
+world axes in chassis space only once the caller supplies gravity: explicitly, or
+through a named gravity model such as a level road, a level chassis, or the opposite
+axle held on the road.
 
 ## Installation
 
@@ -198,23 +204,23 @@ config:
       aspect_ratio: 0.55
       section_width: 270
       rim_diameter: 13
-  cg_position: {x: 1250, y: 0, z: 450}
+  cg_position: { x: 1250, y: 0, z: 450 }
   wheelbase: 2500
 
 hardpoints:
-  lower_wishbone_inboard_front: {x: 250, y: 400, z: 200}
-  lower_wishbone_inboard_rear: {x: -250, y: 450, z: 200}
-  lower_wishbone_outboard: {x: 0, y: 900, z: 200}
+  lower_wishbone_inboard_front: { x: 250, y: 400, z: 200 }
+  lower_wishbone_inboard_rear: { x: -250, y: 450, z: 200 }
+  lower_wishbone_outboard: { x: 0, y: 900, z: 200 }
 
-  upper_wishbone_inboard_front: {x: 225, y: 350, z: 500}
-  upper_wishbone_inboard_rear: {x: -275, y: 350, z: 500}
-  upper_wishbone_outboard: {x: -25, y: 750, z: 500}
+  upper_wishbone_inboard_front: { x: 225, y: 350, z: 500 }
+  upper_wishbone_inboard_rear: { x: -275, y: 350, z: 500 }
+  upper_wishbone_outboard: { x: -25, y: 750, z: 500 }
 
-  trackrod_inboard: {x: 50, y: 200, z: 250}
-  trackrod_outboard: {x: 150, y: 800, z: 275}
+  trackrod_inboard: { x: 50, y: 200, z: 250 }
+  trackrod_outboard: { x: 150, y: 800, z: 275 }
 
-  axle_inboard: {x: -20, y: 800, z: 308.426}
-  axle_outboard: {x: -20, y: 950, z: 313.426}
+  axle_inboard: { x: -20, y: 800, z: 308.426 }
+  axle_outboard: { x: -20, y: 950, z: 313.426 }
 ```
 
 For `steering.type: rack`, use `trackrod_inboard` and `trackrod_outboard`.
@@ -232,13 +238,13 @@ version: 1
 steps: 41
 targets:
   - point: wheel_center
-    direction: {axis: z}
+    direction: { axis: z }
     mode: relative
     start: -40
     stop: 40
 
   - point: trackrod_inboard
-    direction: {axis: y}
+    direction: { axis: y }
     mode: relative
     start: 0
     stop: 0
@@ -304,16 +310,16 @@ version: 1.0.0
 units: millimeters
 
 vehicle_config:
-  cg_position: {x: 1250, y: 0, z: 450}
+  cg_position: { x: 1250, y: 0, z: 450 }
   wheelbase: 2500
 
 axle_config:
   axle_position: front
-  steering: {type: rack}
-  actuation: {type: direct, mount: lower_wishbone}
-  spring: {type: none}
-  anti_roll: {type: none}
-  heave_link: {type: none}
+  steering: { type: rack }
+  actuation: { type: direct, mount: lower_wishbone }
+  spring: { type: none }
+  anti_roll: { type: none }
+  heave_link: { type: none }
   wheel:
     offset: 0
     tire:
@@ -345,19 +351,19 @@ version: 1
 targets:
   - point: wheel_center
     side: left
-    direction: {axis: z}
+    direction: { axis: z }
     mode: relative
     values: [-30, 0, 30]
 
   - point: wheel_center
     side: right
-    direction: {axis: z}
+    direction: { axis: z }
     mode: relative
     values: [30, 0, -30]
 
   - point: trackrod_inboard
     side: left
-    direction: {axis: y}
+    direction: { axis: y }
     mode: relative
     values: [0, 0, 0]
 ```

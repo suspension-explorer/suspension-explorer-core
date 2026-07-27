@@ -18,12 +18,13 @@ class PointCatalog:
     """
     Identifier-only classification of points in a suspension assembly.
 
-    The fixed, free, and derived sets are mutually exclusive and partition every
-    point in the assembly. ``output_only`` is not a fourth class: it is an
-    overlay marking points that are reported but cannot be driven under the
-    solver's actuator policy. An output-only point is either derived (a corner's
-    flat-ground tangent) or a post-solve closure output that the solver treats
-    as stationary (an axle's coupled wheel-ground tangents); it is never free.
+    The fixed, free, and derived sets are mutually exclusive and partition
+    every point in the assembly. ``fixed`` means authored geometry that never
+    moves; ``derived`` means computed from the state — whether by the
+    derived-point graph or by a post-solve closure (an axle's coupled
+    wheel-ground tangents). ``output_only`` is not a fourth class: it is an
+    overlay marking the subset of derived points that are reported but cannot
+    be driven under the solver's actuator policy.
     """
 
     fixed: frozenset[PointKey]
@@ -43,12 +44,9 @@ class PointCatalog:
         if overlaps:
             raise ValueError(f"Point classifications overlap: {sorted(overlaps)!r}")
 
-        if self.output_only & self.free:
-            invalid = sorted(self.output_only & self.free)
-            raise ValueError(f"Output-only points cannot be free points: {invalid!r}")
-        if not self.output_only <= self.all:
-            invalid = sorted(self.output_only - self.all)
-            raise ValueError(f"Output-only points must be catalog points: {invalid!r}")
+        if not self.output_only <= self.derived:
+            invalid = sorted(self.output_only - self.derived)
+            raise ValueError(f"Output-only points must be derived points: {invalid!r}")
 
     @property
     def all(self) -> frozenset[PointKey]:
@@ -63,12 +61,22 @@ class PointCatalog:
         state: SuspensionState,
         derived_spec: DerivedPointsSpec,
         output_only_points: tuple[PointKey, ...] = (),
+        closure_points: tuple[PointKey, ...] = (),
     ) -> "PointCatalog":
         """
         Classify point identifiers without copying solver positions.
+
+        How a point is computed and whether it may be driven are separate
+        facts: ``closure_points`` declares points the post-solve closure
+        writes, and they classify as derived because they are computed from
+        the state each solve — publishing them as fixed would misstate
+        geometry that moves with every state. ``output_only_points`` is pure
+        targeting policy and never changes classification.
         """
         state_points = frozenset[PointKey](state.positions)
-        derived = frozenset[PointKey](derived_spec.functions)
+        derived = frozenset[PointKey](derived_spec.functions) | frozenset(
+            closure_points
+        )
         free = frozenset[PointKey](state.free_points)
         base = state_points - derived
 
@@ -163,12 +171,15 @@ class SuspensionAssembly:
         elements: tuple[SuspensionElement, ...],
         output_points: tuple[PointKey, ...],
         output_only_points: tuple[PointKey, ...] = (),
+        closure_points: tuple[PointKey, ...] = (),
     ) -> "SuspensionAssembly":
         """
         Build and validate an assembly from existing solver declarations.
         """
         return cls(
-            points=PointCatalog.from_state(state, derived_spec, output_only_points),
+            points=PointCatalog.from_state(
+                state, derived_spec, output_only_points, closure_points
+            ),
             elements=elements,
             output_points=output_points,
         )

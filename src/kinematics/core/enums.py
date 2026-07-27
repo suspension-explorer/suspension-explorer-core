@@ -87,8 +87,10 @@ class PointID(IntEnum):
         """Return point-specific guidance when an output cannot be driven."""
         if self is PointID.WHEEL_GROUND_TANGENT:
             return (
-                "Target 'wheel_center' along Z to control ride height; read the "
-                "wheel-ground tangent from solved output."
+                "Target 'wheel_center' along Z as the available heave input; "
+                "wheel orientation can still move the ground tangent, so read "
+                "ride height from the 'ride_height_change' or "
+                "'ground_z_centerline' metrics of the solved output."
             )
         return None
 

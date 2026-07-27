@@ -91,6 +91,7 @@ def test_absolute_mode_solve():
         constraints=[],
         sweep_config=SweepConfig([x_sweep, y_sweep, z_sweep]),
         derived_manager=derived_manager,
+        finalize_state=lambda positions: None,
     )
 
     assert len(states) == 1

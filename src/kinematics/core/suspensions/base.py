@@ -307,6 +307,16 @@ class Suspension(ABC):
         """Return physical actuator coordinates that every sweep must control."""
         return ()
 
+    def closure_points(self) -> tuple[PointKey, ...]:
+        """
+        Return points written by the post-solve closure rather than the graph.
+
+        These classify as derived in the point catalog: they are computed from
+        the state on every solve, independent of whether targeting policy also
+        marks them output-only. The base suspension has none.
+        """
+        return ()
+
     def assembly(self) -> SuspensionAssembly:
         """Return the validated point and element composition."""
         if self._assembly_cache is None:
@@ -316,5 +326,6 @@ class Suspension(ABC):
                 self.elements(),
                 self.output_points(),
                 self.output_only_points(),
+                self.closure_points(),
             )
         return self._assembly_cache

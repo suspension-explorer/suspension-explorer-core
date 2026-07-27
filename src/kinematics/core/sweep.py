@@ -7,7 +7,7 @@ geometries.
 
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import List
+from typing import Any, Callable, List
 
 from kinematics.core.diagnostics import (
     DiagnosticCategory,
@@ -17,6 +17,7 @@ from kinematics.core.diagnostics import (
 )
 from kinematics.core.metrics.main import AxleMetricRows, MetricRow
 from kinematics.core.points.derived.manager import DerivedPointsManager
+from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.sensitivity import (
     TangentField,
     TangentSolveInfo,
@@ -60,23 +61,34 @@ def solve_sweep(
     derived_spec = suspension.derived_spec()
     derived_manager = DerivedPointsManager(derived_spec)
 
-    kinematic_states, solver_stats = solve_suspension_sweep(
+    return solve_suspension_sweep(
         initial_state=suspension.initial_state(),
         constraints=suspension.constraints(),
         sweep_config=sweep_config,
         derived_manager=derived_manager,
+        finalize_state=_ground_closure_finalizer(suspension),
     )
 
-    # Post-solve ground closure: the coupled wheel-ground tangents are pure
-    # outputs, solved once per accepted state. The previous state's root seeds
-    # the next solve so a multi-root geometry follows one continuous branch.
+
+def _ground_closure_finalizer(
+    suspension: Suspension,
+) -> Callable[[dict[PointKey, Any]], None]:
+    """Build the accepted-state finaliser that applies the ground closure.
+
+    The coupled wheel-ground tangents are pure outputs, solved once per
+    accepted state inside the solver's accept path, so no state can leave the
+    solver with stale closure values. Each solved root seeds the next state's
+    closure, keeping a multi-root geometry on one continuous branch.
+    """
     ground_seed: float | None = None
-    for state in kinematic_states:
-        solved_seed = suspension.apply_ground_closure(state.positions, ground_seed)
+
+    def finalize(positions: dict[PointKey, Any]) -> None:
+        nonlocal ground_seed
+        solved_seed = suspension.apply_ground_closure(positions, ground_seed)
         if solved_seed is not None:
             ground_seed = solved_seed
 
-    return kinematic_states, solver_stats
+    return finalize
 
 
 @dataclass(frozen=True)
@@ -237,6 +249,14 @@ def evaluate_solved_sweep(
 ) -> EvaluatedSweep:
     """
     Compute metrics and diagnostics for an already solved sweep.
+
+    Supplied states are copied and the copies are finalised through the
+    suspension's ground closure, so externally produced states cannot carry
+    stale closure outputs into metrics and the caller's states are never
+    mutated. The returned :class:`EvaluatedSweep` holds the finalised copies.
+    Seeds thread exactly as they do during solving: the first state recovers
+    its seed from its stored tangent values and each solved root seeds the
+    next state, so already-finalised states reproduce their stored values.
     """
     if len(states) != len(solver_stats):
         raise ValueError(
@@ -244,6 +264,31 @@ def evaluate_solved_sweep(
             f"{len(states)} states, {len(solver_stats)} solver stats."
         )
 
+    finalize = _ground_closure_finalizer(suspension)
+    finalized_states = []
+    for state in states:
+        finalized = state.copy()
+        finalize(finalized.positions)
+        finalized_states.append(finalized)
+
+    return _evaluate_finalized_sweep(
+        suspension, sweep_config, finalized_states, solver_stats
+    )
+
+
+def _evaluate_finalized_sweep(
+    suspension: Suspension,
+    sweep_config: SweepConfig,
+    states: list[SuspensionState],
+    solver_stats: list[SolverInfo],
+) -> EvaluatedSweep:
+    """
+    Evaluate states that are already finalised at the solver accept boundary.
+
+    :func:`solve_evaluated_sweep` comes here directly so the sweep is closed
+    exactly once, at solving time; only externally supplied states pay the
+    copy-and-finalise pass in :func:`evaluate_solved_sweep`.
+    """
     metrics = compute_sweep_metrics(suspension, sweep_config, states)
     try:
         diagnostics = list(diagnose_sweep(suspension, states, solver_stats).issues)
@@ -275,9 +320,12 @@ def solve_evaluated_sweep(
 ) -> EvaluatedSweep:
     """
     Solve one sweep and compute its metrics and advisory diagnostics.
+
+    States from :func:`solve_sweep` are finalised at the solver's accept
+    boundary, so they are evaluated directly without a second closure pass.
     """
     states, solver_stats = solve_sweep(suspension, sweep_config)
-    return evaluate_solved_sweep(
+    return _evaluate_finalized_sweep(
         suspension,
         sweep_config,
         states,

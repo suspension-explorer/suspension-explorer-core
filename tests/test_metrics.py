@@ -8,6 +8,7 @@ from kinematics.core.enums import Axis, AxlePosition, PointID
 from kinematics.core.metrics.anti_geometry import (
     _cg_height_above_ground,
     calculate_anti_dive_pct,
+    calculate_anti_squat_pct,
 )
 from kinematics.core.metrics.catalog import get_default_corner_metrics
 from kinematics.core.metrics.context import MetricContext
@@ -399,7 +400,8 @@ def test_anti_geometry_uses_perpendicular_cg_height_above_the_ground_plane(
 ) -> None:
     """
     The anti formulas take the CG's perpendicular distance to the road plane,
-    which on a banked ground line differs from the raw chassis-Z difference.
+    which on a banked ground line differs from the raw chassis-Z difference,
+    and resolve the reaction-line rise along the same ground normal.
     """
     suspension = load_geometry(double_wishbone_geometry_file)
     assert isinstance(suspension, DoubleWishboneSuspension)
@@ -443,11 +445,27 @@ def test_anti_geometry_uses_perpendicular_cg_height_above_the_ground_plane(
     svic = ctx.side_view_ic
     assert svic is not None
     run = float(tangent[Axis.X]) - float(svic[Axis.X])
-    tan_theta = (float(svic[Axis.Z]) - float(tangent[Axis.Z])) / run
-    expected_anti_dive = 100.0 * 0.6 * (config.wheelbase / expected_height) * tan_theta
+    # The datum passes through the tangent, so the tangent -> SVIC rise along
+    # the ground normal is n . (SVIC - T), written out with the datum's
+    # normal components rather than through the implementation's helpers.
+    expected_rise = ground.normal_y * (
+        float(svic[Axis.Y]) - float(tangent[Axis.Y])
+    ) + ground.normal_z * (float(svic[Axis.Z]) - float(tangent[Axis.Z]))
+    expected_tan_theta = expected_rise / run
+    expected_anti_dive = (
+        100.0 * 0.6 * (config.wheelbase / expected_height) * expected_tan_theta
+    )
     anti_dive = calculate_anti_dive_pct(ctx)
     assert anti_dive is not None
     np.testing.assert_allclose(anti_dive, expected_anti_dive, atol=TEST_TOLERANCE)
+
+    # The pre-fix hybrid formula took the rise as raw chassis delta-Z; on a
+    # banked datum it must disagree, or a silent revert would go unnoticed.
+    hybrid_tan_theta = (float(svic[Axis.Z]) - float(tangent[Axis.Z])) / run
+    hybrid_anti_dive = (
+        100.0 * 0.6 * (config.wheelbase / expected_height) * hybrid_tan_theta
+    )
+    assert not np.isclose(anti_dive, hybrid_anti_dive, atol=TEST_TOLERANCE)
 
     # A level ground line through the same tangent must still give the
     # chassis-Z height, leaving flat-ground anti percentages untouched.
@@ -455,6 +473,103 @@ def test_anti_geometry_uses_perpendicular_cg_height_above_the_ground_plane(
     flat_height = _cg_height_above_ground(flat_ctx)
     assert flat_height is not None
     np.testing.assert_allclose(flat_height, chassis_z_height, atol=TEST_TOLERANCE)
+
+
+def test_anti_dive_on_flat_ground_equals_the_chassis_z_formula(
+    double_wishbone_geometry_file,
+    test_data_dir,
+) -> None:
+    """
+    On the default flat datum the ground normal is +Z, so the ground-normal
+    rise and CG height reduce exactly to the chassis-Z differences of the
+    classic flat-ground formula.
+    """
+    suspension = load_geometry(double_wishbone_geometry_file)
+    assert isinstance(suspension, DoubleWishboneSuspension)
+    assert suspension.config is not None
+    config = suspension.config.model_copy(
+        update={"axle_position": AxlePosition.FRONT, "front_brake_bias": 0.6}
+    )
+    states, _ = solve_sweep(suspension, load_sweep(test_data_dir / "sweep.yaml"))
+    state = next(
+        candidate
+        for candidate in states
+        if suspension.compute_side_view_instant_center(candidate) is not None
+    )
+    ctx = MetricContext(state=state, suspension=suspension, config=config)
+
+    tangent = state.get(PointID.WHEEL_GROUND_TANGENT)
+    svic = ctx.side_view_ic
+    assert svic is not None
+    run = float(tangent[Axis.X]) - float(svic[Axis.X])
+    tan_theta = (float(svic[Axis.Z]) - float(tangent[Axis.Z])) / run
+    height = float(config.cg_position[Axis.Z]) - float(tangent[Axis.Z])
+    expected = 100.0 * 0.6 * (config.wheelbase / height) * tan_theta
+
+    anti_dive = calculate_anti_dive_pct(ctx)
+    assert anti_dive is not None
+    assert anti_dive == expected
+
+
+def test_anti_squat_resolves_the_rise_along_a_banked_ground_normal(
+    double_wishbone_geometry_file,
+    test_data_dir,
+) -> None:
+    """
+    Anti-squat's wheel-center -> SVIC line has neither endpoint on the ground
+    plane, so its rise is the endpoints' signed-distance difference along the
+    ground normal rather than the raw chassis-Z difference.
+    """
+    suspension = load_geometry(double_wishbone_geometry_file)
+    assert isinstance(suspension, DoubleWishboneSuspension)
+    assert suspension.config is not None
+    config = suspension.config.model_copy(
+        update={
+            "axle_position": AxlePosition.REAR,
+            "driven_axle": AxlePosition.REAR,
+        }
+    )
+    states, _ = solve_sweep(suspension, load_sweep(test_data_dir / "sweep.yaml"))
+    state = next(
+        candidate
+        for candidate in states
+        if suspension.compute_side_view_instant_center(candidate) is not None
+    )
+    tangent = state.get(PointID.WHEEL_GROUND_TANGENT)
+    ground = _banked_ground_through(tangent, 12.0)
+    ctx = MetricContext(
+        state=state, suspension=suspension, config=config, ground=ground
+    )
+
+    svic = ctx.side_view_ic
+    assert svic is not None
+    wc = state.get(PointID.WHEEL_CENTER)
+    run = float(svic[Axis.X]) - float(wc[Axis.X])
+    # n . (SVIC - WC), written out with the datum's normal components; the
+    # plane offset cancels in the endpoint difference.
+    expected_rise = ground.normal_y * (
+        float(svic[Axis.Y]) - float(wc[Axis.Y])
+    ) + ground.normal_z * (float(svic[Axis.Z]) - float(wc[Axis.Z]))
+    cg = config.cg_position
+    height = (
+        ground.normal_y * float(cg[Axis.Y])
+        + ground.normal_z * float(cg[Axis.Z])
+        + ground.offset_mm
+    )
+    expected = 100.0 * (config.wheelbase / height) * (expected_rise / run)
+
+    anti_squat = calculate_anti_squat_pct(ctx)
+    assert anti_squat is not None
+    np.testing.assert_allclose(anti_squat, expected, atol=TEST_TOLERANCE)
+
+    # The pre-fix hybrid formula took the rise as raw chassis delta-Z; on a
+    # banked datum it must disagree, or a silent revert would go unnoticed.
+    hybrid = (
+        100.0
+        * (config.wheelbase / height)
+        * ((float(svic[Axis.Z]) - float(wc[Axis.Z])) / run)
+    )
+    assert not np.isclose(anti_squat, hybrid, atol=TEST_TOLERANCE)
 
 
 def test_anti_cg_height_is_shared_by_both_corners_of_a_banked_axle(

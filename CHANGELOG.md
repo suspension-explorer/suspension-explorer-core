@@ -23,17 +23,24 @@ All notable changes to this project will be documented in this file.
   `ground_z_centerline`.
 - A dimensionless metric unit for quantities such as the ground-line normal
   components, using the conventional semantic unit symbol `1`.
-- A chassis pose API in `kinematics.core.pose` reinterprets a solved axle ground
-  datum as a whole-vehicle attitude relative to a world frame whose `Z = 0` plane
-  is the road. `build_chassis_pose()` and `chassis_pose_for_axle_state()` return a
-  `ChassisPose` carrying roll, pitch, the chassis-space anchor that maps to the
-  world origin, the chassis-to-world rotation, and the gravity direction in
-  chassis space. Roll comes from the fitted ground line; pitch is a named
-  `PoseAssumption` — `PURE_HEAVE` (zero pitch) or `OPPOSITE_AXLE_FIXED`
-  (`atan(compression / wheelbase)`, signed by axle position) — recorded on the
-  pose so an interpreted attitude cannot be mistaken for a measured one. This is
-  a post-solve reading of solved outputs only; longitudinal grade remains assumed
-  zero inside the tangency solve.
+- A world-space API in `kinematics.core.pose` relates solved states to world
+  space, this project's name for the ISO 8855 / SAE J670 earth-fixed axis
+  system. One axle measures the chassis-to-ground relation completely but
+  cannot measure gravity, so world space is an input:
+  `world_space_for_axle_state()` and the per-step `world_spaces_for_sweep()`
+  take an explicit chassis-space gravity direction or a named `GravityModel`
+  — a rule computing gravity under stated premises: `ROAD_LEVEL` (the fitted
+  ground plane is perpendicular to gravity), `OPPOSITE_AXLE_FIXED` (road
+  laterally level, ride-height change tips gravity fore-aft by
+  `atan(compression / wheelbase)` signed by axle position), or
+  `CHASSIS_LEVEL` (a gravity-aligned chassis, the kinematics-rig reading
+  under which the ground angle is road bank) — and return a `WorldSpace`
+  reporting the world axes as exact chassis-space basis vectors plus the
+  anchor that maps to the world origin. The result records its
+  `gravity_model` (`None` for explicit gravity), so a modelled attitude
+  cannot be mistaken for a measured one; string model values coerce to their
+  enums and unrecognised strings are rejected. Suspension roll remains the
+  `roll` metric and the chassis-to-ground angle remains `ground_line_angle`.
 
 ### Changed
 
@@ -120,15 +127,35 @@ All notable changes to this project will be documented in this file.
   derived point. `AxleSuspension` drops the composed `WHEEL_GROUND_TANGENT`
   entries from its derived specification and writes both tangents once per
   accepted state, so no per-corner flat-ground tangent can reach an axle state.
+- State finalisation has one authoritative boundary. The low-level solver
+  requires an accepted-state finaliser — a caller that passes a no-op receives
+  kinematic intermediates, never complete-looking solved states — and
+  `solve_sweep()` passes the ground closure through it, so every state is
+  closed inside the solver's accept path. `evaluate_solved_sweep()` copies
+  externally supplied states and finalises the copies without mutating the
+  caller's, while `solve_evaluated_sweep()` evaluates its own already
+  finalised states directly, so nothing is closed twice and
+  `analyze_solved_sweep()` can no longer evaluate scalar metrics against stale
+  tangents while derivative evaluation closes its own dual positions.
+- `PointCatalog` separates how a point is computed from whether it may be
+  driven. Suspensions declare `closure_points()` — points the post-solve
+  closure writes — and those classify as derived, so the catalog no longer
+  publishes an axle's coupled wheel-ground tangents as fixed geometry.
+  `output_only` is pure targeting policy, never changes classification, and
+  is invariantly a subset of `derived`.
 - Ground-root branch continuity is threaded explicitly through a seed argument
   instead of solver-side continuation state. The previously accepted
   ground-normal angle is passed forward, and with no seed the closure recovers
   one from the tangents already stored in the state; the earlier per-geometry
   root cache inside the derived-point graph is gone. Identical inputs and an
   identical seed always reproduce the same root.
-- Anti-dive, anti-lift, and anti-squat now measure CG height from the shared axle
-  ground plane and take a ground-plane-consistent front-view swing-arm sign,
-  replacing the per-corner flat-ground assumption (delivered alongside this work).
+- Anti-dive, anti-lift, and anti-squat are resolved consistently in the
+  longitudinal–ground-normal plane: CG height is the perpendicular distance to
+  the shared axle ground plane and the reaction-line rise is measured along the
+  ground normal, while the run remains chassis X, which lies exactly in the
+  X-extruded plane. On flat ground this reduces bit-for-bit to the previous
+  chassis-Z formulation. The side-view swing-arm metrics remain chassis-frame
+  descriptive constructions and are documented as such.
 - Axle ride-height change compares current and design ground height at chassis
   centerline, avoiding contamination from bank angle, asymmetric track, tire
   radii, or lateral track migration.

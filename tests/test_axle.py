@@ -16,14 +16,20 @@ from kinematics.core.metrics import (
 from kinematics.core.metrics import main as metrics_main
 from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.points.derived import ground as ground_module
+from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointRef, Side
+from kinematics.core.solver import solve_suspension_sweep
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.corner import (
     ActuationDirect,
     DoubleWishboneSuspension,
 )
-from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
+from kinematics.core.sweep import (
+    compute_sweep_metrics,
+    evaluate_solved_sweep,
+    solve_sweep,
+)
 
 
 def test_mirrored_axle_builds_two_explicit_corners(test_data_dir: Path) -> None:
@@ -246,6 +252,57 @@ def test_ground_closure_threads_one_seeded_search_per_solved_state(
         if seed is not None
     ]
     assert max(deviations, default=0.0) < 1e-6
+
+
+def test_ground_closure_is_applied_at_every_public_state_boundary(
+    test_data_dir: Path,
+) -> None:
+    """No public path may hand out axle states with stale closure outputs.
+
+    The low-level solver requires an explicit finaliser; a deliberate no-op
+    yields kinematic intermediates whose tangents still sit at design values.
+    solve_sweep() finalises at the solver's accept boundary, and
+    evaluate_solved_sweep() finalises copies of externally supplied states
+    without mutating the caller's, so both public boundaries must agree with
+    a direct closure of the raw states.
+    """
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+    sweep = load_sweep(test_data_dir / "axle_sweep.yaml", axle)
+    tangent_refs = (
+        PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT),
+        PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT),
+    )
+
+    raw_states, raw_stats = solve_suspension_sweep(
+        initial_state=axle.initial_state(),
+        constraints=axle.constraints(),
+        sweep_config=sweep,
+        derived_manager=DerivedPointsManager(axle.derived_spec()),
+        finalize_state=lambda positions: None,
+    )
+    # The no-op finaliser documents the hazard: tangents still sit at their
+    # design positions while the wheel has moved through the sweep.
+    stale_left = raw_states[0].get(tangent_refs[0]).copy()
+    design_left = axle.initial_state().get(tangent_refs[0])
+    assert float((stale_left - design_left).norm()) < 1e-9
+
+    solved_states, _ = solve_sweep(axle, sweep)
+    step = 0  # -30 mm bump: the stale error is macroscopic here.
+    closed_left = solved_states[step].get(tangent_refs[0])
+    assert float((closed_left - stale_left).norm()) > 10.0
+
+    # evaluate_solved_sweep() must finalise COPIES of the raw states to the
+    # same closure, leaving the caller's states untouched.
+    evaluated = evaluate_solved_sweep(axle, sweep, raw_states, raw_stats)
+    for state, reference in zip(evaluated.states, solved_states, strict=True):
+        for ref in tangent_refs:
+            difference = state.get(ref) - reference.get(ref)
+            assert float(difference.norm()) < 1e-9
+    untouched_left = raw_states[0].get(tangent_refs[0])
+    assert float((untouched_left - stale_left).norm()) < 1e-12, (
+        "evaluate_solved_sweep must not mutate the states it was handed"
+    )
 
 
 def test_axle_targets_require_side(test_data_dir: Path) -> None:
