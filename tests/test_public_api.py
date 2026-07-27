@@ -39,7 +39,7 @@ def test_core_import_succeeds_without_cli_dependencies() -> None:
         "import kinematics\n"
         "import kinematics.core\n"
         "from kinematics.core.input import build_suspension, build_sweep\n"
-        "from kinematics.core.metrics import AxleGroundLine\n"
+        "from kinematics.core.metrics import GroundDatum\n"
     )
 
     result = subprocess.run(

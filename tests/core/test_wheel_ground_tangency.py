@@ -9,15 +9,15 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.enums import PointID
-from kinematics.core.metrics.ground import AxleGroundLine
+from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.points.derived import ground
 from kinematics.core.points.derived.ground import (
     _GROUND_SOLVE_LIMIT,
     _flat_ground_normal_angle_estimate,
     _ground_normal,
     _GroundNormalContinuation,
+    _search_ground_normal_angle,
     _shared_ground_normal_angle,
-    _solve_ground_normal_angle,
     get_axle_wheel_ground_tangent,
 )
 from kinematics.core.points.derived.manager import PositionValue
@@ -208,7 +208,7 @@ _SATURATING_RADIUS_MM = 400.0
 
 
 def _solve_saturating() -> float:
-    return _solve_ground_normal_angle(
+    return _search_ground_normal_angle(
         _SATURATING_LEFT_CENTER,
         _SATURATING_LEFT_AXIS,
         _SATURATING_RADIUS_MM,
@@ -257,7 +257,7 @@ def test_flat_ground_seed_is_robust_to_crossed_lateral_orientation():
     seed = _flat_ground_normal_angle_estimate(
         crossed_left_center, axis, RADIUS_MM, crossed_right_center, axis, RADIUS_MM
     )
-    angle = _solve_ground_normal_angle(
+    angle = _search_ground_normal_angle(
         crossed_left_center, axis, RADIUS_MM, crossed_right_center, axis, RADIUS_MM
     )
 
@@ -288,7 +288,7 @@ def test_shared_angle_is_solved_once_for_both_sides(monkeypatch):
     np.testing.assert_allclose(np.dot(normal, left.data), np.dot(normal, right.data))
 
 
-def test_continuation_uses_previous_root_as_next_state_seed(monkeypatch):
+def test_continuation_reuses_each_state_branch_and_resets_between_sweeps(monkeypatch):
     seeds: list[float | None] = []
 
     def fake_search(*args, seed=None):
@@ -315,17 +315,39 @@ def test_continuation_uses_previous_root_as_next_state_seed(monkeypatch):
         axis,
         RADIUS_MM,
     )
+    revisited_first = continuation.solve(
+        np.array((0.0, 500.0, 300.0)),
+        axis,
+        RADIUS_MM,
+        np.array((0.0, -500.0, 200.0)),
+        axis,
+        RADIUS_MM,
+    )
 
     assert first == pytest.approx(0.25)
     assert second == pytest.approx(0.26)
+    assert revisited_first == pytest.approx(first)
     assert seeds == [None, pytest.approx(0.25)]
+
+    continuation.reset()
+    reset_first = continuation.solve(
+        np.array((0.0, 500.0, 300.0)),
+        axis,
+        RADIUS_MM,
+        np.array((0.0, -500.0, 200.0)),
+        axis,
+        RADIUS_MM,
+    )
+
+    assert reset_first == pytest.approx(0.25)
+    assert seeds == [None, pytest.approx(0.25), None]
 
 
 def test_internal_normal_angle_negates_the_public_ground_line_angle():
     positions = _positions()
     left = _tangent(positions, "left")
     right = _tangent(positions, "right")
-    ground_line = AxleGroundLine.from_wheel_ground_tangents(left, right)
+    ground_line = GroundDatum.from_wheel_ground_tangents(left, right)
     assert ground_line is not None
 
     angle = _shared_ground_normal_angle(

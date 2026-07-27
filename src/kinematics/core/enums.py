@@ -82,6 +82,16 @@ class PointID(IntEnum):
     ARB_T_BAR_PIVOT = 32
     DROPLINK_T_BAR = 33
 
+    @property
+    def output_only_target_guidance(self) -> str | None:
+        """Return point-specific guidance when an output cannot be driven."""
+        if self is PointID.WHEEL_GROUND_TANGENT:
+            return (
+                "Target 'wheel_center' along Z to control ride height; read the "
+                "wheel-ground tangent from solved output."
+            )
+        return None
+
 
 class ShimType(StrEnum):
     """Supported suspension shim adjustments."""

@@ -19,7 +19,7 @@ from kinematics.core.metrics.catalog import (
 )
 from kinematics.core.metrics.context import MetricContext
 from kinematics.core.metrics.derivatives import evaluate_derivative_metrics
-from kinematics.core.metrics.ground import AxleGroundLine
+from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.metrics.registry import flat_key
 from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
 from kinematics.core.schema.config import SuspensionConfig
@@ -70,10 +70,7 @@ def compute_metrics_for_axle_state(
     """Compute structural per-corner rows followed by axle-level metrics."""
     axle_row: MetricRow = OrderedDict()
     corner_rows: dict[Side, MetricRow] = {}
-    ground = AxleGroundLine.from_wheel_ground_tangents(
-        state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)),
-        state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
-    )
+    ground = _ground_datum_for_axle_state(state)
     for side in (Side.LEFT, Side.RIGHT):
         corner = axle.corners[side]
         corner_state = axle.corner_state(state, side)
@@ -85,11 +82,11 @@ def compute_metrics_for_axle_state(
             _corner_tangents(tangents, side, axle.actuator_dofs())
             if tangents
             else None,
-            axle_ground=ground,
+            ground=ground,
         )
         corner_rows[side] = side_row
 
-    append_axle_state_metrics(axle_row, state, axle, ground)
+    append_axle_state_metrics(axle_row, state, axle, ground, axle.design_ground)
     topology_rows = axle.topology_metric_rows(state)
     axle_row.update(topology_rows.axle)
     for side, row in topology_rows.corners.items():
@@ -103,6 +100,14 @@ def compute_metrics_for_axle_state(
             )
         )
     return AxleMetricRows(axle=axle_row, corners=corner_rows)
+
+
+def _ground_datum_for_axle_state(state: SuspensionState) -> GroundDatum | None:
+    """Construct the shared metric ground datum for an axle state."""
+    return GroundDatum.from_wheel_ground_tangents(
+        state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)),
+        state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
+    )
 
 
 def _corner_tangents(
@@ -154,7 +159,7 @@ def compute_metrics_for_state(
     config: SuspensionConfig,
     tangents: "Sequence[TangentField] | None" = None,
     *,
-    axle_ground: AxleGroundLine | None = None,
+    ground: GroundDatum | None = None,
 ) -> MetricRow:
     """
     Compute all corner-level metrics for a single solved state.
@@ -165,9 +170,9 @@ def compute_metrics_for_state(
         config: Suspension configuration with vehicle parameters.
         tangents: Optional solution-manifold tangents. Derivative columns are
             appended only when these are supplied.
-        axle_ground: Optional shared axle ground line. Standalone corner
-            callers omit this and use their wheel-ground tangent as the local
-            datum.
+        ground: Optional shared axle ground datum. Standalone corner callers
+            omit this and use the horizontal datum through their wheel-ground
+            tangent.
 
     Returns:
         An ordered mapping of metric column names to values. Values are
@@ -178,7 +183,7 @@ def compute_metrics_for_state(
         state=state,
         suspension=suspension,
         config=config,
-        axle_ground=axle_ground,
+        ground=ground,
     )
 
     catalog = get_default_corner_metrics()
@@ -238,21 +243,30 @@ def compute_metrics_for_sweep(
         One metric result per state. Corner suspensions return ordered rows;
         axle suspensions return structural axle and per-corner rows.
     """
-    if tangents_per_state is None:
-        return [
-            _compute_metrics_for_suspension_state(state, suspension, config)
-            for state in states
-        ]
-    if len(states) != len(tangents_per_state):
+    if tangents_per_state is not None and len(states) != len(tangents_per_state):
         raise ValueError("State/tangent row count mismatch")
+
+    if suspension.is_axle:
+        axle = cast("AxleSuspension", suspension)
+        return [
+            compute_metrics_for_axle_state(
+                state,
+                axle,
+                config,
+                tangents_per_state[index] if tangents_per_state is not None else None,
+            )
+            for index, state in enumerate(states)
+        ]
+
+    corner = cast("CornerSuspension", suspension)
     return [
-        _compute_metrics_for_suspension_state(
+        compute_metrics_for_state(
             state,
-            suspension,
+            corner,
             config,
-            tangents,
+            tangents_per_state[index] if tangents_per_state is not None else None,
         )
-        for state, tangents in zip(states, tangents_per_state)
+        for index, state in enumerate(states)
     ]
 
 

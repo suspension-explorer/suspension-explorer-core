@@ -65,6 +65,7 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
     from kinematics.core.metrics.steering_geometry import (
         calculate_mechanical_trail,
         calculate_scrub_radius,
+        calculate_steering_axis_offset_ground,
     )
     from kinematics.core.metrics.swing_arms import (
         calculate_fvsa_length,
@@ -87,6 +88,12 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
         MetricDefinition("camber", calculate_camber, "Camber", MetricUnit.DEG),
         MetricDefinition("caster", calculate_caster, "Caster", MetricUnit.DEG),
         MetricDefinition("kpi", calculate_kpi, "KPI", MetricUnit.DEG),
+        MetricDefinition(
+            "steering_axis_offset_ground",
+            calculate_steering_axis_offset_ground,
+            "Steering-Axis Offset at Ground",
+            MetricUnit.MM,
+        ),
         MetricDefinition(
             "scrub_radius", calculate_scrub_radius, "Scrub Radius", MetricUnit.MM
         ),

@@ -7,12 +7,12 @@ from the preceding root so a multi-root geometry stays on one local branch.
 
 Sign convention.  The scalar solved here is the *ground-normal* angle: it rotates
 the plane's normal.  The public axle datum
-:class:`kinematics.core.metrics.ground.AxleGroundLine` instead reports
+:class:`kinematics.core.metrics.ground.GroundDatum` instead reports
 ``angle_deg = atan2(tangent_z, tangent_y)``, which measures the ground *line*.
 Rotating a normal by ``+theta`` tilts the line it belongs to by ``-theta``, so
 the two quantities are exact negatives of one another::
 
-    AxleGroundLine.angle_deg == -degrees(ground_normal_angle)
+    GroundDatum.angle_deg == -degrees(ground_normal_angle)
 
 Every internal name here says ``normal_angle`` for that reason.  Nothing in
 this module is the public roll angle, and the two must not be conflated.
@@ -191,7 +191,7 @@ def _flat_ground_normal_angle_estimate(
     if abs(lateral_separation) <= EPS_GEOMETRIC:
         raise ValueError("Cannot determine axle ground tangent with collapsed track")
     if lateral_separation < 0.0:
-        # Mirror AxleGroundLine.from_wheel_ground_tangents and orient the
+        # Mirror GroundDatum.from_wheel_ground_tangents and orient the
         # separation from vehicle right to left.  Without this, laterally
         # crossed supports give an estimate near +/-pi, which the clamp then
         # turns into a seed unrelated to the geometry.
@@ -438,17 +438,21 @@ def _ground_angle_cache_key(
 
 
 class _GroundNormalContinuation:
-    """Axle-local continuation state shared by the two tangent-point functions.
+    """Sweep-local root history shared by one axle's tangent-point functions.
 
-    A one-entry exact-input cache avoids solving the identical scalar twice for
-    the left and right derived points. For a new state, the preceding root is
-    used only as the branch-selection seed. The object is scoped to one derived
-    specification, so independent axles and sweeps never share mutable state.
+    Exact accepted geometries retain their selected root so later tangent
+    propagation cannot choose another branch. For a new geometry, the most
+    recently visited root remains the branch-selection seed.
     """
 
     def __init__(self) -> None:
-        self._last_key: _GroundAngleKey | None = None
         self._last_angle: float | None = None
+        self._angles_by_key: dict[_GroundAngleKey, float] = {}
+
+    def reset(self) -> None:
+        """Start an independent root history for a new sweep."""
+        self._last_angle = None
+        self._angles_by_key.clear()
 
     def solve(
         self,
@@ -463,9 +467,10 @@ class _GroundNormalContinuation:
         key = _ground_angle_cache_key(
             left_center, left_axis, left_radius, right_center, right_axis, right_radius
         )
-        if key == self._last_key:
-            assert self._last_angle is not None
-            return self._last_angle
+        cached_angle = self._angles_by_key.get(key)
+        if cached_angle is not None:
+            self._last_angle = cached_angle
+            return cached_angle
 
         normal_angle = _search_ground_normal_angle(
             left_center,
@@ -476,31 +481,9 @@ class _GroundNormalContinuation:
             right_radius,
             seed=self._last_angle,
         )
-        self._last_key = key
         self._last_angle = normal_angle
+        self._angles_by_key[key] = normal_angle
         return normal_angle
-
-
-def _solve_ground_normal_angle(
-    left_center: np.ndarray,
-    left_axis: np.ndarray,
-    left_radius: float,
-    right_center: np.ndarray,
-    right_axis: np.ndarray,
-    right_radius: float,
-    *,
-    seed: float | None = None,
-) -> float:
-    """Pure scalar solve used by tests and callers without continuation state."""
-    return _search_ground_normal_angle(
-        left_center,
-        left_axis,
-        left_radius,
-        right_center,
-        right_axis,
-        right_radius,
-        seed=seed,
-    )
 
 
 def _shared_ground_normal_angle(
@@ -520,7 +503,7 @@ def _shared_ground_normal_angle(
     solve = (
         continuation.solve
         if continuation is not None
-        else _solve_ground_normal_angle
+        else _search_ground_normal_angle
     )
     normal_angle = solve(
         primal_left_center,

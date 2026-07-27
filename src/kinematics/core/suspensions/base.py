@@ -19,7 +19,7 @@ from kinematics.core.elements import SuspensionElement
 from kinematics.core.enums import PointID, ShimType, SuspensionType, Units
 from kinematics.core.points.derived.manager import DerivedPointsSpec
 from kinematics.core.primitives.geometry import Point3
-from kinematics.core.primitives.point_ref import PointKey, Side
+from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.state import SuspensionState
 
@@ -63,6 +63,12 @@ class Suspension(ABC):
         default=None,
         init=False,
         repr=False,
+    )
+    _assembly_cache: SuspensionAssembly | None = field(
+        default=None,
+        init=False,
+        repr=False,
+        compare=False,
     )
 
     def __post_init__(self) -> None:
@@ -240,6 +246,10 @@ class Suspension(ABC):
         """
         return self.OUTPUT_ONLY_POINTS
 
+    def prepare_sweep(self) -> None:
+        """Reset any sweep-local derived-point runtime state."""
+        return None
+
     def validate_sweep_target_points(
         self,
         point_keys: Iterable[PointKey],
@@ -259,11 +269,15 @@ class Suspension(ABC):
                     f"type '{suspension_type}'."
                 )
             if point_key in point_catalog.output_only:
+                point_id = (
+                    point_key.point if isinstance(point_key, PointRef) else point_key
+                )
+                guidance = point_id.output_only_target_guidance
+                guidance_suffix = f" {guidance}" if guidance is not None else ""
                 raise ValueError(
                     f"Sweep target point '{point_key.name}' is a derived output of "
-                    f"suspension type '{suspension_type}' and cannot be driven. "
-                    "Target 'wheel_center' along Z to control ride height, and "
-                    "read ground geometry from the 'ground_z_centerline' metric."
+                    f"suspension type '{suspension_type}' and cannot be driven."
+                    f"{guidance_suffix}"
                 )
 
     def resolve_target_key(self, point: PointID, side: Side | None) -> PointKey:
@@ -283,10 +297,12 @@ class Suspension(ABC):
 
     def assembly(self) -> SuspensionAssembly:
         """Return the validated point and element composition."""
-        return SuspensionAssembly.from_state(
-            self.initial_state(),
-            self.derived_spec(),
-            self.elements(),
-            self.output_points(),
-            self.output_only_points(),
-        )
+        if self._assembly_cache is None:
+            self._assembly_cache = SuspensionAssembly.from_state(
+                self.initial_state(),
+                self.derived_spec(),
+                self.elements(),
+                self.output_points(),
+                self.output_only_points(),
+            )
+        return self._assembly_cache

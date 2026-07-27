@@ -1,7 +1,7 @@
-"""Axle-level ground datum derived from two wheel-ground tangent points.
+"""Typed zero-grade ground datum for metric calculations.
 
-Chassis space remains the coordinate reference. This primitive
-describes only the YZ ground line at one axle; its corresponding 3D plane is
+Chassis space remains the coordinate reference. The datum stores the upward
+normal and Hessian offset of a YZ ground line; its corresponding 3D plane is
 that line extruded along chassis X, so it deliberately carries no grade.
 """
 
@@ -12,64 +12,53 @@ from math import atan2, degrees, hypot, isfinite
 
 from kinematics.core.enums import Axis
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
-from kinematics.core.primitives.geometry import Point3
+from kinematics.core.primitives.geometry import Direction3, Point3
 
 _INVARIANT_TOLERANCE = 1e-12
 
 
 @dataclass(frozen=True)
-class AxleGroundLine:
-    """A normalized YZ tangent line and its upward Hessian normal.
+class GroundDatum:
+    """A normalized upward YZ normal and Hessian offset.
 
     The line equation is ``normal_y * y + normal_z * z + offset_mm = 0``.
-    Its tangent convention points from vehicle right to left (nonnegative Y),
-    which makes the normal's Z component nonnegative.  Extruding the line in
-    chassis ±X yields the axle-level, zero-grade ground plane.
+    Its derived tangent points from vehicle right to left (nonnegative Y).
+    Extruding the line in chassis ±X yields the zero-grade ground plane used
+    by metric calculations.
     """
 
-    tangent_y: float
-    tangent_z: float
     normal_y: float
     normal_z: float
     offset_mm: float
 
     def __post_init__(self) -> None:
-        """Reject direct construction that would violate the line conventions."""
+        """Reject direct construction that violates the datum conventions."""
         if not all(
             isfinite(value)
-            for value in (
-                self.tangent_y,
-                self.tangent_z,
-                self.normal_y,
-                self.normal_z,
-                self.offset_mm,
-            )
+            for value in (self.normal_y, self.normal_z, self.offset_mm)
         ):
-            raise ValueError("Axle ground-line fields must be finite")
-
-        if abs(hypot(self.tangent_y, self.tangent_z) - 1.0) > _INVARIANT_TOLERANCE:
-            raise ValueError("Axle ground-line tangent must be unit length")
-
-        # Pinning the normal to the tangent's upward rotation also fixes its
-        # length and perpendicularity, so no separate checks are needed.
-        if (
-            abs(self.normal_y + self.tangent_z) > _INVARIANT_TOLERANCE
-            or abs(self.normal_z - self.tangent_y) > _INVARIANT_TOLERANCE
+            raise ValueError("Ground-datum fields must be finite")
+        if abs(hypot(self.normal_y, self.normal_z) - 1.0) > _INVARIANT_TOLERANCE:
+            raise ValueError("Ground-datum normal must be unit length")
+        if self.normal_z < -_INVARIANT_TOLERANCE or (
+            abs(self.normal_z) <= _INVARIANT_TOLERANCE
+            and self.normal_y > _INVARIANT_TOLERANCE
         ):
-            raise ValueError(
-                "Axle ground-line normal must be the tangent's upward rotation"
-            )
+            raise ValueError("Ground-datum normal must use the upward orientation")
 
-        if self.tangent_y < -_INVARIANT_TOLERANCE or (
-            abs(self.tangent_y) <= _INVARIANT_TOLERANCE
-            and self.tangent_z < -_INVARIANT_TOLERANCE
-        ):
-            raise ValueError("Axle ground-line tangent has a non-canonical orientation")
+    @classmethod
+    def horizontal_at(cls, point: Point3) -> GroundDatum:
+        """Construct the standalone-corner +Z datum through ``point``."""
+        return cls(
+            normal_y=0.0,
+            normal_z=1.0,
+            offset_mm=-float(point[Axis.Z]),
+        )
 
     @classmethod
     def from_wheel_ground_tangents(
         cls, left: Point3, right: Point3
-    ) -> AxleGroundLine | None:
+    ) -> GroundDatum | None:
         """Construct the datum from current wheel-ground tangents, ignoring X.
 
         Returns ``None`` when the lateral track or YZ projection has
@@ -98,9 +87,8 @@ class AxleGroundLine:
         if not isfinite(separation) or separation <= EPS_GEOMETRIC:
             return None
 
-        # The guards above leave a strictly positive lateral component and a
-        # finite separation, so normalization yields a canonically oriented unit
-        # tangent and its upward rotation.
+        # The guards above leave a strictly positive lateral component and
+        # finite separation, so the upward normal is canonical.
         tangent_y /= separation
         tangent_z /= separation
         normal_y = -tangent_z
@@ -110,12 +98,20 @@ class AxleGroundLine:
             return None
 
         return cls(
-            tangent_y=tangent_y,
-            tangent_z=tangent_z,
             normal_y=normal_y,
             normal_z=normal_z,
             offset_mm=offset_mm,
         )
+
+    @property
+    def tangent_y(self) -> float:
+        """Return the canonical ground-line tangent's lateral component."""
+        return self.normal_z
+
+    @property
+    def tangent_z(self) -> float:
+        """Return the canonical ground-line tangent's vertical component."""
+        return -self.normal_y
 
     @property
     def angle_deg(self) -> float:
@@ -123,9 +119,9 @@ class AxleGroundLine:
         return degrees(atan2(self.tangent_z, self.tangent_y))
 
     @property
-    def plane_normal(self) -> tuple[float, float, float]:
-        """Return the normal of the X-extruded axle ground plane."""
-        return (0.0, self.normal_y, self.normal_z)
+    def normal(self) -> Direction3:
+        """Return the upward normal of the X-extruded ground plane."""
+        return Direction3((0.0, self.normal_y, self.normal_z))
 
     def z_at(self, y: float) -> float | None:
         """Return the line height at lateral coordinate ``y``, when defined."""
@@ -134,8 +130,8 @@ class AxleGroundLine:
         z = -(self.normal_y * y + self.offset_mm) / self.normal_z
         return float(z) if isfinite(z) else None
 
-    def signed_distance_yz(self, point: Point3) -> float:
-        """Return signed perpendicular YZ distance; positive is above the line."""
+    def signed_distance(self, point: Point3) -> float:
+        """Return signed perpendicular distance; positive is above the plane."""
         return float(
             self.normal_y * point[Axis.Y]
             + self.normal_z * point[Axis.Z]

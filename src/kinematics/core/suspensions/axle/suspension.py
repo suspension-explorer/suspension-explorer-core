@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
-from functools import partial
+from functools import cached_property, partial
 from typing import TYPE_CHECKING, Any, ClassVar, Sequence
 
 from kinematics.core.constraints import Constraint, DistanceConstraint
@@ -22,6 +22,7 @@ from kinematics.core.elements import (
     map_element_points,
 )
 from kinematics.core.enums import Axis, PointID, SuspensionType
+from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.metrics.main import AxleMetricRows, compute_metrics_for_axle_state
 from kinematics.core.points.derived.ground import (
     _GroundNormalContinuation,
@@ -89,6 +90,12 @@ class AxleSuspension(Suspension):
     corners: dict[Side, CornerSuspension] = field(default_factory=dict)
     anti_roll: AxleArb = field(default_factory=ArbNone, kw_only=True)
     heave_link: AxleHeaveLink = field(default_factory=HeaveLinkNone, kw_only=True)
+    _ground_normal_continuation: _GroundNormalContinuation = field(
+        default_factory=_GroundNormalContinuation,
+        init=False,
+        repr=False,
+        compare=False,
+    )
 
     @property
     def is_axle(self) -> bool:
@@ -178,6 +185,14 @@ class AxleSuspension(Suspension):
         self._initial_state = state
         return self._initial_state
 
+    def prepare_sweep(self) -> None:
+        """Start one independent ground-root history at the design state."""
+        initial_state = self.initial_state()
+        self._ground_normal_continuation.reset()
+        DerivedPointsManager(self.derived_spec()).update_in_place(
+            initial_state.positions
+        )
+
     def free_points(self) -> Sequence[PointKey]:
         """Return both corners' free points under side-qualified keys."""
         corner_points = tuple(
@@ -204,6 +219,15 @@ class AxleSuspension(Suspension):
                 for side in (Side.LEFT, Side.RIGHT)
                 for point in self.corners[side].output_only_points()
             )
+        )
+
+    @cached_property
+    def design_ground(self) -> GroundDatum | None:
+        """Return the immutable ground datum for the authored axle geometry."""
+        state = self.initial_state()
+        return GroundDatum.from_wheel_ground_tangents(
+            state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)),
+            state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
         )
 
     def constraints(self) -> list[Constraint]:
@@ -335,7 +359,7 @@ class AxleSuspension(Suspension):
             "right_axis_inboard": right_axis_inboard_ref,
             "right_axis_outboard": right_axis_outboard_ref,
             "right_radius": right_corner.config.wheel.tire.nominal_radius,
-            "continuation": _GroundNormalContinuation(),
+            "continuation": self._ground_normal_continuation,
         }
         functions[left_tangent] = partial(
             get_axle_wheel_ground_tangent,

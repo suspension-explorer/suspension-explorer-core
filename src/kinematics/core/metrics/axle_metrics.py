@@ -6,7 +6,7 @@ from math import atan2, degrees
 from typing import TYPE_CHECKING
 
 from kinematics.core.enums import Axis, PointID
-from kinematics.core.metrics.ground import AxleGroundLine
+from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
 from kinematics.core.primitives.point_ref import PointRef, Side
 
@@ -20,9 +20,10 @@ def append_axle_state_metrics(
     row: MetricRow,
     state: SuspensionState,
     axle: AxleSuspension,
-    ground: "AxleGroundLine | None" = None,
+    ground: GroundDatum | None,
+    design_ground: GroundDatum | None,
 ) -> None:
-    """Append axle-scoped metrics, including an optional shared ground line."""
+    """Append axle-scoped metrics from the current and design ground data."""
     wheel_delta_z: dict[Side, float] = {}
     tangent_y: dict[Side, float] = {}
     for side in (Side.LEFT, Side.RIGHT):
@@ -39,7 +40,6 @@ def append_axle_state_metrics(
     track = abs(tangent_y[Side.LEFT] - tangent_y[Side.RIGHT])
     row["heave"] = 0.5 * (left_wheel_z + right_wheel_z)
     row["roll"] = degrees(atan2(left_wheel_z - right_wheel_z, track))
-    design_ground = _axle_ground_line(axle.initial_state())
     current_ground_z = ground.z_at(0.0) if ground is not None else None
     design_ground_z = design_ground.z_at(0.0) if design_ground is not None else None
     row["ride_height_change"] = (
@@ -76,14 +76,6 @@ def append_axle_state_metrics(
         design_rack_y = float(left_corner.initial_state().get(rack_attachment)[Axis.Y])
         current_rack_y = float(state.get(PointRef(Side.LEFT, rack_attachment))[Axis.Y])
         row["rack_displacement"] = current_rack_y - design_rack_y
-
-
-def _axle_ground_line(state: SuspensionState) -> AxleGroundLine | None:
-    """Build the shared ground datum from an axle state."""
-    return AxleGroundLine.from_wheel_ground_tangents(
-        state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)),
-        state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
-    )
 
 
 def _roll_center(

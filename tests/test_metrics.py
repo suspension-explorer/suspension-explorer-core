@@ -7,9 +7,13 @@ from kinematics.cli.io.sweep_loader import load_sweep
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.metrics.catalog import get_default_corner_metrics
 from kinematics.core.metrics.context import MetricContext
-from kinematics.core.metrics.ground import AxleGroundLine
+from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.metrics.main import compute_metrics_for_state_from_suspension
-from kinematics.core.metrics.steering_geometry import calculate_scrub_radius
+from kinematics.core.metrics.steering_geometry import (
+    calculate_mechanical_trail,
+    calculate_scrub_radius,
+    calculate_steering_axis_offset_ground,
+)
 from kinematics.core.metrics.units import MetricUnit
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.constants import TEST_TOLERANCE
@@ -244,13 +248,9 @@ def test_metric_context_exposes_cg_position(double_wishbone_geometry_file) -> No
     assert ctx.cg_position is not suspension.config.cg_position
 
 
-def test_scrub_radius_uses_ground_plane_wheel_lateral_direction(
+def test_iso_steering_ground_metrics_use_wheel_relative_axes(
     double_wishbone_geometry_file,
 ) -> None:
-    """
-    Scrub radius should use the wheel lateral direction in the ground
-    plane, not the full 3D axle direction.
-    """
     suspension = load_geometry(double_wishbone_geometry_file)
     assert isinstance(suspension, DoubleWishboneSuspension)
     assert suspension.config is not None
@@ -268,11 +268,15 @@ def test_scrub_radius_uses_ground_plane_wheel_lateral_direction(
     DerivedPointsManager(suspension.derived_spec()).update_in_place(state.positions)
 
     metrics = compute_metrics_for_state_from_suspension(state, suspension)
+    steering_axis_offset = metrics["steering_axis_offset_ground"]
     scrub_radius = metrics["scrub_radius"]
+    mechanical_trail = metrics["mechanical_trail"]
     roadwheel_angle = metrics["roadwheel_angle"]
     camber = metrics["camber"]
 
+    assert steering_axis_offset is not None
     assert scrub_radius is not None
+    assert mechanical_trail is not None
     assert roadwheel_angle is not None
     assert camber is not None
     assert abs(roadwheel_angle) > 1.0
@@ -282,25 +286,35 @@ def test_scrub_radius_uses_ground_plane_wheel_lateral_direction(
     ground_pt = ctx.steering_axis_ground_intersection
     assert ground_pt is not None
 
-    displacement = (ground_pt - ctx.wheel_ground_tangent).data
-    wheel_lateral_ground = ctx.wheel_axis.data.copy()
-    wheel_lateral_ground[2] = 0.0
-    wheel_lateral_ground /= np.linalg.norm(wheel_lateral_ground)
+    displacement = ground_pt - ctx.wheel_ground_tangent
+    ground_normal = ctx.ground.normal
+    wheel_lateral_ground = (
+        ctx.wheel_axis.vector()
+        - ground_normal * ctx.wheel_axis.dot(ground_normal)
+    ).normalize()
+    wheel_longitudinal_ground = (
+        ctx.side_sign * wheel_lateral_ground.cross(ground_normal)
+    ).normalize()
 
-    expected_scrub_radius = -float(np.dot(displacement, wheel_lateral_ground))
-    old_3d_axle_projection = -float(np.dot(displacement, ctx.wheel_axis.data))
+    expected_offset = -float(displacement.dot(wheel_lateral_ground))
+    expected_trail = float(displacement.dot(wheel_longitudinal_ground))
+    expected_scrub = displacement.norm()
 
     np.testing.assert_allclose(
+        steering_axis_offset, expected_offset, atol=TEST_TOLERANCE
+    )
+    np.testing.assert_allclose(mechanical_trail, expected_trail, atol=TEST_TOLERANCE)
+    np.testing.assert_allclose(scrub_radius, expected_scrub, atol=TEST_TOLERANCE)
+    np.testing.assert_allclose(
         scrub_radius,
-        expected_scrub_radius,
+        np.hypot(steering_axis_offset, mechanical_trail),
         atol=TEST_TOLERANCE,
-        err_msg="Scrub radius should use wheel lateral direction on the ground plane",
     )
     assert not np.isclose(
-        scrub_radius,
-        old_3d_axle_projection,
+        mechanical_trail,
+        displacement[Axis.X],
         atol=1e-3,
-    ), "Scrub radius should not use the full 3D axle direction"
+    ), "Mechanical trail should follow tyre X_T, not chassis X"
 
 
 def test_steering_geometry_uses_actual_banked_ground_plane(
@@ -322,9 +336,7 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
     tangent_z = sin(bank_angle)
     normal_y = -tangent_z
     normal_z = tangent_y
-    ground = AxleGroundLine(
-        tangent_y=tangent_y,
-        tangent_z=tangent_z,
+    ground = GroundDatum(
         normal_y=normal_y,
         normal_z=normal_z,
         offset_mm=-(normal_y * tangent[Axis.Y] + normal_z * tangent[Axis.Z]),
@@ -333,27 +345,39 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
         state=state,
         suspension=suspension,
         config=suspension.config,
-        axle_ground=ground,
+        ground=ground,
     )
 
     intersection = ctx.steering_axis_ground_intersection
     assert intersection is not None
     np.testing.assert_allclose(
-        ground.signed_distance_yz(intersection), 0.0, atol=TEST_TOLERANCE
+        ground.signed_distance(intersection), 0.0, atol=TEST_TOLERANCE
     )
 
-    ground_normal, _ = ctx.ground_plane
+    ground_normal = ctx.ground.normal
     projected_axis = (
         ctx.wheel_axis.vector()
         - ground_normal * ctx.wheel_axis.dot(ground_normal)
     ).normalize()
-    expected_scrub = -float(
-        (intersection - ctx.wheel_ground_tangent).dot(projected_axis)
-    )
+    displacement = intersection - ctx.wheel_ground_tangent
+    expected_offset = -float(displacement.dot(projected_axis))
+    forward_axis = (
+        ctx.side_sign * projected_axis.cross(ground_normal)
+    ).normalize()
+    expected_trail = float(displacement.dot(forward_axis))
+    expected_scrub = displacement.norm()
 
+    steering_axis_offset = calculate_steering_axis_offset_ground(ctx)
     scrub_radius = calculate_scrub_radius(ctx)
+    mechanical_trail = calculate_mechanical_trail(ctx)
+    assert steering_axis_offset is not None
     assert scrub_radius is not None
+    assert mechanical_trail is not None
+    np.testing.assert_allclose(
+        steering_axis_offset, expected_offset, atol=TEST_TOLERANCE
+    )
     np.testing.assert_allclose(scrub_radius, expected_scrub, atol=TEST_TOLERANCE)
+    np.testing.assert_allclose(mechanical_trail, expected_trail, atol=TEST_TOLERANCE)
 
 
 class TestSignConventionsAndKnownValues:
@@ -490,6 +514,7 @@ def test_default_corner_metric_catalog_matches_trusted_set() -> None:
         "camber",
         "caster",
         "kpi",
+        "steering_axis_offset_ground",
         "scrub_radius",
         "mechanical_trail",
         "roadwheel_angle",

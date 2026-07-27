@@ -12,11 +12,12 @@ All notable changes to this project will be documented in this file.
 - Advisory sweep diagnostics report convergence, residual acceptance, branch continuity, derivative availability, rocker and anti-roll-bar chirality, and transmission margin.
 - Coupled axle models solve left and right corners together and support either mirrored or independently authored geometry.
 - The public `analyze_sweep()` and `initial_pose()` APIs return structured positions, metrics, locations, metadata, renderer-neutral element paths, diagnostics, references, and solved frames.
-- An `AxleGroundLine` value object, exported from `kinematics.core.metrics`,
-  derives the chassis-space `YZ` ground line once per solved axle state and shares
-  it between both corner metric contexts. Its plane interpretation is that line
-  extruded along chassis `X`, so longitudinal grade is assumed to be zero rather
-  than inferred from a single axle.
+- A `GroundDatum` value object, exported from `kinematics.core.metrics`, owns
+  the upward unit normal, Hessian offset, and ground-evaluation helpers used by
+  post-solve metrics. For an axle it is derived once per solved state from the
+  two wheel-ground tangents and shared by both corner metric contexts. Its plane
+  interpretation is the chassis-space `YZ` line extruded along chassis `X`, so
+  longitudinal grade is assumed to be zero rather than inferred from one axle.
 - Five axle-scoped ground metrics: `ground_line_normal_y`,
   `ground_line_normal_z`, `ground_line_offset`, `ground_line_angle`, and
   `ground_z_centerline`.
@@ -98,12 +99,16 @@ All notable changes to this project will be documented in this file.
   chassis `X`, instead of letting each corner independently assume a flat `+Z`
   ground. Standalone corners keep the local `+Z` assumption, since one wheel
   cannot define a ground line.
-- Steering-axis intersection and scrub direction use the full shared axle ground
-  plane, including bank, rather than substituting a horizontal plane at the
-  corner tangent height.
-- Ground-root selection continues from the preceding accepted state and keeps its
-  one-result sibling reuse local to a derived-point specification; independent
-  axles and sweeps share no process-global geometry cache.
+- Steering-axis ground metrics follow the ISO 8855 tyre-axis decomposition on
+  the full shared ground plane, including bank. `steering_axis_offset_ground`
+  is the signed lateral component along tyre `Y_T`, `mechanical_trail` is the
+  signed longitudinal component along tyre `X_T`, and `scrub_radius` is the
+  unsigned distance between the tyre contact centre and steering-axis ground
+  intersection.
+- Ground-root selection is sweep-local to each axle. It continues from the
+  preceding accepted state and records the selected root for each exact accepted
+  geometry, so later tangent propagation reuses the same branch. A new sweep
+  resets that history at the design condition; no process-global cache is used.
 - Axle ride-height change compares current and design ground height at chassis
   centerline, avoiding contamination from bank angle, asymmetric track, tire
   radii, or lateral track migration.
@@ -152,13 +157,18 @@ All notable changes to this project will be documented in this file.
   the ground normal into the wheel plane directly, so the separate flat-ground
   down-vector helper no longer had a caller.
 - The wheel-ground tangent point is a derived output that cannot be driven,
-  so sweeps that target it are rejected during validation with an error naming
-  the drivable alternative. On an axle the point comes from a coupled derivation
-  across both corners, with a bounded validity domain and non-unique roots, so
-  supporting it as an actuator would require an explicit branch policy.
+  so sweeps that target it are rejected during validation. On an axle the point
+  comes from a coupled derivation across both corners, with a bounded validity
+  domain and non-unique roots, so supporting it as an actuator would require an
+  explicit branch policy.
 - The static geometry check reports the wheel-ground tangent height rather
   than a contact-patch height, and `GeometryVisualizationResult` renames its
   `contact_patch_z` and `contact_patch_on_ground` fields to match.
+- Steering-axis ground metrics now use their ISO meanings.
+  `steering_axis_offset_ground` replaces the signed lateral quantity previously
+  reported as `scrub_radius`; `scrub_radius` is now the total unsigned ground
+  distance; and `mechanical_trail` is projected along the wheel-relative tyre
+  longitudinal axis rather than chassis `X`.
 
 ## [0.3.0] - 2026-04-09
 

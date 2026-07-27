@@ -14,7 +14,8 @@ from kinematics.core.metrics import (
     compute_metrics_for_sweep,
 )
 from kinematics.core.metrics import main as metrics_main
-from kinematics.core.metrics.ground import AxleGroundLine
+from kinematics.core.metrics.ground import GroundDatum
+from kinematics.core.points.derived import ground as ground_module
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.suspensions.axle import AxleSuspension
@@ -155,11 +156,28 @@ def test_basic_axle_sweep_solves_and_emits_structural_metrics(
     assert "camber" in midpoint.corners[Side.RIGHT]
     assert "camber_left" not in midpoint.corners[Side.LEFT]
     assert "rack_displacement" in midpoint.axle
+    for key in (
+        "steering_axis_offset_ground",
+        "scrub_radius",
+        "mechanical_trail",
+    ):
+        assert midpoint.corners[Side.LEFT][key] == pytest.approx(
+            midpoint.corners[Side.RIGHT][key]
+        )
+    left_offset = midpoint.corners[Side.LEFT]["steering_axis_offset_ground"]
+    left_scrub = midpoint.corners[Side.LEFT]["scrub_radius"]
+    left_trail = midpoint.corners[Side.LEFT]["mechanical_trail"]
+    assert left_offset is not None
+    assert left_scrub is not None
+    assert left_trail is not None
+    assert left_scrub == pytest.approx(
+        (left_offset**2 + left_trail**2) ** 0.5
+    )
     midpoint_state = states[2]
     assert midpoint.axle["ground_line_normal_y"] == pytest.approx(0.0, abs=1e-10)
     assert midpoint.axle["ground_line_normal_z"] == pytest.approx(1.0)
     assert midpoint.axle["ground_line_angle"] == pytest.approx(0.0, abs=1e-8)
-    ground = AxleGroundLine.from_wheel_ground_tangents(
+    ground = GroundDatum.from_wheel_ground_tangents(
         midpoint_state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)),
         midpoint_state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
     )
@@ -172,6 +190,35 @@ def test_basic_axle_sweep_solves_and_emits_structural_metrics(
     left_z = final.get(PointRef(Side.LEFT, PointID.WHEEL_CENTER))[Axis.Z]
     right_z = final.get(PointRef(Side.RIGHT, PointID.WHEEL_CENTER))[Axis.Z]
     assert left_z == pytest.approx(right_z, abs=1e-5)
+
+
+def test_tangent_propagation_reuses_the_solved_ground_roots(
+    test_data_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+    sweep = load_sweep(test_data_dir / "axle_sweep.yaml", axle)
+    original_search = ground_module._search_ground_normal_angle
+    searched_seeds: list[float | None] = []
+
+    def record_search(*args, seed=None):
+        searched_seeds.append(seed)
+        return original_search(*args, seed=seed)
+
+    monkeypatch.setattr(
+        ground_module,
+        "_search_ground_normal_angle",
+        record_search,
+    )
+
+    states, _ = solve_sweep(axle, sweep)
+    searches_after_solve = len(searched_seeds)
+    metrics = compute_sweep_metrics(axle, sweep, states)
+
+    assert metrics.derivative_error is None
+    assert searches_after_solve > 0
+    assert len(searched_seeds) == searches_after_solve
 
 
 def test_axle_targets_require_side(test_data_dir: Path) -> None:
@@ -231,11 +278,11 @@ def test_axle_metrics_share_one_ground_line_instance_with_both_corners(
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
     assert isinstance(axle, AxleSuspension)
     assert axle.config is not None
-    received_ground: list[AxleGroundLine | None] = []
+    received_ground: list[GroundDatum | None] = []
     original_compute = metrics_main.compute_metrics_for_state
 
     def capture_ground(*args, **kwargs):
-        received_ground.append(kwargs["axle_ground"])
+        received_ground.append(kwargs["ground"])
         return original_compute(*args, **kwargs)
 
     monkeypatch.setattr(metrics_main, "compute_metrics_for_state", capture_ground)
@@ -250,7 +297,7 @@ def test_ride_height_change_uses_shared_ground_centerline(test_data_dir: Path) -
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
     assert isinstance(axle, AxleSuspension)
     state = axle.initial_state().copy()
-    design_ground = AxleGroundLine.from_wheel_ground_tangents(
+    design_ground = GroundDatum.from_wheel_ground_tangents(
         state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)),
         state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
     )
@@ -276,3 +323,11 @@ def test_ride_height_change_uses_shared_ground_centerline(test_data_dir: Path) -
 
     assert isinstance(rows, AxleMetricRows)
     assert rows.axle["ride_height_change"] == pytest.approx(15.0)
+
+
+def test_axle_reuses_one_design_ground_datum(test_data_dir: Path) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+
+    assert axle.design_ground is not None
+    assert axle.design_ground is axle.design_ground

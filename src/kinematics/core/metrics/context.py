@@ -11,18 +11,18 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import TYPE_CHECKING
 
-from kinematics.core.enums import Axis, PointID
+from kinematics.core.enums import PointID
+from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.state import SuspensionState
 
 if TYPE_CHECKING:
-    from kinematics.core.metrics.ground import AxleGroundLine
     from kinematics.core.suspensions.corner.base import CornerSuspension
 
 
-@dataclass
+@dataclass(init=False)
 class MetricContext:
     """
     Shared context for computing metrics on a single solved corner state.
@@ -36,7 +36,26 @@ class MetricContext:
     state: SuspensionState
     suspension: "CornerSuspension"
     config: SuspensionConfig
-    axle_ground: "AxleGroundLine | None" = None
+    ground: GroundDatum
+
+    def __init__(
+        self,
+        state: SuspensionState,
+        suspension: "CornerSuspension",
+        config: SuspensionConfig,
+        ground: GroundDatum | None = None,
+    ) -> None:
+        """Resolve one ground datum when the metric context is created."""
+        self.state = state
+        self.suspension = suspension
+        self.config = config
+        self.ground = (
+            ground
+            if ground is not None
+            else GroundDatum.horizontal_at(
+                state.get(PointID.WHEEL_GROUND_TANGENT)
+            )
+        )
 
     @cached_property
     def design_state(self) -> SuspensionState:
@@ -106,37 +125,6 @@ class MetricContext:
         return (upper - lower).normalize()
 
     @cached_property
-    def ground_z(self) -> float:
-        """
-        Ground-line Z-height in chassis space.
-
-        For an axle solve, this evaluates the shared axle ground line at this
-        corner's wheel-ground tangent Y coordinate. Standalone corner solves
-        retain the local tangent Z datum with a +Z ground normal. In either case, the
-        chassis-space ground datum is not generally at Z=0.
-        """
-        if self.axle_ground is not None:
-            ground_z = self.axle_ground.z_at(
-                float(self.wheel_ground_tangent[Axis.Y])
-            )
-            if ground_z is not None:
-                return ground_z
-        return float(self.wheel_ground_tangent[Axis.Z])
-
-    @cached_property
-    def ground_plane(self) -> tuple[Direction3, float]:
-        """Return the current ground plane as upward unit normal and Hessian offset."""
-        if self.axle_ground is not None:
-            return (
-                Direction3(self.axle_ground.plane_normal),
-                self.axle_ground.offset_mm,
-            )
-        return (
-            Direction3((0.0, 0.0, 1.0)),
-            -float(self.wheel_ground_tangent[Axis.Z]),
-        )
-
-    @cached_property
     def steering_axis_ground_intersection(self) -> Point3 | None:
         """
         Point where the steering axis intersects the ground plane.
@@ -148,17 +136,11 @@ class MetricContext:
         """
         lower, upper = self.steering_axis_pivots
         direction = upper - lower
-        normal, offset = self.ground_plane
+        normal = self.ground.normal
         denominator = normal.dot(direction)
         if abs(denominator) < EPS_GEOMETRIC:
             return None
-        signed_distance = (
-            normal[Axis.X] * lower[Axis.X]
-            + normal[Axis.Y] * lower[Axis.Y]
-            + normal[Axis.Z] * lower[Axis.Z]
-            + offset
-        )
-        t = -signed_distance / denominator
+        t = -self.ground.signed_distance(lower) / denominator
         return lower + t * direction
 
     @cached_property

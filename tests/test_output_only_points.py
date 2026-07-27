@@ -49,7 +49,7 @@ def test_corner_rejects_ground_tangent_sweep_target(test_data_dir: Path) -> None
         build_sweep_config(spec, corner)
 
 
-def test_ground_tangent_rejection_names_the_supported_alternative(
+def test_output_only_rejection_uses_the_point_declaration_guidance(
     test_data_dir: Path,
 ) -> None:
     corner = load_geometry(test_data_dir / "geometry.yaml")
@@ -60,7 +60,7 @@ def test_ground_tangent_rejection_names_the_supported_alternative(
 
     message = str(error.value)
     assert "'wheel_center'" in message
-    assert "'ground_z_centerline'" in message
+    assert "'ground_z_centerline'" not in message
 
 
 def test_direct_sweep_config_cannot_bypass_output_only_validation(
@@ -119,6 +119,17 @@ def test_corner_accepts_wheel_center_sweep_target(test_data_dir: Path) -> None:
         PointID.TRACKROD_INBOARD,
         PointID.WHEEL_CENTER,
     ]
+
+
+def test_repeated_target_validation_reuses_the_validated_assembly(
+    test_data_dir: Path,
+) -> None:
+    corner = load_geometry(test_data_dir / "geometry.yaml")
+
+    first = corner.assembly()
+    corner.validate_sweep_target_points([PointID.WHEEL_CENTER])
+
+    assert corner.assembly() is first
 
 
 def test_axle_accepts_wheel_center_sweep_target(test_data_dir: Path) -> None:
