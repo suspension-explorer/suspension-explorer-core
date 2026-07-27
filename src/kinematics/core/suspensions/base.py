@@ -11,7 +11,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Sequence
 
 from kinematics.core.assembly import SuspensionAssembly
 from kinematics.core.constraints import Constraint
@@ -237,17 +237,29 @@ class Suspension(ABC):
 
     def output_only_points(self) -> tuple[PointKey, ...]:
         """
-        Return exported derived points that cannot be driven as sweep targets.
+        Return exported solved points that cannot be driven as sweep targets.
 
-        These are always a subset of the derived points. The designation is a
-        solver and product policy for observables that are not supported as
-        actuators, such as branch-sensitive outputs from a coupled construction;
-        it does not imply that their forward value or Jacobian is unavailable.
+        The designation is a solver and product policy for observables that are
+        not supported as actuators, such as branch-sensitive outputs from a
+        coupled construction; it does not imply that their forward value or
+        Jacobian is unavailable. An output-only point is computed either as an
+        ordinary derived point or by the post-solve ground closure.
         """
         return self.OUTPUT_ONLY_POINTS
 
-    def prepare_sweep(self) -> None:
-        """Reset any sweep-local derived-point runtime state."""
+    def apply_ground_closure(
+        self,
+        positions: "dict[PointKey, Any]",
+        seed: float | None = None,
+    ) -> float | None:
+        """
+        Write post-solve ground outputs into ``positions``; return the solved seed.
+
+        The base suspension has no coupled ground geometry, so this is a no-op.
+        Axles overwrite both wheel-ground tangents with the coupled shared-plane
+        solution and return the solved ground-normal angle so a sweep can thread
+        it into the next state's solve as an explicit, stateless seed.
+        """
         return None
 
     def validate_sweep_target_points(
@@ -263,11 +275,6 @@ class Suspension(ABC):
                     f"Sweep target point '{point_key.name}' is not present in "
                     f"suspension type '{suspension_type}'."
                 )
-            if point_key in point_catalog.fixed:
-                raise ValueError(
-                    f"Sweep target point '{point_key.name}' is fixed in suspension "
-                    f"type '{suspension_type}'."
-                )
             if point_key in point_catalog.output_only:
                 point_id = (
                     point_key.point if isinstance(point_key, PointRef) else point_key
@@ -278,6 +285,11 @@ class Suspension(ABC):
                     f"Sweep target point '{point_key.name}' is a derived output of "
                     f"suspension type '{suspension_type}' and cannot be driven."
                     f"{guidance_suffix}"
+                )
+            if point_key in point_catalog.fixed:
+                raise ValueError(
+                    f"Sweep target point '{point_key.name}' is fixed in suspension "
+                    f"type '{suspension_type}'."
                 )
 
     def resolve_target_key(self, point: PointID, side: Side | None) -> PointKey:

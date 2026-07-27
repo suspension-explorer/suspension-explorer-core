@@ -17,6 +17,7 @@ PUBLIC_CORE_MODULES = {
     "kinematics.core.metrics.main",
     "kinematics.core.metrics.registry",
     "kinematics.core.enums",
+    "kinematics.core.pose",
     "kinematics.core.primitives.geometry",
     "kinematics.core.primitives.point_ref",
     "kinematics.core.presentation",
@@ -40,6 +41,12 @@ def test_core_import_succeeds_without_cli_dependencies() -> None:
         "import kinematics.core\n"
         "from kinematics.core.input import build_suspension, build_sweep\n"
         "from kinematics.core.metrics import GroundDatum\n"
+        "from kinematics.core.pose import (\n"
+        "    ChassisPose,\n"
+        "    PoseAssumption,\n"
+        "    build_chassis_pose,\n"
+        "    chassis_pose_for_axle_state,\n"
+        ")\n"
     )
 
     result = subprocess.run(
@@ -51,6 +58,19 @@ def test_core_import_succeeds_without_cli_dependencies() -> None:
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_pose_module_declares_its_public_names() -> None:
+    from kinematics.core import pose
+
+    assert set(pose.__all__) == {
+        "ChassisPose",
+        "PoseAssumption",
+        "build_chassis_pose",
+        "chassis_pose_for_axle_state",
+    }
+    for name in pose.__all__:
+        assert hasattr(pose, name)
 
 
 def test_low_level_core_import_does_not_load_solver_stack() -> None:

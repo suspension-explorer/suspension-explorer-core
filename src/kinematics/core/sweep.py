@@ -51,7 +51,6 @@ def solve_sweep(
         Tuple containing the list of solved suspension states and corresponding
         solver information for each step in the sweep.
     """
-    suspension.prepare_sweep()
     suspension.validate_sweep_target_points(
         target.point_id
         for target_sweep in sweep_config.target_sweeps
@@ -67,6 +66,15 @@ def solve_sweep(
         sweep_config=sweep_config,
         derived_manager=derived_manager,
     )
+
+    # Post-solve ground closure: the coupled wheel-ground tangents are pure
+    # outputs, solved once per accepted state. The previous state's root seeds
+    # the next solve so a multi-root geometry follows one continuous branch.
+    ground_seed: float | None = None
+    for state in kinematic_states:
+        solved_seed = suspension.apply_ground_closure(state.positions, ground_seed)
+        if solved_seed is not None:
+            ground_seed = solved_seed
 
     return kinematic_states, solver_stats
 
@@ -140,6 +148,7 @@ def compute_sweep_tangents(
             constraints,
             derived_manager,
             step_targets,
+            post_derived_update=suspension.apply_ground_closure,
         )
         tangents_per_step.append(fields)
         solve_infos.append(solve_info)

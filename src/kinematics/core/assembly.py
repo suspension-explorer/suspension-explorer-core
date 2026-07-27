@@ -20,9 +20,10 @@ class PointCatalog:
 
     The fixed, free, and derived sets are mutually exclusive and partition every
     point in the assembly. ``output_only`` is not a fourth class: it is an
-    overlay marking the subset of derived points that are reported but cannot be
-    driven under the solver's actuator policy, for example because they are
-    branch-sensitive observables from a coupled construction.
+    overlay marking points that are reported but cannot be driven under the
+    solver's actuator policy. An output-only point is either derived (a corner's
+    flat-ground tangent) or a post-solve closure output that the solver treats
+    as stationary (an axle's coupled wheel-ground tangents); it is never free.
     """
 
     fixed: frozenset[PointKey]
@@ -42,9 +43,12 @@ class PointCatalog:
         if overlaps:
             raise ValueError(f"Point classifications overlap: {sorted(overlaps)!r}")
 
-        if not self.output_only <= self.derived:
-            invalid = sorted(self.output_only - self.derived)
-            raise ValueError(f"Output-only points must be derived points: {invalid!r}")
+        if self.output_only & self.free:
+            invalid = sorted(self.output_only & self.free)
+            raise ValueError(f"Output-only points cannot be free points: {invalid!r}")
+        if not self.output_only <= self.all:
+            invalid = sorted(self.output_only - self.all)
+            raise ValueError(f"Output-only points must be catalog points: {invalid!r}")
 
     @property
     def all(self) -> frozenset[PointKey]:

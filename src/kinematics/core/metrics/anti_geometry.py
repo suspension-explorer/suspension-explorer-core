@@ -7,9 +7,12 @@ braking), and anti-squat (driven axle under acceleration). All are expressed
 as a percentage where 100 percent means the geometry fully reacts the
 load-transfer pitch moment and 0 percent means it reacts none of it.
 
-All quantities are evaluated in the side view (the XZ plane). The governing
-line is the line from a reaction point (wheel-ground tangent for outboard brakes,
-wheel center for inboard-sprung drive) to the side-view instant center
+All quantities are evaluated in the side view (the XZ plane). The ground plane
+is the YZ ground line extruded along chassis X, so it carries no longitudinal
+gradient and its roll tilt leaves these side-view X and Z components unchanged.
+The governing line is the line from a reaction point (wheel-ground tangent for
+outboard brakes, wheel center for inboard-sprung drive) to the side-view
+instant center
 (SVIC). Its inclination, expressed as tan(theta), together with the wheelbase
 L and CG height above ground h, sets the anti percentage.
 
@@ -50,6 +53,8 @@ def calculate_svsa_angle(ctx: "MetricContext") -> float | None:
         return None
     tangent = ctx.wheel_ground_tangent
 
+    # The ground plane is the YZ ground line extruded along chassis X, so its
+    # roll tilt leaves these side-view X and Z components untouched.
     run = float(svic[Axis.X]) - float(tangent[Axis.X])
     if abs(run) < EPS_GEOMETRIC:
         # Vertical side-view line: slope undefined.
@@ -62,12 +67,15 @@ def _cg_height_above_ground(ctx: "MetricContext") -> float | None:
     """
     CG height above the ground plane in mm, or None if not strictly positive.
 
-    In chassis space the ground follows the tire, so ground level is
-    the wheel-ground tangent Z. A non-positive height would put the CG at
-    or below the ground, which is non-physical for these anti formulas.
+    The load-transfer moment arm in the anti formulas is the CG's perpendicular
+    distance to the road plane, because the braking or tractive force acts
+    parallel to that plane. The height is therefore the signed distance to the
+    shared ground datum, which on a level ground line equals the chassis-Z
+    difference to the wheel-ground tangent, and on an asymmetric (banked) state
+    gives both corners of an axle one consistent height. A non-positive height
+    would put the CG at or below the ground, which is non-physical here.
     """
-    tangent = ctx.wheel_ground_tangent
-    height = float(ctx.cg_position[Axis.Z]) - float(tangent[Axis.Z])
+    height = ctx.ground.signed_distance(ctx.cg_position)
     if height <= EPS_GEOMETRIC:
         return None
     return height

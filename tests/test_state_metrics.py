@@ -13,6 +13,7 @@ from kinematics.core.metrics.anti_geometry import (
     calculate_anti_squat_pct,
 )
 from kinematics.core.metrics.context import MetricContext
+from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.metrics.main import (
     AxleMetricRows,
     MetricRow,
@@ -207,6 +208,7 @@ def _anti_context(
     driven_axle: AxlePosition | None = None,
 ) -> MetricContext:
     """Build the minimal synthetic context consumed by anti metrics."""
+    wheel_ground_tangent = Point3([0.0, 800.0, 0.0])
     return cast(
         MetricContext,
         SimpleNamespace(
@@ -215,8 +217,9 @@ def _anti_context(
                 front_brake_bias=front_brake_bias,
                 driven_axle=driven_axle,
             ),
+            ground=GroundDatum.horizontal_at(wheel_ground_tangent),
             side_view_ic=Point3([svic_x, 800.0, 300.0]),
-            wheel_ground_tangent=Point3([0.0, 800.0, 0.0]),
+            wheel_ground_tangent=wheel_ground_tangent,
             wheel_center=Point3([0.0, 800.0, 300.0]),
             cg_position=Point3([1250.0, 0.0, 450.0]),
             wheelbase=2500.0,

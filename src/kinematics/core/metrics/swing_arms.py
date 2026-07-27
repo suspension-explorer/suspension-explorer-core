@@ -23,11 +23,13 @@ FVSA (Front-View Swing Arm):
 
         FVSA = +/- sqrt((FVIC_Y - T_Y)^2 + (FVIC_Z - T_Z)^2)
 
-    Positive when the FVIC is inboard (closer to vehicle centerline)
-    of the ground tangent. For a left-side corner (Y > 0) "inboard"
-    means FVIC_Y < T_Y; for a right-side corner (Y < 0) "inboard"
-    means FVIC_Y > T_Y. Negative values indicate the FVIC is
-    outboard of the ground tangent.
+    Positive when the FVIC is inboard (closer to vehicle centerline) of the
+    ground tangent, where inboard/outboard is judged by the component of
+    (FVIC - T) along the ground line rather than along chassis Y. For a
+    left-side corner (Y > 0) "inboard" means a negative along-ground
+    component; for a right-side corner (Y < 0) it means a positive one. On a
+    level ground line the tangent is +Y, so this is the sign of FVIC_Y - T_Y.
+    Negative values indicate the FVIC is outboard of the ground tangent.
 """
 
 from __future__ import annotations
@@ -56,6 +58,9 @@ def calculate_svsa_length(ctx: MetricContext) -> float | None:
     if svic is None:
         return None
     ground_tangent = ctx.wheel_ground_tangent
+    # The ground plane is the YZ ground line extruded along chassis X, so it
+    # has zero longitudinal gradient and its roll tilt does not affect this
+    # side-view X component.
     return float(svic[Axis.X] - ground_tangent[Axis.X])
 
 
@@ -63,9 +68,11 @@ def calculate_fvsa_length(ctx: MetricContext) -> float | None:
     """
     Front-view swing arm length in mm.
 
-    The FVSA length is the lateral distance (in Y) from the wheel-plane
-    ground-tangent point to the front-view instant center. The sign follows
-    the vehicle Y axis (positive = towards vehicle left).
+    The FVSA length is the YZ distance from the wheel-plane ground-tangent
+    point to the front-view instant center. The magnitude is a plain
+    point-to-point distance, while the sign is taken from the displacement
+    resolved along the ground line, so "inboard" is measured across the road
+    surface rather than along chassis Y.
 
     Returns None if the FVIC is undefined.
     """
@@ -81,7 +88,9 @@ def calculate_fvsa_length(ctx: MetricContext) -> float | None:
     length = np.sqrt(dy * dy + dz * dz)
 
     # Sign convention: positive when FVIC is on the vehicle-center side
-    # of the ground tangent. For the left side (Y > 0), inboard means
-    # FVIC_Y < T_Y, so we negate. For right side, FVIC_Y > T_Y is
-    # inboard, so the sign is already correct.
-    return float(length * (-ctx.side_sign * np.sign(dy)))
+    # of the ground tangent. The ground-line tangent points from vehicle
+    # right to left, so this along-ground component reduces to dy on a level
+    # ground line. For the left side (Y > 0), inboard means a negative
+    # component, so we negate. For the right side the sign is already correct.
+    along_ground = dy * ctx.ground.tangent_y + dz * ctx.ground.tangent_z
+    return float(length * (-ctx.side_sign * np.sign(along_ground)))

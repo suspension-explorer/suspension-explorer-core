@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, cast
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -13,17 +13,17 @@ from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.points.derived import ground
 from kinematics.core.points.derived.ground import (
     _GROUND_SOLVE_LIMIT,
+    AxleGroundTangency,
     _flat_ground_normal_angle_estimate,
     _ground_normal,
-    _GroundNormalContinuation,
     _search_ground_normal_angle,
     _shared_ground_normal_angle,
-    get_axle_wheel_ground_tangent,
+    seed_from_tangent_points,
+    solve_axle_wheel_ground_tangents,
 )
-from kinematics.core.points.derived.manager import PositionValue
 from kinematics.core.primitives.dual import DualScalar, DualVec3
 from kinematics.core.primitives.geometry import Point3
-from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
+from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.suspensions.axle import AxleSuspension
 
 RADIUS_MM = 200.0
@@ -52,13 +52,12 @@ def _positions() -> dict[PointRef, Point3]:
     }
 
 
-def _tangent(
+def _solve(
     positions: dict[PointRef, Point3],
-    side: Literal["left", "right"],
-    continuation: _GroundNormalContinuation | None = None,
-) -> Point3:
+    seed: float | None = None,
+) -> AxleGroundTangency:
     keys = _keys()
-    tangent = get_axle_wheel_ground_tangent(
+    return solve_axle_wheel_ground_tangents(
         positions,
         left_center=keys["left_center"],
         left_axis_inboard=keys["left_inboard"],
@@ -68,33 +67,24 @@ def _tangent(
         right_axis_inboard=keys["right_inboard"],
         right_axis_outboard=keys["right_outboard"],
         right_radius=RADIUS_MM,
-        side=side,
-        continuation=continuation,
+        seed=seed,
     )
-    assert isinstance(tangent, Point3)
-    return tangent
 
 
 def test_coupled_tangents_lie_on_one_ground_plane_and_each_wheel_plane():
     positions = _positions()
-    left = _tangent(positions, "left")
-    right = _tangent(positions, "right")
     keys = _keys()
+    tangency = _solve(positions)
+    left = tangency.left
+    right = tangency.right
+    assert isinstance(left, Point3)
+    assert isinstance(right, Point3)
 
     left_center = positions[keys["left_center"]].data
     right_center = positions[keys["right_center"]].data
     left_axis = np.array((0.0, 1.0, 0.0))
     right_axis = np.array((0.0, 1.0, 0.0))
-    angle = _shared_ground_normal_angle(
-        left_center,
-        left_axis,
-        RADIUS_MM,
-        right_center,
-        right_axis,
-        RADIUS_MM,
-    )
-    assert isinstance(angle, float)
-    normal = _ground_normal(angle)
+    normal = _ground_normal(tangency.normal_angle)
     assert isinstance(normal, np.ndarray)
 
     np.testing.assert_allclose(
@@ -106,7 +96,7 @@ def test_coupled_tangents_lie_on_one_ground_plane_and_each_wheel_plane():
     np.testing.assert_allclose(np.linalg.norm(left.data - left_center), RADIUS_MM)
     np.testing.assert_allclose(np.linalg.norm(right.data - right_center), RADIUS_MM)
     np.testing.assert_allclose(np.dot(normal, left.data), np.dot(normal, right.data))
-    assert angle == pytest.approx(-np.arctan(0.1))
+    assert tangency.normal_angle == pytest.approx(-np.arctan(0.1))
 
 
 def test_dual_ground_angle_uses_implicit_shared_plane_derivative():
@@ -136,8 +126,12 @@ def test_coupled_tangents_handle_camber_and_toe_axes():
     positions[keys["left_outboard"]] = Point3((20.0, 596.0, 320.0))
     positions[keys["right_inboard"]] = Point3((30.0, -595.0, 225.0))
     positions[keys["right_outboard"]] = Point3((-30.0, -405.0, 175.0))
-    left = _tangent(positions, "left")
-    right = _tangent(positions, "right")
+    tangency = _solve(positions)
+    left = tangency.left
+    right = tangency.right
+    assert isinstance(left, Point3)
+    assert isinstance(right, Point3)
+
     left_center = positions[keys["left_center"]].data
     right_center = positions[keys["right_center"]].data
     left_axis = (
@@ -148,16 +142,7 @@ def test_coupled_tangents_handle_camber_and_toe_axes():
     )
     left_axis /= np.linalg.norm(left_axis)
     right_axis /= np.linalg.norm(right_axis)
-    angle = _shared_ground_normal_angle(
-        left_center,
-        left_axis,
-        RADIUS_MM,
-        right_center,
-        right_axis,
-        RADIUS_MM,
-    )
-    assert isinstance(angle, float)
-    normal = _ground_normal(angle)
+    normal = _ground_normal(tangency.normal_angle)
     assert isinstance(normal, np.ndarray)
 
     np.testing.assert_allclose(
@@ -171,20 +156,65 @@ def test_coupled_tangents_handle_camber_and_toe_axes():
     np.testing.assert_allclose(np.dot(normal, left.data), np.dot(normal, right.data))
 
 
-def test_axle_derived_spec_replaces_corner_flat_tangents(test_data_dir):
-    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
-    assert isinstance(axle, AxleSuspension)
-    spec = axle.derived_spec()
-    left_tangent = PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)
-    right_center = PointRef(Side.RIGHT, PointID.WHEEL_CENTER)
-    assert right_center in spec.dependencies[left_tangent]
+def test_solve_returns_one_shared_plane_and_is_stateless():
+    positions = _positions()
 
-    state = axle.initial_state()
-    expected = spec.functions[left_tangent](
-        cast(dict[PointKey, PositionValue], state.positions)
+    first = _solve(positions, seed=-0.05)
+    repeat = _solve(_positions(), seed=-0.05)
+
+    assert isinstance(first.normal_angle, float)
+    normal = _ground_normal(first.normal_angle)
+    assert isinstance(normal, np.ndarray)
+    assert isinstance(first.left, Point3)
+    assert isinstance(first.right, Point3)
+    np.testing.assert_allclose(
+        np.dot(normal, first.left.data), np.dot(normal, first.right.data)
     )
-    assert isinstance(expected, Point3)
-    assert state.get(left_tangent).almost_equals(expected, atol=1e-9)
+    # Statelessness: the only cross-call coupling is the explicit seed, so the
+    # same inputs and seed must reproduce the result bit for bit.
+    assert isinstance(repeat.left, Point3)
+    assert isinstance(repeat.right, Point3)
+    assert repeat.normal_angle == first.normal_angle, (
+        "Identical inputs and seed must reproduce the same ground-normal angle"
+    )
+    np.testing.assert_array_equal(repeat.left.data, first.left.data)
+    np.testing.assert_array_equal(repeat.right.data, first.right.data)
+
+
+def test_seed_from_tangent_points_recovers_the_ground_line_angle():
+    left = Point3((0.0, 620.0, -12.0))
+    right = Point3((0.0, -580.0, 18.0))
+    lateral_separation = 620.0 - (-580.0)
+    vertical_separation = -12.0 - 18.0
+
+    seed = seed_from_tangent_points(left, right)
+    reversed_seed = seed_from_tangent_points(right, left)
+
+    expected = -np.arctan2(vertical_separation, lateral_separation)
+    assert seed == pytest.approx(expected)
+    # The recovery orients the separation from vehicle right to left, so a
+    # crossed argument order cannot flip the reported ground-line angle.
+    assert reversed_seed == pytest.approx(expected)
+
+
+def test_seed_from_tangent_points_matches_the_solved_ground_normal_angle():
+    tangency = _solve(_positions())
+
+    seed = seed_from_tangent_points(tangency.left, tangency.right)
+
+    assert seed == pytest.approx(tangency.normal_angle)
+
+
+def test_seed_from_tangent_points_returns_none_for_unusable_points():
+    collapsed = seed_from_tangent_points(
+        Point3((0.0, 100.0, 10.0)), Point3((0.0, 100.0, -10.0))
+    )
+    non_finite = seed_from_tangent_points(
+        np.array((0.0, 600.0, np.nan)), np.array((0.0, -600.0, 0.0))
+    )
+
+    assert collapsed is None, "A collapsed track cannot orient a ground line"
+    assert non_finite is None, "Non-finite tangents cannot orient a ground line"
 
 
 def test_plain_coincident_wheels_are_rejected_as_nonunique_ground_geometry():
@@ -195,7 +225,7 @@ def test_plain_coincident_wheels_are_rejected_as_nonunique_ground_geometry():
     positions[keys["right_outboard"]] = Point3((0.0, 600.0, 300.0))
 
     with pytest.raises(ValueError, match="collapsed track"):
-        _tangent(positions, "left")
+        _solve(positions)
 
 
 # A narrow, tall, heavily toed axle whose flat-ground seed saturates the clamp while
@@ -265,98 +295,77 @@ def test_flat_ground_seed_is_robust_to_crossed_lateral_orientation():
     assert angle == pytest.approx(np.arctan(0.1))
 
 
-def test_shared_angle_is_solved_once_for_both_sides(monkeypatch):
-    calls: list[float] = []
-    original = ground._search_ground_normal_angle
-
-    def counting_search(*args, **kwargs):
-        result = original(*args, **kwargs)
-        calls.append(result)
-        return result
-
-    monkeypatch.setattr(ground, "_search_ground_normal_angle", counting_search)
-
-    positions = _positions()
-    continuation = _GroundNormalContinuation()
-    left = _tangent(positions, "left", continuation)
-    right = _tangent(positions, "right", continuation)
-
-    assert len(calls) == 1
-    # The reused scalar must still place both sides on one plane.
-    normal = _ground_normal(calls[0])
-    assert isinstance(normal, np.ndarray)
-    np.testing.assert_allclose(np.dot(normal, left.data), np.dot(normal, right.data))
-
-
-def test_continuation_reuses_each_state_branch_and_resets_between_sweeps(monkeypatch):
-    seeds: list[float | None] = []
-
-    def fake_search(*args, seed=None):
-        seeds.append(seed)
-        return 0.25 if seed is None else seed + 0.01
-
-    monkeypatch.setattr(ground, "_search_ground_normal_angle", fake_search)
-    continuation = _GroundNormalContinuation()
-    axis = np.array((0.0, 1.0, 0.0))
-
-    first = continuation.solve(
-        np.array((0.0, 500.0, 300.0)),
-        axis,
-        RADIUS_MM,
-        np.array((0.0, -500.0, 200.0)),
-        axis,
-        RADIUS_MM,
-    )
-    second = continuation.solve(
-        np.array((0.0, 500.0, 301.0)),
-        axis,
-        RADIUS_MM,
-        np.array((0.0, -500.0, 200.0)),
-        axis,
-        RADIUS_MM,
-    )
-    revisited_first = continuation.solve(
-        np.array((0.0, 500.0, 300.0)),
-        axis,
-        RADIUS_MM,
-        np.array((0.0, -500.0, 200.0)),
-        axis,
-        RADIUS_MM,
-    )
-
-    assert first == pytest.approx(0.25)
-    assert second == pytest.approx(0.26)
-    assert revisited_first == pytest.approx(first)
-    assert seeds == [None, pytest.approx(0.25)]
-
-    continuation.reset()
-    reset_first = continuation.solve(
-        np.array((0.0, 500.0, 300.0)),
-        axis,
-        RADIUS_MM,
-        np.array((0.0, -500.0, 200.0)),
-        axis,
-        RADIUS_MM,
-    )
-
-    assert reset_first == pytest.approx(0.25)
-    assert seeds == [None, pytest.approx(0.25), None]
-
-
 def test_internal_normal_angle_negates_the_public_ground_line_angle():
-    positions = _positions()
-    left = _tangent(positions, "left")
-    right = _tangent(positions, "right")
-    ground_line = GroundDatum.from_wheel_ground_tangents(left, right)
-    assert ground_line is not None
+    tangency = _solve(_positions())
+    assert isinstance(tangency.left, Point3)
+    assert isinstance(tangency.right, Point3)
 
-    angle = _shared_ground_normal_angle(
-        positions[_keys()["left_center"]].data,
-        np.array((0.0, 1.0, 0.0)),
-        RADIUS_MM,
-        positions[_keys()["right_center"]].data,
-        np.array((0.0, 1.0, 0.0)),
-        RADIUS_MM,
+    ground_line = GroundDatum.from_wheel_ground_tangents(tangency.left, tangency.right)
+
+    assert ground_line is not None
+    assert ground_line.angle_deg == pytest.approx(-np.degrees(tangency.normal_angle))
+
+
+def test_axle_derived_spec_omits_the_coupled_tangents(test_data_dir: Path) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+
+    spec = axle.derived_spec()
+
+    for side in (Side.LEFT, Side.RIGHT):
+        tangent = PointRef(side, PointID.WHEEL_GROUND_TANGENT)
+        assert tangent not in spec.functions, (
+            "Coupled wheel-ground tangents are closure outputs, not derived points"
+        )
+        assert tangent not in spec.dependencies
+
+
+def test_ground_closure_reproduces_the_stored_initial_state_tangents(
+    test_data_dir: Path,
+) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+    state = axle.initial_state()
+    positions = dict(state.positions)
+
+    axle.apply_ground_closure(positions)
+
+    for side in (Side.LEFT, Side.RIGHT):
+        tangent = PointRef(side, PointID.WHEEL_GROUND_TANGENT)
+        recomputed = positions[tangent]
+        assert isinstance(recomputed, Point3)
+        assert state.get(tangent).almost_equals(recomputed, atol=1e-9), (
+            f"Closure must reproduce the stored {side.name.lower()} tangent"
+        )
+
+
+def test_ground_closure_recovers_its_seed_from_the_stored_tangents(
+    test_data_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+    state = axle.initial_state()
+    positions = dict(state.positions)
+    stored_seed = seed_from_tangent_points(
+        state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)),
+        state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
     )
-    assert isinstance(angle, float)
-    assert ground_line.angle_deg == pytest.approx(-np.degrees(angle))
+    assert stored_seed is not None
+
+    original_search = ground._search_ground_normal_angle
+    recorded_seeds: list[float | None] = []
+
+    def record_search(*args, seed=None):
+        recorded_seeds.append(seed)
+        return original_search(*args, seed=seed)
+
+    monkeypatch.setattr(ground, "_search_ground_normal_angle", record_search)
+
+    axle.apply_ground_closure(positions)
+
+    assert len(recorded_seeds) == 1, "The shared plane is solved once per closure"
+    assert recorded_seeds[0] is not None, (
+        "The closure must recover a seed from the stored tangent values"
+    )
+    assert recorded_seeds[0] == pytest.approx(stored_seed)

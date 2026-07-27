@@ -23,6 +23,17 @@ All notable changes to this project will be documented in this file.
   `ground_z_centerline`.
 - A dimensionless metric unit for quantities such as the ground-line normal
   components, using the conventional semantic unit symbol `1`.
+- A chassis pose API in `kinematics.core.pose` reinterprets a solved axle ground
+  datum as a whole-vehicle attitude relative to a world frame whose `Z = 0` plane
+  is the road. `build_chassis_pose()` and `chassis_pose_for_axle_state()` return a
+  `ChassisPose` carrying roll, pitch, the chassis-space anchor that maps to the
+  world origin, the chassis-to-world rotation, and the gravity direction in
+  chassis space. Roll comes from the fitted ground line; pitch is a named
+  `PoseAssumption` — `PURE_HEAVE` (zero pitch) or `OPPOSITE_AXLE_FIXED`
+  (`atan(compression / wheelbase)`, signed by axle position) — recorded on the
+  pose so an interpreted attitude cannot be mistaken for a measured one. This is
+  a post-solve reading of solved outputs only; longitudinal grade remains assumed
+  zero inside the tangency solve.
 
 ### Changed
 
@@ -105,10 +116,19 @@ All notable changes to this project will be documented in this file.
   signed longitudinal component along tyre `X_T`, and `scrub_radius` is the
   unsigned distance between the tyre contact centre and steering-axis ground
   intersection.
-- Ground-root selection is sweep-local to each axle. It continues from the
-  preceding accepted state and records the selected root for each exact accepted
-  geometry, so later tangent propagation reuses the same branch. A new sweep
-  resets that history at the design condition; no process-global cache is used.
+- The coupled axle tangency solve is a stateless post-solve closure rather than a
+  derived point. `AxleSuspension` drops the composed `WHEEL_GROUND_TANGENT`
+  entries from its derived specification and writes both tangents once per
+  accepted state, so no per-corner flat-ground tangent can reach an axle state.
+- Ground-root branch continuity is threaded explicitly through a seed argument
+  instead of solver-side continuation state. The previously accepted
+  ground-normal angle is passed forward, and with no seed the closure recovers
+  one from the tangents already stored in the state; the earlier per-geometry
+  root cache inside the derived-point graph is gone. Identical inputs and an
+  identical seed always reproduce the same root.
+- Anti-dive, anti-lift, and anti-squat now measure CG height from the shared axle
+  ground plane and take a ground-plane-consistent front-view swing-arm sign,
+  replacing the per-corner flat-ground assumption (delivered alongside this work).
 - Axle ride-height change compares current and design ground height at chassis
   centerline, avoiding contamination from bank angle, asymmetric track, tire
   radii, or lateral track migration.

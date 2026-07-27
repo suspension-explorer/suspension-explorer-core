@@ -105,8 +105,10 @@ def build_wheel_derived_spec(wheel: "WheelConfig") -> "DerivedPointsSpec":
 
     Every corner whose wheel spin axis is AXLE_INBOARD -> AXLE_OUTBOARD derives
     the wheel centre, rim faces, and flat-ground wheel-plane tangent the same way.
-    AxleSuspension replaces the tangent calculation with its coupled ground-plane
-    version when both corners are composed.
+    When both corners are composed, AxleSuspension removes the WHEEL_GROUND_TANGENT
+    entries from the composed derived-point graph entirely and writes both tangents
+    from its post-solve ground closure instead, so no per-corner flat-ground tangent
+    can reach an axle state.
     """
     tire_radius = wheel.tire.nominal_radius
     functions = {

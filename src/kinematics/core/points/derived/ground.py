@@ -1,27 +1,108 @@
-"""Wheel-plane tangency to a shared axle ground plane.
+"""Wheel-plane road tangency: flat-ground corner tangents and the coupled axle solve.
 
-The ground plane is extruded along chassis X, so its normal is parameterised as
-``(0, sin(theta), cos(theta))``. The first scalar solve starts from the
-independent flat-ground tangent estimate; subsequent accepted states continue
-from the preceding root so a multi-root geometry stays on one local branch.
+Why this module exists
+======================
 
-Sign convention.  The scalar solved here is the *ground-normal* angle: it rotates
-the plane's normal.  The public axle datum
-:class:`kinematics.core.metrics.ground.GroundDatum` instead reports
-``angle_deg = atan2(tangent_z, tangent_y)``, which measures the ground *line*.
-Rotating a normal by ``+theta`` tilts the line it belongs to by ``-theta``, so
-the two quantities are exact negatives of one another::
+Every authored and solved coordinate in this package is chassis-fixed: ``+X``
+forward, ``+Y`` left, ``+Z`` up, hardpoints stationary. There is no road in
+that frame — the ground is wherever the tires are. The only geometric evidence
+the model has about the road is that each rigid wheel disc must touch it, so
+the road must be *inferred* from wheel tangency rather than authored.
 
-    GroundDatum.angle_deg == -degrees(ground_normal_angle)
+For a standalone corner there is not enough information to orient a road: the
+corner assumes a flat, horizontal road (``+Z`` normal) and its road contact is
+simply the lowest point of the wheel disc, :func:`get_wheel_ground_tangent`.
 
-Every internal name here says ``normal_angle`` for that reason.  Nothing in
-this module is the public roll angle, and the two must not be conflated.
+For a two-corner axle the assumption of one horizontal plane per corner breaks
+down: on an asymmetric state (roll, one-wheel bump), each corner's "flat road"
+sits at a different height, and any consumer comparing the two sides — roll
+centre construction, ride height, CG height — silently mixes two different
+ground references. The fix is one shared road plane that is *simultaneously
+tangent to both wheel discs*. That is what :func:`solve_axle_wheel_ground_tangents`
+computes.
+
+The mathematics
+===============
+
+The shared plane is parameterised by a single scalar, the ground-normal angle
+``theta``, giving the plane normal ``n = (0, sin(theta), cos(theta))``.
+
+.. note::
+    The zero ``X`` component is a deliberate modelling assumption: with only
+    one axle modelled, longitudinal road grade is unknowable, so the plane is
+    the axle's YZ ground line extruded along chassis ``±X`` — **zero
+    longitudinal gradient is assumed throughout**. Pitch is reintroduced
+    post hoc, as an interpretation, by :mod:`kinematics.core.pose`; it is
+    never part of this tangency solve.
+
+For one wheel with centre ``C``, unit spin axis ``a``, and nominal radius
+``R``, the point of the wheel plane that touches a plane with unit normal
+``n`` is the disc's support point in the ``-n`` direction, restricted to the
+wheel plane::
+
+    q = n - (n . a) a          # road normal projected into the wheel plane
+    P = C - R q / ||q||        # wheel-plane road-tangent point
+
+Both discs touch one plane when their support points have equal height along
+the normal, giving the scalar residual whose root is solved here::
+
+    f(theta) = n(theta) . P_left(theta) - n(theta) . P_right(theta) = 0
+
+Because ``P`` itself depends on ``theta`` (camber and toe rotate the support
+point around the disc), ``f`` is transcendental; there is no closed form once
+the spin axes are non-trivial. The solve is a Newton iteration whose exact
+slope comes from a dual-number evaluation of the residual, with a
+bracketed-bisection fallback scanning the admissible angle domain. The domain
+is clamped to ±80 degrees of normal tilt — a product policy bounding the
+supported geometry, not an intrinsic singularity.
+
+Root selection and the seed
+===========================
+
+``f`` can have several roots for exotic geometries (strongly cambered, narrow
+axles). To keep a sweep on one physical branch, callers thread the previously
+accepted root through the ``seed`` parameter; the solver converges to, or
+selects, the root nearest that seed. With no seed, the estimate from the two
+independent flat-ground tangents is used. This threading is *explicit and
+stateless*: the function has no memory, and identical inputs plus an identical
+seed always reproduce the same root. (An earlier design kept a hidden
+continuation cache inside the derived-point graph; the post-solve closure
+made that state unnecessary.)
+
+How the results are used
+========================
+
+:meth:`AxleSuspension.apply_ground_closure` calls
+:func:`solve_axle_wheel_ground_tangents` once per accepted solver state — a
+post-solve closure, not a solver constraint — and writes the two tangent
+points into the state under ``WHEEL_GROUND_TANGENT``. The public axle ground
+datum (:class:`kinematics.core.metrics.ground.GroundDatum`) is then fitted
+through those two stored points; because both points lie exactly on the solved
+plane, that fit reproduces this module's plane to within the root tolerance,
+making the stored tangent points the single source of truth for ground
+geometry.
+
+Sign convention: the scalar solved here rotates the plane's *normal*.
+``GroundDatum.angle_deg`` instead measures the ground *line*, so the two are
+exact negatives: ``GroundDatum.angle_deg == -degrees(ground_normal_angle)``.
+Every internal name says ``normal_angle`` for that reason; nothing here is
+the public roll angle.
+
+Dual-number inputs
+==================
+
+All entry points accept either raw ``numpy`` vectors or :class:`DualVec3`
+positions. With dual inputs, the primal root is solved from the stripped
+values and the root's sensitivity is attached by implicit differentiation of
+the residual — this is what propagates solution-manifold tangents through the
+tangency solve for derivative metrics.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from math import atan2, isfinite, pi
-from typing import Any, Callable, Literal, Mapping, TypeVar
+from typing import Any, Callable, Mapping, TypeVar
 
 import numpy as np
 
@@ -48,8 +129,6 @@ _ROOT_RELATIVE_TOLERANCE = 1e-12
 _NEWTON_ITERATIONS = 10
 _FALLBACK_BRACKET_SEGMENTS = 64
 _BISECTION_ITERATIONS = 60
-
-_GroundAngleKey = tuple[bytes, bytes, float, bytes, bytes, float]
 
 _ResidualFn = Callable[[float], float]
 _ResidualSlopeFn = Callable[[float], tuple[float, float]]
@@ -82,9 +161,7 @@ def _ensure_finite_ground_vector(
         else np.isfinite(vector).all()
     )
     if not finite:
-        raise ValueError(
-            f"Wheel-ground tangent produced non-finite {description}"
-        )
+        raise ValueError(f"Wheel-ground tangent produced non-finite {description}")
     return vector
 
 
@@ -195,6 +272,35 @@ def _flat_ground_normal_angle_estimate(
         # separation from vehicle right to left.  Without this, laterally
         # crossed supports give an estimate near +/-pi, which the clamp then
         # turns into a seed unrelated to the geometry.
+        lateral_separation = -lateral_separation
+        vertical_separation = -vertical_separation
+    return _clamp_ground_normal_angle(-atan2(vertical_separation, lateral_separation))
+
+
+def seed_from_tangent_points(
+    left_tangent: np.ndarray | DualVec3 | Point3,
+    right_tangent: np.ndarray | DualVec3 | Point3,
+) -> float | None:
+    """Recover the ground-normal angle implied by two stored tangent points.
+
+    Accepted states carry the previously solved tangent points, so the angle
+    of the line through them is an exact-root seed for the next solve — this
+    is how branch continuity survives without any hidden solver state.
+    Returns ``None`` when the stored points cannot orient a line.
+    """
+    left = _primal_vector(
+        left_tangent.data if isinstance(left_tangent, Point3) else left_tangent
+    )
+    right = _primal_vector(
+        right_tangent.data if isinstance(right_tangent, Point3) else right_tangent
+    )
+    if not (np.isfinite(left).all() and np.isfinite(right).all()):
+        return None
+    lateral_separation = float(left[Axis.Y] - right[Axis.Y])
+    vertical_separation = float(left[Axis.Z] - right[Axis.Z])
+    if abs(lateral_separation) <= EPS_GEOMETRIC:
+        return None
+    if lateral_separation < 0.0:
         lateral_separation = -lateral_separation
         vertical_separation = -vertical_separation
     return _clamp_ground_normal_angle(-atan2(vertical_separation, lateral_separation))
@@ -324,9 +430,10 @@ def _search_ground_normal_angle(
 ) -> float:
     """Solve the shared-plane condition on the branch nearest ``seed``.
 
-    The flat-ground construction provides the first seed. Subsequent axle states
-    pass the previously selected root so a multi-root geometry follows one
-    continuous branch instead of independently choosing a root at every state.
+    With no seed, the flat-ground construction provides the starting estimate.
+    Callers sweeping through states pass the previously accepted root so a
+    multi-root geometry follows one continuous branch instead of independently
+    choosing a root at every state.
     """
 
     def residual(normal_angle: float) -> float:
@@ -341,9 +448,7 @@ def _search_ground_normal_angle(
         )
         assert not isinstance(value, DualScalar)
         if not isfinite(value):
-            raise ValueError(
-                "Shared wheel-ground tangent has non-finite residual"
-            )
+            raise ValueError("Shared wheel-ground tangent has non-finite residual")
         return value
 
     def residual_and_slope(normal_angle: float) -> tuple[float, float]:
@@ -357,17 +462,17 @@ def _search_ground_normal_angle(
             normal_angle,
         )
 
-    flat_estimate = _flat_ground_normal_angle_estimate(
-        left_center,
-        left_axis,
-        left_radius,
-        right_center,
-        right_axis,
-        right_radius,
-    )
-    selection_seed = (
-        flat_estimate if seed is None else _clamp_ground_normal_angle(seed)
-    )
+    if seed is None:
+        selection_seed = _flat_ground_normal_angle_estimate(
+            left_center,
+            left_axis,
+            left_radius,
+            right_center,
+            right_axis,
+            right_radius,
+        )
+    else:
+        selection_seed = _clamp_ground_normal_angle(seed)
     derivative_threshold = _root_derivative_threshold(
         left_center, left_radius, right_center, right_radius
     )
@@ -418,74 +523,6 @@ def _search_ground_normal_angle(
     )
 
 
-def _ground_angle_cache_key(
-    left_center: np.ndarray,
-    left_axis: np.ndarray,
-    left_radius: float,
-    right_center: np.ndarray,
-    right_axis: np.ndarray,
-    right_radius: float,
-) -> _GroundAngleKey:
-    """Key the primal solve on the exact bit pattern of its scalar inputs."""
-    return (
-        np.ascontiguousarray(left_center, dtype=np.float64).tobytes(),
-        np.ascontiguousarray(left_axis, dtype=np.float64).tobytes(),
-        float(left_radius),
-        np.ascontiguousarray(right_center, dtype=np.float64).tobytes(),
-        np.ascontiguousarray(right_axis, dtype=np.float64).tobytes(),
-        float(right_radius),
-    )
-
-
-class _GroundNormalContinuation:
-    """Sweep-local root history shared by one axle's tangent-point functions.
-
-    Exact accepted geometries retain their selected root so later tangent
-    propagation cannot choose another branch. For a new geometry, the most
-    recently visited root remains the branch-selection seed.
-    """
-
-    def __init__(self) -> None:
-        self._last_angle: float | None = None
-        self._angles_by_key: dict[_GroundAngleKey, float] = {}
-
-    def reset(self) -> None:
-        """Start an independent root history for a new sweep."""
-        self._last_angle = None
-        self._angles_by_key.clear()
-
-    def solve(
-        self,
-        left_center: np.ndarray,
-        left_axis: np.ndarray,
-        left_radius: float,
-        right_center: np.ndarray,
-        right_axis: np.ndarray,
-        right_radius: float,
-    ) -> float:
-        """Return the continuous root for one axle geometry state."""
-        key = _ground_angle_cache_key(
-            left_center, left_axis, left_radius, right_center, right_axis, right_radius
-        )
-        cached_angle = self._angles_by_key.get(key)
-        if cached_angle is not None:
-            self._last_angle = cached_angle
-            return cached_angle
-
-        normal_angle = _search_ground_normal_angle(
-            left_center,
-            left_axis,
-            left_radius,
-            right_center,
-            right_axis,
-            right_radius,
-            seed=self._last_angle,
-        )
-        self._last_angle = normal_angle
-        self._angles_by_key[key] = normal_angle
-        return normal_angle
-
-
 def _shared_ground_normal_angle(
     left_center: np.ndarray | DualVec3,
     left_axis: np.ndarray | DualVec3,
@@ -493,25 +530,21 @@ def _shared_ground_normal_angle(
     right_center: np.ndarray | DualVec3,
     right_axis: np.ndarray | DualVec3,
     right_radius: float,
-    continuation: _GroundNormalContinuation | None = None,
+    seed: float | None = None,
 ) -> float | DualScalar:
     """Solve the ground-normal angle and propagate it by implicit differentiation."""
     primal_left_center = _primal_vector(left_center)
     primal_left_axis = _primal_vector(left_axis)
     primal_right_center = _primal_vector(right_center)
     primal_right_axis = _primal_vector(right_axis)
-    solve = (
-        continuation.solve
-        if continuation is not None
-        else _search_ground_normal_angle
-    )
-    normal_angle = solve(
+    normal_angle = _search_ground_normal_angle(
         primal_left_center,
         primal_left_axis,
         left_radius,
         primal_right_center,
         primal_right_axis,
         right_radius,
+        seed=seed,
     )
     if not any(
         isinstance(value, DualVec3)
@@ -559,7 +592,20 @@ def get_wheel_ground_tangent(
     )
 
 
-def get_axle_wheel_ground_tangent(
+@dataclass(frozen=True)
+class AxleGroundTangency:
+    """One coupled tangency solution: both tangent points and the solved angle.
+
+    ``normal_angle`` is the primal ground-normal angle in radians; it is the
+    seed to pass to the next state's solve for branch continuity.
+    """
+
+    left: Point3 | DualVec3
+    right: Point3 | DualVec3
+    normal_angle: float
+
+
+def solve_axle_wheel_ground_tangents(
     positions: Mapping[_K, Any],
     *,
     left_center: _K,
@@ -570,31 +616,39 @@ def get_axle_wheel_ground_tangent(
     right_axis_inboard: _K,
     right_axis_outboard: _K,
     right_radius: float,
-    side: Literal["left", "right"],
-    continuation: _GroundNormalContinuation | None = None,
-) -> Point3 | DualVec3:
-    """Compute one side's tangent to the axle's common zero-grade ground plane."""
+    seed: float | None = None,
+) -> AxleGroundTangency:
+    """Solve both sides' tangents to the axle's common zero-grade ground plane.
+
+    Stateless: the only cross-state coupling is the explicit ``seed``. The
+    single scalar solve serves both sides, so the two returned points lie on
+    one plane by construction.
+    """
     left_center_vector = _as_ground_vector(positions[left_center])
     right_center_vector = _as_ground_vector(positions[right_center])
     left_axis = _wheel_spin_axis(positions, left_axis_inboard, left_axis_outboard)
     right_axis = _wheel_spin_axis(positions, right_axis_inboard, right_axis_outboard)
-    ground_normal = _ground_normal(
-        _shared_ground_normal_angle(
-            left_center_vector,
-            left_axis,
-            left_radius,
-            right_center_vector,
-            right_axis,
-            right_radius,
-            continuation,
-        )
+    normal_angle = _shared_ground_normal_angle(
+        left_center_vector,
+        left_axis,
+        left_radius,
+        right_center_vector,
+        right_axis,
+        right_radius,
+        seed=seed,
     )
-    if side == "left":
-        support = _wheel_plane_support_point(
-            left_center_vector, left_axis, left_radius, ground_normal
-        )
-    else:
-        support = _wheel_plane_support_point(
-            right_center_vector, right_axis, right_radius, ground_normal
-        )
-    return _make_position(support)
+    ground_normal = _ground_normal(normal_angle)
+    left_support = _wheel_plane_support_point(
+        left_center_vector, left_axis, left_radius, ground_normal
+    )
+    right_support = _wheel_plane_support_point(
+        right_center_vector, right_axis, right_radius, ground_normal
+    )
+    primal_angle = (
+        normal_angle.val if isinstance(normal_angle, DualScalar) else normal_angle
+    )
+    return AxleGroundTangency(
+        left=_make_position(left_support),
+        right=_make_position(right_support),
+        normal_angle=float(primal_angle),
+    )

@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
-from functools import cached_property, partial
+from functools import cached_property
 from typing import TYPE_CHECKING, Any, ClassVar, Sequence
 
 from kinematics.core.constraints import Constraint, DistanceConstraint
@@ -25,11 +25,10 @@ from kinematics.core.enums import Axis, PointID, SuspensionType
 from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.metrics.main import AxleMetricRows, compute_metrics_for_axle_state
 from kinematics.core.points.derived.ground import (
-    _GroundNormalContinuation,
-    get_axle_wheel_ground_tangent,
+    seed_from_tangent_points,
+    solve_axle_wheel_ground_tangents,
 )
 from kinematics.core.points.derived.manager import (
-    DerivedPointsManager,
     DerivedPointsSpec,
     PositionFn,
     PositionValue,
@@ -90,12 +89,6 @@ class AxleSuspension(Suspension):
     corners: dict[Side, CornerSuspension] = field(default_factory=dict)
     anti_roll: AxleArb = field(default_factory=ArbNone, kw_only=True)
     heave_link: AxleHeaveLink = field(default_factory=HeaveLinkNone, kw_only=True)
-    _ground_normal_continuation: _GroundNormalContinuation = field(
-        default_factory=_GroundNormalContinuation,
-        init=False,
-        repr=False,
-        compare=False,
-    )
 
     @property
     def is_axle(self) -> bool:
@@ -178,20 +171,12 @@ class AxleSuspension(Suspension):
         state = SuspensionState(positions, free_points)
         self.anti_roll.add_to_state(state)
         # Corners construct their own flat-ground tangent points before they are
-        # composed. Re-run the composed spec after shared mechanism points are
-        # present so the axle's two tangents use one coupled ground plane.
-        DerivedPointsManager(self.derived_spec()).update_in_place(state.positions)
+        # composed; the closure overwrites both with the coupled shared-plane
+        # solution so the design state carries one consistent ground.
+        self.apply_ground_closure(state.positions)
         state.free_points_order = sorted(state.free_points)
         self._initial_state = state
         return self._initial_state
-
-    def prepare_sweep(self) -> None:
-        """Start one independent ground-root history at the design state."""
-        initial_state = self.initial_state()
-        self._ground_normal_continuation.reset()
-        DerivedPointsManager(self.derived_spec()).update_in_place(
-            initial_state.positions
-        )
 
     def free_points(self) -> Sequence[PointKey]:
         """Return both corners' free points under side-qualified keys."""
@@ -309,70 +294,74 @@ class AxleSuspension(Suspension):
         anti_roll_spec = self.anti_roll.derived_spec()
         functions.update(anti_roll_spec.functions)
         dependencies.update(anti_roll_spec.dependencies)
-        self._install_shared_wheel_ground_tangents(functions, dependencies)
+        if self._ground_closure_plan() is not None:
+            # The coupled tangents are post-solve closure outputs, not derived
+            # points: dropping the composed flat-ground entries means nothing
+            # can silently write per-corner flat tangents into an axle state.
+            for side in (Side.LEFT, Side.RIGHT):
+                tangent = PointRef(side, PointID.WHEEL_GROUND_TANGENT)
+                functions.pop(tangent, None)
+                dependencies.pop(tangent, None)
         return DerivedPointsSpec(functions, dependencies)
 
-    def _install_shared_wheel_ground_tangents(
-        self,
-        functions: dict[PointKey, PositionFn],
-        dependencies: dict[PointKey, set[PointKey]],
-    ) -> None:
-        """Replace per-corner flat tangents with the shared axle ground tangent."""
+    def _ground_closure_plan(self) -> dict[str, Any] | None:
+        """Return the coupled tangency solve arguments, or None when inapplicable.
+
+        The closure needs both corners' wheel radii and spin axes. Corners
+        without a wheel configuration have no radius to couple, and a custom
+        corner that solves its own authored tangent as a free point owns that
+        point outright; both cases leave tangent ownership with the corners.
+        """
         left_corner = self.corners[Side.LEFT]
         right_corner = self.corners[Side.RIGHT]
         if left_corner.config is None or right_corner.config is None:
-            # Minimal topology test doubles may author their own tangent points
-            # without a wheel configuration. They have no radius to couple.
-            return
+            return None
         if (
             PointID.WHEEL_GROUND_TANGENT in left_corner.free_points()
             or PointID.WHEEL_GROUND_TANGENT in right_corner.free_points()
         ):
-            # A custom corner that solves an authored tangent as a free point
-            # owns that point's constraints and cannot be replaced safely.
-            return
+            return None
 
         left_axis_inboard, left_axis_outboard = left_corner.wheel_axis_points()
         right_axis_inboard, right_axis_outboard = right_corner.wheel_axis_points()
-        left_center = PointRef(Side.LEFT, PointID.WHEEL_CENTER)
-        right_center = PointRef(Side.RIGHT, PointID.WHEEL_CENTER)
-        left_axis_inboard_ref = PointRef(Side.LEFT, left_axis_inboard)
-        left_axis_outboard_ref = PointRef(Side.LEFT, left_axis_outboard)
-        right_axis_inboard_ref = PointRef(Side.RIGHT, right_axis_inboard)
-        right_axis_outboard_ref = PointRef(Side.RIGHT, right_axis_outboard)
+        return {
+            "left_center": PointRef(Side.LEFT, PointID.WHEEL_CENTER),
+            "left_axis_inboard": PointRef(Side.LEFT, left_axis_inboard),
+            "left_axis_outboard": PointRef(Side.LEFT, left_axis_outboard),
+            "left_radius": left_corner.config.wheel.tire.nominal_radius,
+            "right_center": PointRef(Side.RIGHT, PointID.WHEEL_CENTER),
+            "right_axis_inboard": PointRef(Side.RIGHT, right_axis_inboard),
+            "right_axis_outboard": PointRef(Side.RIGHT, right_axis_outboard),
+            "right_radius": right_corner.config.wheel.tire.nominal_radius,
+        }
+
+    def apply_ground_closure(
+        self,
+        positions: dict[PointKey, Any],
+        seed: float | None = None,
+    ) -> float | None:
+        """Overwrite both wheel-ground tangents with the coupled solution.
+
+        Runs once per accepted state, after solving. With no explicit ``seed``,
+        the angle implied by the tangent values already stored in ``positions``
+        is recovered as the seed, so branch continuity needs no hidden state.
+        Returns the solved primal ground-normal angle, or ``None`` when the
+        corners own their tangent points.
+        """
+        plan = self._ground_closure_plan()
+        if plan is None:
+            return None
         left_tangent = PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)
         right_tangent = PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)
-        shared_dependencies = {
-            left_center,
-            left_axis_inboard_ref,
-            left_axis_outboard_ref,
-            right_center,
-            right_axis_inboard_ref,
-            right_axis_outboard_ref,
-        }
-        shared_arguments = {
-            "left_center": left_center,
-            "left_axis_inboard": left_axis_inboard_ref,
-            "left_axis_outboard": left_axis_outboard_ref,
-            "left_radius": left_corner.config.wheel.tire.nominal_radius,
-            "right_center": right_center,
-            "right_axis_inboard": right_axis_inboard_ref,
-            "right_axis_outboard": right_axis_outboard_ref,
-            "right_radius": right_corner.config.wheel.tire.nominal_radius,
-            "continuation": self._ground_normal_continuation,
-        }
-        functions[left_tangent] = partial(
-            get_axle_wheel_ground_tangent,
-            **shared_arguments,
-            side="left",
-        )
-        functions[right_tangent] = partial(
-            get_axle_wheel_ground_tangent,
-            **shared_arguments,
-            side="right",
-        )
-        dependencies[left_tangent] = set(shared_dependencies)
-        dependencies[right_tangent] = set(shared_dependencies)
+        if seed is None:
+            stored_left = positions.get(left_tangent)
+            stored_right = positions.get(right_tangent)
+            if stored_left is not None and stored_right is not None:
+                seed = seed_from_tangent_points(stored_left, stored_right)
+        tangency = solve_axle_wheel_ground_tangents(positions, **plan, seed=seed)
+        positions[left_tangent] = tangency.left
+        positions[right_tangent] = tangency.right
+        return tangency.normal_angle
 
     @staticmethod
     def _wrap_derived(function: PositionFn, side: Side) -> PositionFn:

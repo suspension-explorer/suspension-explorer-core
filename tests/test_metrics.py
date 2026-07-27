@@ -4,7 +4,11 @@ import numpy as np
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.sweep_loader import load_sweep
-from kinematics.core.enums import Axis, PointID
+from kinematics.core.enums import Axis, AxlePosition, PointID
+from kinematics.core.metrics.anti_geometry import (
+    _cg_height_above_ground,
+    calculate_anti_dive_pct,
+)
 from kinematics.core.metrics.catalog import get_default_corner_metrics
 from kinematics.core.metrics.context import MetricContext
 from kinematics.core.metrics.ground import GroundDatum
@@ -14,10 +18,13 @@ from kinematics.core.metrics.steering_geometry import (
     calculate_scrub_radius,
     calculate_steering_axis_offset_ground,
 )
+from kinematics.core.metrics.swing_arms import calculate_fvsa_length
 from kinematics.core.metrics.units import MetricUnit
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.constants import TEST_TOLERANCE
-from kinematics.core.primitives.point_ref import Side
+from kinematics.core.primitives.geometry import Vector3
+from kinematics.core.primitives.point_ref import PointRef, Side
+from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.corner import DoubleWishboneSuspension
 from kinematics.core.sweep import solve_sweep
 
@@ -223,9 +230,7 @@ def test_steering_axis_ground_intersection_uses_ground_tangent_height(
         actual_intersection.data,
         expected_intersection.data,
         atol=TEST_TOLERANCE,
-        err_msg=(
-            "Steering-axis intersection should use wheel-ground tangent Z height"
-        ),
+        err_msg=("Steering-axis intersection should use wheel-ground tangent Z height"),
     )
 
 
@@ -289,8 +294,7 @@ def test_iso_steering_ground_metrics_use_wheel_relative_axes(
     displacement = ground_pt - ctx.wheel_ground_tangent
     ground_normal = ctx.ground.normal
     wheel_lateral_ground = (
-        ctx.wheel_axis.vector()
-        - ground_normal * ctx.wheel_axis.dot(ground_normal)
+        ctx.wheel_axis.vector() - ground_normal * ctx.wheel_axis.dot(ground_normal)
     ).normalize()
     wheel_longitudinal_ground = (
         ctx.side_sign * wheel_lateral_ground.cross(ground_normal)
@@ -356,14 +360,11 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
 
     ground_normal = ctx.ground.normal
     projected_axis = (
-        ctx.wheel_axis.vector()
-        - ground_normal * ctx.wheel_axis.dot(ground_normal)
+        ctx.wheel_axis.vector() - ground_normal * ctx.wheel_axis.dot(ground_normal)
     ).normalize()
     displacement = intersection - ctx.wheel_ground_tangent
     expected_offset = -float(displacement.dot(projected_axis))
-    forward_axis = (
-        ctx.side_sign * projected_axis.cross(ground_normal)
-    ).normalize()
+    forward_axis = (ctx.side_sign * projected_axis.cross(ground_normal)).normalize()
     expected_trail = float(displacement.dot(forward_axis))
     expected_scrub = displacement.norm()
 
@@ -378,6 +379,180 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
     )
     np.testing.assert_allclose(scrub_radius, expected_scrub, atol=TEST_TOLERANCE)
     np.testing.assert_allclose(mechanical_trail, expected_trail, atol=TEST_TOLERANCE)
+
+
+def _banked_ground_through(point, bank_angle_deg: float) -> GroundDatum:
+    """Build a ground datum rolled by ``bank_angle_deg`` through ``point``."""
+    bank_angle = radians(bank_angle_deg)
+    normal_y = -sin(bank_angle)
+    normal_z = cos(bank_angle)
+    return GroundDatum(
+        normal_y=normal_y,
+        normal_z=normal_z,
+        offset_mm=-(normal_y * point[Axis.Y] + normal_z * point[Axis.Z]),
+    )
+
+
+def test_anti_geometry_uses_perpendicular_cg_height_above_the_ground_plane(
+    double_wishbone_geometry_file,
+    test_data_dir,
+) -> None:
+    """
+    The anti formulas take the CG's perpendicular distance to the road plane,
+    which on a banked ground line differs from the raw chassis-Z difference.
+    """
+    suspension = load_geometry(double_wishbone_geometry_file)
+    assert isinstance(suspension, DoubleWishboneSuspension)
+    assert suspension.config is not None
+    config = suspension.config.model_copy(
+        update={"axle_position": AxlePosition.FRONT, "front_brake_bias": 0.6}
+    )
+    # The design state has side-view-parallel wishbones, so its SVIC is at
+    # infinity; take a swept state where the anti formulas are defined.
+    states, _ = solve_sweep(suspension, load_sweep(test_data_dir / "sweep.yaml"))
+    state = next(
+        candidate
+        for candidate in states
+        if suspension.compute_side_view_instant_center(candidate) is not None
+    )
+    tangent = state.get(PointID.WHEEL_GROUND_TANGENT)
+
+    ground = _banked_ground_through(tangent, 12.0)
+    ctx = MetricContext(
+        state=state,
+        suspension=suspension,
+        config=config,
+        ground=ground,
+    )
+    cg = config.cg_position
+
+    expected_height = (
+        ground.normal_y * float(cg[Axis.Y])
+        + ground.normal_z * float(cg[Axis.Z])
+        + ground.offset_mm
+    )
+    height = _cg_height_above_ground(ctx)
+    assert height is not None
+    np.testing.assert_allclose(height, expected_height, atol=TEST_TOLERANCE)
+
+    chassis_z_height = float(cg[Axis.Z]) - float(tangent[Axis.Z])
+    assert not np.isclose(height, chassis_z_height, atol=1e-3), (
+        "Banked ground should not reduce to the chassis-Z height difference"
+    )
+
+    svic = ctx.side_view_ic
+    assert svic is not None
+    run = float(tangent[Axis.X]) - float(svic[Axis.X])
+    tan_theta = (float(svic[Axis.Z]) - float(tangent[Axis.Z])) / run
+    expected_anti_dive = 100.0 * 0.6 * (config.wheelbase / expected_height) * tan_theta
+    anti_dive = calculate_anti_dive_pct(ctx)
+    assert anti_dive is not None
+    np.testing.assert_allclose(anti_dive, expected_anti_dive, atol=TEST_TOLERANCE)
+
+    # A level ground line through the same tangent must still give the
+    # chassis-Z height, leaving flat-ground anti percentages untouched.
+    flat_ctx = MetricContext(state=state, suspension=suspension, config=config)
+    flat_height = _cg_height_above_ground(flat_ctx)
+    assert flat_height is not None
+    np.testing.assert_allclose(flat_height, chassis_z_height, atol=TEST_TOLERANCE)
+
+
+def test_anti_cg_height_is_shared_by_both_corners_of_a_banked_axle(
+    test_data_dir,
+) -> None:
+    """Both corners of an axle measure the CG against the same ground line."""
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+    assert axle.config is not None
+
+    state = axle.initial_state().copy()
+    left_tangent_ref = PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)
+    left_tangent = state.get(left_tangent_ref)
+    state.set(left_tangent_ref, left_tangent + Vector3((0.0, 0.0, 40.0)))
+
+    ground = GroundDatum.from_wheel_ground_tangents(
+        state.get(left_tangent_ref),
+        state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
+    )
+    assert ground is not None
+    assert abs(ground.angle_deg) > 1.0, "The test state must be genuinely banked"
+
+    heights: dict[Side, float] = {}
+    chassis_z_heights: dict[Side, float] = {}
+    for side in (Side.LEFT, Side.RIGHT):
+        corner = axle.corners[side]
+        corner_config = corner.config if corner.config is not None else axle.config
+        corner_state = axle.corner_state(state, side)
+        ctx = MetricContext(
+            state=corner_state,
+            suspension=corner,
+            config=corner_config,
+            ground=ground,
+        )
+        height = _cg_height_above_ground(ctx)
+        assert height is not None
+        heights[side] = height
+        chassis_z_heights[side] = float(corner_config.cg_position[Axis.Z]) - float(
+            corner_state.get(PointID.WHEEL_GROUND_TANGENT)[Axis.Z]
+        )
+
+    np.testing.assert_allclose(
+        heights[Side.LEFT], heights[Side.RIGHT], atol=TEST_TOLERANCE
+    )
+    assert not np.isclose(
+        chassis_z_heights[Side.LEFT], chassis_z_heights[Side.RIGHT], atol=1e-3
+    ), "The chassis-Z heights must disagree for this test to be meaningful"
+
+
+def test_fvsa_sign_follows_the_ground_line_rather_than_chassis_y(
+    double_wishbone_geometry_file,
+) -> None:
+    """
+    The FVSA magnitude is a plain YZ distance, but its inboard/outboard sign
+    is resolved along the ground line, so a steep bank can flip it.
+    """
+    suspension = load_geometry(double_wishbone_geometry_file)
+    assert isinstance(suspension, DoubleWishboneSuspension)
+    assert suspension.config is not None
+    state = suspension.initial_state()
+    tangent = state.get(PointID.WHEEL_GROUND_TANGENT)
+
+    # Place the FVIC so its chassis-Y and along-ground components disagree on
+    # a 45-degree bank; the solved geometry never sits this close to the
+    # tangent, so the case has to be posed directly.
+    offset = Vector3((0.0, 100.0, -200.0))
+    ground = _banked_ground_through(tangent, 45.0)
+    ctx = MetricContext(
+        state=state,
+        suspension=suspension,
+        config=suspension.config,
+        ground=ground,
+    )
+    ctx.front_view_ic = tangent + offset
+
+    expected_magnitude = float(np.hypot(offset[Axis.Y], offset[Axis.Z]))
+    along_ground = (
+        float(offset[Axis.Y]) * ground.tangent_y
+        + float(offset[Axis.Z]) * ground.tangent_z
+    )
+    expected = expected_magnitude * (-ctx.side_sign * np.sign(along_ground))
+
+    fvsa_length = calculate_fvsa_length(ctx)
+    assert fvsa_length is not None
+    np.testing.assert_allclose(fvsa_length, expected, atol=TEST_TOLERANCE)
+
+    flat_ctx = MetricContext(
+        state=state, suspension=suspension, config=suspension.config
+    )
+    flat_ctx.front_view_ic = tangent + offset
+    flat_fvsa_length = calculate_fvsa_length(flat_ctx)
+    assert flat_fvsa_length is not None
+    np.testing.assert_allclose(
+        flat_fvsa_length,
+        expected_magnitude * (-ctx.side_sign * np.sign(float(offset[Axis.Y]))),
+        atol=TEST_TOLERANCE,
+    )
+    assert flat_fvsa_length == -fvsa_length
 
 
 class TestSignConventionsAndKnownValues:

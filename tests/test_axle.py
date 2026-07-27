@@ -170,9 +170,7 @@ def test_basic_axle_sweep_solves_and_emits_structural_metrics(
     assert left_offset is not None
     assert left_scrub is not None
     assert left_trail is not None
-    assert left_scrub == pytest.approx(
-        (left_offset**2 + left_trail**2) ** 0.5
-    )
+    assert left_scrub == pytest.approx((left_offset**2 + left_trail**2) ** 0.5)
     midpoint_state = states[2]
     assert midpoint.axle["ground_line_normal_y"] == pytest.approx(0.0, abs=1e-10)
     assert midpoint.axle["ground_line_normal_z"] == pytest.approx(1.0)
@@ -192,19 +190,23 @@ def test_basic_axle_sweep_solves_and_emits_structural_metrics(
     assert left_z == pytest.approx(right_z, abs=1e-5)
 
 
-def test_tangent_propagation_reuses_the_solved_ground_roots(
+def test_ground_closure_threads_one_seeded_search_per_solved_state(
     test_data_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
     assert isinstance(axle, AxleSuspension)
     sweep = load_sweep(test_data_dir / "axle_sweep.yaml", axle)
+    # Build and cache the design state before recording, so the closure run at
+    # initial-state construction is not counted against the sweep.
+    axle.initial_state()
     original_search = ground_module._search_ground_normal_angle
-    searched_seeds: list[float | None] = []
+    searches: list[tuple[float | None, float]] = []
 
     def record_search(*args, seed=None):
-        searched_seeds.append(seed)
-        return original_search(*args, seed=seed)
+        root = original_search(*args, seed=seed)
+        searches.append((seed, root))
+        return root
 
     monkeypatch.setattr(
         ground_module,
@@ -213,12 +215,37 @@ def test_tangent_propagation_reuses_the_solved_ground_roots(
     )
 
     states, _ = solve_sweep(axle, sweep)
-    searches_after_solve = len(searched_seeds)
+    solve_searches = list(searches)
+
+    assert len(solve_searches) == len(states), (
+        "The closure solves the shared plane exactly once per accepted state"
+    )
+    assert solve_searches[0][0] is not None, (
+        "The first state seeds from the stored design tangents, not from nothing"
+    )
+    for (seed, _), (_, previous_root) in zip(
+        solve_searches[1:], solve_searches[:-1], strict=True
+    ):
+        assert seed == pytest.approx(previous_root), (
+            "Each state must be seeded from the previously accepted root"
+        )
+
+    solved_roots = [root for _, root in solve_searches]
     metrics = compute_sweep_metrics(axle, sweep, states)
+    metric_searches = searches[len(solve_searches) :]
 
     assert metrics.derivative_error is None
-    assert searches_after_solve > 0
-    assert len(searched_seeds) == searches_after_solve
+    # Metrics may re-solve the plane for their dual evaluations, but every such
+    # solve must be handed a seed that is already on the solved branch.
+    assert all(seed is not None for seed, _ in metric_searches), (
+        "Metric-time searches must reuse a solved root as their seed"
+    )
+    deviations = [
+        min(abs(seed - root) for root in solved_roots)
+        for seed, _ in metric_searches
+        if seed is not None
+    ]
+    assert max(deviations, default=0.0) < 1e-6
 
 
 def test_axle_targets_require_side(test_data_dir: Path) -> None:

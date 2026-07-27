@@ -156,11 +156,16 @@ def test_axle_catalog_marks_both_ground_tangents_output_only(
     assert isinstance(axle, AxleSuspension)
 
     points = axle.assembly().points
-
-    assert points.output_only == frozenset(
+    tangents = frozenset(
         {
             PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT),
             PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT),
         }
     )
-    assert points.output_only <= points.derived
+
+    assert points.output_only == tangents
+    # The coupled tangents are post-solve closure outputs, so they are neither
+    # derived points nor solver free points, but they remain catalog points.
+    assert not tangents & points.derived
+    assert not tangents & points.free
+    assert tangents <= points.all
