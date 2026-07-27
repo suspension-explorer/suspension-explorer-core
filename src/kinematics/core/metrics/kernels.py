@@ -48,7 +48,7 @@ PositionLike = Union[np.ndarray, DualVec3, object]
 # A kernel result: float on the plain substrate, DualScalar on the dual one.
 Scalar = Union[float, DualScalar]
 
-# Constant world axes as raw arrays (constants have zero derivative).
+# Constant chassis axes as raw arrays (constants have zero derivative).
 _X_AXIS = np.array([1.0, 0.0, 0.0])
 
 
@@ -100,7 +100,7 @@ def coordinate(
     axis: Axis,
 ) -> Scalar:
     """
-    A single chassis-frame coordinate of a point (mm).
+    A single chassis-space coordinate of a point (mm).
     """
     return _component(_vec(positions, point_id), axis)
 

@@ -61,7 +61,7 @@ class ScalarDriver(ScalarResponse, Protocol):
 
 @dataclass(frozen=True)
 class PointCoordinateResponse:
-    """Coordinate of a point along a normalized world or custom axis."""
+    """Coordinate of a point along a normalized chassis-space or custom axis."""
 
     point: PointKey
     axis: Direction3
@@ -78,7 +78,7 @@ class PointCoordinateResponse:
         return self.point
 
     @classmethod
-    def from_world_axis(
+    def from_chassis_axis(
         cls,
         point: PointKey,
         axis: Axis,
@@ -87,7 +87,7 @@ class PointCoordinateResponse:
         unit: MetricUnit,
         label: str | None = None,
     ) -> "PointCoordinateResponse":
-        """Build a coordinate response along a principal world axis."""
+        """Build a coordinate response along a principal chassis axis."""
         direction = np.zeros(3, dtype=np.float64)
         direction[int(axis)] = 1.0
         return cls(
@@ -110,7 +110,7 @@ class PointCoordinateResponse:
     ) -> "PointCoordinateResponse":
         """Build a coordinate response, normalizing the supplied axis."""
         if isinstance(axis, Axis):
-            return cls.from_world_axis(
+            return cls.from_chassis_axis(
                 point,
                 axis,
                 name=name,

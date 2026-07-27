@@ -23,14 +23,15 @@ from kinematics.core.elements import (
 )
 from kinematics.core.enums import Axis, PointID, SuspensionType
 from kinematics.core.metrics.main import AxleMetricRows, compute_metrics_for_axle_state
+from kinematics.core.points.derived.ground import (
+    _GroundNormalContinuation,
+    get_axle_wheel_ground_tangent,
+)
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
     PositionFn,
     PositionValue,
-)
-from kinematics.core.points.derived.road import (
-    get_axle_wheel_plane_road_tangent,
 )
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import (
@@ -51,7 +52,7 @@ from kinematics.core.suspensions.axle.mechanisms import (
 )
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.suspensions.corner.base import CornerSuspension
-from kinematics.core.targeting import ActuatorDOF, WorldAxisSystem
+from kinematics.core.targeting import ActuatorDOF, ChassisAxisSystem
 
 if TYPE_CHECKING:
     from kinematics.core.diagnostics import DiagnosticIssue
@@ -144,7 +145,7 @@ class AxleSuspension(Suspension):
                     PointRef(Side.LEFT, rack[0]),
                     PointRef(Side.RIGHT, rack[1]),
                 ),
-                direction=WorldAxisSystem.Y,
+                direction=ChassisAxisSystem.Y,
             ),
         )
 
@@ -169,9 +170,9 @@ class AxleSuspension(Suspension):
 
         state = SuspensionState(positions, free_points)
         self.anti_roll.add_to_state(state)
-        # Corners construct their own flat-road tangent points before they are
+        # Corners construct their own flat-ground tangent points before they are
         # composed. Re-run the composed spec after shared mechanism points are
-        # present so the axle's two tangents use one coupled road plane.
+        # present so the axle's two tangents use one coupled ground plane.
         DerivedPointsManager(self.derived_spec()).update_in_place(state.positions)
         state.free_points_order = sorted(state.free_points)
         self._initial_state = state
@@ -194,6 +195,16 @@ class AxleSuspension(Suspension):
             for point in self.corners[side].output_points()
         )
         return tuple(dict.fromkeys((*corner_points, *self.anti_roll.output_points)))
+
+    def output_only_points(self) -> tuple[PointKey, ...]:
+        """Return each corner's undriveable outputs under side-qualified keys."""
+        return tuple(
+            dict.fromkeys(
+                side_qualified(side, point)
+                for side in (Side.LEFT, Side.RIGHT)
+                for point in self.corners[side].output_only_points()
+            )
+        )
 
     def constraints(self) -> list[Constraint]:
         """Combine remapped corner constraints and the rigid rack coupling."""
@@ -274,15 +285,15 @@ class AxleSuspension(Suspension):
         anti_roll_spec = self.anti_roll.derived_spec()
         functions.update(anti_roll_spec.functions)
         dependencies.update(anti_roll_spec.dependencies)
-        self._install_shared_wheel_plane_tangents(functions, dependencies)
+        self._install_shared_wheel_ground_tangents(functions, dependencies)
         return DerivedPointsSpec(functions, dependencies)
 
-    def _install_shared_wheel_plane_tangents(
+    def _install_shared_wheel_ground_tangents(
         self,
         functions: dict[PointKey, PositionFn],
         dependencies: dict[PointKey, set[PointKey]],
     ) -> None:
-        """Replace per-corner flat tangents with the shared axle road tangent."""
+        """Replace per-corner flat tangents with the shared axle ground tangent."""
         left_corner = self.corners[Side.LEFT]
         right_corner = self.corners[Side.RIGHT]
         if left_corner.config is None or right_corner.config is None:
@@ -290,8 +301,8 @@ class AxleSuspension(Suspension):
             # without a wheel configuration. They have no radius to couple.
             return
         if (
-            PointID.WHEEL_PLANE_ROAD_TANGENT in left_corner.free_points()
-            or PointID.WHEEL_PLANE_ROAD_TANGENT in right_corner.free_points()
+            PointID.WHEEL_GROUND_TANGENT in left_corner.free_points()
+            or PointID.WHEEL_GROUND_TANGENT in right_corner.free_points()
         ):
             # A custom corner that solves an authored tangent as a free point
             # owns that point's constraints and cannot be replaced safely.
@@ -305,8 +316,8 @@ class AxleSuspension(Suspension):
         left_axis_outboard_ref = PointRef(Side.LEFT, left_axis_outboard)
         right_axis_inboard_ref = PointRef(Side.RIGHT, right_axis_inboard)
         right_axis_outboard_ref = PointRef(Side.RIGHT, right_axis_outboard)
-        left_tangent = PointRef(Side.LEFT, PointID.WHEEL_PLANE_ROAD_TANGENT)
-        right_tangent = PointRef(Side.RIGHT, PointID.WHEEL_PLANE_ROAD_TANGENT)
+        left_tangent = PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)
+        right_tangent = PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)
         shared_dependencies = {
             left_center,
             left_axis_inboard_ref,
@@ -324,14 +335,15 @@ class AxleSuspension(Suspension):
             "right_axis_inboard": right_axis_inboard_ref,
             "right_axis_outboard": right_axis_outboard_ref,
             "right_radius": right_corner.config.wheel.tire.nominal_radius,
+            "continuation": _GroundNormalContinuation(),
         }
         functions[left_tangent] = partial(
-            get_axle_wheel_plane_road_tangent,
+            get_axle_wheel_ground_tangent,
             **shared_arguments,
             side="left",
         )
         functions[right_tangent] = partial(
-            get_axle_wheel_plane_road_tangent,
+            get_axle_wheel_ground_tangent,
             **shared_arguments,
             side="right",
         )

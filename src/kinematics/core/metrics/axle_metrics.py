@@ -6,11 +6,11 @@ from math import atan2, degrees
 from typing import TYPE_CHECKING
 
 from kinematics.core.enums import Axis, PointID
+from kinematics.core.metrics.ground import AxleGroundLine
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
 from kinematics.core.primitives.point_ref import PointRef, Side
 
 if TYPE_CHECKING:
-    from kinematics.core.metrics.ground import AxleGroundLine
     from kinematics.core.metrics.main import MetricRow
     from kinematics.core.state import SuspensionState
     from kinematics.core.suspensions.axle import AxleSuspension
@@ -24,17 +24,13 @@ def append_axle_state_metrics(
 ) -> None:
     """Append axle-scoped metrics, including an optional shared ground line."""
     wheel_delta_z: dict[Side, float] = {}
-    tangent_delta_z: dict[Side, float] = {}
     tangent_y: dict[Side, float] = {}
     for side in (Side.LEFT, Side.RIGHT):
         design = axle.corners[side].initial_state()
         wheel_ref = PointRef(side, PointID.WHEEL_CENTER)
-        tangent_ref = PointRef(side, PointID.WHEEL_PLANE_ROAD_TANGENT)
+        tangent_ref = PointRef(side, PointID.WHEEL_GROUND_TANGENT)
         wheel_delta_z[side] = float(state.get(wheel_ref)[Axis.Z]) - float(
             design.get(PointID.WHEEL_CENTER)[Axis.Z]
-        )
-        tangent_delta_z[side] = float(state.get(tangent_ref)[Axis.Z]) - float(
-            design.get(PointID.WHEEL_PLANE_ROAD_TANGENT)[Axis.Z]
         )
         tangent_y[side] = float(state.get(tangent_ref)[Axis.Y])
 
@@ -43,8 +39,13 @@ def append_axle_state_metrics(
     track = abs(tangent_y[Side.LEFT] - tangent_y[Side.RIGHT])
     row["heave"] = 0.5 * (left_wheel_z + right_wheel_z)
     row["roll"] = degrees(atan2(left_wheel_z - right_wheel_z, track))
-    row["ride_height_change"] = -0.5 * (
-        tangent_delta_z[Side.LEFT] + tangent_delta_z[Side.RIGHT]
+    design_ground = _axle_ground_line(axle.initial_state())
+    current_ground_z = ground.z_at(0.0) if ground is not None else None
+    design_ground_z = design_ground.z_at(0.0) if design_ground is not None else None
+    row["ride_height_change"] = (
+        design_ground_z - current_ground_z
+        if design_ground_z is not None and current_ground_z is not None
+        else None
     )
     row["track"] = track
 
@@ -77,20 +78,28 @@ def append_axle_state_metrics(
         row["rack_displacement"] = current_rack_y - design_rack_y
 
 
+def _axle_ground_line(state: SuspensionState) -> AxleGroundLine | None:
+    """Build the shared ground datum from an axle state."""
+    return AxleGroundLine.from_wheel_ground_tangents(
+        state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)),
+        state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
+    )
+
+
 def _roll_center(
     state: SuspensionState,
     axle: AxleSuspension,
 ) -> tuple[float | None, float | None]:
-    """Intersect the two wheel-plane-road-tangent-to-FVIC lines in the YZ plane."""
+    """Intersect the two wheel-plane-ground-tangent-to-FVIC lines in the YZ plane."""
     lines: list[tuple[float, float, float, float]] = []
     for side in (Side.LEFT, Side.RIGHT):
         corner_state = axle.corner_state(state, side)
         fvic = axle.corners[side].compute_front_view_instant_center(corner_state)
         if fvic is None:
             return None, None
-        road_tangent = corner_state.get(PointID.WHEEL_PLANE_ROAD_TANGENT)
-        tangent_y = float(road_tangent[Axis.Y])
-        tangent_z = float(road_tangent[Axis.Z])
+        ground_tangent = corner_state.get(PointID.WHEEL_GROUND_TANGENT)
+        tangent_y = float(ground_tangent[Axis.Y])
+        tangent_z = float(ground_tangent[Axis.Z])
         lines.append(
             (
                 tangent_y,

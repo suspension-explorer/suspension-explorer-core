@@ -50,9 +50,9 @@ tool.
 The calculated metrics include wheel travel, longitudinal wheel-center travel,
 half-track and track, roadwheel angle, camber, caster, kingpin inclination,
 scrub radius, mechanical trail, instant-center geometry, roll center, heave,
-roll, anti-pitch geometry, damper and mechanism travel, and applicable motion
-ratios. Metric availability depends on the architecture and installed
-mechanisms.
+roll, axle ground-line geometry, anti-pitch geometry, damper and mechanism
+travel, and applicable motion ratios. Metric availability depends on the
+architecture and installed mechanisms.
 
 Analytical constraint Jacobians are used by the nonlinear solver. Applicable
 motion ratios and response derivatives are evaluated from the solved constraint
@@ -81,18 +81,43 @@ Suspension Explorer uses the ISO 8855 vehicle coordinate system:
 - Angles use radians internally and degrees in configuration and output.
 - Wheel offset follows the ET convention: positive offset is inboard.
 
-Hardpoints describe the design-condition assembly in a chassis-fixed frame.
-Fixed chassis hardpoints remain fixed while suspension, wheel, and tire points
-move relative to them. There is currently no separate inertial/world frame or
-road-frame transform. Left-side hardpoints therefore normally have positive Y
+Hardpoints describe the design-condition assembly in chassis space. Fixed
+chassis hardpoints remain fixed while suspension, wheel, and tire points move
+relative to them. Left-side hardpoints therefore normally have positive Y
 coordinates and right-side hardpoints normally have negative Y coordinates.
 
-For a solved two-corner axle, metrics also derive a shared chassis-frame road line in
-`YZ` from both wheel-plane road-tangent points. Its road-plane interpretation is the
-mathematical extrusion parallel to chassis `±X`, so longitudinal grade is assumed zero
-and is not inferred. This axle-local construction needs neither a rear axle nor a
-world frame; standalone corners instead assume a local `+Z` road normal. The axle
-metric row exports its normal, offset, angle, and chassis-centerline height.
+### Design datum and coordinate spaces
+
+The intended authoring datum is:
+
+1. At design condition, chassis space and ground space are aligned.
+2. The front axle centreline defines `X = 0`.
+3. The design ground plane defines `Z = 0`, so each design-condition
+   `wheel_ground_tangent` lies on `Z = 0`.
+4. Positive X points forwards, positive Y points left, and positive Z points
+   upwards in both spaces when they are aligned.
+
+These are design-condition conventions, not constraints held through a sweep.
+The solver stores and solves coordinates in chassis space; it does not move the
+chassis or maintain a second set of point coordinates. As the suspension
+travels, the current wheel-ground tangents define ground space relative to
+chassis space, so the two spaces may translate and rotate apart.
+
+For a two-corner axle, both wheel-ground tangent points are derived from the
+solved wheel geometry using one shared ground plane, instead of each corner
+independently assuming flat ground. That plane is the axle's ground line in
+chassis `YZ`, extruded parallel to chassis `±X`, so longitudinal grade is
+assumed to be zero rather than inferred from a single axle. The construction
+needs neither a rear axle nor an inertial space. The axle metric row exports the
+line's normal, offset, and angle, plus its height at the vehicle centreline. A
+standalone corner cannot define a ground line, so it retains a local `+Z`
+ground normal.
+
+The `wheel_ground_tangent` is a derived output, not a point the solver can be
+asked to place. Sweeps that target it are rejected during validation; drive
+`wheel_center` instead, and read the resulting ground geometry from the axle
+ground-line metrics. A ground-space renderer transforms the solved
+chassis-space result for display; it does not change the solved state.
 
 ## Installation
 
@@ -222,7 +247,7 @@ targets:
 Every physical actuator must be controlled exactly once. A rack-steered model
 therefore needs one `trackrod_inboard` target along Y, even when the rack is
 held at zero displacement. `relative` values are measured from the authored
-design condition; `absolute` values are coordinates in the chassis-fixed frame.
+design condition; `absolute` values are coordinates in chassis space.
 
 All target sequences must have the same number of values. Multiple targets are
 paired by index rather than expanded into a Cartesian product. Use `start`,
@@ -235,9 +260,9 @@ paired by index rather than expanded into a Cartesian product. Use `start`,
 uv run kinematics visualize --geometry geometry.yaml --output geometry.png
 ```
 
-This validates and builds the geometry, reports whether the derived wheel-plane
-road-tangent point lies on `Z = 0`, and writes a static image. It requires
-`[cli,viz]`.
+This validates and builds the geometry, reports whether every derived
+wheel-ground tangent point lies on `Z = 0`, and writes a static image. It
+requires `[cli,viz]`.
 
 ### 4. Solve and export the sweep
 

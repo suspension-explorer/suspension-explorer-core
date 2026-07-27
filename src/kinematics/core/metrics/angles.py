@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from kinematics.core.enums import Axis
-from kinematics.core.targeting import WorldAxisSystem
+from kinematics.core.targeting import ChassisAxisSystem
 
 if TYPE_CHECKING:
     from kinematics.core.metrics.context import MetricContext
@@ -35,7 +35,7 @@ def calculate_camber(ctx: MetricContext) -> float:
     # vehicle's longitudinal axis (X-axis).
     # Multiply by -side so the vector points roughly +Z (Up) for both
     # sides.
-    wheel_up = axle.cross(WorldAxisSystem.X) * -side
+    wheel_up = axle.cross(ChassisAxisSystem.X) * -side
 
     # Project onto the front view plane (YZ plane).
     proj_y = wheel_up[Axis.Y]

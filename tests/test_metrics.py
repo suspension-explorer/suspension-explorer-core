@@ -1,3 +1,5 @@
+from math import cos, radians, sin
+
 import numpy as np
 
 from kinematics.cli.io.loaders import load_geometry
@@ -5,7 +7,9 @@ from kinematics.cli.io.sweep_loader import load_sweep
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.metrics.catalog import get_default_corner_metrics
 from kinematics.core.metrics.context import MetricContext
+from kinematics.core.metrics.ground import AxleGroundLine
 from kinematics.core.metrics.main import compute_metrics_for_state_from_suspension
+from kinematics.core.metrics.steering_geometry import calculate_scrub_radius
 from kinematics.core.metrics.units import MetricUnit
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.constants import TEST_TOLERANCE
@@ -41,7 +45,7 @@ def test_metric_catalog_uses_supported_units() -> None:
 
 def _shift_x(point: object, delta_x: float):
     """
-    Shift a 3D point along the world X axis by a fixed amount.
+    Shift a 3D point along the chassis X axis by a fixed amount.
 
     Returns a Point3 so it can be used with Pydantic's `model_copy(update=...)`
     which does not re-run field validators.
@@ -57,7 +61,7 @@ def _translate_double_wishbone_x(
     """
     Build a rigidly translated copy of a double wishbone suspension.
 
-    Hardpoints and any configuration points that live in world coordinates
+    Hardpoints and any configuration points that live in chassis-space coordinates
     are shifted together so the translated suspension is geometrically
     identical to the original one.
     """
@@ -180,12 +184,12 @@ def test_parallel_wishbone_planes_produce_null_ic_metrics(
     assert metrics["fvsa_length"] is None
 
 
-def test_steering_axis_ground_intersection_uses_road_tangent_height(
+def test_steering_axis_ground_intersection_uses_ground_tangent_height(
     double_wishbone_geometry_file,
 ) -> None:
     """
     The steering-axis ground intersection should be evaluated on the
-    horizontal plane through the wheel-plane road tangent, not on world Z = 0.
+    horizontal plane through the wheel-ground tangent, not on chassis Z = 0.
     """
     suspension = load_geometry(double_wishbone_geometry_file)
     assert isinstance(suspension, DoubleWishboneSuspension)
@@ -199,12 +203,12 @@ def test_steering_axis_ground_intersection_uses_road_tangent_height(
     upper = state.get(PointID.UPPER_WISHBONE_OUTBOARD).copy()
     direction = upper - lower
 
-    road_tangent_data = state.get(PointID.WHEEL_PLANE_ROAD_TANGENT).data.copy()
-    road_tangent_data[2] = 123.456
-    road_tangent = Point3(road_tangent_data)
-    state[PointID.WHEEL_PLANE_ROAD_TANGENT] = road_tangent
+    ground_tangent_data = state.get(PointID.WHEEL_GROUND_TANGENT).data.copy()
+    ground_tangent_data[2] = 123.456
+    ground_tangent = Point3(ground_tangent_data)
+    state[PointID.WHEEL_GROUND_TANGENT] = ground_tangent
 
-    expected_t = (road_tangent[2] - lower[2]) / direction[2]
+    expected_t = (ground_tangent[2] - lower[2]) / direction[2]
     expected_intersection = lower + expected_t * direction
 
     ctx = MetricContext(state=state, suspension=suspension, config=suspension.config)
@@ -216,7 +220,7 @@ def test_steering_axis_ground_intersection_uses_road_tangent_height(
         expected_intersection.data,
         atol=TEST_TOLERANCE,
         err_msg=(
-            "Steering-axis intersection should use wheel-plane road-tangent Z height"
+            "Steering-axis intersection should use wheel-ground tangent Z height"
         ),
     )
 
@@ -278,7 +282,7 @@ def test_scrub_radius_uses_ground_plane_wheel_lateral_direction(
     ground_pt = ctx.steering_axis_ground_intersection
     assert ground_pt is not None
 
-    displacement = (ground_pt - ctx.wheel_plane_road_tangent).data
+    displacement = (ground_pt - ctx.wheel_ground_tangent).data
     wheel_lateral_ground = ctx.wheel_axis.data.copy()
     wheel_lateral_ground[2] = 0.0
     wheel_lateral_ground /= np.linalg.norm(wheel_lateral_ground)
@@ -297,6 +301,59 @@ def test_scrub_radius_uses_ground_plane_wheel_lateral_direction(
         old_3d_axle_projection,
         atol=1e-3,
     ), "Scrub radius should not use the full 3D axle direction"
+
+
+def test_steering_geometry_uses_actual_banked_ground_plane(
+    double_wishbone_geometry_file,
+) -> None:
+    suspension = load_geometry(double_wishbone_geometry_file)
+    assert isinstance(suspension, DoubleWishboneSuspension)
+    assert suspension.config is not None
+
+    from kinematics.core.primitives.geometry import Vector3
+
+    state = suspension.initial_state().copy()
+    axle_inboard = state.get(PointID.AXLE_INBOARD)
+    state[PointID.AXLE_OUTBOARD] = axle_inboard + Vector3((80.0, 150.0, 60.0))
+    tangent = state.get(PointID.WHEEL_GROUND_TANGENT)
+
+    bank_angle = radians(12.0)
+    tangent_y = cos(bank_angle)
+    tangent_z = sin(bank_angle)
+    normal_y = -tangent_z
+    normal_z = tangent_y
+    ground = AxleGroundLine(
+        tangent_y=tangent_y,
+        tangent_z=tangent_z,
+        normal_y=normal_y,
+        normal_z=normal_z,
+        offset_mm=-(normal_y * tangent[Axis.Y] + normal_z * tangent[Axis.Z]),
+    )
+    ctx = MetricContext(
+        state=state,
+        suspension=suspension,
+        config=suspension.config,
+        axle_ground=ground,
+    )
+
+    intersection = ctx.steering_axis_ground_intersection
+    assert intersection is not None
+    np.testing.assert_allclose(
+        ground.signed_distance_yz(intersection), 0.0, atol=TEST_TOLERANCE
+    )
+
+    ground_normal, _ = ctx.ground_plane
+    projected_axis = (
+        ctx.wheel_axis.vector()
+        - ground_normal * ctx.wheel_axis.dot(ground_normal)
+    ).normalize()
+    expected_scrub = -float(
+        (intersection - ctx.wheel_ground_tangent).dot(projected_axis)
+    )
+
+    scrub_radius = calculate_scrub_radius(ctx)
+    assert scrub_radius is not None
+    np.testing.assert_allclose(scrub_radius, expected_scrub, atol=TEST_TOLERANCE)
 
 
 class TestSignConventionsAndKnownValues:

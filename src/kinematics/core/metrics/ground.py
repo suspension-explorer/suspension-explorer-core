@@ -1,6 +1,6 @@
-"""Axle-level road datum derived from two wheel-plane road-tangent points.
+"""Axle-level ground datum derived from two wheel-ground tangent points.
 
-The chassis coordinate system remains the reference frame.  This primitive
+Chassis space remains the coordinate reference. This primitive
 describes only the YZ ground line at one axle; its corresponding 3D plane is
 that line extruded along chassis X, so it deliberately carries no grade.
 """
@@ -24,7 +24,7 @@ class AxleGroundLine:
     The line equation is ``normal_y * y + normal_z * z + offset_mm = 0``.
     Its tangent convention points from vehicle right to left (nonnegative Y),
     which makes the normal's Z component nonnegative.  Extruding the line in
-    chassis ±X yields the axle-level, zero-grade road plane.
+    chassis ±X yields the axle-level, zero-grade ground plane.
     """
 
     tangent_y: float
@@ -35,32 +35,23 @@ class AxleGroundLine:
 
     def __post_init__(self) -> None:
         """Reject direct construction that would violate the line conventions."""
-        values = (
-            self.tangent_y,
-            self.tangent_z,
-            self.normal_y,
-            self.normal_z,
-            self.offset_mm,
-        )
-        try:
-            finite = all(isfinite(value) for value in values)
-        except TypeError as error:
-            raise ValueError("Axle ground-line fields must be finite floats") from error
-        if not finite:
+        if not all(
+            isfinite(value)
+            for value in (
+                self.tangent_y,
+                self.tangent_z,
+                self.normal_y,
+                self.normal_z,
+                self.offset_mm,
+            )
+        ):
             raise ValueError("Axle ground-line fields must be finite")
 
-        tangent_length = hypot(self.tangent_y, self.tangent_z)
-        normal_length = hypot(self.normal_y, self.normal_z)
-        if abs(tangent_length - 1.0) > _INVARIANT_TOLERANCE:
+        if abs(hypot(self.tangent_y, self.tangent_z) - 1.0) > _INVARIANT_TOLERANCE:
             raise ValueError("Axle ground-line tangent must be unit length")
-        if abs(normal_length - 1.0) > _INVARIANT_TOLERANCE:
-            raise ValueError("Axle ground-line normal must be unit length")
 
-        dot_product = self.tangent_y * self.normal_y + self.tangent_z * self.normal_z
-        if abs(dot_product) > _INVARIANT_TOLERANCE:
-            raise ValueError(
-                "Axle ground-line tangent and normal must be perpendicular"
-            )
+        # Pinning the normal to the tangent's upward rotation also fixes its
+        # length and perpendicularity, so no separate checks are needed.
         if (
             abs(self.normal_y + self.tangent_z) > _INVARIANT_TOLERANCE
             or abs(self.normal_z - self.tangent_y) > _INVARIANT_TOLERANCE
@@ -68,6 +59,7 @@ class AxleGroundLine:
             raise ValueError(
                 "Axle ground-line normal must be the tangent's upward rotation"
             )
+
         if self.tangent_y < -_INVARIANT_TOLERANCE or (
             abs(self.tangent_y) <= _INVARIANT_TOLERANCE
             and self.tangent_z < -_INVARIANT_TOLERANCE
@@ -75,13 +67,17 @@ class AxleGroundLine:
             raise ValueError("Axle ground-line tangent has a non-canonical orientation")
 
     @classmethod
-    def from_wheel_plane_road_tangents(
+    def from_wheel_ground_tangents(
         cls, left: Point3, right: Point3
     ) -> AxleGroundLine | None:
-        """Construct the datum from current wheel-plane road tangents, ignoring X.
+        """Construct the datum from current wheel-ground tangents, ignoring X.
 
         Returns ``None`` when the lateral track or YZ projection has
         insufficient separation, or any input/intermediate is non-finite.
+        Degenerate input is rejected by the guards below; anything that reaches
+        construction satisfies the line invariants by construction, so a
+        :class:`ValueError` from ``__post_init__`` signals a defect here rather
+        than an undefined ground line.
         """
         left_y = left[Axis.Y]
         left_z = left[Axis.Z]
@@ -102,30 +98,24 @@ class AxleGroundLine:
         if not isfinite(separation) or separation <= EPS_GEOMETRIC:
             return None
 
+        # The guards above leave a strictly positive lateral component and a
+        # finite separation, so normalization yields a canonically oriented unit
+        # tangent and its upward rotation.
         tangent_y /= separation
         tangent_z /= separation
         normal_y = -tangent_z
         normal_z = tangent_y
         offset_mm = -(normal_y * left_y + normal_z * left_z)
-        values = (tangent_y, tangent_z, normal_y, normal_z, offset_mm)
-        if not all(isfinite(value) for value in values):
+        if not isfinite(offset_mm):
             return None
 
-        try:
-            return cls(
-                tangent_y=tangent_y,
-                tangent_z=tangent_z,
-                normal_y=normal_y,
-                normal_z=normal_z,
-                offset_mm=offset_mm,
-            )
-        except ValueError:
-            return None
-
-    @property
-    def c(self) -> float:
-        """Return the Hessian line offset alias used in mathematical notation."""
-        return self.offset_mm
+        return cls(
+            tangent_y=tangent_y,
+            tangent_z=tangent_z,
+            normal_y=normal_y,
+            normal_z=normal_z,
+            offset_mm=offset_mm,
+        )
 
     @property
     def angle_deg(self) -> float:

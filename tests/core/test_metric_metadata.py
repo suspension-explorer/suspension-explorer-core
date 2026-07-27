@@ -33,8 +33,16 @@ def test_static_metric_specs_use_unit_free_identities() -> None:
     assert "track_mm" not in specs
 
 
-def test_dimensionless_unit_uses_explicit_export_symbol() -> None:
+def test_dimensionless_unit_exports_conventional_symbol() -> None:
+    """Dimensionless quantities retain their conventional semantic unit."""
     assert MetricUnit.DIMENSIONLESS.symbol == "1"
+
+
+def test_dimensionless_quotients_retain_semantic_units() -> None:
+    """Derivative metadata preserves dimensionless operands explicitly."""
+    assert (MetricUnit.MM / MetricUnit.DEG).symbol == "mm/deg"
+    assert (MetricUnit.DIMENSIONLESS / MetricUnit.MM).symbol == "1/mm"
+    assert (MetricUnit.MM / MetricUnit.DIMENSIONLESS).symbol == "mm/1"
 
 
 def test_flat_location_is_separate_from_metric_identity() -> None:
@@ -68,7 +76,7 @@ def test_unlabelled_derivative_falls_back_to_exact_export_key() -> None:
             name="future_response",
             unit=MetricUnit.MM,
         ),
-        driver=PointCoordinateResponse.from_world_axis(
+        driver=PointCoordinateResponse.from_chassis_axis(
             PointID.WHEEL_CENTER,
             Axis.Z,
             name="future_driver",

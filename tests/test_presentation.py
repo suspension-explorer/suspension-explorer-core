@@ -138,13 +138,10 @@ def test_cli_renderer_adds_styles_to_unstyled_element_paths(
 
     rendered = renderer_elements(paths)
 
-    expected_paths = [
-        path for path in paths if path.type is not ElementType.WHEEL_PLANE_ROAD_TANGENT
-    ]
-    assert [link.element for link in rendered] == expected_paths
+    assert [link.element for link in rendered] == list(paths)
     assert all(point in positions for link in rendered for point in link.points)
     assert all(link.style.color for link in rendered)
-    assert ElementType.WHEEL_PLANE_ROAD_TANGENT not in ELEMENT_STYLES
+    assert ElementType.WHEEL_GROUND_TANGENT in ELEMENT_STYLES
     torsion_bar_paths = [
         path.points for path in paths if path.type is ElementType.TORSION_BAR
     ]
@@ -153,7 +150,7 @@ def test_cli_renderer_adds_styles_to_unstyled_element_paths(
         sum(path.points == torsion_path for path in paths) == 1
         for torsion_path in torsion_bar_paths
     )
-    for label in {path.label for path in expected_paths}:
+    for label in {path.label for path in paths}:
         assert sum(link.label == label for link in rendered) == 1
 
 
@@ -165,16 +162,16 @@ def test_cli_renderer_has_distinct_heave_link_style() -> None:
     assert heave_style.linestyle == "--"
 
 
-def test_wheel_reference_uses_road_tangent_name(
+def test_wheel_reference_uses_ground_tangent_name(
     test_data_dir: Path,
 ) -> None:
     suspension = load_geometry(test_data_dir / "geometry.yaml")
     reference = wheel_references(suspension.assembly())[0]
 
-    assert reference.wheel_plane_road_tangent == "wheel_plane_road_tangent"
+    assert reference.wheel_ground_tangent == "wheel_ground_tangent"
 
 
-def test_wheel_element_and_path_use_canonical_road_tangent_name(
+def test_wheel_element_and_path_use_canonical_ground_tangent_name(
     test_data_dir: Path,
 ) -> None:
     suspension = load_geometry(test_data_dir / "geometry.yaml")
@@ -185,29 +182,39 @@ def test_wheel_element_and_path_use_canonical_road_tangent_name(
     path = next(
         path
         for path in named_element_paths(assembly)
-        if path.type is ElementType.WHEEL_PLANE_ROAD_TANGENT
+        if path.type is ElementType.WHEEL_GROUND_TANGENT
     )
 
-    assert wheel.wheel_plane_road_tangent is PointID.WHEEL_PLANE_ROAD_TANGENT
-    assert path.type.value == "wheel_plane_road_tangent"
-    assert path.label == "Wheel Wheel-Plane Road Tangent"
+    assert wheel.wheel_ground_tangent is PointID.WHEEL_GROUND_TANGENT
+    assert path.type.value == "wheel_ground_tangent"
+    assert path.label == "Wheel Ground Tangent"
 
 
-def test_cli_renderer_omits_wheel_plane_road_tangent(
+def test_cli_renderer_styles_wheel_ground_tangent_as_a_marker(
     test_data_dir: Path,
 ) -> None:
     suspension = load_geometry(test_data_dir / "geometry.yaml")
     render_model = build_render_model(suspension)
     visualizer = render_model.visualizer
 
-    assert all(
-        link.element.type is not ElementType.WHEEL_PLANE_ROAD_TANGENT
+    tangents = [
+        link
         for link in visualizer.links
+        if link.element.type is ElementType.WHEEL_GROUND_TANGENT
+    ]
+
+    assert len(tangents) == 1
+    assert all(len(link.points) == 1 for link in tangents)
+    assert all(link.style.linewidth == 0.0 for link in tangents)
+    assert all(link.style.markersize > 0.0 for link in tangents)
+    assert all(
+        len(link.points) > 1
+        for link in visualizer.links
+        if link.element.type is not ElementType.WHEEL_GROUND_TANGENT
     )
-    assert all(len(link.points) > 1 for link in visualizer.links)
 
 
-def test_cli_renderer_static_and_animation_topology_excludes_road_tangent(
+def test_cli_renderer_static_and_animation_topology_includes_ground_tangent(
     test_data_dir: Path,
 ) -> None:
     plt = pytest.importorskip("matplotlib.pyplot")
@@ -228,7 +235,8 @@ def test_cli_renderer_static_and_animation_topology_excludes_road_tangent(
             positions,
             view_name="iso",
         )
-        assert len(static_axis.collections) == 0
+        # The single-point ground tangent is drawn as a scatter collection.
+        assert len(static_axis.collections) == 1
 
         animation_axis = fig.add_subplot(122, projection="3d")
         artists = visualizer.draw_links(animation_axis, positions)

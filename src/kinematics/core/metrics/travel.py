@@ -21,7 +21,7 @@ def calculate_wheel_travel(ctx: "MetricContext") -> float | None:
     Vertical wheel travel in mm relative to the design condition.
 
     Defined as the current wheel-center Z minus the design wheel-center Z.
-    Positive means the wheel has moved up in the chassis-fixed frame (bump);
+    Positive means the wheel has moved up in chassis space (bump);
     negative means droop.
 
         wheel_travel = WC_z(current) - WC_z(design)
@@ -35,12 +35,12 @@ def calculate_half_track(ctx: "MetricContext") -> float | None:
     """
     Half-track at this corner in mm.
 
-    Half-track is the lateral distance of the wheel-plane road tangent from the
+    Half-track is the lateral distance of the wheel-ground tangent from the
     vehicle centerline, i.e. the magnitude of its Y coordinate.
 
         half_track = |CP_y(current)|
     """
-    return abs(float(ctx.wheel_plane_road_tangent[Axis.Y]))
+    return abs(float(ctx.wheel_ground_tangent[Axis.Y]))
 
 
 def calculate_damper_length(ctx: "MetricContext") -> float | None:
@@ -48,7 +48,7 @@ def calculate_damper_length(ctx: "MetricContext") -> float | None:
     Installed spring/damper (coilover) length in mm.
 
     The length is the straight-line distance between the strut top mount
-    (chassis-fixed) and the strut bottom (body-mounted foot). Only defined
+    (fixed in chassis space) and the strut bottom (body-mounted foot). Only defined
     when the suspension actually carries a strut group; otherwise None.
 
         damper_length = |STRUT_TOP - STRUT_BOTTOM|

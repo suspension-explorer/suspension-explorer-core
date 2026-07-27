@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from kinematics.core.enums import Axis, TargetPositionMode
 from kinematics.core.primitives.geometry import Direction3, extract_array
-from kinematics.core.primitives.point_ref import Side
+from kinematics.core.primitives.point_ref import PointKey, Side
 from kinematics.core.schema.decoding import (
     AxisValue,
     PointIDValue,
@@ -17,11 +17,11 @@ from kinematics.core.schema.decoding import (
     TargetPositionModeValue,
 )
 from kinematics.core.targeting import (
+    ChassisAxisSystem,
     PointTarget,
     PointTargetAxis,
     PointTargetVector,
     SweepConfig,
-    WorldAxisSystem,
     validate_sweep_controls,
 )
 
@@ -29,9 +29,9 @@ if TYPE_CHECKING:
     from kinematics.core.suspensions.base import Suspension
 
 AXIS_VECTORS: dict[Axis, np.ndarray] = {
-    Axis.X: WorldAxisSystem.X.data,
-    Axis.Y: WorldAxisSystem.Y.data,
-    Axis.Z: WorldAxisSystem.Z.data,
+    Axis.X: ChassisAxisSystem.X.data,
+    Axis.Y: ChassisAxisSystem.Y.data,
+    Axis.Z: ChassisAxisSystem.Z.data,
 }
 
 
@@ -147,6 +147,7 @@ def build_sweep_config(
         )
 
     dimensions: list[list[PointTarget]] = []
+    resolved_point_keys: list[PointKey] = []
     for target_spec, values in zip(spec.targets, target_sequences):
         unit_vector = target_spec.direction.to_unit_vector()
         axis = vector_to_axis(unit_vector)
@@ -160,17 +161,7 @@ def build_sweep_config(
             point_key = suspension.resolve_target_key(
                 target_spec.point, target_spec.side
             )
-            point_catalog = suspension.assembly().points
-            if point_key not in point_catalog.all:
-                raise ValueError(
-                    f"Sweep target point '{point_key.name}' is not present in "
-                    f"suspension type '{suspension.reported_type_key()}'."
-                )
-            if point_key in point_catalog.fixed:
-                raise ValueError(
-                    f"Sweep target point '{point_key.name}' is fixed in suspension "
-                    f"type '{suspension.reported_type_key()}'."
-                )
+            resolved_point_keys.append(point_key)
         else:
             if target_spec.side is not None:
                 raise ValueError(
@@ -192,5 +183,6 @@ def build_sweep_config(
         )
     sweep_config = SweepConfig(dimensions)
     if suspension is not None:
+        suspension.validate_sweep_target_points(resolved_point_keys)
         validate_sweep_controls(sweep_config, suspension.actuator_dofs())
     return sweep_config

@@ -11,7 +11,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, Sequence
+from typing import TYPE_CHECKING, ClassVar, Iterable, Sequence
 
 from kinematics.core.assembly import SuspensionAssembly
 from kinematics.core.constraints import Constraint
@@ -48,6 +48,7 @@ class Suspension(ABC):
     REQUIRED_POINTS: ClassVar[frozenset[PointID]] = frozenset()
     OPTIONAL_POINTS: ClassVar[frozenset[PointID]] = frozenset()
     OUTPUT_POINTS: ClassVar[tuple[PointKey, ...]] = ()
+    OUTPUT_ONLY_POINTS: ClassVar[tuple[PointKey, ...]] = ()
     SUPPORTED_SHIMS: ClassVar[frozenset[ShimType]] = frozenset()
 
     name: str = "unnamed"
@@ -228,6 +229,43 @@ class Suspension(ABC):
         """Return the points exported for a solved state."""
         return self.OUTPUT_POINTS
 
+    def output_only_points(self) -> tuple[PointKey, ...]:
+        """
+        Return exported derived points that cannot be driven as sweep targets.
+
+        These are always a subset of the derived points. The designation is a
+        solver and product policy for observables that are not supported as
+        actuators, such as branch-sensitive outputs from a coupled construction;
+        it does not imply that their forward value or Jacobian is unavailable.
+        """
+        return self.OUTPUT_ONLY_POINTS
+
+    def validate_sweep_target_points(
+        self,
+        point_keys: Iterable[PointKey],
+    ) -> None:
+        """Require every sweep target to be present, movable, and supported."""
+        point_catalog = self.assembly().points
+        suspension_type = self.reported_type_key()
+        for point_key in dict.fromkeys(point_keys):
+            if point_key not in point_catalog.all:
+                raise ValueError(
+                    f"Sweep target point '{point_key.name}' is not present in "
+                    f"suspension type '{suspension_type}'."
+                )
+            if point_key in point_catalog.fixed:
+                raise ValueError(
+                    f"Sweep target point '{point_key.name}' is fixed in suspension "
+                    f"type '{suspension_type}'."
+                )
+            if point_key in point_catalog.output_only:
+                raise ValueError(
+                    f"Sweep target point '{point_key.name}' is a derived output of "
+                    f"suspension type '{suspension_type}' and cannot be driven. "
+                    "Target 'wheel_center' along Z to control ride height, and "
+                    "read ground geometry from the 'ground_z_centerline' metric."
+                )
+
     def resolve_target_key(self, point: PointID, side: Side | None) -> PointKey:
         """Resolve a sweep target for a single-corner suspension."""
         if side is not None:
@@ -250,4 +288,5 @@ class Suspension(ABC):
             self.derived_spec(),
             self.elements(),
             self.output_points(),
+            self.output_only_points(),
         )

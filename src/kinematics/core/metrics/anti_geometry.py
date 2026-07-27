@@ -8,7 +8,7 @@ as a percentage where 100 percent means the geometry fully reacts the
 load-transfer pitch moment and 0 percent means it reacts none of it.
 
 All quantities are evaluated in the side view (the XZ plane). The governing
-line is the line from a reaction point (wheel-plane road tangent for outboard brakes,
+line is the line from a reaction point (wheel-ground tangent for outboard brakes,
 wheel center for inboard-sprung drive) to the side-view instant center
 (SVIC). Its inclination, expressed as tan(theta), together with the wheelbase
 L and CG height above ground h, sets the anti percentage.
@@ -34,7 +34,7 @@ def calculate_svsa_angle(ctx: "MetricContext") -> float | None:
     """
     Side-view swing-arm line inclination in degrees.
 
-    This is the inclination of the side-view line from the wheel-plane road tangent to
+    This is the inclination of the side-view line from the wheel-ground tangent to
     the SVIC. A side-view line has a 180-degree ambiguity (it is a line, not
     a ray), so the angle is taken as the atan of the slope rather than atan2,
     giving a range of (-90, 90) degrees:
@@ -48,7 +48,7 @@ def calculate_svsa_angle(ctx: "MetricContext") -> float | None:
     svic = ctx.side_view_ic
     if svic is None:
         return None
-    tangent = ctx.wheel_plane_road_tangent
+    tangent = ctx.wheel_ground_tangent
 
     run = float(svic[Axis.X]) - float(tangent[Axis.X])
     if abs(run) < EPS_GEOMETRIC:
@@ -62,11 +62,11 @@ def _cg_height_above_ground(ctx: "MetricContext") -> float | None:
     """
     CG height above the ground plane in mm, or None if not strictly positive.
 
-    In the chassis-fixed frame the ground follows the tire, so ground level is
-    the wheel-plane road-tangent Z. A non-positive height would put the CG at
-    or below the road, which is non-physical for these anti formulas.
+    In chassis space the ground follows the tire, so ground level is
+    the wheel-ground tangent Z. A non-positive height would put the CG at
+    or below the ground, which is non-physical for these anti formulas.
     """
-    tangent = ctx.wheel_plane_road_tangent
+    tangent = ctx.wheel_ground_tangent
     height = float(ctx.cg_position[Axis.Z]) - float(tangent[Axis.Z])
     if height <= EPS_GEOMETRIC:
         return None
@@ -79,13 +79,13 @@ def calculate_anti_dive_pct(ctx: "MetricContext") -> float | None:
 
     Only defined for a front axle with a known front brake bias. With outboard
     brakes the front suspension reacts the brake force along the wheel-plane
-    road-tangent -> SVIC line. With L the wheelbase and h the CG height above
+    ground-tangent -> SVIC line. With L the wheelbase and h the CG height above
     ground, the line inclination is taken about the tangent as:
 
         tan_theta = (SVIC_z - T_z) / (T_x - SVIC_x)
 
     which is positive in the classic anti-dive layout (SVIC above and BEHIND
-    the front wheel-plane road tangent). Then:
+    the front wheel-ground tangent). Then:
 
         anti_dive_pct = 100 * front_brake_bias * (L / h) * tan_theta
 
@@ -101,7 +101,7 @@ def calculate_anti_dive_pct(ctx: "MetricContext") -> float | None:
     svic = ctx.side_view_ic
     if svic is None:
         return None
-    tangent = ctx.wheel_plane_road_tangent
+    tangent = ctx.wheel_ground_tangent
 
     # Run measured from SVIC to the tangent so tan_theta is positive when the
     # SVIC sits behind (-X of) the front tangent: the anti-dive geometry.
@@ -122,13 +122,13 @@ def calculate_anti_lift_pct(ctx: "MetricContext") -> float | None:
 
     Only defined for a rear axle with a known front brake bias; the rear share
     of the braking force is (1 - front_brake_bias). With outboard brakes the
-    rear suspension reacts the brake force along the wheel-plane road-tangent
+    rear suspension reacts the brake force along the wheel-ground tangent
     -> SVIC line. The line inclination is taken about the tangent as:
 
         tan_theta = (SVIC_z - T_z) / (SVIC_x - T_x)
 
     which is positive when the SVIC sits above and AHEAD (+X) of the rear
-    wheel-plane road tangent. Then:
+    wheel-ground tangent. Then:
 
         anti_lift_pct = 100 * (1 - front_brake_bias) * (L / h) * tan_theta
 
@@ -144,7 +144,7 @@ def calculate_anti_lift_pct(ctx: "MetricContext") -> float | None:
     svic = ctx.side_view_ic
     if svic is None:
         return None
-    tangent = ctx.wheel_plane_road_tangent
+    tangent = ctx.wheel_ground_tangent
 
     run = float(svic[Axis.X]) - float(tangent[Axis.X])
     if abs(run) < EPS_GEOMETRIC:
@@ -165,7 +165,7 @@ def calculate_anti_squat_pct(ctx: "MetricContext") -> float | None:
     Only defined when a driven axle is configured AND it is this axle
     (driven_axle == axle_position, both non-None). With inboard-sprung drive
     (halfshafts) the tractive force reacts along the WHEEL-CENTER -> SVIC line,
-    not the wheel-plane road-tangent line. The full drive torque is carried by
+    not the wheel-ground tangent line. The full drive torque is carried by
     the driven axle. With L the wheelbase and h the CG height above ground:
 
         rear axle:  tan_theta = (SVIC_z - WC_z) / (SVIC_x - WC_x)

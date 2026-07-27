@@ -12,6 +12,16 @@ All notable changes to this project will be documented in this file.
 - Advisory sweep diagnostics report convergence, residual acceptance, branch continuity, derivative availability, rocker and anti-roll-bar chirality, and transmission margin.
 - Coupled axle models solve left and right corners together and support either mirrored or independently authored geometry.
 - The public `analyze_sweep()` and `initial_pose()` APIs return structured positions, metrics, locations, metadata, renderer-neutral element paths, diagnostics, references, and solved frames.
+- An `AxleGroundLine` value object, exported from `kinematics.core.metrics`,
+  derives the chassis-space `YZ` ground line once per solved axle state and shares
+  it between both corner metric contexts. Its plane interpretation is that line
+  extruded along chassis `X`, so longitudinal grade is assumed to be zero rather
+  than inferred from a single axle.
+- Five axle-scoped ground metrics: `ground_line_normal_y`,
+  `ground_line_normal_z`, `ground_line_offset`, `ground_line_angle`, and
+  `ground_z_centerline`.
+- A dimensionless metric unit for quantities such as the ground-line normal
+  components, using the conventional semantic unit symbol `1`.
 
 ### Changed
 
@@ -41,7 +51,8 @@ All notable changes to this project will be documented in this file.
 - Physical elements and assemblies own renderer-neutral path topology. CLI plots
   and animations add Matplotlib styling client-side, and structured analysis
   exposes the same unstyled paths for external clients. Static visualization
-  supports both corner and axle assemblies and checks every wheel-plane road-tangent point.
+  supports both corner and axle assemblies and checks every wheel-ground
+  tangent point.
 - Core-only CI now exercises numerical, constraint, Jacobian, state, target,
   derived-point, and rigid-body tests without CLI or visualization dependencies.
 - Derived-point target Jacobians now evaluate only the target's transitive dependency chain and seed only relevant free points, substantially reducing solve time.
@@ -82,6 +93,27 @@ All notable changes to this project will be documented in this file.
   the geometric tolerance, where their length derivative would be undefined.
 - Steering metrics use `roadwheel_angle`; the concrete steering input is `trackrod_inboard`, and wheel-center longitudinal motion is expressed directly as `deriv_wheel_center_x_wrt_hub_z`.
 - Half-track is exported as the absolute `half_track` state metric rather than a design-condition delta.
+- A two-corner axle now derives both wheel-ground tangent points from the solved
+  wheel geometry using one shared zero-grade ground plane, extruded along
+  chassis `X`, instead of letting each corner independently assume a flat `+Z`
+  ground. Standalone corners keep the local `+Z` assumption, since one wheel
+  cannot define a ground line.
+- Steering-axis intersection and scrub direction use the full shared axle ground
+  plane, including bank, rather than substituting a horizontal plane at the
+  corner tangent height.
+- Ground-root selection continues from the preceding accepted state and keeps its
+  one-result sibling reuse local to a derived-point specification; independent
+  axles and sweeps share no process-global geometry cache.
+- Axle ride-height change compares current and design ground height at chassis
+  centerline, avoiding contamination from bank angle, asymmetric track, tire
+  radii, or lateral track migration.
+- Geometry inputs now reject non-millimetre unit declarations. Length
+  normalization is not implemented, so accepting another label would silently
+  mis-scale tire, ground, tolerance, and metric calculations.
+- Residual and Jacobian evaluation updates only the derived-point chains that
+  the active constraints and step targets actually require, which keeps the
+  coupled axle ground derivation out of the least-squares hot loop. The complete
+  derived set is still recomputed once a step is accepted.
 
 ### Breaking changes
 
@@ -103,6 +135,30 @@ All notable changes to this project will be documented in this file.
   steering retains track-rod point and element identifiers; non-steered corners
   use distinct toe-link identifiers.
 - `AxleMetricRows.corners` now uses `Side` keys instead of serialized side names.
+- Renamed the geometric tire-ground support point everywhere it is exposed.
+  `PointID.CONTACT_PATCH_CENTER` becomes `PointID.WHEEL_GROUND_TANGENT`,
+  `ElementType.CONTACT_PATCH` becomes `ElementType.WHEEL_GROUND_TANGENT`,
+  and the `WheelElement` and `WheelReferences` fields become
+  `wheel_ground_tangent`. Exported point columns change from
+  `contact_patch_center_x/y/z` to `wheel_ground_tangent_x/y/z`, so anything
+  reading those names from CSV, Parquet, or the structured payload must be
+  updated.
+- The derived-point function `get_contact_patch_center` is now
+  `get_wheel_ground_tangent` and lives in
+  `kinematics.core.points.derived.ground` alongside the coupled axle ground
+  derivation.
+- Removed the `get_wheel_plane_down_vector` derived-point helper. The ground
+  support-point construction in `kinematics.core.points.derived.ground` projects
+  the ground normal into the wheel plane directly, so the separate flat-ground
+  down-vector helper no longer had a caller.
+- The wheel-ground tangent point is a derived output that cannot be driven,
+  so sweeps that target it are rejected during validation with an error naming
+  the drivable alternative. On an axle the point comes from a coupled derivation
+  across both corners, with a bounded validity domain and non-unique roots, so
+  supporting it as an actuator would require an explicit branch policy.
+- The static geometry check reports the wheel-ground tangent height rather
+  than a contact-patch height, and `GeometryVisualizationResult` renames its
+  `contact_patch_z` and `contact_patch_on_ground` fields to match.
 
 ## [0.3.0] - 2026-04-09
 
@@ -128,14 +184,14 @@ All notable changes to this project will be documented in this file.
 - Front-view (Y-Z) comparison plot in `visualize_camber_shim.py` overlaying design and setup suspensions with distinct colors.
 - Direct sign and known-value tests for `camber_deg`, `caster_deg`, and `roadwheel_angle_deg`, plus catalog coverage for the trusted corner-metric export set.
 - Kingpin inclination metric (`kpi_deg`): steering axis angle in the front-view (YZ) plane.
-- Scrub radius metric (`scrub_radius_mm`): lateral offset from steering axis ground intersection to the wheel-plane road-tangent point.
-- Mechanical trail metric (`mechanical_trail_mm`): longitudinal offset from steering axis ground intersection to the wheel-plane road-tangent point.
+- Scrub radius metric (`scrub_radius_mm`): lateral offset from steering axis ground intersection to contact patch center.
+- Mechanical trail metric (`mechanical_trail_mm`): longitudinal offset from steering axis ground intersection to contact patch center.
 
 ### Removed
-- `WHEEL_CENTER_ON_GROUND` point and `get_wheel_center_on_ground` derived point function. The Z=0 ground plane assumption was incorrect in a chassis-fixed frame; ground-plane intersections now use the wheel-plane road-tangent Z via `MetricContext.ground_z`.
+- `WHEEL_CENTER_ON_GROUND` point and `get_wheel_center_on_ground` derived point function. The Z=0 ground plane assumption was incorrect in chassis space; ground-plane intersections now use the contact patch Z via `MetricContext.ground_z`.
 
 ### Fixed
 - Scrub radius now projects along the wheel axle direction in the ground plane instead of the global Y axis, giving correct values when the wheel is steered or cambered.
-- Scrub radius and mechanical trail now intersect the steering axis at the wheel-plane road-tangent Z rather than Z=0, giving correct values through bump travel.
-- Clarified `get_wheel_plane_road_tangent` docstring as the lowest point on an ideal tire circle in the wheel center plane.
+- Scrub radius and mechanical trail now intersect the steering axis at the contact patch Z rather than Z=0, giving correct values through bump travel.
+- Clarified `get_contact_patch_center` docstring as the lowest point on an ideal tire circle in the wheel center plane.
 - Dashboard plots now show KPI, mechanical trail, and scrub radius instead of swing arm lengths and FVIC height. Camber plot Y-axis tuned to [-2.5, -1.5] degrees.

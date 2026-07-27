@@ -2,7 +2,7 @@
 Metric computation context.
 
 Provides a single per-state object that resolves and caches shared geometry
-needed by multiple metric functions (wheel axis, wheel-plane road tangent, ICs, etc.).
+needed by multiple metric functions (wheel axis, wheel-ground tangent, ICs, etc.).
 """
 
 from __future__ import annotations
@@ -49,9 +49,9 @@ class MetricContext:
         return self.design_state.get(PointID.WHEEL_CENTER)
 
     @cached_property
-    def design_wheel_plane_road_tangent(self) -> Point3:
-        """Wheel-plane road-tangent position at the design condition."""
-        return self.design_state.get(PointID.WHEEL_PLANE_ROAD_TANGENT)
+    def design_wheel_ground_tangent(self) -> Point3:
+        """Wheel-ground tangent position at the design condition."""
+        return self.design_state.get(PointID.WHEEL_GROUND_TANGENT)
 
     @cached_property
     def side_view_ic(self) -> Point3 | None:
@@ -75,9 +75,9 @@ class MetricContext:
         return self.state.get(PointID.WHEEL_CENTER)
 
     @cached_property
-    def wheel_plane_road_tangent(self) -> Point3:
-        """Current wheel-plane road-tangent position."""
-        return self.state.get(PointID.WHEEL_PLANE_ROAD_TANGENT)
+    def wheel_ground_tangent(self) -> Point3:
+        """Current wheel-ground tangent position."""
+        return self.state.get(PointID.WHEEL_GROUND_TANGENT)
 
     @cached_property
     def wheel_axis(self) -> Direction3:
@@ -108,37 +108,57 @@ class MetricContext:
     @cached_property
     def ground_z(self) -> float:
         """
-        Ground-line Z-height in the chassis-fixed frame.
+        Ground-line Z-height in chassis space.
 
         For an axle solve, this evaluates the shared axle ground line at this
-        corner's wheel-plane road-tangent Y coordinate. Standalone corner solves
-        retain the local tangent Z datum with a +Z road normal. In either case, the
-        chassis-fixed ground datum is not generally at Z=0.
+        corner's wheel-ground tangent Y coordinate. Standalone corner solves
+        retain the local tangent Z datum with a +Z ground normal. In either case, the
+        chassis-space ground datum is not generally at Z=0.
         """
         if self.axle_ground is not None:
             ground_z = self.axle_ground.z_at(
-                float(self.wheel_plane_road_tangent[Axis.Y])
+                float(self.wheel_ground_tangent[Axis.Y])
             )
             if ground_z is not None:
                 return ground_z
-        return float(self.wheel_plane_road_tangent[Axis.Z])
+        return float(self.wheel_ground_tangent[Axis.Z])
+
+    @cached_property
+    def ground_plane(self) -> tuple[Direction3, float]:
+        """Return the current ground plane as upward unit normal and Hessian offset."""
+        if self.axle_ground is not None:
+            return (
+                Direction3(self.axle_ground.plane_normal),
+                self.axle_ground.offset_mm,
+            )
+        return (
+            Direction3((0.0, 0.0, 1.0)),
+            -float(self.wheel_ground_tangent[Axis.Z]),
+        )
 
     @cached_property
     def steering_axis_ground_intersection(self) -> Point3 | None:
         """
         Point where the steering axis intersects the ground plane.
 
-        Parameterises the line from the lower steering pivot through the
-        upper pivot and solves for the parameter t where Z = ground_z.
+        Parameterises the line from the lower steering pivot through the upper
+        pivot and solves ``n · (lower + t * direction) + c = 0`` against the
+        actual ground plane.
         Returns None if the steering axis is parallel to the ground plane.
         """
         lower, upper = self.steering_axis_pivots
         direction = upper - lower
-        dz = direction[Axis.Z]
-        if abs(dz) < EPS_GEOMETRIC:
+        normal, offset = self.ground_plane
+        denominator = normal.dot(direction)
+        if abs(denominator) < EPS_GEOMETRIC:
             return None
-        # t such that lower + t * direction has Z = ground_z
-        t = (self.ground_z - lower[Axis.Z]) / dz
+        signed_distance = (
+            normal[Axis.X] * lower[Axis.X]
+            + normal[Axis.Y] * lower[Axis.Y]
+            + normal[Axis.Z] * lower[Axis.Z]
+            + offset
+        )
+        t = -signed_distance / denominator
         return lower + t * direction
 
     @cached_property

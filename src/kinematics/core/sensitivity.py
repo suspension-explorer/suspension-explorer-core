@@ -159,7 +159,7 @@ def _degenerate_constraint_pins(
         direction = constraint.line_direction.data
         direction = direction / np.linalg.norm(direction)
 
-        # Cross with the least-aligned world axis to obtain a stable basis of
+        # Cross with the least-aligned chassis axis to obtain a stable basis of
         # the plane perpendicular to the line.
         least_aligned = np.zeros(3)
         least_aligned[int(np.argmin(np.abs(direction)))] = 1.0

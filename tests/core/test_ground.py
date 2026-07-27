@@ -1,4 +1,4 @@
-"""Tests for the axle-level road-line primitive."""
+"""Tests for the axle-level ground-line primitive."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from kinematics.core.primitives.geometry import Point3
 def _line(
     left: tuple[float, float, float], right: tuple[float, float, float]
 ) -> AxleGroundLine:
-    ground_line = AxleGroundLine.from_wheel_plane_road_tangents(
+    ground_line = AxleGroundLine.from_wheel_ground_tangents(
         Point3(left), Point3(right)
     )
     assert ground_line is not None
@@ -30,13 +30,12 @@ def test_flat_ground_line_has_upward_normal_and_expected_height():
     assert ground_line.normal_y == pytest.approx(0.0)
     assert ground_line.normal_z == pytest.approx(1.0)
     assert ground_line.offset_mm == pytest.approx(-20.0)
-    assert ground_line.c == pytest.approx(-20.0)
     assert ground_line.angle_deg == pytest.approx(0.0)
     assert ground_line.z_at(-250.0) == pytest.approx(20.0)
     assert ground_line.plane_normal == pytest.approx((0.0, 0.0, 1.0))
 
 
-def test_signed_roll_is_positive_when_left_road_tangent_is_higher():
+def test_signed_roll_is_positive_when_left_ground_tangent_is_higher():
     ground_line = _line((0.0, 500.0, 100.0), (0.0, -500.0, 0.0))
 
     assert ground_line.angle_deg == pytest.approx(np.degrees(np.arctan(0.1)))
@@ -64,9 +63,9 @@ def test_equal_z_translation_preserves_orientation_and_shifts_offset():
 def test_argument_order_and_x_coordinates_do_not_change_line():
     left = Point3((9999.0, 500.0, 100.0))
     right = Point3((-9999.0, -500.0, 0.0))
-    ordered = AxleGroundLine.from_wheel_plane_road_tangents(left, right)
-    reversed_order = AxleGroundLine.from_wheel_plane_road_tangents(right, left)
-    changed_x = AxleGroundLine.from_wheel_plane_road_tangents(
+    ordered = AxleGroundLine.from_wheel_ground_tangents(left, right)
+    reversed_order = AxleGroundLine.from_wheel_ground_tangents(right, left)
+    changed_x = AxleGroundLine.from_wheel_ground_tangents(
         Point3((-1.0, 500.0, 100.0)), Point3((1.0, -500.0, 0.0))
     )
 
@@ -75,10 +74,10 @@ def test_argument_order_and_x_coordinates_do_not_change_line():
     assert changed_x == ordered
 
 
-def test_line_equation_contains_both_road_tangents_and_distance_is_signed():
+def test_line_equation_contains_both_ground_tangents_and_distance_is_signed():
     left = Point3((0.0, 500.0, 100.0))
     right = Point3((0.0, -500.0, 0.0))
-    ground_line = AxleGroundLine.from_wheel_plane_road_tangents(left, right)
+    ground_line = AxleGroundLine.from_wheel_ground_tangents(left, right)
     assert ground_line is not None
 
     assert ground_line.signed_distance_yz(left) == pytest.approx(0.0)
@@ -88,7 +87,7 @@ def test_line_equation_contains_both_road_tangents_and_distance_is_signed():
 
 
 def test_factory_rejects_collapsed_lateral_track_despite_height_difference():
-    ground_line = AxleGroundLine.from_wheel_plane_road_tangents(
+    ground_line = AxleGroundLine.from_wheel_ground_tangents(
         Point3((0.0, 0.0, 10.0)), Point3((0.0, 0.0, 0.0))
     )
 
@@ -110,11 +109,25 @@ def test_direct_vertical_line_has_no_z_at_value():
         ((0.0, 1.0, np.inf), (1.0, -1.0, 0.0)),
     ],
 )
-def test_degenerate_or_nonfinite_road_tangents_return_none(left, right):
+def test_degenerate_or_nonfinite_ground_tangents_return_none(left, right):
     assert (
-        AxleGroundLine.from_wheel_plane_road_tangents(Point3(left), Point3(right))
+        AxleGroundLine.from_wheel_ground_tangents(Point3(left), Point3(right))
         is None
     )
+
+
+def test_factory_propagates_invariant_violations(monkeypatch):
+    # A broken invariant means the factory's arithmetic is wrong, which must not
+    # be reported as an undefined ground line.
+    def raise_invariant(self) -> None:
+        raise ValueError("simulated invariant defect")
+
+    monkeypatch.setattr(AxleGroundLine, "__post_init__", raise_invariant)
+
+    with pytest.raises(ValueError, match="simulated invariant defect"):
+        AxleGroundLine.from_wheel_ground_tangents(
+            Point3((0.0, 500.0, 100.0)), Point3((0.0, -500.0, 0.0))
+        )
 
 
 def test_ground_line_is_immutable():

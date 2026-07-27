@@ -80,7 +80,7 @@ def test_displacement_magnitude_response() -> None:
             name="point_displacement",
             unit=MetricUnit.MM,
         ),
-        driver=PointCoordinateResponse.from_world_axis(
+        driver=PointCoordinateResponse.from_chassis_axis(
             PointID.AXLE_INBOARD,
             Axis.Y,
             name="wheel_y",
@@ -174,7 +174,7 @@ def test_zero_point_distance_is_rejected() -> None:
             name="point_distance",
             unit=MetricUnit.MM,
         ),
-        driver=PointCoordinateResponse.from_world_axis(
+        driver=PointCoordinateResponse.from_chassis_axis(
             PointID.AXLE_INBOARD,
             Axis.X,
             name="wheel_x",
@@ -273,13 +273,13 @@ def test_equal_strength_matching_tangents_are_rejected() -> None:
         velocities={PointID.AXLE_INBOARD: np.array([-2.0, 3.0, 0.0])},
     )
     definition = DerivativeMetricDefinition(
-        response=PointCoordinateResponse.from_world_axis(
+        response=PointCoordinateResponse.from_chassis_axis(
             PointID.AXLE_INBOARD,
             Axis.Y,
             name="coordinate_y",
             unit=MetricUnit.MM,
         ),
-        driver=PointCoordinateResponse.from_world_axis(
+        driver=PointCoordinateResponse.from_chassis_axis(
             PointID.AXLE_INBOARD,
             Axis.X,
             name="coordinate_x",
@@ -294,7 +294,7 @@ def test_equal_strength_matching_tangents_are_rejected() -> None:
 @pytest.mark.parametrize("name", ["UpperCase", "has-hyphen", "has space", "_x"])
 def test_scalar_names_must_be_lowercase_snake_case(name: str) -> None:
     with pytest.raises(ValueError, match="lowercase snake-case"):
-        PointCoordinateResponse.from_world_axis(
+        PointCoordinateResponse.from_chassis_axis(
             PointID.AXLE_INBOARD,
             Axis.X,
             name=name,
@@ -304,7 +304,7 @@ def test_scalar_names_must_be_lowercase_snake_case(name: str) -> None:
 
 def test_scalar_units_must_be_supported_metric_units() -> None:
     with pytest.raises(TypeError, match="must be a MetricUnit"):
-        PointCoordinateResponse.from_world_axis(
+        PointCoordinateResponse.from_chassis_axis(
             PointID.AXLE_INBOARD,
             Axis.X,
             name="coordinate_x",

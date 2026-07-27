@@ -76,7 +76,7 @@ def test_design_state_travel_and_position_metrics() -> None:
 
     assert metrics["wheel_travel"] == pytest.approx(0.0)
     assert metrics["half_track"] == pytest.approx(
-        abs(float(state.get(PointID.WHEEL_PLANE_ROAD_TANGENT)[1]))
+        abs(float(state.get(PointID.WHEEL_GROUND_TANGENT)[1]))
     )
     assert metrics["damper_length"] is None
     assert metrics["anti_dive"] is None
@@ -216,7 +216,7 @@ def _anti_context(
                 driven_axle=driven_axle,
             ),
             side_view_ic=Point3([svic_x, 800.0, 300.0]),
-            wheel_plane_road_tangent=Point3([0.0, 800.0, 0.0]),
+            wheel_ground_tangent=Point3([0.0, 800.0, 0.0]),
             wheel_center=Point3([0.0, 800.0, 300.0]),
             cg_position=Point3([1250.0, 0.0, 450.0]),
             wheelbase=2500.0,

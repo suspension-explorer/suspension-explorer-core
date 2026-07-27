@@ -405,7 +405,7 @@ class TestActuationMountValidation:
             actuation.validate({})
 
     def test_direct_actuation_rejects_collinear_first_three_anchors(self):
-        # Three anchors strung along world Y leave rotation about that line free.
+        # Three anchors strung along chassis Y leave rotation about that line free.
         hardpoints: dict[PointKey, Point3] = {
             PointID.LOWER_WISHBONE_INBOARD_FRONT: Point3([0.0, 0.0, 0.0]),
             PointID.LOWER_WISHBONE_INBOARD_REAR: Point3([0.0, 100.0, 0.0]),

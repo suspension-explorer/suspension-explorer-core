@@ -46,6 +46,12 @@ ELEMENT_STYLES = {
     ElementType.ROCKER: LinkStyle("mediumvioletred"),
     ElementType.ANTI_ROLL_BAR: LinkStyle("teal"),
     ElementType.TORSION_BAR: LinkStyle("teal"),
+    # A single point rather than a path, so it is drawn as a marker alone.
+    ElementType.WHEEL_GROUND_TANGENT: LinkStyle(
+        "black",
+        linewidth=0.0,
+        markersize=15.0,
+    ),
 }
 
 
@@ -83,8 +89,6 @@ def renderer_elements(
     rendered: list[LinkVisualization] = []
     labels: set[str] = set()
     for element in elements:
-        if element.type is ElementType.WHEEL_PLANE_ROAD_TANGENT:
-            continue
         legend_label = element.label if element.label not in labels else "_nolegend_"
         labels.add(element.label)
         rendered.append(

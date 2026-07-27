@@ -22,7 +22,7 @@ from kinematics.core.state import SuspensionState
 FIXED_POINT = PointID.UPPER_WISHBONE_INBOARD_FRONT
 FREE_POINT = PointID.UPPER_WISHBONE_OUTBOARD
 DERIVED_POINT = PointID.WHEEL_CENTER
-UNKNOWN_POINT = PointID.WHEEL_PLANE_ROAD_TANGENT
+UNKNOWN_POINT = PointID.WHEEL_GROUND_TANGENT
 
 
 def calculate_derived(positions):
@@ -140,6 +140,37 @@ def test_rocker_heave_link_pickup_has_named_arm_path() -> None:
         "Rocker Axis",
         "Rocker Heave Link Arm",
     ]
+
+
+def test_point_catalog_overlays_output_only_on_derived_points() -> None:
+    catalog = PointCatalog.from_state(
+        make_state(),
+        make_derived_spec(),
+        (DERIVED_POINT,),
+    )
+
+    assert catalog.output_only == frozenset({DERIVED_POINT})
+    assert catalog.output_only <= catalog.derived
+    assert catalog.all == frozenset({FIXED_POINT, FREE_POINT, DERIVED_POINT})
+
+
+def test_point_catalog_rejects_output_only_point_that_is_not_derived() -> None:
+    with pytest.raises(ValueError, match="Output-only points must be derived"):
+        PointCatalog(
+            fixed=frozenset({FIXED_POINT}),
+            free=frozenset({FREE_POINT}),
+            derived=frozenset({DERIVED_POINT}),
+            output_only=frozenset({FREE_POINT}),
+        )
+
+
+def test_point_catalog_rejects_overlapping_classifications() -> None:
+    with pytest.raises(ValueError, match="Point classifications overlap"):
+        PointCatalog(
+            fixed=frozenset({FIXED_POINT, FREE_POINT}),
+            free=frozenset({FREE_POINT}),
+            derived=frozenset({DERIVED_POINT}),
+        )
 
 
 def test_point_catalog_rejects_derived_point_marked_free() -> None:

@@ -367,7 +367,7 @@ class ActuationPushrodRocker:
                 unit=MetricUnit.DEG,
                 label=response_label,
             ),
-            driver=PointCoordinateResponse.from_world_axis(
+            driver=PointCoordinateResponse.from_chassis_axis(
                 PointID.WHEEL_CENTER,
                 Axis.Z,
                 name="hub_z",
@@ -525,7 +525,7 @@ class CornerSpringCoilover:
                     unit=MetricUnit.MM,
                     label="Damper Length",
                 ),
-                driver=PointCoordinateResponse.from_world_axis(
+                driver=PointCoordinateResponse.from_chassis_axis(
                     PointID.WHEEL_CENTER,
                     Axis.Z,
                     name="hub_z",

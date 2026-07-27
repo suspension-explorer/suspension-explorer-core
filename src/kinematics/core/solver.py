@@ -213,6 +213,30 @@ class ResidualComputer:
         self.jac_buffer = np.zeros((self.n_residuals, self.n_vars), dtype=np.float64)
         self.jac_plan = [self.build_jac_plan(c) for c in constraints]
 
+        # The constraint contribution to the required-point set is fixed for this
+        # object's lifetime, so it is resolved once rather than on every residual
+        # and Jacobian evaluation.
+        self.constraint_required_points = frozenset(
+            point for constraint in constraints for point in constraint.involved_points
+        )
+        self._required_points_cache: dict[
+            tuple[PointKey, ...], frozenset[PointKey]
+        ] = {}
+
+    def required_points(self, step_targets: list[PointTarget]) -> frozenset[PointKey]:
+        """
+        Return every point whose derived chain must be refreshed for an evaluation.
+
+        A solve step re-evaluates the same targets many times, so results are
+        memoized against the step's target identifiers.
+        """
+        target_ids = tuple(target.point_id for target in step_targets)
+        required = self._required_points_cache.get(target_ids)
+        if required is None:
+            required = self.constraint_required_points.union(target_ids)
+            self._required_points_cache[target_ids] = required
+        return required
+
     def validate_target_count(self, step_targets: list[PointTarget]) -> None:
         """
         Ensure each evaluation uses the fixed target count configured at init time.
@@ -254,14 +278,8 @@ class ResidualComputer:
         # Update state buffer in-place with current guess.
         self.state_buffer.update_from_array(free_array)
 
-        required_points = {
-            point
-            for constraint in self.constraints
-            for point in constraint.involved_points
-        }
-        required_points.update(target.point_id for target in step_targets)
         self.derived_manager.update_required_in_place(
-            self.state_buffer.positions, required_points
+            self.state_buffer.positions, self.required_points(step_targets)
         )
 
         # Fill constraint residuals section: residuals[0:n_constraints].
@@ -520,14 +538,8 @@ class ResidualComputer:
         self.validate_target_count(step_targets)
 
         self.state_buffer.update_from_array(free_array)
-        required_points = {
-            point
-            for constraint in self.constraints
-            for point in constraint.involved_points
-        }
-        required_points.update(target.point_id for target in step_targets)
         self.derived_manager.update_required_in_place(
-            self.state_buffer.positions, required_points
+            self.state_buffer.positions, self.required_points(step_targets)
         )
 
         jac = self.jac_buffer

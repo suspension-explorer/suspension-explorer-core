@@ -51,6 +51,11 @@ def solve_sweep(
         Tuple containing the list of solved suspension states and corresponding
         solver information for each step in the sweep.
     """
+    suspension.validate_sweep_target_points(
+        target.point_id
+        for target_sweep in sweep_config.target_sweeps
+        for target in target_sweep
+    )
     validate_sweep_controls(sweep_config, suspension.actuator_dofs())
     derived_spec = suspension.derived_spec()
     derived_manager = DerivedPointsManager(derived_spec)

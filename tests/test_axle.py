@@ -15,6 +15,7 @@ from kinematics.core.metrics import (
 )
 from kinematics.core.metrics import main as metrics_main
 from kinematics.core.metrics.ground import AxleGroundLine
+from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.corner import (
@@ -158,13 +159,14 @@ def test_basic_axle_sweep_solves_and_emits_structural_metrics(
     assert midpoint.axle["ground_line_normal_y"] == pytest.approx(0.0, abs=1e-10)
     assert midpoint.axle["ground_line_normal_z"] == pytest.approx(1.0)
     assert midpoint.axle["ground_line_angle"] == pytest.approx(0.0, abs=1e-8)
-    ground = AxleGroundLine.from_wheel_plane_road_tangents(
-        midpoint_state.get(PointRef(Side.LEFT, PointID.WHEEL_PLANE_ROAD_TANGENT)),
-        midpoint_state.get(PointRef(Side.RIGHT, PointID.WHEEL_PLANE_ROAD_TANGENT)),
+    ground = AxleGroundLine.from_wheel_ground_tangents(
+        midpoint_state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)),
+        midpoint_state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
     )
     assert ground is not None
     assert midpoint.axle["ground_z_centerline"] == pytest.approx(ground.z_at(0.0))
     assert midpoint.axle["heave"] == pytest.approx(0.0, abs=1e-5)
+    assert midpoint.axle["ride_height_change"] == pytest.approx(0.0, abs=1e-5)
 
     final = states[-1]
     left_z = final.get(PointRef(Side.LEFT, PointID.WHEEL_CENTER))[Axis.Z]
@@ -205,8 +207,8 @@ def test_axle_ground_metrics_are_undefined_without_a_valid_ground_line(
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
     assert isinstance(axle, AxleSuspension)
     state = axle.initial_state()
-    left_tangent = PointRef(Side.LEFT, PointID.WHEEL_PLANE_ROAD_TANGENT)
-    right_tangent = PointRef(Side.RIGHT, PointID.WHEEL_PLANE_ROAD_TANGENT)
+    left_tangent = PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)
+    right_tangent = PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)
     state.set(left_tangent, state.get(right_tangent))
 
     rows = compute_metrics_for_state_from_suspension(state, axle)
@@ -242,3 +244,35 @@ def test_axle_metrics_share_one_ground_line_instance_with_both_corners(
     assert len(received_ground) == 2
     assert received_ground[0] is not None
     assert received_ground[0] is received_ground[1]
+
+
+def test_ride_height_change_uses_shared_ground_centerline(test_data_dir: Path) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+    state = axle.initial_state().copy()
+    design_ground = AxleGroundLine.from_wheel_ground_tangents(
+        state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)),
+        state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
+    )
+    assert design_ground is not None
+    design_centerline_z = design_ground.z_at(0.0)
+    assert design_centerline_z is not None
+
+    # Define a banked ground whose track midpoint is deliberately offset from
+    # chassis Y=0. Averaging the two tangent Z deltas would therefore mix bank
+    # angle and lateral track migration into the ride-height result.
+    current_centerline_z = design_centerline_z - 15.0
+    slope = 0.1
+    for side, lateral_shift in ((Side.LEFT, 100.0), (Side.RIGHT, 0.0)):
+        key = PointRef(side, PointID.WHEEL_GROUND_TANGENT)
+        original = state.get(key)
+        y = float(original[Axis.Y]) + lateral_shift
+        state.set(
+            key,
+            Point3((original[Axis.X], y, current_centerline_z + slope * y)),
+        )
+
+    rows = compute_metrics_for_state_from_suspension(state, axle)
+
+    assert isinstance(rows, AxleMetricRows)
+    assert rows.axle["ride_height_change"] == pytest.approx(15.0)

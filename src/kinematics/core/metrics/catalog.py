@@ -180,7 +180,7 @@ def get_default_corner_derivative_metrics(
     axle_inboard, axle_outboard = suspension.wheel_axis_points()
     lower_pivot, upper_pivot = suspension.steering_axis_points()
     rack_attachment = suspension.rack_attachment_point()
-    hub_z_driver = PointCoordinateResponse.from_world_axis(
+    hub_z_driver = PointCoordinateResponse.from_chassis_axis(
         PointID.WHEEL_CENTER,
         Axis.Z,
         name="hub_z",
@@ -248,7 +248,7 @@ def get_default_corner_derivative_metrics(
         ),
         DerivativeMetricDefinition(
             response=PointCoordinateResponse.from_axis(
-                PointID.WHEEL_PLANE_ROAD_TANGENT,
+                PointID.WHEEL_GROUND_TANGENT,
                 (0.0, side_sign, 0.0),
                 name="half_track",
                 unit=MetricUnit.MM,
@@ -269,9 +269,9 @@ def get_default_corner_derivative_metrics(
     ]
 
     if rack_attachment is not None:
-        # Rack displacement is the rack attachment point world-Y offset;
-        # the corner constrains that point to translate along world Y.
-        rack_displacement_driver = PointCoordinateResponse.from_world_axis(
+        # Rack displacement is the rack attachment point chassis Y offset;
+        # the corner constrains that point to translate along chassis Y.
+        rack_displacement_driver = PointCoordinateResponse.from_chassis_axis(
             rack_attachment,
             Axis.Y,
             name="rack_displacement",
