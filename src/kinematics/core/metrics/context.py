@@ -52,9 +52,7 @@ class MetricContext:
         self.ground = (
             ground
             if ground is not None
-            else GroundDatum.horizontal_at(
-                state.get(PointID.WHEEL_GROUND_TANGENT)
-            )
+            else GroundDatum.horizontal_at(state.get(PointID.WHEEL_GROUND_TANGENT))
         )
 
     @cached_property

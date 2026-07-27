@@ -112,9 +112,7 @@ class TrailingArmCorner(CornerSuspension):
             for anchor in (CHASSIS_FRONT, CHASSIS_REAR)
         ]
         constraints.append(distance(KNUCKLE, PointID.WHEEL_CENTER))
-        constraints.append(
-            distance(PointID.WHEEL_CENTER, PointID.WHEEL_GROUND_TANGENT)
-        )
+        constraints.append(distance(PointID.WHEEL_CENTER, PointID.WHEEL_GROUND_TANGENT))
         constraints.append(distance(KNUCKLE, PointID.WHEEL_GROUND_TANGENT))
         return constraints
 

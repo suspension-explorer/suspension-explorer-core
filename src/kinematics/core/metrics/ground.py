@@ -34,8 +34,7 @@ class GroundDatum:
     def __post_init__(self) -> None:
         """Reject direct construction that violates the datum conventions."""
         if not all(
-            isfinite(value)
-            for value in (self.normal_y, self.normal_z, self.offset_mm)
+            isfinite(value) for value in (self.normal_y, self.normal_z, self.offset_mm)
         ):
             raise ValueError("Ground-datum fields must be finite")
         if abs(hypot(self.normal_y, self.normal_z) - 1.0) > _INVARIANT_TOLERANCE:

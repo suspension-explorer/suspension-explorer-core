@@ -29,9 +29,8 @@ def _wheel_ground_axes(
     face; ``X_T`` is oriented forward for both vehicle sides.
     """
     ground_normal = ctx.ground.normal
-    projected_axis = (
-        ctx.wheel_axis.vector()
-        - ground_normal * ctx.wheel_axis.dot(ground_normal)
+    projected_axis = ctx.wheel_axis.vector() - ground_normal * ctx.wheel_axis.dot(
+        ground_normal
     )
     if projected_axis.norm() < EPS_GEOMETRIC:
         return None

@@ -15,9 +15,7 @@ from kinematics.core.primitives.geometry import Point3
 def _line(
     left: tuple[float, float, float], right: tuple[float, float, float]
 ) -> GroundDatum:
-    ground_line = GroundDatum.from_wheel_ground_tangents(
-        Point3(left), Point3(right)
-    )
+    ground_line = GroundDatum.from_wheel_ground_tangents(Point3(left), Point3(right))
     assert ground_line is not None
     return ground_line
 
@@ -110,10 +108,7 @@ def test_direct_vertical_line_has_no_z_at_value():
     ],
 )
 def test_degenerate_or_nonfinite_ground_tangents_return_none(left, right):
-    assert (
-        GroundDatum.from_wheel_ground_tangents(Point3(left), Point3(right))
-        is None
-    )
+    assert GroundDatum.from_wheel_ground_tangents(Point3(left), Point3(right)) is None
 
 
 def test_factory_propagates_invariant_violations(monkeypatch):

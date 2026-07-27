@@ -126,9 +126,7 @@ class MacPhersonSuspension(CornerSuspension):
     # coupled solve across both corners, with a bounded validity domain and
     # non-unique roots; the standalone flat-ground construction is the same
     # quantity, so it is refused as a target at both scopes.
-    OUTPUT_ONLY_POINTS: ClassVar[tuple[PointID, ...]] = (
-        PointID.WHEEL_GROUND_TANGENT,
-    )
+    OUTPUT_ONLY_POINTS: ClassVar[tuple[PointID, ...]] = (PointID.WHEEL_GROUND_TANGENT,)
 
     # Free points that move during solving. The strut top is a fixed chassis
     # mount and the strut clamp is derived from the lower ball joint and top.
