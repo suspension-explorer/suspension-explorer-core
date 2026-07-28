@@ -12,35 +12,12 @@ All notable changes to this project will be documented in this file.
 - Advisory sweep diagnostics report convergence, residual acceptance, branch continuity, derivative availability, rocker and anti-roll-bar chirality, and transmission margin.
 - Coupled axle models solve left and right corners together and support either mirrored or independently authored geometry.
 - The public `analyze_sweep()` and `initial_pose()` APIs return structured positions, metrics, locations, metadata, renderer-neutral element paths, diagnostics, references, and solved frames.
-- A `GroundDatum` value object, exported from `kinematics.core.metrics`, owns
-  the upward unit normal, Hessian offset, and ground-evaluation helpers used by
-  post-solve metrics. For an axle it is derived once per solved state from the
-  two wheel-ground tangents and shared by both corner metric contexts. Its plane
-  interpretation is the chassis-space `YZ` line extruded along chassis `X`, so
-  longitudinal grade is assumed to be zero rather than inferred from one axle.
-- Five axle-scoped ground metrics: `ground_line_normal_y`,
-  `ground_line_normal_z`, `ground_line_offset`, `ground_line_angle`, and
-  `ground_z_centerline`.
-- A dimensionless metric unit for quantities such as the ground-line normal
-  components, using the conventional semantic unit symbol `1`.
-- A world-space API in `kinematics.core.pose` relates solved states to world
-  space, this project's name for the ISO 8855 / SAE J670 earth-fixed axis
-  system. One axle measures the chassis-to-ground relation completely but
-  cannot measure gravity, so world space is an input:
-  `world_space_for_axle_state()` and the per-step `world_spaces_for_sweep()`
-  take an explicit chassis-space gravity direction or a named `GravityModel`
-  — a rule computing gravity under stated premises: `ROAD_LEVEL` (the fitted
-  ground plane is perpendicular to gravity), `OPPOSITE_AXLE_FIXED` (road
-  laterally level, ride-height change tips gravity fore-aft by
-  `atan(compression / wheelbase)` signed by axle position), or
-  `CHASSIS_LEVEL` (a gravity-aligned chassis, the kinematics-rig reading
-  under which the ground angle is road bank) — and return a `WorldSpace`
-  reporting the world axes as exact chassis-space basis vectors plus the
-  anchor that maps to the world origin. The result records its
-  `gravity_model` (`None` for explicit gravity), so a modelled attitude
-  cannot be mistaken for a measured one; string model values coerce to their
-  enums and unrecognised strings are rejected. Suspension roll remains the
-  `roll` metric and the chassis-to-ground angle remains `ground_line_angle`.
+- A flat-ground `WorldSpace` API completes each solved axle pose from its two
+  tyre contacts plus a configured opposite-axle pivot reference. World ground
+  is always `Z = 0`, gravity is always World `-Z`, and the transform is carried
+  structurally on axle analysis frames. The internal full-plane `GroundDatum`
+  is shared by ground-relative metric consumers rather than exported as duplicate
+  scalar ground-line metrics.
 
 ### Changed
 
@@ -90,8 +67,9 @@ All notable changes to this project will be documented in this file.
   and setup. Explicit right hardpoints support asymmetric geometry, while optional
   `right_setup` supports a different camber-shim setup.
 - Geometry configuration is separated by ownership: vehicle inputs hold CG,
-  wheelbase, brake bias, and driven axle; axle inputs hold steering, wheel/tire,
-  and axle-position data; corner inputs hold side-local setup such as camber shims.
+  wheelbase, opposite-axle pivot-axis height, brake bias, and driven axle; axle
+  inputs hold steering, wheel/tire, and axle-position data; corner inputs hold
+  side-local setup such as camber shims.
 - Steering configuration now selects an explicit `rack` or `none` actuator.
   Double-wishbone and MacPherson corners use a rack-driven track rod when
   steered and a chassis-fixed toe link when non-steered. Selecting `none`

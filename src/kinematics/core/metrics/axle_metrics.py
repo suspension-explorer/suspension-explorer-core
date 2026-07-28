@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
+from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointRef, Side
 
 if TYPE_CHECKING:
@@ -20,12 +21,12 @@ def append_axle_state_metrics(
     row: MetricRow,
     state: SuspensionState,
     axle: AxleSuspension,
-    ground: GroundDatum | None,
+    ground: GroundDatum,
     design_ground: GroundDatum | None,
 ) -> None:
     """Append axle-scoped metrics from the current and design ground data."""
     wheel_delta_z: dict[Side, float] = {}
-    tangent_y: dict[Side, float] = {}
+    tangents: dict[Side, Point3] = {}
     for side in (Side.LEFT, Side.RIGHT):
         design = axle.corners[side].initial_state()
         wheel_ref = PointRef(side, PointID.WHEEL_CENTER)
@@ -33,18 +34,20 @@ def append_axle_state_metrics(
         wheel_delta_z[side] = float(state.get(wheel_ref)[Axis.Z]) - float(
             design.get(PointID.WHEEL_CENTER)[Axis.Z]
         )
-        tangent_y[side] = float(state.get(tangent_ref)[Axis.Y])
+        tangents[side] = state.get(tangent_ref)
 
     left_wheel_z = wheel_delta_z[Side.LEFT]
     right_wheel_z = wheel_delta_z[Side.RIGHT]
-    track = abs(tangent_y[Side.LEFT] - tangent_y[Side.RIGHT])
+    track = abs(
+        float(ground.lateral.dot(tangents[Side.LEFT] - tangents[Side.RIGHT]))
+    )
     row["heave"] = 0.5 * (left_wheel_z + right_wheel_z)
     row["roll"] = degrees(atan2(left_wheel_z - right_wheel_z, track))
-    current_ground_z = ground.z_at(0.0) if ground is not None else None
-    design_ground_z = design_ground.z_at(0.0) if design_ground is not None else None
+    chassis_origin = Point3((0.0, 0.0, 0.0))
     row["ride_height_change"] = (
-        design_ground_z - current_ground_z
-        if design_ground_z is not None and current_ground_z is not None
+        ground.signed_distance(chassis_origin)
+        - design_ground.signed_distance(chassis_origin)
+        if design_ground is not None
         else None
     )
     row["track"] = track
@@ -52,19 +55,6 @@ def append_axle_state_metrics(
     roll_center_y, roll_center_z = _roll_center(state, axle)
     row["roll_center_y"] = roll_center_y
     row["roll_center_z"] = roll_center_z
-
-    if ground is None:
-        row["ground_line_normal_y"] = None
-        row["ground_line_normal_z"] = None
-        row["ground_line_offset"] = None
-        row["ground_line_angle"] = None
-        row["ground_z_centerline"] = None
-    else:
-        row["ground_line_normal_y"] = ground.normal_y
-        row["ground_line_normal_z"] = ground.normal_z
-        row["ground_line_offset"] = ground.offset_mm
-        row["ground_line_angle"] = ground.angle_deg
-        row["ground_z_centerline"] = ground.z_at(0.0)
 
     # Rack displacement is measured on the left corner rack attachment; the rack
     # coupling makes the right corner move identically.

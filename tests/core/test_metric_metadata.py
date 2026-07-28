@@ -24,10 +24,7 @@ def test_static_metric_specs_use_unit_free_identities() -> None:
     assert specs["camber"].scope is Scope.CORNER
     assert specs["track"].unit is MetricUnit.MM
     assert specs["track"].scope is Scope.AXLE
-    assert specs["ground_line_normal_y"].unit is MetricUnit.DIMENSIONLESS
-    assert specs["ground_line_normal_y"].scope is Scope.AXLE
-    assert specs["ground_line_offset"].unit is MetricUnit.MM
-    assert specs["ground_line_angle"].unit is MetricUnit.DEG
+    assert not any(key.startswith("ground_") for key in specs)
     assert "t_bar_heave_angle" not in specs
     assert "camber_deg" not in specs
     assert "track_mm" not in specs

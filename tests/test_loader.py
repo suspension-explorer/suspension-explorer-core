@@ -47,6 +47,7 @@ def invalid_geometry_file(tmp_path: Path):
             },
             "cg_position": {"x": 0, "y": 0, "z": 0},
             "wheelbase": 2500.0,
+            "opposite_axle_axis_height": 300.0,
         },
     }  # Valid type but missing required hardpoints
     file_path = tmp_path / "invalid_geometry.yaml"

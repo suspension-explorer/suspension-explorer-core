@@ -38,8 +38,6 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from kinematics.core.enums import Axis
-
 if TYPE_CHECKING:
     from kinematics.core.metrics.context import MetricContext
 
@@ -48,20 +46,17 @@ def calculate_svsa_length(ctx: MetricContext) -> float | None:
     """
     Side-view swing arm length in mm.
 
-    The SVSA length is the horizontal distance (in X) from the wheel-plane
-    ground-tangent point to the side-view instant center. A positive value means
-    the IC is ahead of the ground tangent; negative means behind.
+    The SVSA length is the forward distance in the ground plane from the
+    wheel-ground tangent to the side-view instant center. A positive value
+    means the IC is ahead of the ground tangent; negative means behind.
 
     Returns None if the SVIC is undefined.
     """
     svic = ctx.side_view_ic
     if svic is None:
         return None
-    ground_tangent = ctx.wheel_ground_tangent
-    # The ground plane is the YZ ground line extruded along chassis X, so it
-    # has zero longitudinal gradient and its roll tilt does not affect this
-    # side-view X component.
-    return float(svic[Axis.X] - ground_tangent[Axis.X])
+    displacement = svic - ctx.wheel_ground_tangent
+    return float(ctx.ground.forward.dot(displacement))
 
 
 def calculate_fvsa_length(ctx: MetricContext) -> float | None:
@@ -79,18 +74,14 @@ def calculate_fvsa_length(ctx: MetricContext) -> float | None:
     fvic = ctx.front_view_ic
     if fvic is None:
         return None
-    ground_tangent = ctx.wheel_ground_tangent
-
-    # Lateral distance from ground tangent to FVIC, preserving sign.
-    dy = float(fvic[Axis.Y] - ground_tangent[Axis.Y])
-    dz = float(fvic[Axis.Z] - ground_tangent[Axis.Z])
-    # Signed length: positive when IC is inboard of the ground tangent.
-    length = np.sqrt(dy * dy + dz * dz)
+    displacement = fvic - ctx.wheel_ground_tangent
+    along_ground = float(ctx.ground.lateral.dot(displacement))
+    normal_height = float(ctx.ground.normal.dot(displacement))
+    length = np.sqrt(along_ground * along_ground + normal_height * normal_height)
 
     # Sign convention: positive when FVIC is on the vehicle-center side
     # of the ground tangent. The ground-line tangent points from vehicle
     # right to left, so this along-ground component reduces to dy on a level
     # ground line. For the left side (Y > 0), inboard means a negative
     # component, so we negate. For the right side the sign is already correct.
-    along_ground = dy * ctx.ground.tangent_y + dz * ctx.ground.tangent_z
     return float(length * (-ctx.side_sign * np.sign(along_ground)))

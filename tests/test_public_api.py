@@ -40,10 +40,8 @@ def test_core_import_succeeds_without_cli_dependencies() -> None:
         "import kinematics\n"
         "import kinematics.core\n"
         "from kinematics.core.input import build_suspension, build_sweep\n"
-        "from kinematics.core.metrics import GroundDatum\n"
         "from kinematics.core.pose import (\n"
         "    WorldSpace,\n"
-        "    GravityModel,\n"
         "    world_space_for_axle_state,\n"
         "    world_spaces_for_sweep,\n"
         ")\n"
@@ -65,7 +63,6 @@ def test_pose_module_declares_its_public_names() -> None:
 
     assert set(pose.__all__) == {
         "WorldSpace",
-        "GravityModel",
         "world_space_for_axle_state",
         "world_spaces_for_sweep",
     }

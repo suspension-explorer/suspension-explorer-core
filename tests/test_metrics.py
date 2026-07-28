@@ -23,7 +23,7 @@ from kinematics.core.metrics.swing_arms import calculate_fvsa_length
 from kinematics.core.metrics.units import MetricUnit
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.constants import TEST_TOLERANCE
-from kinematics.core.primitives.geometry import Vector3
+from kinematics.core.primitives.geometry import Direction3, Vector3
 from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.corner import DoubleWishboneSuspension
@@ -341,10 +341,9 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
     tangent_z = sin(bank_angle)
     normal_y = -tangent_z
     normal_z = tangent_y
-    ground = GroundDatum(
-        normal_y=normal_y,
-        normal_z=normal_z,
-        offset_mm=-(normal_y * tangent[Axis.Y] + normal_z * tangent[Axis.Z]),
+    ground = GroundDatum.through(
+        Direction3((0.0, normal_y, normal_z)),
+        tangent,
     )
     ctx = MetricContext(
         state=state,
@@ -387,11 +386,7 @@ def _banked_ground_through(point, bank_angle_deg: float) -> GroundDatum:
     bank_angle = radians(bank_angle_deg)
     normal_y = -sin(bank_angle)
     normal_z = cos(bank_angle)
-    return GroundDatum(
-        normal_y=normal_y,
-        normal_z=normal_z,
-        offset_mm=-(normal_y * point[Axis.Y] + normal_z * point[Axis.Z]),
-    )
+    return GroundDatum.through(Direction3((0.0, normal_y, normal_z)), point)
 
 
 def test_anti_geometry_uses_perpendicular_cg_height_above_the_ground_plane(
@@ -399,7 +394,7 @@ def test_anti_geometry_uses_perpendicular_cg_height_above_the_ground_plane(
     test_data_dir,
 ) -> None:
     """
-    The anti formulas take the CG's perpendicular distance to the road plane,
+    The anti formulas take the CG's perpendicular distance to the ground plane,
     which on a banked ground line differs from the raw chassis-Z difference,
     and resolve the reaction-line rise along the same ground normal.
     """
@@ -428,11 +423,7 @@ def test_anti_geometry_uses_perpendicular_cg_height_above_the_ground_plane(
     )
     cg = config.cg_position
 
-    expected_height = (
-        ground.normal_y * float(cg[Axis.Y])
-        + ground.normal_z * float(cg[Axis.Z])
-        + ground.offset_mm
-    )
+    expected_height = ground.signed_distance(cg)
     height = _cg_height_above_ground(ctx)
     assert height is not None
     np.testing.assert_allclose(height, expected_height, atol=TEST_TOLERANCE)
@@ -448,9 +439,7 @@ def test_anti_geometry_uses_perpendicular_cg_height_above_the_ground_plane(
     # The datum passes through the tangent, so the tangent -> SVIC rise along
     # the ground normal is n . (SVIC - T), written out with the datum's
     # normal components rather than through the implementation's helpers.
-    expected_rise = ground.normal_y * (
-        float(svic[Axis.Y]) - float(tangent[Axis.Y])
-    ) + ground.normal_z * (float(svic[Axis.Z]) - float(tangent[Axis.Z]))
+    expected_rise = ground.normal.dot(svic - tangent)
     expected_tan_theta = expected_rise / run
     expected_anti_dive = (
         100.0 * 0.6 * (config.wheelbase / expected_height) * expected_tan_theta
@@ -547,15 +536,9 @@ def test_anti_squat_resolves_the_rise_along_a_banked_ground_normal(
     run = float(svic[Axis.X]) - float(wc[Axis.X])
     # n . (SVIC - WC), written out with the datum's normal components; the
     # plane offset cancels in the endpoint difference.
-    expected_rise = ground.normal_y * (
-        float(svic[Axis.Y]) - float(wc[Axis.Y])
-    ) + ground.normal_z * (float(svic[Axis.Z]) - float(wc[Axis.Z]))
+    expected_rise = ground.normal.dot(svic - wc)
     cg = config.cg_position
-    height = (
-        ground.normal_y * float(cg[Axis.Y])
-        + ground.normal_z * float(cg[Axis.Z])
-        + ground.offset_mm
-    )
+    height = ground.signed_distance(cg)
     expected = 100.0 * (config.wheelbase / height) * (expected_rise / run)
 
     anti_squat = calculate_anti_squat_pct(ctx)
@@ -585,12 +568,14 @@ def test_anti_cg_height_is_shared_by_both_corners_of_a_banked_axle(
     left_tangent = state.get(left_tangent_ref)
     state.set(left_tangent_ref, left_tangent + Vector3((0.0, 0.0, 40.0)))
 
-    ground = GroundDatum.from_wheel_ground_tangents(
-        state.get(left_tangent_ref),
-        state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
+    left = state.get(left_tangent_ref)
+    right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT))
+    lateral = (left - right).normalize()
+    ground = GroundDatum.through(
+        Direction3(Direction3((1.0, 0.0, 0.0)).cross(lateral)),
+        left,
     )
-    assert ground is not None
-    assert abs(ground.angle_deg) > 1.0, "The test state must be genuinely banked"
+    assert abs(float(ground.normal[Axis.Y])) > 0.01
 
     heights: dict[Side, float] = {}
     chassis_z_heights: dict[Side, float] = {}
@@ -646,10 +631,7 @@ def test_fvsa_sign_follows_the_ground_line_rather_than_chassis_y(
     ctx.front_view_ic = tangent + offset
 
     expected_magnitude = float(np.hypot(offset[Axis.Y], offset[Axis.Z]))
-    along_ground = (
-        float(offset[Axis.Y]) * ground.tangent_y
-        + float(offset[Axis.Z]) * ground.tangent_z
-    )
+    along_ground = ground.lateral.dot(offset)
     expected = expected_magnitude * (-ctx.side_sign * np.sign(along_ground))
 
     fvsa_length = calculate_fvsa_length(ctx)
@@ -667,7 +649,11 @@ def test_fvsa_sign_follows_the_ground_line_rather_than_chassis_y(
         expected_magnitude * (-ctx.side_sign * np.sign(float(offset[Axis.Y]))),
         atol=TEST_TOLERANCE,
     )
-    assert flat_fvsa_length == -fvsa_length
+    np.testing.assert_allclose(
+        flat_fvsa_length,
+        -fvsa_length,
+        atol=TEST_TOLERANCE,
+    )
 
 
 class TestSignConventionsAndKnownValues:

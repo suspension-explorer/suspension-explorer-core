@@ -17,7 +17,7 @@ For a two-corner axle the assumption of one horizontal plane per corner breaks
 down: on an asymmetric state (roll, one-wheel bump), each corner's "flat road"
 sits at a different height, and any consumer comparing the two sides — roll
 centre construction, ride height, CG height — silently mixes two different
-ground references. The fix is one shared road plane that is *simultaneously
+ground references. The fix is one shared ground plane that is *simultaneously
 tangent to both wheel discs*. That is what :func:`solve_axle_wheel_ground_tangents`
 computes.
 
@@ -75,18 +75,13 @@ How the results are used
 :meth:`AxleSuspension.apply_ground_closure` calls
 :func:`solve_axle_wheel_ground_tangents` once per accepted solver state — a
 post-solve closure, not a solver constraint — and writes the two tangent
-points into the state under ``WHEEL_GROUND_TANGENT``. The public axle ground
-datum (:class:`kinematics.core.metrics.ground.GroundDatum`) is then fitted
-through those two stored points; because both points lie exactly on the solved
-plane, that fit reproduces this module's plane to within the root tolerance,
-making the stored tangent points the single source of truth for ground
-geometry.
+points into the state under ``WHEEL_GROUND_TANGENT``. Those stored contacts
+are then the geometric inputs to the post-solve WorldSpace placement. Metrics
+consume the resulting complete 3D World ground plane; they do not publish a
+second scalar ground-line representation.
 
-Sign convention: the scalar solved here rotates the plane's *normal*.
-``GroundDatum.angle_deg`` instead measures the ground *line*, so the two are
-exact negatives: ``GroundDatum.angle_deg == -degrees(ground_normal_angle)``.
-Every internal name says ``normal_angle`` for that reason; nothing here is
-the public roll angle.
+The scalar solved here rotates the intermediate plane's *normal*, hence the
+consistent internal name ``normal_angle``.
 
 Dual-number inputs
 ==================
@@ -268,10 +263,9 @@ def _flat_ground_normal_angle_estimate(
     if abs(lateral_separation) <= EPS_GEOMETRIC:
         raise ValueError("Cannot determine axle ground tangent with collapsed track")
     if lateral_separation < 0.0:
-        # Mirror GroundDatum.from_wheel_ground_tangents and orient the
-        # separation from vehicle right to left.  Without this, laterally
-        # crossed supports give an estimate near +/-pi, which the clamp then
-        # turns into a seed unrelated to the geometry.
+        # Orient the separation from vehicle right to left. Without this,
+        # laterally crossed supports give an estimate near +/-pi, which the
+        # clamp then turns into a seed unrelated to the geometry.
         lateral_separation = -lateral_separation
         vertical_separation = -vertical_separation
     return _clamp_ground_normal_angle(-atan2(vertical_separation, lateral_separation))

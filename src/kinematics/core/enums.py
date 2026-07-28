@@ -89,8 +89,8 @@ class PointID(IntEnum):
             return (
                 "Target 'wheel_center' along Z as the available heave input; "
                 "wheel orientation can still move the ground tangent, so read "
-                "ride height from the 'ride_height_change' or "
-                "'ground_z_centerline' metrics of the solved output."
+                "ride height from the 'ride_height_change' metric of the solved "
+                "output."
             )
         return None
 

@@ -9,7 +9,6 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.enums import PointID
-from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.points.derived import ground
 from kinematics.core.points.derived.ground import (
     _GROUND_SOLVE_LIMIT,
@@ -181,7 +180,7 @@ def test_solve_returns_one_shared_plane_and_is_stateless():
     np.testing.assert_array_equal(repeat.right.data, first.right.data)
 
 
-def test_seed_from_tangent_points_recovers_the_ground_line_angle():
+def test_seed_from_tangent_points_recovers_the_lateral_contact_angle():
     left = Point3((0.0, 620.0, -12.0))
     right = Point3((0.0, -580.0, 18.0))
     lateral_separation = 620.0 - (-580.0)
@@ -293,17 +292,6 @@ def test_flat_ground_seed_is_robust_to_crossed_lateral_orientation():
 
     assert seed == pytest.approx(np.arctan(0.1))
     assert angle == pytest.approx(np.arctan(0.1))
-
-
-def test_internal_normal_angle_negates_the_public_ground_line_angle():
-    tangency = _solve(_positions())
-    assert isinstance(tangency.left, Point3)
-    assert isinstance(tangency.right, Point3)
-
-    ground_line = GroundDatum.from_wheel_ground_tangents(tangency.left, tangency.right)
-
-    assert ground_line is not None
-    assert ground_line.angle_deg == pytest.approx(-np.degrees(tangency.normal_angle))
 
 
 def test_axle_derived_spec_omits_the_coupled_tangents(test_data_dir: Path) -> None:

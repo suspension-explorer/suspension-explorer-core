@@ -75,6 +75,7 @@ def valid_config() -> SuspensionConfig:
         ),
         cg_position=Point3([1250, 0, 450]),
         wheelbase=2500.0,
+        opposite_axle_axis_height=300.0,
         camber_shim=CamberShimConfig(
             shim_face_point_a=Point3([-25.0, 750.0, 510.0]),
             shim_face_point_b=Point3([-25.0, 750.0, 490.0]),
@@ -361,6 +362,7 @@ config:
       rim_diameter: 13
   cg_position: {x: 1250, y: 0, z: 450}
   wheelbase: 2500.0
+  opposite_axle_axis_height: 300.0
 """
         yaml_file = tmp_path / "test_geometry.yaml"
         yaml_file.write_text(yaml_content)
@@ -406,6 +408,7 @@ config:
       rim_diameter: 13
   cg_position: {x: 1250, y: 0, z: 450}
   wheelbase: 2500.0
+  opposite_axle_axis_height: 300.0
   camber_shim:
     shim_face_point_a: {x: -25.0, y: 750.0, z: 510.0}
     shim_face_point_b: {x: -25.0, y: 750.0, z: 490.0}
@@ -439,6 +442,7 @@ config:
       rim_diameter: 13
   cg_position: {x: 0, y: 0, z: 0}
   wheelbase: 2500.0
+  opposite_axle_axis_height: 300.0
 """
         yaml_file = tmp_path / "unknown.yaml"
         yaml_file.write_text(yaml_content)
@@ -470,6 +474,7 @@ config:
       rim_diameter: 13
   cg_position: {x: 0, y: 0, z: 0}
   wheelbase: 2500.0
+  opposite_axle_axis_height: 300.0
 """
         yaml_file = tmp_path / "missing.yaml"
         yaml_file.write_text(yaml_content)

@@ -21,6 +21,7 @@ from kinematics.core.metrics.context import MetricContext
 from kinematics.core.metrics.derivatives import evaluate_derivative_metrics
 from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.metrics.registry import flat_key
+from kinematics.core.pose import world_space_for_axle_state
 from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.sensitivity import TangentField
@@ -70,7 +71,12 @@ def compute_metrics_for_axle_state(
     """Compute structural per-corner rows followed by axle-level metrics."""
     axle_row: MetricRow = OrderedDict()
     corner_rows: dict[Side, MetricRow] = {}
-    ground = _ground_datum_for_axle_state(state)
+    world_space = world_space_for_axle_state(axle, state)
+    if world_space is None:
+        raise ValueError(
+            "Axle metrics require a valid flat-ground WorldSpace for every state"
+        )
+    ground = GroundDatum.through(world_space.z, world_space.origin)
     for side in (Side.LEFT, Side.RIGHT):
         corner = axle.corners[side]
         corner_state = axle.corner_state(state, side)
@@ -100,14 +106,6 @@ def compute_metrics_for_axle_state(
             )
         )
     return AxleMetricRows(axle=axle_row, corners=corner_rows)
-
-
-def _ground_datum_for_axle_state(state: SuspensionState) -> GroundDatum | None:
-    """Construct the shared metric ground datum for an axle state."""
-    return GroundDatum.from_wheel_ground_tangents(
-        state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)),
-        state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
-    )
 
 
 def _corner_tangents(

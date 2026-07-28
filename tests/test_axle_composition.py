@@ -28,7 +28,13 @@ from kinematics.core.elements import (
     RigidLinkElement,
     SuspensionElement,
 )
-from kinematics.core.enums import Axis, PointID, SteeringType, SuspensionType
+from kinematics.core.enums import (
+    Axis,
+    AxlePosition,
+    PointID,
+    SteeringType,
+    SuspensionType,
+)
 from kinematics.core.metrics.context import MetricContext
 from kinematics.core.metrics.main import AxleMetricRows
 from kinematics.core.points.derived.manager import DerivedPointsSpec
@@ -192,7 +198,10 @@ def build_stub_corner(
 def build_stub_axle(config: SuspensionConfig | None = None) -> AxleSuspension:
     if config is not None:
         config = config.model_copy(
-            update={"steering": SteeringConfig(type=SteeringType.NONE)}
+            update={
+                "steering": SteeringConfig(type=SteeringType.NONE),
+                "axle_position": AxlePosition.FRONT,
+            }
         )
     # The stub corners have no registered architecture; any member works as
     # the reported identity here.

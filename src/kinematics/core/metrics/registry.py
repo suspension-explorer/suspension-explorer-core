@@ -90,41 +90,6 @@ _AXLE_BASE_SPECS = (
         MetricKind.STATE,
         Scope.AXLE,
     ),
-    MetricSpec(
-        "ground_line_normal_y",
-        "Ground Line Normal Y",
-        MetricUnit.DIMENSIONLESS,
-        MetricKind.STATE,
-        Scope.AXLE,
-    ),
-    MetricSpec(
-        "ground_line_normal_z",
-        "Ground Line Normal Z",
-        MetricUnit.DIMENSIONLESS,
-        MetricKind.STATE,
-        Scope.AXLE,
-    ),
-    MetricSpec(
-        "ground_line_offset",
-        "Ground Line Offset",
-        MetricUnit.MM,
-        MetricKind.STATE,
-        Scope.AXLE,
-    ),
-    MetricSpec(
-        "ground_line_angle",
-        "Ground Line Angle",
-        MetricUnit.DEG,
-        MetricKind.STATE,
-        Scope.AXLE,
-    ),
-    MetricSpec(
-        "ground_z_centerline",
-        "Ground Z at Chassis Centerline",
-        MetricUnit.MM,
-        MetricKind.STATE,
-        Scope.AXLE,
-    ),
 )
 
 

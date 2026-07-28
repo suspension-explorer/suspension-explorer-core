@@ -7,13 +7,11 @@ braking), and anti-squat (driven axle under acceleration). All are expressed
 as a percentage where 100 percent means the geometry fully reacts the
 load-transfer pitch moment and 0 percent means it reacts none of it.
 
-The anti percentages model brake and tractive forces relative to the road, so
-each governing line's rise is resolved along the ground-plane normal, via
-signed distances to the shared ground datum. The run stays the chassis-X
-difference: the ground plane is the YZ ground line extruded along chassis X,
-so chassis X lies exactly in the plane and carries no longitudinal gradient.
-On a level ground line the normal is +Z and each rise reduces exactly to the
-chassis-Z difference. The governing line runs from a reaction point
+The anti percentages model brake and tractive forces relative to the road.
+Each governing line's rise is resolved along the completed ground-plane
+normal, and its run along the plane's projected vehicle-forward direction.
+At design, those axes reduce to chassis +Z and +X respectively. The governing
+line runs from a reaction point
 (wheel-ground tangent for outboard brakes, wheel center for inboard-sprung
 drive) to the side-view instant center (SVIC). Its inclination, expressed as
 tan(theta), together with the wheelbase L and CG height above ground h, sets
@@ -57,7 +55,7 @@ def calculate_svsa_angle(ctx: "MetricContext") -> float | None:
     tangent = ctx.wheel_ground_tangent
 
     # Deliberately a chassis-frame side-view construction: this angle describes
-    # the linkage's XZ swing-arm line, not a road-relative force line. The anti
+    # the linkage's XZ swing-arm line, not a ground-relative force line. The anti
     # percentages resolve their rise along the ground normal instead.
     run = float(svic[Axis.X]) - float(tangent[Axis.X])
     if abs(run) < EPS_GEOMETRIC:
@@ -72,7 +70,7 @@ def _cg_height_above_ground(ctx: "MetricContext") -> float | None:
     CG height above the ground plane in mm, or None if not strictly positive.
 
     The load-transfer moment arm in the anti formulas is the CG's perpendicular
-    distance to the road plane, because the braking or tractive force acts
+    distance to the ground plane, because the braking or tractive force acts
     parallel to that plane. The height is therefore the signed distance to the
     shared ground datum, which on a level ground line equals the chassis-Z
     difference to the wheel-ground tangent, and on an asymmetric (banked) state
@@ -120,7 +118,7 @@ def calculate_anti_dive_pct(ctx: "MetricContext") -> float | None:
 
     # Run measured from SVIC to the tangent so tan_theta is positive when the
     # SVIC sits behind (-X of) the front tangent: the anti-dive geometry.
-    run = float(tangent[Axis.X]) - float(svic[Axis.X])
+    run = float(ctx.ground.forward.dot(tangent - svic))
     if abs(run) < EPS_GEOMETRIC:
         return None
     height = _cg_height_above_ground(ctx)
@@ -166,7 +164,7 @@ def calculate_anti_lift_pct(ctx: "MetricContext") -> float | None:
         return None
     tangent = ctx.wheel_ground_tangent
 
-    run = float(svic[Axis.X]) - float(tangent[Axis.X])
+    run = float(ctx.ground.forward.dot(svic - tangent))
     if abs(run) < EPS_GEOMETRIC:
         return None
     height = _cg_height_above_ground(ctx)
@@ -219,9 +217,9 @@ def calculate_anti_squat_pct(ctx: "MetricContext") -> float | None:
     # Front (FWD) and rear axles flip the sense of the horizontal run so that
     # positive tan_theta always means "resists the acceleration pitch".
     if config.axle_position is AxlePosition.FRONT:
-        run = float(wc[Axis.X]) - float(svic[Axis.X])
+        run = float(ctx.ground.forward.dot(wc - svic))
     else:
-        run = float(svic[Axis.X]) - float(wc[Axis.X])
+        run = float(ctx.ground.forward.dot(svic - wc))
     if abs(run) < EPS_GEOMETRIC:
         return None
     height = _cg_height_above_ground(ctx)

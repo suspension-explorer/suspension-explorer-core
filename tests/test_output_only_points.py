@@ -60,11 +60,10 @@ def test_output_only_rejection_uses_the_point_declaration_guidance(
 
     message = str(error.value)
     # The guidance names the honest control: wheel-centre Z is the heave
-    # input, and ride height is read back from the solved ground metrics.
+    # input, and ride height is read back from the solved metric.
     assert "'wheel_center'" in message
     assert "heave input" in message
     assert "'ride_height_change'" in message
-    assert "'ground_z_centerline'" in message
 
 
 def test_direct_sweep_config_cannot_bypass_output_only_validation(

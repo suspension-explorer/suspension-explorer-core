@@ -46,6 +46,7 @@ config:
       rim_diameter: 13  # Specified in inches.
   cg_position: {x: 1250, y: 0, z: 450}
   wheelbase: 2500.0
+  opposite_axle_axis_height: 300.0
 
   # Camber Shim Configuration.
   camber_shim:

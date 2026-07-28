@@ -217,11 +217,14 @@ class AxleSuspension(Suspension):
 
     @cached_property
     def design_ground(self) -> GroundDatum | None:
-        """Return the immutable ground datum for the authored axle geometry."""
+        """Return the authored horizontal datum, rejecting a banked design."""
         state = self.initial_state()
-        return GroundDatum.from_wheel_ground_tangents(
-            state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)),
-            state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
+        left = state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT))
+        right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT))
+        if abs(float(left[Axis.Z]) - float(right[Axis.Z])) > 1e-7:
+            return None
+        return GroundDatum.horizontal_at(
+            Point3((0.0, 0.0, 0.5 * (float(left[Axis.Z]) + float(right[Axis.Z]))))
         )
 
     def constraints(self) -> list[Constraint]:
