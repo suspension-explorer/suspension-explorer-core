@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pytest
 
-from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.enums import PointID
+from kinematics.core.input import build_suspension
 from kinematics.core.points.derived import ground
 from kinematics.core.points.derived.ground import (
     _GROUND_SOLVE_LIMIT,
@@ -26,6 +24,55 @@ from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.suspensions.axle import AxleSuspension
 
 RADIUS_MM = 200.0
+
+
+def _axle_suspension() -> AxleSuspension:
+    """Build the test axle through the transport-neutral core input facade."""
+    suspension = build_suspension(
+        {
+            "type": "double_wishbone",
+            "scope": "axle",
+            "name": "test axle",
+            "version": "0.0.1",
+            "units": "millimeters",
+            "vehicle_config": {
+                "cg_position": {"x": 1250, "y": 0, "z": 450},
+                "wheelbase": 2500.0,
+            },
+            "axle_config": {
+                "axle_position": "front",
+                "steering": {"type": "rack"},
+                "actuation": {"type": "direct", "mount": "lower_wishbone"},
+                "spring": {"type": "none"},
+                "anti_roll": {"type": "none"},
+                "heave_link": {"type": "none"},
+                "wheel": {
+                    "offset": 0,
+                    "tire": {
+                        "aspect_ratio": 0.55,
+                        "section_width": 270,
+                        "rim_diameter": 13,
+                    },
+                },
+            },
+            "hardpoints": {
+                "left": {
+                    "lower_wishbone_inboard_front": {"x": 250, "y": 400, "z": 200},
+                    "lower_wishbone_inboard_rear": {"x": -250, "y": 450, "z": 200},
+                    "lower_wishbone_outboard": {"x": 0, "y": 900, "z": 200},
+                    "upper_wishbone_inboard_front": {"x": 225, "y": 350, "z": 500},
+                    "upper_wishbone_inboard_rear": {"x": -275, "y": 350, "z": 500},
+                    "upper_wishbone_outboard": {"x": -25, "y": 750, "z": 500},
+                    "trackrod_inboard": {"x": 50, "y": 200, "z": 250},
+                    "trackrod_outboard": {"x": 150, "y": 800, "z": 275},
+                    "axle_inboard": {"x": -20, "y": 800, "z": 308.426},
+                    "axle_outboard": {"x": -20, "y": 950, "z": 313.426},
+                }
+            },
+        }
+    )
+    assert isinstance(suspension, AxleSuspension)
+    return suspension
 
 
 def _keys() -> dict[str, PointRef]:
@@ -294,9 +341,8 @@ def test_flat_ground_seed_is_robust_to_crossed_lateral_orientation():
     assert angle == pytest.approx(np.arctan(0.1))
 
 
-def test_axle_derived_spec_omits_the_coupled_tangents(test_data_dir: Path) -> None:
-    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
-    assert isinstance(axle, AxleSuspension)
+def test_axle_derived_spec_omits_the_coupled_tangents() -> None:
+    axle = _axle_suspension()
 
     spec = axle.derived_spec()
 
@@ -308,11 +354,8 @@ def test_axle_derived_spec_omits_the_coupled_tangents(test_data_dir: Path) -> No
         assert tangent not in spec.dependencies
 
 
-def test_ground_closure_reproduces_the_stored_initial_state_tangents(
-    test_data_dir: Path,
-) -> None:
-    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
-    assert isinstance(axle, AxleSuspension)
+def test_ground_closure_reproduces_the_stored_initial_state_tangents() -> None:
+    axle = _axle_suspension()
     state = axle.initial_state()
     positions = dict(state.positions)
 
@@ -328,11 +371,9 @@ def test_ground_closure_reproduces_the_stored_initial_state_tangents(
 
 
 def test_ground_closure_recovers_its_seed_from_the_stored_tangents(
-    test_data_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
-    assert isinstance(axle, AxleSuspension)
+    axle = _axle_suspension()
     state = axle.initial_state()
     positions = dict(state.positions)
     stored_seed = seed_from_tangent_points(
