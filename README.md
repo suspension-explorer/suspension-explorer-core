@@ -88,74 +88,68 @@ coordinates and right-side hardpoints normally have negative Y coordinates.
 
 ### Chassis and world axis systems
 
-The system uses two right-handed axis systems: `Chassis` and `World`. Solver
-state lives in chassis space; world space is constructed after solving for
-metrics measured relative to ground and for presentation.
+The system introduces two right-handed coordinate systems as `Chassis` and
+`World`. Chassis space follows the ISO 8855:2011 vehicle axis system: X points
+forwards, Y left, and Z upwards, with the basis fixed to the sprung mass.
+Solver variables, constraints, hardpoints, and solved positions exist only in
+this system.
 
-At design condition, chassis space and world space are aligned: the front axle
-centreline is `X = 0`, the flat ground plane is `Z = 0`, and positive X/Y/Z
-point forwards/left/upwards. The world ground plane is always level, gravity
-always points along world `-Z`, and inclined roads and yaw are not supported.
+World space follows the ISO earth-fixed axis system. World X and Y lie in the
+ISO ground plane, world Z points upwards, and gravity is always world `-Z`.
+This project considers only a straight, level road, so the ISO local road
+plane, ground plane, and world `Z = 0` plane coincide. Road grade, road bank,
+yaw, and non-planar surfaces are outside the model.
 
-Fixed chassis hardpoints do not move, and suspension points are solved relative
-to them. Constructing world space never changes the accepted solver state.
-The two spaces may consequently translate and rotate apart during a sweep.
+At design condition the chassis and world axes are aligned, the front axle
+centreline is `X = 0`, and the wheel tangent line is `Z = 0`. During a sweep,
+fixed hardpoints remain fixed in chassis space while the road plane may move
+relative to them as the modelled axle heaves or rolls. This represents
+suspension motion associated with vehicle-generated vertical, lateral, or
+longitudinal forces; the solver is kinematic and does not calculate those
+forces or a dynamic body attitude.
 
-A modelled axle supplies two derived wheel contact tangent points. Requiring
-both to lie on world `Z = 0` establishes lateral attitude and vertical
-placement, but cannot by itself determine vehicle pitch. The configured
-`wheelbase`, `axle_position`, and `opposite_axle_axis_height` locate the point
-where the vehicle centreline crosses the unmodelled axle's spin axis. That
-point is fixed in chassis coordinates and held at the configured height in
-world space. For the two current contacts `q_L` and `q_R`, opposite axle
-reference `P`, configured height `h`, and world +Z unit direction `n`, placement
-satisfies:
+The axle contact closure models each tyre as a rigid disc and returns two
+derived tangent points. It constructs the single plane tangent to both wheels
+and extrudes the contact line parallel to chassis X. Consequently:
 
-```text
-n · (q_L - P) = -h
-n · (q_R - P) = -h
-||n|| = 1
-```
+- local axle heave and roll relative to the road are observable;
+- longitudinal road gradient is zero by construction;
+- one axle cannot determine whole-vehicle pitch, yaw, or longitudinal
+  translation, so these are assigned zero rather than inferred;
+- an opposite-axle pivot is neither required nor modelled; and
+- `wheel_ground_tangent` is an output and cannot be a sweep target.
 
-This allows pitch calculation and produces the structured `WorldSpace`
-transform carried by each axle analysis frame. A standalone corner cannot
-determine full vehicle placement and therefore has no `WorldSpace`.
-`wheel_ground_tangent` is a derived output and cannot be used as a sweep
-target.
+The resulting `WorldSpace` value is a presentation transform only. It maps the
+same axle-local road plane to world `Z = 0`, preserves chassis +X as world +X,
+and rotates/translates for local roll and heave. Metric calculation does not
+consume this transform.
 
-No chassis pitch scalar metric is exported. The inferred attitude is carried
-by `WorldSpace` and used internally by metrics that require a ground plane. In
-an axle analysis, the fixed opposite axle assumption therefore applies to:
+Metric reference systems are deliberate:
 
-- `ride_height_change`;
-- `steering_axis_offset_ground`, `scrub_radius`, and `mechanical_trail`;
-- `svsa_length` and `fvsa_length`;
-- `anti_dive`, `anti_lift`, and `anti_squat`;
-- `track`, which is resolved along the inferred ground lateral direction; and
-- `roll`, only through that projected track value in its denominator.
+- `camber` is the ISO vehicle-relative camber angle, while road-relative wheel
+  inclination is not currently exported;
+- `caster`, `kpi`, and `roadwheel_angle` use the chassis/vehicle axes;
+- `steering_axis_offset_ground`, `scrub_radius`, and `mechanical_trail` use
+  the ISO tyre axes on the local road plane;
+- `track`, `ride_height_change`, swing-arm lengths, and geometric anti
+  percentages use the axle-local road plane represented in chassis
+  coordinates;
+- wheel travel, heave, instant-centre coordinates, rack displacement, and
+  roll-centre coordinates use chassis axes; and
+- damper length and other Euclidean link lengths are invariant under the
+  chassis-to-world rigid transform.
 
-These values are evaluated against the ground plane implied by holding the
-opposite axle reference fixed; they do not incorporate a full vehicle pitch
-solution. Chassis space metrics such as heave, wheel travel, wheel alignment,
-instant centre coordinates, damper length, and rack displacement do not use
-the inferred attitude.
+`ride_height_change` is therefore the change in perpendicular clearance from
+the chassis origin to the axle-local road plane. It is not a full-vehicle ride
+height or pitch result. Likewise, the exported `roll` is a kinematic axle
+input calculated from left/right chassis Z travel and road-resolved track, not
+a solved sprung-mass attitude. The anti percentages are geometric
+construction metrics; they do not predict pitch under load.
 
-This is a deliberately basic single axle contact model:
-
-- The opposite axle's spin axis reference is fixed in world space; its own
-  suspension movement and tyre contacts are not modelled.
-- Each tyre is a nominal rigid disc. Tyre deflection, loaded radius,
-  contact patch extent, forces, and compliance are not represented.
-- The coupled contact solve uses a lateral/vertical tangent line extruded
-  parallel to chassis X. A single axle cannot infer longitudinal road shape,
-  and contact locations are not re-solved longitudinally after vehicle pitch
-  is established.
-- Invalid or ambiguous placement is rejected rather than replaced with a
-  different ground assumption.
-
-A future full vehicle model with both axles and all four tyre contacts could
-derive vehicle placement directly and remove the opposite axle reference
-assumption.
+The contact model omits tyre deflection, loaded radius, contact-patch extent,
+forces, compliance, and interaction with another axle. A future full-vehicle
+model could observe pitch from both axles, but that degree of freedom is
+intentionally absent from the present single-axle model.
 
 ## Installation
 
@@ -238,7 +232,6 @@ config:
       rim_diameter: 13
   cg_position: { x: 1250, y: 0, z: 450 }
   wheelbase: 2500
-  opposite_axle_axis_height: 300
 
 hardpoints:
   lower_wishbone_inboard_front: { x: 250, y: 400, z: 200 }
@@ -345,7 +338,6 @@ units: millimeters
 vehicle_config:
   cg_position: { x: 1250, y: 0, z: 450 }
   wheelbase: 2500
-  opposite_axle_axis_height: 300
 
 axle_config:
   axle_position: front

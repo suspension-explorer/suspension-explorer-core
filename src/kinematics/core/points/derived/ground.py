@@ -31,9 +31,8 @@ The shared plane is parameterised by a single scalar, the ground-normal angle
     The zero ``X`` component is a deliberate modelling assumption: with only
     one axle modelled, longitudinal road grade is unknowable, so the plane is
     the axle's YZ ground line extruded along chassis ``±X`` — **zero
-    longitudinal gradient is assumed throughout**. Pitch is reintroduced
-    post hoc, as an interpretation, by :mod:`kinematics.core.pose`; it is
-    never part of this tangency solve.
+    longitudinal gradient is assumed throughout**. Whole-vehicle pitch is not
+    observable from one axle and is not inferred elsewhere.
 
 For one wheel with centre ``C``, unit spin axis ``a``, and nominal radius
 ``R``, the point of the wheel plane that touches a plane with unit normal
@@ -75,10 +74,12 @@ How the results are used
 :meth:`AxleSuspension.apply_ground_closure` calls
 :func:`solve_axle_wheel_ground_tangents` once per accepted solver state — a
 post-solve closure, not a solver constraint — and writes the two tangent
-points into the state under ``WHEEL_GROUND_TANGENT``. Those stored contacts
-are then the geometric inputs to the post-solve WorldSpace placement. Metrics
-consume the resulting complete 3D World ground plane; they do not publish a
-second scalar ground-line representation.
+points into the state under ``WHEEL_GROUND_TANGENT``.
+:class:`kinematics.core.road.RoadPlane` reconstructs the same longitudinally
+extruded plane from those independent outputs. Metrics consume it directly in
+chassis coordinates, while :mod:`kinematics.core.pose` uses it separately to
+construct the world presentation transform. No scalar normal, angle, offset,
+or ground-Z duplicate is exported.
 
 The scalar solved here rotates the intermediate plane's *normal*, hence the
 consistent internal name ``normal_angle``.

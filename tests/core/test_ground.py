@@ -1,4 +1,4 @@
-"""Tests for the internal metric ground plane."""
+"""Tests for the shared road-plane primitive."""
 
 from __future__ import annotations
 
@@ -7,14 +7,14 @@ from dataclasses import FrozenInstanceError
 import numpy as np
 import pytest
 
-from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.primitives.geometry import Direction3, Point3
+from kinematics.core.road import RoadPlane
 
 
 def test_plane_through_point_has_full_3d_normal() -> None:
     normal = Direction3((-0.2, 0.1, 0.97))
     point = Point3((100.0, -20.0, 30.0))
-    ground = GroundDatum.through(normal, point)
+    ground = RoadPlane.through(normal, point)
 
     assert ground.signed_distance(point) == pytest.approx(0.0)
     assert ground.signed_distance(point + normal * 12.0) == pytest.approx(12.0)
@@ -24,7 +24,7 @@ def test_plane_through_point_has_full_3d_normal() -> None:
 
 
 def test_horizontal_datum_uses_local_tangent_height() -> None:
-    ground = GroundDatum.horizontal_at(Point3((123.0, 456.0, 78.0)))
+    ground = RoadPlane.horizontal_at(Point3((123.0, 456.0, 78.0)))
 
     np.testing.assert_allclose(ground.normal.data, (0.0, 0.0, 1.0))
     assert ground.signed_distance(Point3((0.0, 0.0, 80.0))) == pytest.approx(2.0)
@@ -32,8 +32,29 @@ def test_horizontal_datum_uses_local_tangent_height() -> None:
     np.testing.assert_allclose(ground.lateral.data, (0.0, 1.0, 0.0))
 
 
-def test_ground_datum_is_immutable() -> None:
-    ground = GroundDatum.horizontal_at(Point3((0.0, 0.0, 0.0)))
+def test_axle_tangents_define_one_zero_grade_road_plane() -> None:
+    left = Point3((30.0, 2.0, 1.0))
+    right = Point3((-40.0, -2.0, -1.0))
+
+    road = RoadPlane.from_axle_tangents(left, right)
+
+    np.testing.assert_allclose(
+        road.normal.data,
+        (0.0, -1.0 / np.sqrt(5.0), 2.0 / np.sqrt(5.0)),
+    )
+    assert road.signed_distance(left) == pytest.approx(0.0)
+    assert road.signed_distance(right) == pytest.approx(0.0)
+
+
+def test_collapsed_axle_tangents_do_not_define_a_road_plane() -> None:
+    tangent = Point3((10.0, 20.0, 30.0))
+
+    with pytest.raises(ValueError, match="do not define"):
+        RoadPlane.from_axle_tangents(tangent, tangent)
+
+
+def test_road_plane_is_immutable() -> None:
+    ground = RoadPlane.horizontal_at(Point3((0.0, 0.0, 0.0)))
     with pytest.raises(FrozenInstanceError):
         setattr(ground, "offset_mm", 1.0)
 
@@ -48,4 +69,4 @@ def test_ground_datum_is_immutable() -> None:
 )
 def test_direct_construction_rejects_invalid_plane(normal, offset) -> None:
     with pytest.raises(ValueError):
-        GroundDatum(Direction3(normal), offset)
+        RoadPlane(Direction3(normal), offset)

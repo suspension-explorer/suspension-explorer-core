@@ -22,7 +22,6 @@ from kinematics.core.elements import (
     map_element_points,
 )
 from kinematics.core.enums import Axis, PointID, SuspensionType
-from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.metrics.main import AxleMetricRows, compute_metrics_for_axle_state
 from kinematics.core.points.derived.ground import (
     seed_from_tangent_points,
@@ -33,7 +32,7 @@ from kinematics.core.points.derived.manager import (
     PositionFn,
     PositionValue,
 )
-from kinematics.core.primitives.geometry import Point3
+from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import (
     PointKey,
     PointRef,
@@ -43,6 +42,7 @@ from kinematics.core.primitives.point_ref import (
 from kinematics.core.primitives.vector_utils.geometric import (
     compute_point_point_distance,
 )
+from kinematics.core.road import RoadPlane
 from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.axle.mechanisms import (
     ArbNone,
@@ -216,16 +216,27 @@ class AxleSuspension(Suspension):
         )
 
     @cached_property
-    def design_ground(self) -> GroundDatum | None:
-        """Return the authored horizontal datum, rejecting a banked design."""
+    def design_road_plane(self) -> RoadPlane | None:
+        """Return the authored level road plane in chassis coordinates.
+
+        ISO 8855 vehicle and earth-fixed axes are assumed aligned at design.
+        A materially banked axle contact line violates that contract and is
+        rejected rather than reinterpreted as a rolled design condition.
+        """
         state = self.initial_state()
         left = state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT))
         right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT))
-        if abs(float(left[Axis.Z]) - float(right[Axis.Z])) > 1e-7:
+        try:
+            road = RoadPlane.from_axle_tangents(left, right)
+        except ValueError:
             return None
-        return GroundDatum.horizontal_at(
-            Point3((0.0, 0.0, 0.5 * (float(left[Axis.Z]) + float(right[Axis.Z]))))
-        )
+        if not road.normal.almost_equals(
+            Direction3((0.0, 0.0, 1.0)),
+            atol=1e-7,
+            rtol=0.0,
+        ):
+            return None
+        return road
 
     def constraints(self) -> list[Constraint]:
         """Combine remapped corner constraints and the rigid rack coupling."""

@@ -13,13 +13,13 @@ from kinematics.core.metrics.anti_geometry import (
     calculate_anti_squat_pct,
 )
 from kinematics.core.metrics.context import MetricContext
-from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.metrics.main import (
     AxleMetricRows,
     MetricRow,
     compute_metrics_for_state,
 )
 from kinematics.core.primitives.geometry import Point3
+from kinematics.core.road import RoadPlane
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
@@ -217,7 +217,7 @@ def _anti_context(
                 front_brake_bias=front_brake_bias,
                 driven_axle=driven_axle,
             ),
-            ground=GroundDatum.horizontal_at(wheel_ground_tangent),
+            road=RoadPlane.horizontal_at(wheel_ground_tangent),
             side_view_ic=Point3([svic_x, 800.0, 300.0]),
             wheel_ground_tangent=wheel_ground_tangent,
             wheel_center=Point3([0.0, 800.0, 300.0]),

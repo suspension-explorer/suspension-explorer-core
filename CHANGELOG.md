@@ -12,12 +12,11 @@ All notable changes to this project will be documented in this file.
 - Advisory sweep diagnostics report convergence, residual acceptance, branch continuity, derivative availability, rocker and anti-roll-bar chirality, and transmission margin.
 - Coupled axle models solve left and right corners together and support either mirrored or independently authored geometry.
 - The public `analyze_sweep()` and `initial_pose()` APIs return structured positions, metrics, locations, metadata, renderer-neutral element paths, diagnostics, references, and solved frames.
-- A flat-ground `WorldSpace` API completes each solved axle pose from its two
-  tyre contacts plus a configured opposite-axle pivot reference. World ground
-  is always `Z = 0`, gravity is always World `-Z`, and the transform is carried
-  structurally on axle analysis frames. The internal full-plane `GroundDatum`
-  is shared by ground-relative metric consumers rather than exported as duplicate
-  scalar ground-line metrics.
+- A `WorldSpace` API maps the axle-local road plane to the straight, level
+  world `Z = 0` plane for presentation. Gravity is always world `-Z`; local
+  axle heave and roll are represented, while unobservable whole-vehicle pitch
+  and yaw are not inferred. The structured transform is carried on axle
+  analysis frames.
 
 ### Changed
 
@@ -67,9 +66,9 @@ All notable changes to this project will be documented in this file.
   and setup. Explicit right hardpoints support asymmetric geometry, while optional
   `right_setup` supports a different camber-shim setup.
 - Geometry configuration is separated by ownership: vehicle inputs hold CG,
-  wheelbase, opposite-axle pivot-axis height, brake bias, and driven axle; axle
-  inputs hold steering, wheel/tire, and axle-position data; corner inputs hold
-  side-local setup such as camber shims.
+  wheelbase, brake bias, and driven axle; axle inputs hold steering, wheel/tire,
+  and axle-position data; corner inputs hold side-local setup such as camber
+  shims.
 - Steering configuration now selects an explicit `rack` or `none` actuator.
   Double-wishbone and MacPherson corners use a rack-driven track rod when
   steered and a chassis-fixed toe link when non-steered. Selecting `none`
@@ -95,6 +94,10 @@ All notable changes to this project will be documented in this file.
   chassis `X`, instead of letting each corner independently assume a flat `+Z`
   ground. Standalone corners keep the local `+Z` assumption, since one wheel
   cannot define a ground line.
+- Metric calculation and world presentation now reconstruct the same
+  axle-local `RoadPlane` independently from the two stored tyre tangents.
+  Metrics no longer depend on `WorldSpace`, and the opposite-axle height input
+  and inferred-pitch model have been removed.
 - Steering-axis ground metrics follow the ISO 8855 tyre-axis decomposition on
   the full shared ground plane, including bank. `steering_axis_offset_ground`
   is the signed lateral component along tyre `Y_T`, `mechanical_trail` is the

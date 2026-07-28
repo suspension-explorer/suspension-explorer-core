@@ -3,6 +3,10 @@ Metric catalog.
 
 Defines the ordered set of corner-level metrics and their export column names.
 This is the single place to add, remove, or reorder exported metrics.
+
+Reference systems belong to each calculation's docstring rather than the
+catalog metadata. Instant-centre coordinate extractors below report principal
+chassis coordinates using the ISO 8855 vehicle-axis orientation.
 """
 
 from __future__ import annotations
@@ -79,6 +83,7 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
 
     def _ic_coord(attr: str, axis: Axis) -> Callable[["MetricContext"], float | None]:
         def extract(ctx: "MetricContext") -> float | None:
+            """Extract one chassis-axis coordinate from an instant centre."""
             ic = getattr(ctx, attr)
             return None if ic is None else float(ic[axis])
 
@@ -179,9 +184,11 @@ def get_default_corner_derivative_metrics(
     """
     Declare derivative metrics common to every supported corner.
 
-    Point roles are resolved through the corner's role hooks. Wheel-travel
-    derivatives apply to every corner; rack-driven derivatives are omitted when
-    no steering rack is installed.
+    Point roles are resolved through the corner's role hooks. The common
+    alignment responses use chassis-referenced angles, while their hub and rack
+    drivers use chassis-axis coordinates. Differentiation does not introduce a
+    road or world reference. Wheel-travel derivatives apply to every corner;
+    rack-driven derivatives are omitted when no steering rack is installed.
     """
     side_sign = suspension.side.lateral_sign
     axle_inboard, axle_outboard = suspension.wheel_axis_points()

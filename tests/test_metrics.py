@@ -6,13 +6,12 @@ from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.sweep_loader import load_sweep
 from kinematics.core.enums import Axis, AxlePosition, PointID
 from kinematics.core.metrics.anti_geometry import (
-    _cg_height_above_ground,
+    _cg_height_above_road,
     calculate_anti_dive_pct,
     calculate_anti_squat_pct,
 )
 from kinematics.core.metrics.catalog import get_default_corner_metrics
 from kinematics.core.metrics.context import MetricContext
-from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.metrics.main import compute_metrics_for_state_from_suspension
 from kinematics.core.metrics.steering_geometry import (
     calculate_mechanical_trail,
@@ -25,6 +24,7 @@ from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.constants import TEST_TOLERANCE
 from kinematics.core.primitives.geometry import Direction3, Vector3
 from kinematics.core.primitives.point_ref import PointRef, Side
+from kinematics.core.road import RoadPlane
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.corner import DoubleWishboneSuspension
 from kinematics.core.sweep import solve_sweep
@@ -293,7 +293,7 @@ def test_iso_steering_ground_metrics_use_wheel_relative_axes(
     assert ground_pt is not None
 
     displacement = ground_pt - ctx.wheel_ground_tangent
-    ground_normal = ctx.ground.normal
+    ground_normal = ctx.road.normal
     wheel_lateral_ground = (
         ctx.wheel_axis.vector() - ground_normal * ctx.wheel_axis.dot(ground_normal)
     ).normalize()
@@ -341,7 +341,7 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
     tangent_z = sin(bank_angle)
     normal_y = -tangent_z
     normal_z = tangent_y
-    ground = GroundDatum.through(
+    ground = RoadPlane.through(
         Direction3((0.0, normal_y, normal_z)),
         tangent,
     )
@@ -349,7 +349,7 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
         state=state,
         suspension=suspension,
         config=suspension.config,
-        ground=ground,
+        road=ground,
     )
 
     intersection = ctx.steering_axis_ground_intersection
@@ -358,7 +358,7 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
         ground.signed_distance(intersection), 0.0, atol=TEST_TOLERANCE
     )
 
-    ground_normal = ctx.ground.normal
+    ground_normal = ctx.road.normal
     projected_axis = (
         ctx.wheel_axis.vector() - ground_normal * ctx.wheel_axis.dot(ground_normal)
     ).normalize()
@@ -381,12 +381,12 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
     np.testing.assert_allclose(mechanical_trail, expected_trail, atol=TEST_TOLERANCE)
 
 
-def _banked_ground_through(point, bank_angle_deg: float) -> GroundDatum:
+def _banked_ground_through(point, bank_angle_deg: float) -> RoadPlane:
     """Build a ground datum rolled by ``bank_angle_deg`` through ``point``."""
     bank_angle = radians(bank_angle_deg)
     normal_y = -sin(bank_angle)
     normal_z = cos(bank_angle)
-    return GroundDatum.through(Direction3((0.0, normal_y, normal_z)), point)
+    return RoadPlane.through(Direction3((0.0, normal_y, normal_z)), point)
 
 
 def test_anti_geometry_uses_perpendicular_cg_height_above_the_ground_plane(
@@ -419,12 +419,12 @@ def test_anti_geometry_uses_perpendicular_cg_height_above_the_ground_plane(
         state=state,
         suspension=suspension,
         config=config,
-        ground=ground,
+        road=ground,
     )
     cg = config.cg_position
 
     expected_height = ground.signed_distance(cg)
-    height = _cg_height_above_ground(ctx)
+    height = _cg_height_above_road(ctx)
     assert height is not None
     np.testing.assert_allclose(height, expected_height, atol=TEST_TOLERANCE)
 
@@ -459,7 +459,7 @@ def test_anti_geometry_uses_perpendicular_cg_height_above_the_ground_plane(
     # A level ground line through the same tangent must still give the
     # chassis-Z height, leaving flat-ground anti percentages untouched.
     flat_ctx = MetricContext(state=state, suspension=suspension, config=config)
-    flat_height = _cg_height_above_ground(flat_ctx)
+    flat_height = _cg_height_above_road(flat_ctx)
     assert flat_height is not None
     np.testing.assert_allclose(flat_height, chassis_z_height, atol=TEST_TOLERANCE)
 
@@ -527,7 +527,7 @@ def test_anti_squat_resolves_the_rise_along_a_banked_ground_normal(
     tangent = state.get(PointID.WHEEL_GROUND_TANGENT)
     ground = _banked_ground_through(tangent, 12.0)
     ctx = MetricContext(
-        state=state, suspension=suspension, config=config, ground=ground
+        state=state, suspension=suspension, config=config, road=ground
     )
 
     svic = ctx.side_view_ic
@@ -571,7 +571,7 @@ def test_anti_cg_height_is_shared_by_both_corners_of_a_banked_axle(
     left = state.get(left_tangent_ref)
     right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT))
     lateral = (left - right).normalize()
-    ground = GroundDatum.through(
+    ground = RoadPlane.through(
         Direction3(Direction3((1.0, 0.0, 0.0)).cross(lateral)),
         left,
     )
@@ -587,9 +587,9 @@ def test_anti_cg_height_is_shared_by_both_corners_of_a_banked_axle(
             state=corner_state,
             suspension=corner,
             config=corner_config,
-            ground=ground,
+            road=ground,
         )
-        height = _cg_height_above_ground(ctx)
+        height = _cg_height_above_road(ctx)
         assert height is not None
         heights[side] = height
         chassis_z_heights[side] = float(corner_config.cg_position[Axis.Z]) - float(
@@ -626,7 +626,7 @@ def test_fvsa_sign_follows_the_ground_line_rather_than_chassis_y(
         state=state,
         suspension=suspension,
         config=suspension.config,
-        ground=ground,
+        road=ground,
     )
     ctx.front_view_ic = tangent + offset
 

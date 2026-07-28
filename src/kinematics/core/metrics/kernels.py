@@ -21,8 +21,10 @@ vectors straight into atan2: atan2(k*y, k*x) is identical to atan2(y, x) for
 any positive scale k, as a function of the positions, so values AND
 derivatives are unaffected and the normalisation step can be skipped.
 
-Sign conventions mirror the catalog metrics in kinematics.core.metrics.angles
-(ISO 8855: X forward, Y left, Z up; side_sign +1 left / -1 right).
+Sign conventions mirror the catalog metrics in ``kinematics.core.metrics.angles``.
+All supplied positions and axes are expressed in chassis coordinates using the
+ISO 8855 vehicle-axis orientation (X forward, Y left, Z up; ``side_sign`` +1
+left / -1 right). These kernels do not reference road space or world space.
 """
 
 from __future__ import annotations
@@ -70,7 +72,12 @@ def rotation_about_fixed_axis_deg(
     axis_point: np.ndarray,
     axis_direction: np.ndarray,
 ) -> Scalar:
-    """Return dual-safe signed rotation of a point about a fixed axis."""
+    """Return signed rotation about a fixed chassis-space axis.
+
+    The point, design position and fixed axis are all expressed in chassis
+    coordinates. The angular result is invariant under a rigid world transform
+    and has no road-plane reference.
+    """
     design_radius = np.asarray(design_position) - axis_point
     current_radius = _vec(positions, point) - axis_point
     design_perpendicular = (
@@ -115,8 +122,10 @@ def camber_deg(
     Camber angle in degrees; mirrors metrics.angles.calculate_camber.
 
     The wheel-axis endpoints are supplied by the caller, normally from
-    CornerSuspension.wheel_axis_points(). Negative camber tilts the top of
-    the wheel towards the vehicle centerline.
+    ``CornerSuspension.wheel_axis_points()``. The result resolves the wheel
+    axis in the chassis YZ plane against chassis +Z; it does not use road or
+    world space. Negative camber tilts the top of the wheel towards the vehicle
+    centerline.
     """
     axle = _vec(positions, axle_outboard) - _vec(positions, axle_inboard)
 
@@ -143,8 +152,10 @@ def toe_deg(
     Toe angle in degrees; mirrors metrics.angles.calculate_toe.
 
     The wheel-axis endpoints are supplied by the caller, normally from
-    CornerSuspension.wheel_axis_points(). Positive is toe-in: the front of
-    the wheel points towards the vehicle centerline.
+    ``CornerSuspension.wheel_axis_points()``. The result resolves wheel heading
+    in the chassis XY plane relative to chassis +X; it does not use road or
+    world space. Positive is toe-in: the front of the wheel points towards the
+    vehicle centerline.
     """
     axle = _vec(positions, axle_outboard) - _vec(positions, axle_inboard)
     proj_x = _component(axle, Axis.X)
@@ -167,9 +178,10 @@ def caster_deg(
     """
     Caster angle in degrees; mirrors metrics.angles.calculate_caster.
 
-    The steering-axis pivots are architecture-specific and must be supplied
-    by the caller, normally from CornerSuspension.steering_axis_points().
-    Positive caster tilts the top of the steering axis rearward.
+    The steering-axis pivots are architecture-specific and must be supplied by
+    the caller, normally from ``CornerSuspension.steering_axis_points()``. The
+    result resolves the axis in the chassis XZ plane against chassis +Z; it
+    does not use road or world space. Positive caster tilts the top rearward.
     """
     steering = _vec(positions, upper_pivot) - _vec(positions, lower_pivot)
     # Side-view (XZ) angle from vertical; negate X so rearward tilt of the
@@ -187,10 +199,11 @@ def kpi_deg(
     """
     Kingpin inclination in degrees; mirrors metrics.angles.calculate_kpi.
 
-    The steering-axis pivots are architecture-specific and must be supplied
-    by the caller, normally from CornerSuspension.steering_axis_points().
-    Positive KPI tilts the top of the steering axis towards the vehicle
-    centerline.
+    The steering-axis pivots are architecture-specific and must be supplied by
+    the caller, normally from ``CornerSuspension.steering_axis_points()``. The
+    result resolves the axis in the chassis YZ plane against chassis +Z; it
+    does not use road or world space. Positive KPI tilts the top towards the
+    vehicle centerline.
     """
     steering = _vec(positions, upper_pivot) - _vec(positions, lower_pivot)
     # Front-view (YZ) angle from vertical; -side folds left/right into the

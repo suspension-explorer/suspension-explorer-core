@@ -1,5 +1,6 @@
 """Integration tests for basic full-axle composition."""
 
+from math import hypot
 from pathlib import Path
 
 import pytest
@@ -14,13 +15,13 @@ from kinematics.core.metrics import (
     compute_metrics_for_sweep,
 )
 from kinematics.core.metrics import main as metrics_main
-from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.points.derived import ground as ground_module
 from kinematics.core.points.derived.manager import DerivedPointsManager
-from kinematics.core.pose import world_space_for_axle_state
-from kinematics.core.primitives.geometry import Point3
+from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import PointRef, Side
+from kinematics.core.road import RoadPlane
 from kinematics.core.solver import solve_suspension_sweep
+from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.corner import (
     ActuationDirect,
@@ -323,17 +324,41 @@ def test_generic_metric_helpers_preserve_structural_axle_rows(
     assert "camber" in state_metrics.corners[Side.LEFT]
 
 
-def test_axle_metrics_reject_a_state_without_valid_world_placement(
+def test_axle_metrics_do_not_depend_on_world_placement(
+    monkeypatch: pytest.MonkeyPatch,
     test_data_dir: Path,
 ) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
     assert isinstance(axle, AxleSuspension)
-    state = axle.initial_state()
+
+    def fail_world_placement(*_args, **_kwargs):
+        raise AssertionError("metric calculation must not construct WorldSpace")
+
+    # ``raising=False`` keeps this assertion valid after the production import
+    # has been removed: an accidentally reintroduced module-level call will
+    # still fail, while the desired road-datum path ignores this sentinel.
+    monkeypatch.setattr(
+        metrics_main,
+        "world_space_for_axle_state",
+        fail_world_placement,
+        raising=False,
+    )
+
+    rows = compute_metrics_for_state_from_suspension(axle.initial_state(), axle)
+
+    assert isinstance(rows, AxleMetricRows)
+    assert rows.axle["ride_height_change"] == pytest.approx(0.0)
+
+
+def test_axle_metrics_reject_degenerate_road_contacts(test_data_dir: Path) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+    state = axle.initial_state().copy()
     left_tangent = PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)
     right_tangent = PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)
     state.set(left_tangent, state.get(right_tangent))
 
-    with pytest.raises(ValueError, match="valid flat-ground WorldSpace"):
+    with pytest.raises(ValueError):
         compute_metrics_for_state_from_suspension(state, axle)
 
 
@@ -344,22 +369,47 @@ def test_axle_metrics_share_one_ground_line_instance_with_both_corners(
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
     assert isinstance(axle, AxleSuspension)
     assert axle.config is not None
-    received_ground: list[GroundDatum | None] = []
+    received_ground: list[RoadPlane | None] = []
     original_compute = metrics_main.compute_metrics_for_state
 
     def capture_ground(*args, **kwargs):
-        received_ground.append(kwargs["ground"])
+        received_ground.append(kwargs["road"])
         return original_compute(*args, **kwargs)
 
     monkeypatch.setattr(metrics_main, "compute_metrics_for_state", capture_ground)
-    metrics_main.compute_metrics_for_axle_state(axle.initial_state(), axle, axle.config)
+    states, _ = solve_sweep(
+        axle,
+        load_sweep(test_data_dir / "axle_sweep.yaml", axle),
+    )
+    state = states[-1]
+    metrics_main.compute_metrics_for_axle_state(state, axle, axle.config)
 
     assert len(received_ground) == 2
     assert received_ground[0] is not None
     assert received_ground[0] is received_ground[1]
+    road = received_ground[0]
+    assert road.normal[Axis.X] == pytest.approx(0.0, abs=1e-12)
+    for side in (Side.LEFT, Side.RIGHT):
+        tangent = state.get(PointRef(side, PointID.WHEEL_GROUND_TANGENT))
+        assert road.signed_distance(tangent) == pytest.approx(0.0, abs=1e-8)
 
 
-def test_ride_height_change_uses_completed_world_plane(test_data_dir: Path) -> None:
+def _road_datum_from_axle_tangents(state: SuspensionState) -> RoadPlane:
+    """Build the zero-grade YZ road plane implied by the stored contacts."""
+    left = state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT))
+    right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT))
+    dy = float(left[Axis.Y] - right[Axis.Y])
+    dz = float(left[Axis.Z] - right[Axis.Z])
+    magnitude = hypot(dy, dz)
+    normal_y = -dz / magnitude
+    normal_z = dy / magnitude
+    if normal_z < 0.0:
+        normal_y = -normal_y
+        normal_z = -normal_z
+    return RoadPlane.through(Direction3((0.0, normal_y, normal_z)), left)
+
+
+def test_ride_height_change_uses_axle_local_road_plane(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
     assert isinstance(axle, AxleSuspension)
     states, _ = solve_sweep(
@@ -369,21 +419,19 @@ def test_ride_height_change_uses_completed_world_plane(test_data_dir: Path) -> N
     state = states[-1]
     rows = compute_metrics_for_state_from_suspension(state, axle)
     assert isinstance(rows, AxleMetricRows)
-    space = world_space_for_axle_state(axle, state)
-    assert space is not None
-    current_ground = GroundDatum.through(space.z, space.origin)
-    design_ground = axle.design_ground
-    assert design_ground is not None
+    current_ground = _road_datum_from_axle_tangents(state)
+    design_road = axle.design_road_plane
+    assert design_road is not None
     chassis_origin = Point3((0.0, 0.0, 0.0))
     expected = current_ground.signed_distance(
         chassis_origin
-    ) - design_ground.signed_distance(chassis_origin)
+    ) - design_road.signed_distance(chassis_origin)
     assert rows.axle["ride_height_change"] == pytest.approx(expected)
 
 
-def test_axle_reuses_one_design_ground_datum(test_data_dir: Path) -> None:
+def test_axle_reuses_one_design_road_plane(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
     assert isinstance(axle, AxleSuspension)
 
-    assert axle.design_ground is not None
-    assert axle.design_ground is axle.design_ground
+    assert axle.design_road_plane is not None
+    assert axle.design_road_plane is axle.design_road_plane

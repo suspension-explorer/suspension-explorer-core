@@ -3,6 +3,11 @@ Metrics public API.
 
 Provides the top-level entry points for computing post-solve kinematic
 metrics. Returns ordered mappings ready for direct export integration.
+
+Solved geometry remains in chassis coordinates. Axle metrics share an
+ISO 8855 style local or equivalent road plane reconstructed from the two tyre
+contact tangents; standalone corners use a level local plane through their
+contact tangent. Metric evaluation does not use world-space vehicle placement.
 """
 
 from __future__ import annotations
@@ -19,10 +24,9 @@ from kinematics.core.metrics.catalog import (
 )
 from kinematics.core.metrics.context import MetricContext
 from kinematics.core.metrics.derivatives import evaluate_derivative_metrics
-from kinematics.core.metrics.ground import GroundDatum
 from kinematics.core.metrics.registry import flat_key
-from kinematics.core.pose import world_space_for_axle_state
 from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
+from kinematics.core.road import RoadPlane
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.sensitivity import TangentField
 from kinematics.core.state import SuspensionState
@@ -68,15 +72,20 @@ def compute_metrics_for_axle_state(
     config: SuspensionConfig,
     tangents: "Sequence[TangentField] | None" = None,
 ) -> AxleMetricRows:
-    """Compute structural per-corner rows followed by axle-level metrics."""
+    """Compute corner and axle metrics against one axle-local road plane.
+
+    The plane is reconstructed from the two tyre contact tangents and expressed
+    in chassis coordinates. It follows the ISO 8855 local or equivalent
+    road-plane concept. Individual metric docstrings state whether they resolve
+    values in chassis, road, or tyre axes. World-space presentation does not
+    participate in metric calculation.
+    """
     axle_row: MetricRow = OrderedDict()
     corner_rows: dict[Side, MetricRow] = {}
-    world_space = world_space_for_axle_state(axle, state)
-    if world_space is None:
-        raise ValueError(
-            "Axle metrics require a valid flat-ground WorldSpace for every state"
-        )
-    ground = GroundDatum.through(world_space.z, world_space.origin)
+    road = RoadPlane.from_axle_tangents(
+        state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)),
+        state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
+    )
     for side in (Side.LEFT, Side.RIGHT):
         corner = axle.corners[side]
         corner_state = axle.corner_state(state, side)
@@ -88,11 +97,17 @@ def compute_metrics_for_axle_state(
             _corner_tangents(tangents, side, axle.actuator_dofs())
             if tangents
             else None,
-            ground=ground,
+            road=road,
         )
         corner_rows[side] = side_row
 
-    append_axle_state_metrics(axle_row, state, axle, ground, axle.design_ground)
+    append_axle_state_metrics(
+        axle_row,
+        state,
+        axle,
+        road,
+        axle.design_road_plane,
+    )
     topology_rows = axle.topology_metric_rows(state)
     axle_row.update(topology_rows.axle)
     for side, row in topology_rows.corners.items():
@@ -157,10 +172,16 @@ def compute_metrics_for_state(
     config: SuspensionConfig,
     tangents: "Sequence[TangentField] | None" = None,
     *,
-    ground: GroundDatum | None = None,
+    road: RoadPlane | None = None,
 ) -> MetricRow:
     """
     Compute all corner-level metrics for a single solved state.
+
+    Solved positions and directions remain in chassis coordinates. When
+    supplied, ``road`` is the axle's shared ISO-style local road plane,
+    expressed in that same basis. A standalone corner instead receives a level
+    road plane through its tyre contact tangent. Individual calculations may
+    use chassis, road, or tyre axes as documented, but none uses world space.
 
     Args:
         state: The solved SuspensionState to analyze.
@@ -168,9 +189,9 @@ def compute_metrics_for_state(
         config: Suspension configuration with vehicle parameters.
         tangents: Optional solution-manifold tangents. Derivative columns are
             appended only when these are supplied.
-        ground: Optional shared axle ground datum. Standalone corner callers
-            omit this and use the horizontal datum through their wheel-ground
-            tangent.
+        road: Optional shared axle road plane in chassis coordinates.
+            Standalone corner callers omit this and use the horizontal plane
+            through their tyre contact tangent.
 
     Returns:
         An ordered mapping of metric column names to values. Values are
@@ -181,7 +202,7 @@ def compute_metrics_for_state(
         state=state,
         suspension=suspension,
         config=config,
-        ground=ground,
+        road=road,
     )
 
     catalog = get_default_corner_metrics()
@@ -227,6 +248,11 @@ def compute_metrics_for_sweep(
 ) -> Sequence[MetricRow | AxleMetricRows]:
     """
     Compute metrics for a sweep of solved corner or axle states.
+
+    Reference systems are selected independently for each state using the same
+    rules as :func:`compute_metrics_for_state` and
+    :func:`compute_metrics_for_axle_state`. No chassis-to-world transform is
+    introduced by sweep evaluation.
 
     Args:
         states: List of solved SuspensionStates from a parametric sweep.
@@ -274,7 +300,7 @@ def _compute_metrics_for_suspension_state(
     config: SuspensionConfig,
     tangents: "Sequence[TangentField] | None" = None,
 ) -> MetricRow | AxleMetricRows:
-    """Dispatch metric calculation without applying corner metrics to an axle."""
+    """Dispatch calculation while preserving each metric's reference system."""
     if suspension.is_axle:
         axle = cast("AxleSuspension", suspension)
         return compute_metrics_for_axle_state(state, axle, config, tangents)
@@ -304,6 +330,9 @@ def compute_metrics_for_state_from_suspension(
     Compute metrics using parameters from the suspension configuration.
 
     Convenience wrapper that extracts config from the suspension instance.
+    It delegates unchanged to the chassis and local-road calculations described
+    by :func:`compute_metrics_for_state` and
+    :func:`compute_metrics_for_axle_state`; it does not use world space.
 
     Args:
         state: The solved SuspensionState to analyze.

@@ -180,6 +180,7 @@ def _hold_sweep_config(sweep_config: SweepConfig) -> SweepConfig | None:
 def _split_metric_rows(
     rows: MetricRow | AxleMetricRows,
 ) -> tuple[MetricRow, dict[str, MetricRow]]:
+    """Preserve metric values and their already-declared reference systems."""
     if isinstance(rows, AxleMetricRows):
         return rows.axle, {side.name.lower(): row for side, row in rows.corners.items()}
     return rows, {}

@@ -78,16 +78,13 @@ class VehicleConfig(BaseModel):
 
     cg_position: Point3Value
     wheelbase: float
-    # Design height of the centreline point on the unmodelled axle's
-    # chassis-fixed lateral pivot axis.
-    opposite_axle_axis_height: float
     front_brake_bias: float | None = None
     driven_axle: AxlePosition | None = None
 
-    @field_validator("wheelbase", "opposite_axle_axis_height")
+    @field_validator("wheelbase")
     @classmethod
     def check_positive_vehicle_length(cls, value: float) -> float:
-        """Require finite positive lengths for the chassis placement model."""
+        """Require a finite positive wheelbase for vehicle-level metrics."""
         if not isfinite(value) or value <= 0.0:
             raise ValueError("Vehicle length inputs must be finite and positive")
         return value
