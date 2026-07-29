@@ -1,10 +1,14 @@
 from math import cos, radians, sin
+from types import SimpleNamespace
+from typing import cast
 
 import numpy as np
+import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.sweep_loader import load_sweep
 from kinematics.core.enums import Axis, AxlePosition, PointID
+from kinematics.core.metrics.angles import calculate_steer, calculate_toe
 from kinematics.core.metrics.anti_geometry import (
     _cg_height_above_road,
     calculate_anti_dive_pct,
@@ -201,7 +205,7 @@ def test_steering_axis_ground_intersection_uses_ground_tangent_height(
 ) -> None:
     """
     The steering-axis ground intersection should be evaluated on the
-    horizontal plane through the wheel-ground tangent, not on chassis Z = 0.
+    horizontal plane through the wheel contact centre, not on chassis Z = 0.
     """
     suspension = load_geometry(double_wishbone_geometry_file)
     assert isinstance(suspension, DoubleWishboneSuspension)
@@ -215,10 +219,10 @@ def test_steering_axis_ground_intersection_uses_ground_tangent_height(
     upper = state.get(PointID.UPPER_WISHBONE_OUTBOARD).copy()
     direction = upper - lower
 
-    ground_tangent_data = state.get(PointID.WHEEL_GROUND_TANGENT).data.copy()
+    ground_tangent_data = state.get(PointID.WHEEL_CONTACT_CENTRE).data.copy()
     ground_tangent_data[2] = 123.456
     ground_tangent = Point3(ground_tangent_data)
-    state[PointID.WHEEL_GROUND_TANGENT] = ground_tangent
+    state[PointID.WHEEL_CONTACT_CENTRE] = ground_tangent
 
     expected_t = (ground_tangent[2] - lower[2]) / direction[2]
     expected_intersection = lower + expected_t * direction
@@ -231,7 +235,7 @@ def test_steering_axis_ground_intersection_uses_ground_tangent_height(
         actual_intersection.data,
         expected_intersection.data,
         atol=TEST_TOLERANCE,
-        err_msg=("Steering-axis intersection should use wheel-ground tangent Z height"),
+        err_msg=("Steering-axis intersection should use wheel contact centre Z height"),
     )
 
 
@@ -277,31 +281,35 @@ def test_iso_steering_ground_metrics_use_wheel_relative_axes(
     steering_axis_offset = metrics["steering_axis_offset_ground"]
     scrub_radius = metrics["scrub_radius"]
     mechanical_trail = metrics["mechanical_trail"]
-    roadwheel_angle = metrics["roadwheel_angle"]
+    toe_angle = metrics["toe_angle"]
+    steer_angle = metrics["steer_angle"]
     camber = metrics["camber"]
 
     assert steering_axis_offset is not None
     assert scrub_radius is not None
     assert mechanical_trail is not None
-    assert roadwheel_angle is not None
+    assert toe_angle is not None
+    assert steer_angle is not None
     assert camber is not None
-    assert abs(roadwheel_angle) > 1.0
+    assert abs(toe_angle) > 1.0
+    assert abs(steer_angle) > 1.0
     assert abs(camber) > 1.0
 
     ctx = MetricContext(state=state, suspension=suspension, config=suspension.config)
     ground_pt = ctx.steering_axis_ground_intersection
     assert ground_pt is not None
 
-    displacement = ground_pt - ctx.wheel_ground_tangent
+    displacement = ground_pt - ctx.wheel_contact_centre
     ground_normal = ctx.road.normal
-    wheel_lateral_ground = (
+    wheel_outboard_ground = (
         ctx.wheel_axis.vector() - ground_normal * ctx.wheel_axis.dot(ground_normal)
     ).normalize()
     wheel_longitudinal_ground = (
-        ctx.side_sign * wheel_lateral_ground.cross(ground_normal)
+        ctx.side_sign * wheel_outboard_ground.cross(ground_normal)
     ).normalize()
+    wheel_lateral_ground = ground_normal.cross(wheel_longitudinal_ground).normalize()
 
-    expected_offset = -float(displacement.dot(wheel_lateral_ground))
+    expected_offset = -ctx.side_sign * float(displacement.dot(wheel_lateral_ground))
     expected_trail = float(displacement.dot(wheel_longitudinal_ground))
     expected_scrub = displacement.norm()
 
@@ -334,7 +342,7 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
     state = suspension.initial_state().copy()
     axle_inboard = state.get(PointID.AXLE_INBOARD)
     state[PointID.AXLE_OUTBOARD] = axle_inboard + Vector3((80.0, 150.0, 60.0))
-    tangent = state.get(PointID.WHEEL_GROUND_TANGENT)
+    tangent = state.get(PointID.WHEEL_CONTACT_CENTRE)
 
     bank_angle = radians(12.0)
     tangent_y = cos(bank_angle)
@@ -359,12 +367,13 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
     )
 
     ground_normal = ctx.road.normal
-    projected_axis = (
+    outboard_axis = (
         ctx.wheel_axis.vector() - ground_normal * ctx.wheel_axis.dot(ground_normal)
     ).normalize()
-    displacement = intersection - ctx.wheel_ground_tangent
-    expected_offset = -float(displacement.dot(projected_axis))
-    forward_axis = (ctx.side_sign * projected_axis.cross(ground_normal)).normalize()
+    displacement = intersection - ctx.wheel_contact_centre
+    forward_axis = (ctx.side_sign * outboard_axis.cross(ground_normal)).normalize()
+    lateral_axis = ground_normal.cross(forward_axis).normalize()
+    expected_offset = -ctx.side_sign * float(displacement.dot(lateral_axis))
     expected_trail = float(displacement.dot(forward_axis))
     expected_scrub = displacement.norm()
 
@@ -412,7 +421,7 @@ def test_anti_geometry_uses_perpendicular_cg_height_above_the_ground_plane(
         for candidate in states
         if suspension.compute_side_view_instant_center(candidate) is not None
     )
-    tangent = state.get(PointID.WHEEL_GROUND_TANGENT)
+    tangent = state.get(PointID.WHEEL_CONTACT_CENTRE)
 
     ground = _banked_ground_through(tangent, 12.0)
     ctx = MetricContext(
@@ -487,7 +496,7 @@ def test_anti_dive_on_flat_ground_equals_the_chassis_z_formula(
     )
     ctx = MetricContext(state=state, suspension=suspension, config=config)
 
-    tangent = state.get(PointID.WHEEL_GROUND_TANGENT)
+    tangent = state.get(PointID.WHEEL_CONTACT_CENTRE)
     svic = ctx.side_view_ic
     assert svic is not None
     run = float(tangent[Axis.X]) - float(svic[Axis.X])
@@ -524,11 +533,9 @@ def test_anti_squat_resolves_the_rise_along_a_banked_ground_normal(
         for candidate in states
         if suspension.compute_side_view_instant_center(candidate) is not None
     )
-    tangent = state.get(PointID.WHEEL_GROUND_TANGENT)
+    tangent = state.get(PointID.WHEEL_CONTACT_CENTRE)
     ground = _banked_ground_through(tangent, 12.0)
-    ctx = MetricContext(
-        state=state, suspension=suspension, config=config, road=ground
-    )
+    ctx = MetricContext(state=state, suspension=suspension, config=config, road=ground)
 
     svic = ctx.side_view_ic
     assert svic is not None
@@ -564,12 +571,12 @@ def test_anti_cg_height_is_shared_by_both_corners_of_a_banked_axle(
     assert axle.config is not None
 
     state = axle.initial_state().copy()
-    left_tangent_ref = PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)
+    left_tangent_ref = PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE)
     left_tangent = state.get(left_tangent_ref)
     state.set(left_tangent_ref, left_tangent + Vector3((0.0, 0.0, 40.0)))
 
     left = state.get(left_tangent_ref)
-    right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT))
+    right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE))
     lateral = (left - right).normalize()
     ground = RoadPlane.through(
         Direction3(Direction3((1.0, 0.0, 0.0)).cross(lateral)),
@@ -593,7 +600,7 @@ def test_anti_cg_height_is_shared_by_both_corners_of_a_banked_axle(
         assert height is not None
         heights[side] = height
         chassis_z_heights[side] = float(corner_config.cg_position[Axis.Z]) - float(
-            corner_state.get(PointID.WHEEL_GROUND_TANGENT)[Axis.Z]
+            corner_state.get(PointID.WHEEL_CONTACT_CENTRE)[Axis.Z]
         )
 
     np.testing.assert_allclose(
@@ -615,7 +622,7 @@ def test_fvsa_sign_follows_the_ground_line_rather_than_chassis_y(
     assert isinstance(suspension, DoubleWishboneSuspension)
     assert suspension.config is not None
     state = suspension.initial_state()
-    tangent = state.get(PointID.WHEEL_GROUND_TANGENT)
+    tangent = state.get(PointID.WHEEL_CONTACT_CENTRE)
 
     # Place the FVIC so its chassis-Y and along-ground components disagree on
     # a 45-degree bank; the solved geometry never sits this close to the
@@ -737,31 +744,29 @@ class TestSignConventionsAndKnownValues:
             err_msg="Caster at design position",
         )
 
-    def test_roadwheel_angle_zero_at_design_position(
+    def test_toe_and_steer_angle_zero_at_design_position(
         self, double_wishbone_geometry_file
     ) -> None:
         """
         At the design position with no steering input the axle is
-        purely lateral, so the roadwheel angle must be zero.
+        purely lateral, so toe and steer angle must both be zero.
         """
         suspension = load_geometry(double_wishbone_geometry_file)
         state = suspension.initial_state()
         metrics = compute_metrics_for_state_from_suspension(state, suspension)
 
-        roadwheel_angle = metrics["roadwheel_angle"]
-        assert roadwheel_angle is not None, "roadwheel_angle is None"
-        np.testing.assert_allclose(
-            roadwheel_angle,
-            0.0,
-            atol=TEST_TOLERANCE,
-            err_msg="Roadwheel angle at design position",
-        )
+        for key in ("toe_angle", "steer_angle"):
+            value = metrics[key]
+            assert value is not None, f"{key} is None"
+            np.testing.assert_allclose(
+                value, 0.0, atol=TEST_TOLERANCE, err_msg=f"{key} at design"
+            )
 
-    def test_roadwheel_angle_positive_means_turned_inward(
+    def test_toe_angle_positive_means_turned_inward(
         self, double_wishbone_geometry_file, test_data_dir
     ) -> None:
         """
-        During a toe-in sweep (positive roadwheel angle), the front
+        During a toe-in sweep (positive toe angle), the front
         of the wheel points toward the vehicle center. Verify the first
         sweep step produces a positive angle for the left-side suspension.
         """
@@ -772,15 +777,15 @@ class TestSignConventionsAndKnownValues:
         first_metrics = compute_metrics_for_state_from_suspension(states[0], suspension)
         last_metrics = compute_metrics_for_state_from_suspension(states[-1], suspension)
 
-        first_rwa = first_metrics["roadwheel_angle"]
-        last_rwa = last_metrics["roadwheel_angle"]
-        assert first_rwa is not None
-        assert last_rwa is not None
+        first_toe = first_metrics["toe_angle"]
+        last_toe = last_metrics["toe_angle"]
+        assert first_toe is not None
+        assert last_toe is not None
 
-        # The sweep goes from positive to negative roadwheel angle,
+        # The sweep goes from positive to negative toe angle,
         # confirming both sign directions.
-        assert first_rwa > 0, "Expected positive roadwheel angle at start of sweep"
-        assert last_rwa < 0, "Expected negative roadwheel angle at end of sweep"
+        assert first_toe > 0, "Expected positive toe angle at start of sweep"
+        assert last_toe < 0, "Expected negative toe angle at end of sweep"
 
 
 def test_default_corner_metric_catalog_matches_trusted_set() -> None:
@@ -793,7 +798,8 @@ def test_default_corner_metric_catalog_matches_trusted_set() -> None:
         "steering_axis_offset_ground",
         "scrub_radius",
         "mechanical_trail",
-        "roadwheel_angle",
+        "toe_angle",
+        "steer_angle",
         "svic_x",
         "svic_z",
         "svsa_length",
@@ -809,3 +815,27 @@ def test_default_corner_metric_catalog_matches_trusted_set() -> None:
         "anti_squat",
     ]
     assert column_names == expected
+
+
+def test_toe_and_iso_steer_use_distinct_sign_conventions() -> None:
+    """Toe is inward-positive; ISO steer is vehicle-Z RHR on both sides."""
+    angle = radians(10.0)
+    left = cast(
+        MetricContext,
+        SimpleNamespace(
+            side_sign=1.0,
+            wheel_axis=Direction3((-sin(angle), cos(angle), 0.0)),
+        ),
+    )
+    right = cast(
+        MetricContext,
+        SimpleNamespace(
+            side_sign=-1.0,
+            wheel_axis=Direction3((sin(angle), -cos(angle), 0.0)),
+        ),
+    )
+
+    assert calculate_toe(left) == pytest.approx(-10.0)
+    assert calculate_toe(right) == pytest.approx(10.0)
+    assert calculate_steer(left) == pytest.approx(10.0)
+    assert calculate_steer(right) == pytest.approx(10.0)

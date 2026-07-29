@@ -22,7 +22,7 @@ class PointCatalog:
     every point in the assembly. ``fixed`` means authored geometry that never
     moves; ``derived`` means computed from the state — whether by the
     derived-point graph or by a post-solve closure (an axle's coupled
-    wheel-ground tangents). ``output_only`` is not a fourth class: it is an
+    wheel contact centres). ``output_only`` is not a fourth class: it is an
     overlay marking the subset of derived points that are reported but cannot
     be driven under the solver's actuator policy.
     """

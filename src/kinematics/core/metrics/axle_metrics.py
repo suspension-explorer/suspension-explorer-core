@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from math import atan2, degrees
+from math import atan2, degrees, hypot
 from typing import TYPE_CHECKING
 
 from kinematics.core.enums import Axis, PointID
@@ -26,12 +26,18 @@ def append_axle_state_metrics(
 ) -> None:
     """Append axle metrics using their declared chassis or road references.
 
-    ``heave`` is mean wheel-centre chassis Z travel. ``roll`` is the left/right
-    chassis Z travel difference divided by road-resolved track; it is a
-    kinematic axle input, not a solved body attitude. ``ride_height_change`` is
+    ``heave`` is mean wheel-centre chassis Z travel. ``roll`` is ISO 8855
+    suspension roll angle (§5.2.5): the inclination of the current line from
+    the right wheel centre to the left wheel centre, relative to chassis XY.
+    Positive roll means the left wheel centre is higher than the right. It is a
+    kinematic axle state, not a solved body attitude. ``ride_height_change`` is
     the change in perpendicular distance from the chassis origin to the
-    axle-local road plane. ``track`` is the contact-tangent separation along
-    that plane's lateral direction.
+    axle-local road plane. ``track`` is ISO 8855 track (§4.4): the design
+    wheel-contact-centre separation measured parallel to chassis Y with the
+    vehicle at rest on a horizontal surface. ``track_change`` is the generic
+    current-minus-design road-lateral difference. ISO 8855 defines the narrower
+    ``ride track change`` (§8.1.1) only for symmetric wheel displacement, so
+    that name is deliberately not used for arbitrary solved axle states.
 
     Roll-centre coordinates and rack displacement are reported in chassis
     space. The road datum follows the ISO 8855 local or equivalent road-plane
@@ -39,21 +45,48 @@ def append_axle_state_metrics(
     world space or inferred longitudinal pitch.
     """
     wheel_delta_z: dict[Side, float] = {}
-    tangents: dict[Side, Point3] = {}
+    wheel_centres: dict[Side, Point3] = {}
+    contact_centres: dict[Side, Point3] = {}
+    design_contact_centres: dict[Side, Point3] = {}
     for side in (Side.LEFT, Side.RIGHT):
         design = axle.corners[side].initial_state()
         wheel_ref = PointRef(side, PointID.WHEEL_CENTER)
-        tangent_ref = PointRef(side, PointID.WHEEL_GROUND_TANGENT)
+        contact_centre_ref = PointRef(side, PointID.WHEEL_CONTACT_CENTRE)
         wheel_delta_z[side] = float(state.get(wheel_ref)[Axis.Z]) - float(
             design.get(PointID.WHEEL_CENTER)[Axis.Z]
         )
-        tangents[side] = state.get(tangent_ref)
+        wheel_centres[side] = state.get(wheel_ref)
+        contact_centres[side] = state.get(contact_centre_ref)
+        design_contact_centres[side] = design.get(PointID.WHEEL_CONTACT_CENTRE)
 
     left_wheel_z = wheel_delta_z[Side.LEFT]
     right_wheel_z = wheel_delta_z[Side.RIGHT]
-    track = abs(float(road.lateral.dot(tangents[Side.LEFT] - tangents[Side.RIGHT])))
+    wheel_centre_line = wheel_centres[Side.LEFT] - wheel_centres[Side.RIGHT]
+    horizontal_wheel_centre_distance = hypot(
+        float(wheel_centre_line[Axis.X]),
+        float(wheel_centre_line[Axis.Y]),
+    )
+    current_contact_separation = abs(
+        float(
+            road.lateral.dot(contact_centres[Side.LEFT] - contact_centres[Side.RIGHT])
+        )
+    )
+    design_contact_separation = abs(
+        float(
+            design_road.lateral.dot(
+                design_contact_centres[Side.LEFT] - design_contact_centres[Side.RIGHT]
+            )
+        )
+        if design_road is not None
+        else float(
+            design_contact_centres[Side.LEFT][Axis.Y]
+            - design_contact_centres[Side.RIGHT][Axis.Y]
+        )
+    )
     row["heave"] = 0.5 * (left_wheel_z + right_wheel_z)
-    row["roll"] = degrees(atan2(left_wheel_z - right_wheel_z, track))
+    row["roll"] = degrees(
+        atan2(float(wheel_centre_line[Axis.Z]), horizontal_wheel_centre_distance)
+    )
     chassis_origin = Point3((0.0, 0.0, 0.0))
     row["ride_height_change"] = (
         road.signed_distance(chassis_origin)
@@ -61,7 +94,8 @@ def append_axle_state_metrics(
         if design_road is not None
         else None
     )
-    row["track"] = track
+    row["track"] = design_contact_separation
+    row["track_change"] = current_contact_separation - design_contact_separation
 
     roll_center_y, roll_center_z = _roll_center(state, axle)
     row["roll_center_y"] = roll_center_y
@@ -95,15 +129,15 @@ def _roll_center(
         fvic = axle.corners[side].compute_front_view_instant_center(corner_state)
         if fvic is None:
             return None, None
-        ground_tangent = corner_state.get(PointID.WHEEL_GROUND_TANGENT)
-        tangent_y = float(ground_tangent[Axis.Y])
-        tangent_z = float(ground_tangent[Axis.Z])
+        contact_centre = corner_state.get(PointID.WHEEL_CONTACT_CENTRE)
+        contact_y = float(contact_centre[Axis.Y])
+        contact_z = float(contact_centre[Axis.Z])
         lines.append(
             (
-                tangent_y,
-                tangent_z,
-                float(fvic[Axis.Y]) - tangent_y,
-                float(fvic[Axis.Z]) - tangent_z,
+                contact_y,
+                contact_z,
+                float(fvic[Axis.Y]) - contact_y,
+                float(fvic[Axis.Z]) - contact_z,
             )
         )
 

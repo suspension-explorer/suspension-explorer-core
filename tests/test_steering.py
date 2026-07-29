@@ -156,9 +156,9 @@ def test_shared_rack_target_emits_derivatives_for_both_corners(
     row = metrics.rows[0]
     assert isinstance(row, AxleMetricRows)
     for side in (Side.LEFT, Side.RIGHT):
-        assert (
-            row.corners[side]["deriv_roadwheel_angle_wrt_rack_displacement"] is not None
-        )
+        corner = row.corners[side]
+        assert corner["deriv_toe_angle_wrt_rack_displacement"] is not None
+        assert corner["deriv_steer_angle_wrt_rack_displacement"] is not None
 
 
 def test_steering_type_requires_matching_heading_link_hardpoints(
@@ -286,8 +286,10 @@ def test_nonsteered_axle_solves_bump_without_a_rack_target(
     assert isinstance(row, AxleMetricRows)
     assert row.axle["rack_displacement"] is None
     for corner in row.corners.values():
-        assert corner["deriv_roadwheel_angle_wrt_hub_z"] is not None
-        assert "deriv_roadwheel_angle_wrt_rack_displacement" not in corner
+        assert corner["deriv_toe_angle_wrt_hub_z"] is not None
+        assert corner["deriv_steer_angle_wrt_hub_z"] is not None
+        assert "deriv_toe_angle_wrt_rack_displacement" not in corner
+        assert "deriv_steer_angle_wrt_rack_displacement" not in corner
 
 
 @pytest.mark.parametrize(

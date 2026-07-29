@@ -219,9 +219,9 @@ def plot_front_view_comparison(
                 alpha=wheel_config.alpha,
             )
 
-        # Wheel-plane ground tangent marker.
-        if PointID.WHEEL_GROUND_TANGENT in positions:
-            tangent = extract_array(positions[PointID.WHEEL_GROUND_TANGENT])
+        # Wheel-plane contact centre marker.
+        if PointID.WHEEL_CONTACT_CENTRE in positions:
+            tangent = extract_array(positions[PointID.WHEEL_CONTACT_CENTRE])
             ax.scatter(
                 tangent[0], tangent[1], tangent[2], color=color, s=100, marker="o"
             )

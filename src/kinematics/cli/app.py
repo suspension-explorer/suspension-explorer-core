@@ -76,8 +76,8 @@ def visualize(
     Visualize a suspension geometry at its design condition.
 
     This command loads a single geometry file, calculates its initial state, and
-    generates a debug plot. It also reports whether the wheel-ground tangent point
-    is at the design ground height (Z=0).
+    generates a debug plot. It also reports whether the wheel contact centres
+    points lie on the reconstructed design road plane.
 
     Example:
     uv run kinematics visualize --geometry=tests/data/geometry.yaml --output=plot.png
@@ -92,23 +92,22 @@ def visualize(
         suspension=suspension,
         output_path=output,
     )
-    tangent_z = ", ".join(f"{value:.3f}" for value in result.wheel_ground_tangent_z)
-    if result.wheel_ground_tangent_on_ground:
+    road_distances = ", ".join(
+        f"{value:.3f}" for value in result.wheel_contact_centre_road_distance_mm
+    )
+    if result.wheel_contact_centres_on_road:
         typer.secho(
-            "Geometry Check: OK. Wheel-ground tangents at the design ground "
-            f"height (Z = {tangent_z} mm).",
+            "Geometry Check: OK. Wheel contact centres lie on the reconstructed "
+            f"design road plane (distances = {road_distances} mm).",
             fg=typer.colors.GREEN,
         )
     else:
         typer.secho(
-            "Geometry Check: WARNING. Wheel-ground tangent is not at the "
-            "design ground height.",
+            "Geometry Check: WARNING. Wheel contact centres do not lie on the "
+            "reconstructed design road plane.",
             fg=typer.colors.RED,
         )
-        typer.echo(
-            "The wheel-ground tangent points are currently located at "
-            f"Z = {tangent_z} mm."
-        )
+        typer.echo(f"Their signed distances from that plane are {road_distances} mm.")
     typer.secho(
         f"Visualization saved to: {result.output_path}",
         fg=typer.colors.GREEN,

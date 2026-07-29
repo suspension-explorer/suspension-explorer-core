@@ -48,11 +48,11 @@ tool.
 | Outputs                   | Solved point positions, solver statistics, diagnostics, metrics, in either CSV or Parquet | Plotting and animation require the optional visualization dependencies.                                            |
 
 The calculated metrics include wheel travel, longitudinal wheel-center travel,
-half-track and track, roadwheel angle, camber, caster, kingpin inclination,
-scrub radius, mechanical trail, instant-center geometry, roll center, heave,
-roll, ride-height change, anti-pitch geometry, damper and mechanism
-travel, and applicable motion ratios. Metric availability depends on the
-architecture and installed mechanisms.
+half-track, ISO track, track change, toe angle, ISO steer angle, camber, caster,
+kingpin inclination, scrub radius, mechanical trail, instant-center geometry,
+roll center, heave, suspension roll, ride-height change, anti-pitch geometry,
+damper and mechanism travel, and applicable motion ratios. Metric availability
+depends on the architecture and installed mechanisms.
 
 Analytical constraint Jacobians are used by the nonlinear solver. Applicable
 motion ratios and response derivatives are evaluated from the solved constraint
@@ -101,7 +101,7 @@ plane, ground plane, and world `Z = 0` plane coincide. Road grade, road bank,
 yaw, and non-planar surfaces are outside the model.
 
 At design condition the chassis and world axes are aligned, the front axle
-centreline is `X = 0`, and the wheel tangent line is `Z = 0`. During a sweep,
+centreline is `X = 0`, and the wheel contact-centre line is `Z = 0`. During a sweep,
 fixed hardpoints remain fixed in chassis space while the road plane may move
 relative to them as the modelled axle heaves or rolls. This represents
 suspension motion associated with vehicle-generated vertical, lateral, or
@@ -109,7 +109,7 @@ longitudinal forces; the solver is kinematic and does not calculate those
 forces or a dynamic body attitude.
 
 The axle contact closure models each tyre as a rigid disc and returns two
-derived tangent points. It constructs the single plane tangent to both wheels
+wheel contact centres. It constructs the single plane tangent to both wheels
 and extrudes the contact line parallel to chassis X. Consequently:
 
 - local axle heave and roll relative to the road are observable;
@@ -117,7 +117,7 @@ and extrudes the contact line parallel to chassis X. Consequently:
 - one axle cannot determine whole-vehicle pitch, yaw, or longitudinal
   translation, so these are assigned zero rather than inferred;
 - an opposite-axle pivot is neither required nor modelled; and
-- `wheel_ground_tangent` is an output and cannot be a sweep target.
+- `wheel_contact_centre` is an output and cannot be a sweep target.
 
 The resulting `WorldSpace` value is a presentation transform only. It maps the
 same axle-local road plane to world `Z = 0`, preserves chassis +X as world +X,
@@ -128,12 +128,15 @@ Metric reference systems are deliberate:
 
 - `camber` is the ISO vehicle-relative camber angle, while road-relative wheel
   inclination is not currently exported;
-- `caster`, `kpi`, and `roadwheel_angle` use the chassis/vehicle axes;
+- `caster`, `kpi`, and ISO `steer_angle` use the chassis/vehicle axes;
+- `toe_angle` is the project convention: a side-folded roadwheel heading where
+  positive means toe-in; it is reported alongside, rather than substituted for,
+  the ISO vehicle-fixed `steer_angle`;
 - `steering_axis_offset_ground`, `scrub_radius`, and `mechanical_trail` use
   the ISO tyre axes on the local road plane;
-- `track`, `ride_height_change`, swing-arm lengths, and geometric anti
-  percentages use the axle-local road plane represented in chassis
-  coordinates;
+- `track` is the ISO rest dimension on horizontal ground; `track_change`,
+  `ride_height_change`, swing-arm lengths, and geometric anti percentages use
+  the axle-local road plane represented in chassis coordinates;
 - wheel travel, heave, instant-centre coordinates, rack displacement, and
   roll-centre coordinates use chassis axes; and
 - damper length and other Euclidean link lengths are invariant under the
@@ -142,9 +145,9 @@ Metric reference systems are deliberate:
 `ride_height_change` is therefore the change in perpendicular clearance from
 the chassis origin to the axle-local road plane. It is not a full-vehicle ride
 height or pitch result. Likewise, the exported `roll` is a kinematic axle
-input calculated from left/right chassis Z travel and road-resolved track, not
-a solved sprung-mass attitude. The anti percentages are geometric
-construction metrics; they do not predict pitch under load.
+state calculated as the ISO suspension roll angle of the current line joining
+the wheel centres, not a solved sprung-mass attitude. The anti percentages are
+geometric construction metrics; they do not predict pitch under load.
 
 The contact model omits tyre deflection, loaded radius, contact-patch extent,
 forces, compliance, and interaction with another axle. A future full-vehicle
@@ -292,9 +295,10 @@ paired by index rather than expanded into a Cartesian product. Use `start`,
 uv run kinematics visualize --geometry geometry.yaml --output geometry.png
 ```
 
-This validates and builds the geometry, reports whether every derived
-wheel-ground tangent point lies on `Z = 0`, and writes a static image. It
-requires `[cli,viz]`.
+This validates and builds the geometry, reports whether every derived wheel
+contact centre lies on the reconstructed road plane, and writes a static
+image. The diagnostic also prints each centre's raw chassis Z coordinate and
+signed road-plane distance. It requires `[cli,viz]`.
 
 ### 4. Solve and export the sweep
 

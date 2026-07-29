@@ -103,19 +103,6 @@ def calculate_kpi(ctx: MetricContext) -> float:
     return float(np.rad2deg(kpi_rad))
 
 
-def calculate_roadwheel_angle(ctx: MetricContext) -> float:
-    """
-    Roadwheel angle in degrees.
-
-    This follows the ISO 8855:2011 steer-angle convention (§7.1.1): wheel
-    heading is resolved in the chassis XY plane relative to chassis +X.
-    It is independent of the road plane and world space. Positive means the
-    front of the wheel is turned towards the vehicle centerline. This is the
-    same calculation as toe but uses the clearer vehicle-dynamics-facing name.
-    """
-    return calculate_toe(ctx)
-
-
 def calculate_toe(ctx: MetricContext) -> float:
     """
     Toe angle in degrees.
@@ -139,3 +126,24 @@ def calculate_toe(ctx: MetricContext) -> float:
         toe_rad = np.arctan2(proj_x, -proj_y)
 
     return float(np.rad2deg(toe_rad))
+
+
+def calculate_steer(ctx: MetricContext) -> float:
+    """Return ISO 8855:2011 steer angle (§7.1.1) in degrees.
+
+    Steer is the vehicle-fixed, right-hand-rule heading of the wheel forward
+    direction about chassis +Z. Thus a left turn is positive for *both*
+    corners. It deliberately differs from :func:`calculate_toe`, whose
+    side-folded convention makes positive mean toe-in.
+
+    The result is resolved in the chassis XY plane and is independent of the
+    road plane and world space.
+    """
+    axle = ctx.wheel_axis
+    side = ctx.side_sign
+
+    # The wheel axis is inboard-to-outboard. ``side * (axle × +Z)`` is the
+    # wheel's forward direction on either side of the vehicle.
+    forward_x = side * axle[Axis.Y]
+    forward_y = -side * axle[Axis.X]
+    return float(np.rad2deg(np.arctan2(forward_y, forward_x)))

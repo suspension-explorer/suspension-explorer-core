@@ -703,7 +703,7 @@ def solve_suspension_sweep(
         finalize_state: Required finaliser invoked on every accepted state's
             positions, after the derived-point update and before the state is
             stored. Suspensions with post-solve closure outputs (an axle's
-            coupled wheel-ground tangents) pass their closure here so no state
+            coupled wheel contact centres) pass their closure here so no state
             can leave the solver carrying stale closure values; suspensions
             without closure outputs pass `Suspension.apply_ground_closure`,
             which is a no-op for them. The parameter is deliberately required:

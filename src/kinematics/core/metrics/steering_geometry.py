@@ -22,17 +22,18 @@ def _road_displacement(ctx: MetricContext) -> Vector3 | None:
     ground_intersection = ctx.steering_axis_ground_intersection
     if ground_intersection is None:
         return None
-    return ground_intersection - ctx.wheel_ground_tangent
+    return ground_intersection - ctx.wheel_contact_centre
 
 
 def _tyre_road_axes(
     ctx: MetricContext,
 ) -> tuple[Direction3, Direction3] | None:
-    """Return outward-lateral and forward tyre axes in the local road plane.
+    """Return right-handed tyre ``X_T`` and ``Y_T`` axes in the road plane.
 
-    These are the ISO tyre ``Y_T`` and ``X_T`` directions expressed in chassis
-    coordinates. ``Y_T`` follows the wheel spin axis toward the wheel outboard
-    face; ``X_T`` is oriented forward for both vehicle sides.
+    ``X_T`` is forward and ``Z_T`` is the upward road normal. ``Y_T`` is
+    constructed as ``Z_T × X_T``, so ``X_T × Y_T = Z_T`` on both sides. This
+    makes tyre +Y outward on the left but inboard on the right; scalar metrics
+    fold their signs explicitly where required.
     """
     ground_normal = ctx.road.normal
     projected_axis = ctx.wheel_axis.vector() - ground_normal * ctx.wheel_axis.dot(
@@ -40,9 +41,10 @@ def _tyre_road_axes(
     )
     if projected_axis.norm() < EPS_GEOMETRIC:
         return None
-    lateral = projected_axis.normalize()
-    longitudinal = (ctx.side_sign * lateral.cross(ground_normal)).normalize()
-    return lateral, longitudinal
+    outboard = projected_axis.normalize()
+    longitudinal = (ctx.side_sign * outboard.cross(ground_normal)).normalize()
+    lateral = ground_normal.cross(longitudinal).normalize()
+    return longitudinal, lateral
 
 
 def calculate_scrub_radius(ctx: MetricContext) -> float | None:
@@ -79,8 +81,10 @@ def calculate_steering_axis_offset_ground(ctx: MetricContext) -> float | None:
     axes = _tyre_road_axes(ctx)
     if displacement is None or axes is None:
         return None
-    lateral, _ = axes
-    return -float(displacement.dot(lateral))
+    _, lateral = axes
+    # Tyre +Y points outboard on the left and inboard on the right. Fold the
+    # right-handed tyre basis into the documented inboard-positive convention.
+    return -ctx.side_sign * float(displacement.dot(lateral))
 
 
 def calculate_mechanical_trail(ctx: MetricContext) -> float | None:
@@ -105,5 +109,5 @@ def calculate_mechanical_trail(ctx: MetricContext) -> float | None:
     axes = _tyre_road_axes(ctx)
     if displacement is None or axes is None:
         return None
-    _, longitudinal = axes
+    longitudinal, _ = axes
     return float(displacement.dot(longitudinal))

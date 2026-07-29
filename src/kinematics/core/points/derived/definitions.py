@@ -10,7 +10,7 @@ from functools import partial
 from typing import Any
 
 from kinematics.core.enums import PointID
-from kinematics.core.points.derived.ground import get_wheel_ground_tangent
+from kinematics.core.points.derived.ground import get_wheel_contact_centre
 from kinematics.core.points.derived.manager import DerivedPointsSpec
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.primitives.vector_utils.generic import normalize_vector
@@ -104,11 +104,11 @@ def build_wheel_derived_spec(wheel: "WheelConfig") -> "DerivedPointsSpec":
     Build the standard wheel derived-point specification.
 
     Every corner whose wheel spin axis is AXLE_INBOARD -> AXLE_OUTBOARD derives
-    the wheel centre, rim faces, and flat-ground wheel-plane tangent the same way.
-    When both corners are composed, AxleSuspension removes the WHEEL_GROUND_TANGENT
-    entries from the composed derived-point graph entirely and writes both tangents
-    from its post-solve ground closure instead, so no per-corner flat-ground tangent
-    can reach an axle state.
+    the wheel centre, rim faces, and flat-ground wheel contact centre the same way.
+    When both corners are composed, AxleSuspension removes the WHEEL_CONTACT_CENTRE
+    entries from the composed derived-point graph entirely and writes both
+    contact centres from its post-solve ground closure instead, so no
+    per-corner flat-ground result can reach an axle state.
     """
     tire_radius = wheel.tire.nominal_radius
     functions = {
@@ -120,8 +120,8 @@ def build_wheel_derived_spec(wheel: "WheelConfig") -> "DerivedPointsSpec":
         PointID.WHEEL_OUTBOARD: partial(
             get_wheel_outboard, wheel_width=wheel.tire.section_width
         ),
-        PointID.WHEEL_GROUND_TANGENT: partial(
-            get_wheel_ground_tangent, tire_radius=tire_radius
+        PointID.WHEEL_CONTACT_CENTRE: partial(
+            get_wheel_contact_centre, tire_radius=tire_radius
         ),
     }
     dependencies = {
@@ -129,7 +129,7 @@ def build_wheel_derived_spec(wheel: "WheelConfig") -> "DerivedPointsSpec":
         PointID.WHEEL_CENTER: {PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD},
         PointID.WHEEL_INBOARD: {PointID.WHEEL_CENTER, PointID.AXLE_INBOARD},
         PointID.WHEEL_OUTBOARD: {PointID.WHEEL_CENTER, PointID.AXLE_INBOARD},
-        PointID.WHEEL_GROUND_TANGENT: {
+        PointID.WHEEL_CONTACT_CENTRE: {
             PointID.WHEEL_CENTER,
             PointID.AXLE_INBOARD,
             PointID.AXLE_OUTBOARD,

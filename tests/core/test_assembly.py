@@ -22,7 +22,7 @@ from kinematics.core.state import SuspensionState
 FIXED_POINT = PointID.UPPER_WISHBONE_INBOARD_FRONT
 FREE_POINT = PointID.UPPER_WISHBONE_OUTBOARD
 DERIVED_POINT = PointID.WHEEL_CENTER
-UNKNOWN_POINT = PointID.WHEEL_GROUND_TANGENT
+UNKNOWN_POINT = PointID.WHEEL_CONTACT_CENTRE
 
 
 def calculate_derived(positions):
@@ -155,7 +155,7 @@ def test_point_catalog_overlays_output_only_on_derived_points() -> None:
 
 
 def test_point_catalog_classifies_closure_outputs_as_derived() -> None:
-    # An axle's coupled wheel-ground tangents are post-solve closure outputs.
+    # An axle's coupled wheel contact centres are post-solve closure outputs.
     # The solver treats them as stationary, but they are computed from the
     # state on every solve, so the catalog publishes them as derived rather
     # than misstating moving geometry as fixed.

@@ -6,8 +6,8 @@ metrics. Returns ordered mappings ready for direct export integration.
 
 Solved geometry remains in chassis coordinates. Axle metrics share an
 ISO 8855 style local or equivalent road plane reconstructed from the two tyre
-contact tangents; standalone corners use a level local plane through their
-contact tangent. Metric evaluation does not use world-space vehicle placement.
+wheel contact centres; standalone corners use a level local plane through their
+contact centre. Metric evaluation does not use world-space vehicle placement.
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ def compute_metrics_for_axle_state(
 ) -> AxleMetricRows:
     """Compute corner and axle metrics against one axle-local road plane.
 
-    The plane is reconstructed from the two tyre contact tangents and expressed
+    The plane is reconstructed from the two wheel contact centres and expressed
     in chassis coordinates. It follows the ISO 8855 local or equivalent
     road-plane concept. Individual metric docstrings state whether they resolve
     values in chassis, road, or tyre axes. World-space presentation does not
@@ -82,9 +82,9 @@ def compute_metrics_for_axle_state(
     """
     axle_row: MetricRow = OrderedDict()
     corner_rows: dict[Side, MetricRow] = {}
-    road = RoadPlane.from_axle_tangents(
-        state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)),
-        state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
+    road = RoadPlane.from_axle_contact_centres(
+        state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE)),
+        state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE)),
     )
     for side in (Side.LEFT, Side.RIGHT):
         corner = axle.corners[side]
@@ -180,7 +180,7 @@ def compute_metrics_for_state(
     Solved positions and directions remain in chassis coordinates. When
     supplied, ``road`` is the axle's shared ISO-style local road plane,
     expressed in that same basis. A standalone corner instead receives a level
-    road plane through its tyre contact tangent. Individual calculations may
+    road plane through its wheel contact centre. Individual calculations may
     use chassis, road, or tyre axes as documented, but none uses world space.
 
     Args:
@@ -191,7 +191,7 @@ def compute_metrics_for_state(
             appended only when these are supplied.
         road: Optional shared axle road plane in chassis coordinates.
             Standalone corner callers omit this and use the horizontal plane
-            through their tyre contact tangent.
+            through their wheel contact centre.
 
     Returns:
         An ordered mapping of metric column names to values. Values are

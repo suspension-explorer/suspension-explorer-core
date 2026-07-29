@@ -21,6 +21,7 @@ PUBLIC_CORE_MODULES = {
     "kinematics.core.primitives.geometry",
     "kinematics.core.primitives.point_ref",
     "kinematics.core.presentation",
+    "kinematics.core.road",
     "kinematics.core.schema.geometry",
     "kinematics.core.schema.sweep",
     "kinematics.core.solver",
@@ -68,6 +69,13 @@ def test_pose_module_declares_its_public_names() -> None:
     }
     for name in pose.__all__:
         assert hasattr(pose, name)
+
+
+def test_road_module_declares_its_public_names() -> None:
+    from kinematics.core import road
+
+    assert road.__all__ == ["RoadPlane"]
+    assert road.RoadPlane is not None
 
 
 def test_low_level_core_import_does_not_load_solver_stack() -> None:

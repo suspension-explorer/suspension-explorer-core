@@ -256,7 +256,7 @@ class Suspension(ABC):
         Write post-solve ground outputs into ``positions``; return the solved seed.
 
         The base suspension has no coupled ground geometry, so this is a no-op.
-        Axles overwrite both wheel-ground tangents with the coupled shared-plane
+        Axles overwrite both wheel contact centres with the coupled shared-plane
         solution and return the solved ground-normal angle so a sweep can thread
         it into the next state's solve as an explicit, stateless seed.
         """

@@ -10,13 +10,13 @@ from kinematics.core.input import build_suspension
 from kinematics.core.points.derived import ground
 from kinematics.core.points.derived.ground import (
     _GROUND_SOLVE_LIMIT,
-    AxleGroundTangency,
+    AxleWheelContactCentres,
     _flat_ground_normal_angle_estimate,
     _ground_normal,
     _search_ground_normal_angle,
     _shared_ground_normal_angle,
-    seed_from_tangent_points,
-    solve_axle_wheel_ground_tangents,
+    seed_from_contact_centres,
+    solve_axle_wheel_contact_centres,
 )
 from kinematics.core.primitives.dual import DualScalar, DualVec3
 from kinematics.core.primitives.geometry import Point3
@@ -101,9 +101,9 @@ def _positions() -> dict[PointRef, Point3]:
 def _solve(
     positions: dict[PointRef, Point3],
     seed: float | None = None,
-) -> AxleGroundTangency:
+) -> AxleWheelContactCentres:
     keys = _keys()
-    return solve_axle_wheel_ground_tangents(
+    return solve_axle_wheel_contact_centres(
         positions,
         left_center=keys["left_center"],
         left_axis_inboard=keys["left_inboard"],
@@ -227,14 +227,14 @@ def test_solve_returns_one_shared_plane_and_is_stateless():
     np.testing.assert_array_equal(repeat.right.data, first.right.data)
 
 
-def test_seed_from_tangent_points_recovers_the_lateral_contact_angle():
+def test_seed_from_contact_centres_recovers_the_lateral_contact_angle():
     left = Point3((0.0, 620.0, -12.0))
     right = Point3((0.0, -580.0, 18.0))
     lateral_separation = 620.0 - (-580.0)
     vertical_separation = -12.0 - 18.0
 
-    seed = seed_from_tangent_points(left, right)
-    reversed_seed = seed_from_tangent_points(right, left)
+    seed = seed_from_contact_centres(left, right)
+    reversed_seed = seed_from_contact_centres(right, left)
 
     expected = -np.arctan2(vertical_separation, lateral_separation)
     assert seed == pytest.approx(expected)
@@ -243,19 +243,19 @@ def test_seed_from_tangent_points_recovers_the_lateral_contact_angle():
     assert reversed_seed == pytest.approx(expected)
 
 
-def test_seed_from_tangent_points_matches_the_solved_ground_normal_angle():
+def test_seed_from_contact_centres_matches_the_solved_ground_normal_angle():
     tangency = _solve(_positions())
 
-    seed = seed_from_tangent_points(tangency.left, tangency.right)
+    seed = seed_from_contact_centres(tangency.left, tangency.right)
 
     assert seed == pytest.approx(tangency.normal_angle)
 
 
-def test_seed_from_tangent_points_returns_none_for_unusable_points():
-    collapsed = seed_from_tangent_points(
+def test_seed_from_contact_centres_returns_none_for_unusable_points():
+    collapsed = seed_from_contact_centres(
         Point3((0.0, 100.0, 10.0)), Point3((0.0, 100.0, -10.0))
     )
-    non_finite = seed_from_tangent_points(
+    non_finite = seed_from_contact_centres(
         np.array((0.0, 600.0, np.nan)), np.array((0.0, -600.0, 0.0))
     )
 
@@ -347,9 +347,9 @@ def test_axle_derived_spec_omits_the_coupled_tangents() -> None:
     spec = axle.derived_spec()
 
     for side in (Side.LEFT, Side.RIGHT):
-        tangent = PointRef(side, PointID.WHEEL_GROUND_TANGENT)
+        tangent = PointRef(side, PointID.WHEEL_CONTACT_CENTRE)
         assert tangent not in spec.functions, (
-            "Coupled wheel-ground tangents are closure outputs, not derived points"
+            "Coupled wheel contact centres are closure outputs, not derived points"
         )
         assert tangent not in spec.dependencies
 
@@ -362,7 +362,7 @@ def test_ground_closure_reproduces_the_stored_initial_state_tangents() -> None:
     axle.apply_ground_closure(positions)
 
     for side in (Side.LEFT, Side.RIGHT):
-        tangent = PointRef(side, PointID.WHEEL_GROUND_TANGENT)
+        tangent = PointRef(side, PointID.WHEEL_CONTACT_CENTRE)
         recomputed = positions[tangent]
         assert isinstance(recomputed, Point3)
         assert state.get(tangent).almost_equals(recomputed, atol=1e-9), (
@@ -376,9 +376,9 @@ def test_ground_closure_recovers_its_seed_from_the_stored_tangents(
     axle = _axle_suspension()
     state = axle.initial_state()
     positions = dict(state.positions)
-    stored_seed = seed_from_tangent_points(
-        state.get(PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT)),
-        state.get(PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT)),
+    stored_seed = seed_from_contact_centres(
+        state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE)),
+        state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE)),
     )
     assert stored_seed is not None
 

@@ -116,17 +116,17 @@ class MacPhersonSuspension(CornerSuspension):
         PointID.WHEEL_CENTER,
         PointID.WHEEL_INBOARD,
         PointID.WHEEL_OUTBOARD,
-        PointID.WHEEL_GROUND_TANGENT,
+        PointID.WHEEL_CONTACT_CENTRE,
     )
     OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
         *LOCATING_OUTPUT_POINTS,
         *WHEEL_OUTPUT_POINTS,
     )
-    # The ground tangent is reported but never driven. On an axle it comes from a
+    # The contact centre is reported but never driven. On an axle it comes from a
     # coupled solve across both corners, with a bounded validity domain and
     # non-unique roots; the standalone flat-ground construction is the same
     # quantity, so it is refused as a target at both scopes.
-    OUTPUT_ONLY_POINTS: ClassVar[tuple[PointID, ...]] = (PointID.WHEEL_GROUND_TANGENT,)
+    OUTPUT_ONLY_POINTS: ClassVar[tuple[PointID, ...]] = (PointID.WHEEL_CONTACT_CENTRE,)
 
     # Free points that move during solving. The strut top is a fixed chassis
     # mount and the strut clamp is derived from the lower ball joint and top.
@@ -431,7 +431,7 @@ class MacPhersonSuspension(CornerSuspension):
                 outboard=PointID.WHEEL_OUTBOARD,
                 axle_inboard=PointID.AXLE_INBOARD,
                 axle_outboard=PointID.AXLE_OUTBOARD,
-                wheel_ground_tangent=PointID.WHEEL_GROUND_TANGENT,
+                wheel_contact_centre=PointID.WHEEL_CONTACT_CENTRE,
             ),
             *self.wheel_heading_link.elements(),
         )

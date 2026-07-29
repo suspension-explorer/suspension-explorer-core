@@ -59,9 +59,11 @@ def test_current_derivative_specs_have_explicit_labels(test_data_dir: Path) -> N
             "Heave Link Length wrt. Right Hub Z"
         ),
         "deriv_kpi_wrt_hub_z": "KPI wrt. Hub Z",
-        "deriv_roadwheel_angle_wrt_hub_z": "Roadwheel Angle wrt. Hub Z",
-        "deriv_roadwheel_angle_wrt_rack_displacement": (
-            "Roadwheel Angle wrt. Rack Displacement"
+        "deriv_toe_angle_wrt_hub_z": "Toe Angle wrt. Hub Z",
+        "deriv_toe_angle_wrt_rack_displacement": ("Toe Angle wrt. Rack Displacement"),
+        "deriv_steer_angle_wrt_hub_z": "Steer Angle wrt. Hub Z",
+        "deriv_steer_angle_wrt_rack_displacement": (
+            "Steer Angle wrt. Rack Displacement"
         ),
         "deriv_rocker_angle_wrt_hub_z": "Rocker Angle wrt. Hub Z",
         "deriv_t_bar_center_x_wrt_hub_z_left": ("T-Bar Center X wrt. Left Hub Z"),

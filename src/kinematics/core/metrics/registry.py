@@ -70,6 +70,13 @@ _AXLE_BASE_SPECS = (
     ),
     MetricSpec("track", "Track", MetricUnit.MM, MetricKind.STATE, Scope.AXLE),
     MetricSpec(
+        "track_change",
+        "Track Change",
+        MetricUnit.MM,
+        MetricKind.STATE,
+        Scope.AXLE,
+    ),
+    MetricSpec(
         "roll_center_y",
         "Roll Center Y",
         MetricUnit.MM,

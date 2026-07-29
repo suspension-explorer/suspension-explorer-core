@@ -65,7 +65,7 @@ def compute_state_tangents(
 
     ``post_derived_update`` mirrors the sweep's post-solve ground closure: it
     is applied to the dual position map after the derived-point update so
-    closure outputs (the coupled wheel-ground tangents) carry their implicit
+    closure outputs (the coupled wheel contact centres) carry their implicit
     derivatives into the tangent field instead of the zero seed.
     """
     if not step_targets:

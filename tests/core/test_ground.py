@@ -36,7 +36,7 @@ def test_axle_tangents_define_one_zero_grade_road_plane() -> None:
     left = Point3((30.0, 2.0, 1.0))
     right = Point3((-40.0, -2.0, -1.0))
 
-    road = RoadPlane.from_axle_tangents(left, right)
+    road = RoadPlane.from_axle_contact_centres(left, right)
 
     np.testing.assert_allclose(
         road.normal.data,
@@ -50,7 +50,7 @@ def test_collapsed_axle_tangents_do_not_define_a_road_plane() -> None:
     tangent = Point3((10.0, 20.0, 30.0))
 
     with pytest.raises(ValueError, match="do not define"):
-        RoadPlane.from_axle_tangents(tangent, tangent)
+        RoadPlane.from_axle_contact_centres(tangent, tangent)
 
 
 def test_road_plane_is_immutable() -> None:
@@ -63,6 +63,7 @@ def test_road_plane_is_immutable() -> None:
     ("normal", "offset"),
     [
         ((0.0, 0.0, -1.0), 0.0),
+        ((1.0, 0.0, 0.0), 0.0),
         ((0.0, 0.0, 1.0), np.inf),
         ((np.nan, 0.0, 1.0), 0.0),
     ],

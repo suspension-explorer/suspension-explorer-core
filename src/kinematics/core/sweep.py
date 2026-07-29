@@ -75,7 +75,7 @@ def _ground_closure_finalizer(
 ) -> Callable[[dict[PointKey, Any]], None]:
     """Build the accepted-state finaliser that applies the ground closure.
 
-    The coupled wheel-ground tangents are pure outputs, solved once per
+    The coupled wheel contact centres are pure outputs, solved once per
     accepted state inside the solver's accept path, so no state can leave the
     solver with stale closure values. Each solved root seeds the next state's
     closure, keeping a multi-root geometry on one continuous branch.
@@ -255,7 +255,7 @@ def evaluate_solved_sweep(
     stale closure outputs into metrics and the caller's states are never
     mutated. The returned :class:`EvaluatedSweep` holds the finalised copies.
     Seeds thread exactly as they do during solving: the first state recovers
-    its seed from its stored tangent values and each solved root seeds the
+    its seed from its stored contact-centre values and each solved root seeds the
     next state, so already-finalised states reproduce their stored values.
     """
     if len(states) != len(solver_stats):

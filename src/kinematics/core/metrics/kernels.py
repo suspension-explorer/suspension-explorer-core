@@ -170,6 +170,24 @@ def toe_deg(
     return degrees(toe)
 
 
+def steer_deg(
+    positions: Mapping[PointKey, PositionLike],
+    side_sign: float,
+    axle_inboard: PointKey,
+    axle_outboard: PointKey,
+) -> Scalar:
+    """ISO 8855 steer angle in degrees; mirrors ``calculate_steer``.
+
+    The wheel-forward vector is constructed from the inboard-to-outboard spin
+    axis, then its vehicle-fixed right-hand-rule heading is taken about +Z.
+    A left turn is positive for both corners.
+    """
+    axle = _vec(positions, axle_outboard) - _vec(positions, axle_inboard)
+    forward_x = side_sign * _component(axle, Axis.Y)
+    forward_y = -side_sign * _component(axle, Axis.X)
+    return degrees(atan2(forward_y, forward_x))
+
+
 def caster_deg(
     positions: Mapping[PointKey, PositionLike],
     lower_pivot: PointKey,

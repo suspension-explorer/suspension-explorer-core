@@ -57,7 +57,7 @@ class MetricContext:
         self.road = (
             road
             if road is not None
-            else RoadPlane.horizontal_at(state.get(PointID.WHEEL_GROUND_TANGENT))
+            else RoadPlane.horizontal_at(state.get(PointID.WHEEL_CONTACT_CENTRE))
         )
 
     @cached_property
@@ -71,9 +71,9 @@ class MetricContext:
         return self.design_state.get(PointID.WHEEL_CENTER)
 
     @cached_property
-    def design_wheel_ground_tangent(self) -> Point3:
-        """Return the design tyre contact tangent in chassis coordinates."""
-        return self.design_state.get(PointID.WHEEL_GROUND_TANGENT)
+    def design_wheel_contact_centre(self) -> Point3:
+        """Return the design wheel contact centre in chassis coordinates."""
+        return self.design_state.get(PointID.WHEEL_CONTACT_CENTRE)
 
     @cached_property
     def side_view_ic(self) -> Point3 | None:
@@ -91,9 +91,9 @@ class MetricContext:
         return self.state.get(PointID.WHEEL_CENTER)
 
     @cached_property
-    def wheel_ground_tangent(self) -> Point3:
-        """Return the current tyre contact tangent in chassis coordinates."""
-        return self.state.get(PointID.WHEEL_GROUND_TANGENT)
+    def wheel_contact_centre(self) -> Point3:
+        """Return the current wheel contact centre in chassis coordinates."""
+        return self.state.get(PointID.WHEEL_CONTACT_CENTRE)
 
     @cached_property
     def wheel_axis(self) -> Direction3:

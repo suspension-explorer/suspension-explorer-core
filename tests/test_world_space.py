@@ -19,8 +19,8 @@ from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.sweep import solve_sweep
 
 TANGENT_REFS = (
-    PointRef(Side.LEFT, PointID.WHEEL_GROUND_TANGENT),
-    PointRef(Side.RIGHT, PointID.WHEEL_GROUND_TANGENT),
+    PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE),
+    PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE),
 )
 
 

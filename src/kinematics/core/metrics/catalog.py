@@ -58,7 +58,8 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
         calculate_camber,
         calculate_caster,
         calculate_kpi,
-        calculate_roadwheel_angle,
+        calculate_steer,
+        calculate_toe,
     )
     from kinematics.core.metrics.anti_geometry import (
         calculate_anti_dive_pct,
@@ -109,9 +110,15 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
             MetricUnit.MM,
         ),
         MetricDefinition(
-            "roadwheel_angle",
-            calculate_roadwheel_angle,
-            "Roadwheel Angle",
+            "toe_angle",
+            calculate_toe,
+            "Toe Angle",
+            MetricUnit.DEG,
+        ),
+        MetricDefinition(
+            "steer_angle",
+            calculate_steer,
+            "Steer Angle",
             MetricUnit.DEG,
         ),
         MetricDefinition(
@@ -232,8 +239,19 @@ def get_default_corner_derivative_metrics(
                 lambda positions: kernels.toe_deg(
                     positions, side_sign, axle_inboard, axle_outboard
                 ),
-                "roadwheel_angle",
-                "Roadwheel Angle",
+                "toe_angle",
+                "Toe Angle",
+                MetricUnit.DEG,
+            ),
+            driver=hub_z_driver,
+        ),
+        DerivativeMetricDefinition(
+            response=response(
+                lambda positions: kernels.steer_deg(
+                    positions, side_sign, axle_inboard, axle_outboard
+                ),
+                "steer_angle",
+                "Steer Angle",
                 MetricUnit.DEG,
             ),
             driver=hub_z_driver,
@@ -262,7 +280,7 @@ def get_default_corner_derivative_metrics(
         ),
         DerivativeMetricDefinition(
             response=PointCoordinateResponse.from_axis(
-                PointID.WHEEL_GROUND_TANGENT,
+                PointID.WHEEL_CONTACT_CENTRE,
                 (0.0, side_sign, 0.0),
                 name="half_track",
                 unit=MetricUnit.MM,
@@ -299,8 +317,19 @@ def get_default_corner_derivative_metrics(
                         lambda positions: kernels.toe_deg(
                             positions, side_sign, axle_inboard, axle_outboard
                         ),
-                        "roadwheel_angle",
-                        "Roadwheel Angle",
+                        "toe_angle",
+                        "Toe Angle",
+                        MetricUnit.DEG,
+                    ),
+                    driver=rack_displacement_driver,
+                ),
+                DerivativeMetricDefinition(
+                    response=response(
+                        lambda positions: kernels.steer_deg(
+                            positions, side_sign, axle_inboard, axle_outboard
+                        ),
+                        "steer_angle",
+                        "Steer Angle",
                         MetricUnit.DEG,
                     ),
                     driver=rack_displacement_driver,

@@ -75,18 +75,18 @@ class TrailingArmCorner(CornerSuspension):
             CHASSIS_REAR,
             KNUCKLE,
             PointID.WHEEL_CENTER,
-            PointID.WHEEL_GROUND_TANGENT,
+            PointID.WHEEL_CONTACT_CENTRE,
         }
     )
     FREE_POINTS: ClassVar[tuple[PointID, ...]] = (
         KNUCKLE,
         PointID.WHEEL_CENTER,
-        PointID.WHEEL_GROUND_TANGENT,
+        PointID.WHEEL_CONTACT_CENTRE,
     )
     OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
         KNUCKLE,
         PointID.WHEEL_CENTER,
-        PointID.WHEEL_GROUND_TANGENT,
+        PointID.WHEEL_CONTACT_CENTRE,
     )
 
     def initial_state(self) -> SuspensionState:
@@ -118,8 +118,8 @@ class TrailingArmCorner(CornerSuspension):
             for anchor in (CHASSIS_FRONT, CHASSIS_REAR)
         ]
         constraints.append(distance(KNUCKLE, PointID.WHEEL_CENTER))
-        constraints.append(distance(PointID.WHEEL_CENTER, PointID.WHEEL_GROUND_TANGENT))
-        constraints.append(distance(KNUCKLE, PointID.WHEEL_GROUND_TANGENT))
+        constraints.append(distance(PointID.WHEEL_CENTER, PointID.WHEEL_CONTACT_CENTRE))
+        constraints.append(distance(KNUCKLE, PointID.WHEEL_CONTACT_CENTRE))
         return constraints
 
     def derived_spec(self) -> DerivedPointsSpec:
@@ -190,7 +190,7 @@ def build_stub_corner(
             CHASSIS_REAR: Point3([-100.0, 0.3 * lateral, 150.0]),
             KNUCKLE: Point3([0.0, 0.9 * lateral, 50.0]),
             PointID.WHEEL_CENTER: Point3([0.0, lateral, 0.0]),
-            PointID.WHEEL_GROUND_TANGENT: Point3([0.0, lateral, -200.0]),
+            PointID.WHEEL_CONTACT_CENTRE: Point3([0.0, lateral, -200.0]),
         },
     )
 
@@ -294,7 +294,8 @@ def test_stub_axle_solves_and_reports_metrics_through_role_hooks():
         assert row["caster"] is not None
         assert row["deriv_camber_wrt_hub_z"] is not None
         # Corners without a rack declare no rack-driven derivatives.
-        assert "deriv_roadwheel_angle_wrt_rack_displacement" not in row
+        assert "deriv_toe_angle_wrt_rack_displacement" not in row
+        assert "deriv_steer_angle_wrt_rack_displacement" not in row
 
     assert final.axle["heave"] == pytest.approx(bump_values[-1], abs=1e-6)
     assert final.axle["rack_displacement"] is None

@@ -77,7 +77,7 @@ def test_design_state_travel_and_position_metrics() -> None:
 
     assert metrics["wheel_travel"] == pytest.approx(0.0)
     assert metrics["half_track"] == pytest.approx(
-        abs(float(state.get(PointID.WHEEL_GROUND_TANGENT)[1]))
+        abs(float(state.get(PointID.WHEEL_CONTACT_CENTRE)[1]))
     )
     assert metrics["damper_length"] is None
     assert metrics["anti_dive"] is None
@@ -208,7 +208,7 @@ def _anti_context(
     driven_axle: AxlePosition | None = None,
 ) -> MetricContext:
     """Build the minimal synthetic context consumed by anti metrics."""
-    wheel_ground_tangent = Point3([0.0, 800.0, 0.0])
+    wheel_contact_centre = Point3([0.0, 800.0, 0.0])
     return cast(
         MetricContext,
         SimpleNamespace(
@@ -217,9 +217,9 @@ def _anti_context(
                 front_brake_bias=front_brake_bias,
                 driven_axle=driven_axle,
             ),
-            road=RoadPlane.horizontal_at(wheel_ground_tangent),
+            road=RoadPlane.horizontal_at(wheel_contact_centre),
             side_view_ic=Point3([svic_x, 800.0, 300.0]),
-            wheel_ground_tangent=wheel_ground_tangent,
+            wheel_contact_centre=wheel_contact_centre,
             wheel_center=Point3([0.0, 800.0, 300.0]),
             cg_position=Point3([1250.0, 0.0, 450.0]),
             wheelbase=2500.0,
