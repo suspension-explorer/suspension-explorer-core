@@ -12,6 +12,7 @@ def require_visualization() -> ModuleType:
     Load the optional visualization API or exit with installation guidance.
     """
     try:
+        import_module("matplotlib")
         return import_module("kinematics.cli.visualization.api")
     except ImportError as error:
         typer.echo(

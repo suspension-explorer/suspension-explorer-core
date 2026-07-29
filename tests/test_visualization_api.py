@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from types import SimpleNamespace
 from typing import cast
 
@@ -9,6 +11,25 @@ import pytest
 
 from kinematics.cli.visualization import api
 from kinematics.core.suspensions.base import Suspension
+
+
+def test_visualization_api_import_does_not_require_matplotlib() -> None:
+    """Non-rendering helpers remain usable without the optional viz extra."""
+    script = (
+        "import sys\n"
+        "sys.modules['matplotlib'] = None\n"
+        "from kinematics.cli.visualization import api\n"
+        "assert api.GeometryVisualizationResult is not None\n"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize(
