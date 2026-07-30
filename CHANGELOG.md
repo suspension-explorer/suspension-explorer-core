@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-30
+
 ### Added
 
 - A `WorldSpace` API maps the axle-local road plane to the straight, level
