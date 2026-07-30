@@ -135,12 +135,17 @@ class DoubleWishboneSuspension(CornerSuspension):
         PointID.WHEEL_CENTER,
         PointID.WHEEL_INBOARD,
         PointID.WHEEL_OUTBOARD,
-        PointID.CONTACT_PATCH_CENTER,
+        PointID.WHEEL_CONTACT_CENTRE,
     )
     OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
         *LOCATING_OUTPUT_POINTS,
         *WHEEL_OUTPUT_POINTS,
     )
+    # The contact centre is reported but never driven. On an axle it comes from a
+    # coupled solve across both corners, with a bounded validity domain and
+    # non-unique roots; the standalone flat-ground construction is the same
+    # quantity, so it is refused as a target at both scopes.
+    OUTPUT_ONLY_POINTS: ClassVar[tuple[PointID, ...]] = (PointID.WHEEL_CONTACT_CENTRE,)
 
     # Free points that move during solving.
     FREE_POINTS: ClassVar[tuple[PointID, ...]] = (
@@ -488,7 +493,7 @@ class DoubleWishboneSuspension(CornerSuspension):
                 outboard=PointID.WHEEL_OUTBOARD,
                 axle_inboard=PointID.AXLE_INBOARD,
                 axle_outboard=PointID.AXLE_OUTBOARD,
-                contact_patch=PointID.CONTACT_PATCH_CENTER,
+                wheel_contact_centre=PointID.WHEEL_CONTACT_CENTRE,
             ),
         )
         return (

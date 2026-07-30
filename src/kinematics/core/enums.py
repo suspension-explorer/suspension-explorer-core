@@ -62,7 +62,9 @@ class PointID(IntEnum):
     WHEEL_INBOARD = 19
     WHEEL_OUTBOARD = 20
 
-    CONTACT_PATCH_CENTER = 21
+    # Geometric support point where the wheel plane is tangent to the axle's
+    # shared, zero-grade ground plane.
+    WHEEL_CONTACT_CENTRE = 21
 
     # Outboard camber shim geometry. Datum points A and B lie on the design
     # mid-thickness plane; the face normal is perpendicular to that plane.
@@ -79,6 +81,18 @@ class PointID(IntEnum):
     HEAVE_LINK_ROCKER = 31
     ARB_T_BAR_PIVOT = 32
     DROPLINK_T_BAR = 33
+
+    @property
+    def output_only_target_guidance(self) -> str | None:
+        """Return point-specific guidance when an output cannot be driven."""
+        if self is PointID.WHEEL_CONTACT_CENTRE:
+            return (
+                "Target 'wheel_center' along Z as the available heave input; "
+                "wheel orientation can still move the wheel contact centre, so read "
+                "ride height from the 'ride_height_change' metric of the solved "
+                "output."
+            )
+        return None
 
 
 class ShimType(StrEnum):

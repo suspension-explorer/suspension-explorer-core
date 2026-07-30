@@ -2,8 +2,9 @@
 Per-state suspension travel metrics.
 
 These metrics report wheel travel, half-track, and installed damper length.
-Every value is a scalar in millimeters. Sign conventions follow ISO 8855
-(X forward, Y left, Z up).
+Every value is a scalar in millimetres. Coordinates follow the ISO 8855
+vehicle-axis orientation (X forward, Y left, Z up), expressed in chassis
+space. These metrics do not use the local road plane or world space.
 """
 
 from __future__ import annotations
@@ -20,9 +21,10 @@ def calculate_wheel_travel(ctx: "MetricContext") -> float | None:
     """
     Vertical wheel travel in mm relative to the design condition.
 
-    Defined as the current wheel-center Z minus the design wheel-center Z.
-    Positive means the wheel has moved up in the chassis-fixed frame (bump);
-    negative means droop.
+    Defined as the current wheel-center chassis Z minus its design chassis Z.
+    Positive means the wheel has moved up relative to the chassis (bump);
+    negative means droop. This is not displacement normal to the road or world
+    vertical.
 
         wheel_travel = WC_z(current) - WC_z(design)
     """
@@ -35,21 +37,24 @@ def calculate_half_track(ctx: "MetricContext") -> float | None:
     """
     Half-track at this corner in mm.
 
-    Half-track is the lateral distance of the contact patch from the vehicle
-    centerline, i.e. the magnitude of the contact-patch Y.
+    Half-track is the lateral distance of the wheel contact centre from the
+    vehicle centerline, measured as the magnitude of its chassis Y coordinate.
+    Unlike the axle-level track metric, it is not resolved along the current
+    local road plane.
 
         half_track = |CP_y(current)|
     """
-    return abs(float(ctx.contact_patch_center[Axis.Y]))
+    return abs(float(ctx.wheel_contact_centre[Axis.Y]))
 
 
 def calculate_damper_length(ctx: "MetricContext") -> float | None:
     """
     Installed spring/damper (coilover) length in mm.
 
-    The length is the straight-line distance between the strut top mount
-    (chassis-fixed) and the strut bottom (body-mounted foot). Only defined
-    when the suspension actually carries a strut group; otherwise None.
+    Both mounts are represented in chassis coordinates and the length is their
+    Euclidean separation, which is invariant under a rigid change to world
+    coordinates. It does not reference the road plane. Only defined when the
+    suspension carries a strut group; otherwise None.
 
         damper_length = |STRUT_TOP - STRUT_BOTTOM|
     """

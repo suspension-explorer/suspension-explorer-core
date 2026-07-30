@@ -1,76 +1,113 @@
-"""
-Steering axis geometry metrics.
+"""ISO-aligned steering geometry on the axle-local road plane.
 
-Scrub radius and mechanical trail are measured from the point where the
-steering axis (kingpin axis) intersects the local ground reference plane
-through the contact patch center to the contact patch center itself.
-
-Coordinate System Assumption: ISO 8855 (X-Forward, Y-Left, Z-Up).
+The road datum is the ISO 8855 local or equivalent road plane expressed in
+chassis coordinates. The supported environment is straight and level, so road
+space and world space are aligned; these calculations nevertheless use the
+local road datum directly and do not require the inferred vehicle pose.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from kinematics.core.enums import Axis
-from kinematics.core.primitives.geometry import Vector3
+from kinematics.core.primitives.constants import EPS_GEOMETRIC
 
 if TYPE_CHECKING:
     from kinematics.core.metrics.context import MetricContext
+    from kinematics.core.primitives.geometry import Direction3, Vector3
+
+
+def _road_displacement(ctx: MetricContext) -> Vector3 | None:
+    """Return a chassis-coordinate displacement between two road-plane points."""
+    ground_intersection = ctx.steering_axis_ground_intersection
+    if ground_intersection is None:
+        return None
+    return ground_intersection - ctx.wheel_contact_centre
+
+
+def _tyre_road_axes(
+    ctx: MetricContext,
+) -> tuple[Direction3, Direction3] | None:
+    """Return right-handed tyre ``X_T`` and ``Y_T`` axes in the road plane.
+
+    ``X_T`` is forward and ``Z_T`` is the upward road normal. ``Y_T`` is
+    constructed as ``Z_T × X_T``, so ``X_T × Y_T = Z_T`` on both sides. This
+    makes tyre +Y outward on the left but inboard on the right; scalar metrics
+    fold their signs explicitly where required.
+    """
+    ground_normal = ctx.road.normal
+    projected_axis = ctx.wheel_axis.vector() - ground_normal * ctx.wheel_axis.dot(
+        ground_normal
+    )
+    if projected_axis.norm() < EPS_GEOMETRIC:
+        return None
+    outboard = projected_axis.normalize()
+    longitudinal = (ctx.side_sign * outboard.cross(ground_normal)).normalize()
+    lateral = ground_normal.cross(longitudinal).normalize()
+    return longitudinal, lateral
 
 
 def calculate_scrub_radius(ctx: MetricContext) -> float | None:
+    """Return ISO scrub radius in millimetres.
+
+    Following ISO 8855:2011 scrub radius (§7.2.10), this is the
+    distance in the axle-local road plane from the tyre contact centre to the
+    steering-axis intersection with that plane. Both points are represented
+    in chassis coordinates. The value is an unsigned road-plane magnitude,
+    not the commonly conflated signed lateral steering-axis offset, and does
+    not use world space or an inferred chassis pitch.
+
+    Returns ``None`` when the steering axis is parallel to the road plane.
     """
-    Scrub radius in mm.
+    displacement = _road_displacement(ctx)
+    return None if displacement is None else displacement.norm()
 
-    The distance from the steering axis ground intersection to the
-    contact patch center, measured along the wheel's lateral direction
-    in the ground plane. Projecting the wheel axis into the ground
-    plane keeps the measurement correct when the wheel is both steered
-    and cambered.
 
-    Positive scrub radius means the steering axis meets the ground
-    inboard of the contact patch (the common case for a double-
-    wishbone layout with positive KPI).
+def calculate_steering_axis_offset_ground(ctx: MetricContext) -> float | None:
+    """Return ISO steering-axis offset at ground in millimetres.
 
-    The steering-axis intersection is evaluated on the horizontal plane
-    at the contact patch Z-height, not at world Z = 0.
+    Following ISO 8855:2011 steering-axis offset at ground (§7.2.6), this is
+    the signed lateral
+    component along tyre ``Y_T`` from the tyre contact centre to the
+    steering-axis intersection with the axle-local road plane. The tyre axis
+    and both points are expressed in chassis coordinates. Positive means that
+    the intersection is inboard of the contact centre. World space and inferred
+    chassis pitch are not used.
 
-    Returns None if the steering axis is parallel to that plane.
+    Returns ``None`` when the steering axis is parallel to the road plane or
+    the wheel spin axis has no lateral projection into it.
     """
-    ground_pt = ctx.steering_axis_ground_intersection
-    if ground_pt is None:
+    displacement = _road_displacement(ctx)
+    axes = _tyre_road_axes(ctx)
+    if displacement is None or axes is None:
         return None
-    cp = ctx.contact_patch_center
-    # Scrub radius lives in the road plane, so remove the camber-driven
-    # Z component from the wheel axis before measuring the lateral offset.
-    # Negate so that positive scrub means the ground intersection is
-    # inboard of the contact patch. The projected wheel axis already
-    # encodes left/right handedness, so no explicit side_sign is needed.
-    displacement = ground_pt - cp
-    wheel_lateral_ground = Vector3(
-        [ctx.wheel_axis[Axis.X], ctx.wheel_axis[Axis.Y], 0.0]
-    ).normalize()
-    return -float(displacement.dot(wheel_lateral_ground))
+    _, lateral = axes
+    # Tyre +Y points outboard on the left and inboard on the right. Fold the
+    # right-handed tyre basis into the documented inboard-positive convention.
+    return -ctx.side_sign * float(displacement.dot(lateral))
 
 
 def calculate_mechanical_trail(ctx: MetricContext) -> float | None:
+    """Return wheel-relative mechanical trail in millimetres.
+
+    This is ISO 8855:2011 castor offset at ground (§7.2.3, also called castor
+    trail or kinematic trail): the signed longitudinal component along tyre ``X_T``
+    from the tyre contact centre to the steering-axis intersection with the
+    axle-local road plane. The tyre axis and both points are expressed in
+    chassis coordinates. Positive means that the intersection is ahead of the
+    contact centre.
+
+    It is deliberately not a raw chassis-X difference. At non-zero steer the
+    tyre longitudinal axis rotates away from chassis X, and mechanical trail
+    remains a wheel-relative steering-force lever arm. World space and inferred
+    chassis pitch are not used.
+
+    Returns ``None`` when the steering axis is parallel to the road plane or
+    the wheel spin axis has no lateral projection into it.
     """
-    Mechanical trail (caster trail) in mm.
-
-    The longitudinal (X-axis) distance from the steering axis ground
-    intersection to the contact patch center. Positive mechanical
-    trail means the contact patch is behind (rearward of) the steering
-    axis ground intersection, which produces a self-centring moment.
-
-    The steering-axis intersection is evaluated on the horizontal plane
-    at the contact patch Z-height, not at world Z = 0.
-
-    Returns None if the steering axis is parallel to that plane.
-    """
-    ground_pt = ctx.steering_axis_ground_intersection
-    if ground_pt is None:
+    displacement = _road_displacement(ctx)
+    axes = _tyre_road_axes(ctx)
+    if displacement is None or axes is None:
         return None
-    cp = ctx.contact_patch_center
-    # Positive when the contact patch is behind the ground intersection.
-    return float(ground_pt[Axis.X] - cp[Axis.X])
+    longitudinal, _ = axes
+    return float(displacement.dot(longitudinal))

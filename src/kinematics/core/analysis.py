@@ -8,6 +8,7 @@ export concern and are not embedded in analysis metric keys.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, cast
 
 from kinematics.core.assembly import SuspensionAssembly
 from kinematics.core.diagnostics import (
@@ -19,6 +20,7 @@ from kinematics.core.enums import TargetPositionMode
 from kinematics.core.metrics.main import AxleMetricRows, MetricRow
 from kinematics.core.metrics.metadata import MetricDisplay, metric_display_for_keys
 from kinematics.core.metrics.registry import metric_specs_for_suspension
+from kinematics.core.pose import WorldSpace, world_space_for_axle_state
 from kinematics.core.presentation import (
     NamedElementPath,
     WheelDimensions,
@@ -45,6 +47,9 @@ from kinematics.core.sweep import (
     solve_sweep,
 )
 from kinematics.core.targeting import PointTarget, SweepConfig
+
+if TYPE_CHECKING:
+    from kinematics.core.suspensions.axle import AxleSuspension
 
 Positions = dict[str, tuple[float, float, float]]
 
@@ -75,6 +80,7 @@ class AnalyzedFrame:
     positions: Positions
     metrics: MetricRow
     corner_metrics: dict[str, MetricRow]
+    world_space: WorldSpace | None
     solver: SolverInfo
 
 
@@ -174,6 +180,7 @@ def _hold_sweep_config(sweep_config: SweepConfig) -> SweepConfig | None:
 def _split_metric_rows(
     rows: MetricRow | AxleMetricRows,
 ) -> tuple[MetricRow, dict[str, MetricRow]]:
+    """Preserve metric values and their already-declared reference systems."""
     if isinstance(rows, AxleMetricRows):
         return rows.axle, {side.name.lower(): row for side, row in rows.corners.items()}
     return rows, {}
@@ -263,6 +270,14 @@ def analyze_evaluated_sweep(
                 positions=resolve_positions(state.positions, assembly),
                 metrics=metrics,
                 corner_metrics=corner_metrics,
+                world_space=(
+                    world_space_for_axle_state(
+                        cast("AxleSuspension", suspension),
+                        state,
+                    )
+                    if suspension.is_axle
+                    else None
+                ),
                 solver=info,
             )
         )

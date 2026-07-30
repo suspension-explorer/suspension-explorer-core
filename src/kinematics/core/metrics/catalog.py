@@ -3,6 +3,10 @@ Metric catalog.
 
 Defines the ordered set of corner-level metrics and their export column names.
 This is the single place to add, remove, or reorder exported metrics.
+
+Reference systems belong to each calculation's docstring rather than the
+catalog metadata. Instant-centre coordinate extractors below report principal
+chassis coordinates using the ISO 8855 vehicle-axis orientation.
 """
 
 from __future__ import annotations
@@ -54,7 +58,8 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
         calculate_camber,
         calculate_caster,
         calculate_kpi,
-        calculate_roadwheel_angle,
+        calculate_steer,
+        calculate_toe,
     )
     from kinematics.core.metrics.anti_geometry import (
         calculate_anti_dive_pct,
@@ -65,6 +70,7 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
     from kinematics.core.metrics.steering_geometry import (
         calculate_mechanical_trail,
         calculate_scrub_radius,
+        calculate_steering_axis_offset_ground,
     )
     from kinematics.core.metrics.swing_arms import (
         calculate_fvsa_length,
@@ -78,6 +84,7 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
 
     def _ic_coord(attr: str, axis: Axis) -> Callable[["MetricContext"], float | None]:
         def extract(ctx: "MetricContext") -> float | None:
+            """Extract one chassis-axis coordinate from an instant centre."""
             ic = getattr(ctx, attr)
             return None if ic is None else float(ic[axis])
 
@@ -88,6 +95,12 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
         MetricDefinition("caster", calculate_caster, "Caster", MetricUnit.DEG),
         MetricDefinition("kpi", calculate_kpi, "KPI", MetricUnit.DEG),
         MetricDefinition(
+            "steering_axis_offset_ground",
+            calculate_steering_axis_offset_ground,
+            "Steering-Axis Offset at Ground",
+            MetricUnit.MM,
+        ),
+        MetricDefinition(
             "scrub_radius", calculate_scrub_radius, "Scrub Radius", MetricUnit.MM
         ),
         MetricDefinition(
@@ -97,9 +110,15 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
             MetricUnit.MM,
         ),
         MetricDefinition(
-            "roadwheel_angle",
-            calculate_roadwheel_angle,
-            "Roadwheel Angle",
+            "toe_angle",
+            calculate_toe,
+            "Toe Angle",
+            MetricUnit.DEG,
+        ),
+        MetricDefinition(
+            "steer_angle",
+            calculate_steer,
+            "Steer Angle",
             MetricUnit.DEG,
         ),
         MetricDefinition(
@@ -172,15 +191,17 @@ def get_default_corner_derivative_metrics(
     """
     Declare derivative metrics common to every supported corner.
 
-    Point roles are resolved through the corner's role hooks. Wheel-travel
-    derivatives apply to every corner; rack-driven derivatives are omitted when
-    no steering rack is installed.
+    Point roles are resolved through the corner's role hooks. The common
+    alignment responses use chassis-referenced angles, while their hub and rack
+    drivers use chassis-axis coordinates. Differentiation does not introduce a
+    road or world reference. Wheel-travel derivatives apply to every corner;
+    rack-driven derivatives are omitted when no steering rack is installed.
     """
     side_sign = suspension.side.lateral_sign
     axle_inboard, axle_outboard = suspension.wheel_axis_points()
     lower_pivot, upper_pivot = suspension.steering_axis_points()
     rack_attachment = suspension.rack_attachment_point()
-    hub_z_driver = PointCoordinateResponse.from_world_axis(
+    hub_z_driver = PointCoordinateResponse.from_chassis_axis(
         PointID.WHEEL_CENTER,
         Axis.Z,
         name="hub_z",
@@ -218,8 +239,19 @@ def get_default_corner_derivative_metrics(
                 lambda positions: kernels.toe_deg(
                     positions, side_sign, axle_inboard, axle_outboard
                 ),
-                "roadwheel_angle",
-                "Roadwheel Angle",
+                "toe_angle",
+                "Toe Angle",
+                MetricUnit.DEG,
+            ),
+            driver=hub_z_driver,
+        ),
+        DerivativeMetricDefinition(
+            response=response(
+                lambda positions: kernels.steer_deg(
+                    positions, side_sign, axle_inboard, axle_outboard
+                ),
+                "steer_angle",
+                "Steer Angle",
                 MetricUnit.DEG,
             ),
             driver=hub_z_driver,
@@ -248,7 +280,7 @@ def get_default_corner_derivative_metrics(
         ),
         DerivativeMetricDefinition(
             response=PointCoordinateResponse.from_axis(
-                PointID.CONTACT_PATCH_CENTER,
+                PointID.WHEEL_CONTACT_CENTRE,
                 (0.0, side_sign, 0.0),
                 name="half_track",
                 unit=MetricUnit.MM,
@@ -269,9 +301,9 @@ def get_default_corner_derivative_metrics(
     ]
 
     if rack_attachment is not None:
-        # Rack displacement is the rack attachment point world-Y offset;
-        # the corner constrains that point to translate along world Y.
-        rack_displacement_driver = PointCoordinateResponse.from_world_axis(
+        # Rack displacement is the rack attachment point chassis Y offset;
+        # the corner constrains that point to translate along chassis Y.
+        rack_displacement_driver = PointCoordinateResponse.from_chassis_axis(
             rack_attachment,
             Axis.Y,
             name="rack_displacement",
@@ -285,8 +317,19 @@ def get_default_corner_derivative_metrics(
                         lambda positions: kernels.toe_deg(
                             positions, side_sign, axle_inboard, axle_outboard
                         ),
-                        "roadwheel_angle",
-                        "Roadwheel Angle",
+                        "toe_angle",
+                        "Toe Angle",
+                        MetricUnit.DEG,
+                    ),
+                    driver=rack_displacement_driver,
+                ),
+                DerivativeMetricDefinition(
+                    response=response(
+                        lambda positions: kernels.steer_deg(
+                            positions, side_sign, axle_inboard, axle_outboard
+                        ),
+                        "steer_angle",
+                        "Steer Angle",
                         MetricUnit.DEG,
                     ),
                     driver=rack_displacement_driver,

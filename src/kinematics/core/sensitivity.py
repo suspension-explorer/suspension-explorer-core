@@ -10,7 +10,7 @@ one forward dual-number pass.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 
 import numpy as np
 
@@ -59,8 +59,15 @@ def compute_state_tangents(
     constraints: list[Constraint],
     derived_manager: DerivedPointsManager,
     step_targets: Sequence[PointTarget],
+    post_derived_update: Callable[[dict], float | None] | None = None,
 ) -> tuple[list[TangentField], TangentSolveInfo]:
-    """Compute one tangent field per target and report solve health."""
+    """Compute one tangent field per target and report solve health.
+
+    ``post_derived_update`` mirrors the sweep's post-solve ground closure: it
+    is applied to the dual position map after the derived-point update so
+    closure outputs (the coupled wheel contact centres) carry their implicit
+    derivatives into the tangent field instead of the zero seed.
+    """
     if not step_targets:
         return [], TangentSolveInfo(
             n_variables=0,
@@ -128,6 +135,8 @@ def compute_state_tangents(
             free_velocities,
         )
         derived_manager.update_in_place(dual_positions)
+        if post_derived_update is not None:
+            post_derived_update(dual_positions)
         velocities = {
             point_id: dual_position.deriv.copy()
             for point_id, dual_position in dual_positions.items()
@@ -159,7 +168,7 @@ def _degenerate_constraint_pins(
         direction = constraint.line_direction.data
         direction = direction / np.linalg.norm(direction)
 
-        # Cross with the least-aligned world axis to obtain a stable basis of
+        # Cross with the least-aligned chassis axis to obtain a stable basis of
         # the plane perpendicular to the line.
         least_aligned = np.zeros(3)
         least_aligned[int(np.argmin(np.abs(direction)))] = 1.0

@@ -1,9 +1,7 @@
-"""
-Common derived point calculation functions.
+"""Common non-ground derived point calculation functions.
 
-These functions calculate positions of derived points based on the positions of other
-points in the suspension system. They are shared across different suspension types to
-avoid code duplication.
+These functions calculate positions of derived points based on other suspension
+points. Coupled axle ground-tangency geometry lives in :mod:`.ground`.
 """
 
 from __future__ import annotations
@@ -11,14 +9,12 @@ from __future__ import annotations
 from functools import partial
 from typing import Any
 
-import numpy as np
-
 from kinematics.core.enums import PointID
+from kinematics.core.points.derived.ground import get_wheel_contact_centre
 from kinematics.core.points.derived.manager import DerivedPointsSpec
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.primitives.vector_utils.generic import normalize_vector
 from kinematics.core.schema.config import WheelConfig
-from kinematics.core.targeting import WorldAxisSystem
 
 
 def get_point_along_line(
@@ -33,56 +29,15 @@ def get_point_along_line(
     return start + line_direction * distance_from_start
 
 
-def get_wheel_plane_down_vector(positions: dict[PointKey, Any]) -> Any:
-    """
-    Calculates the 'down' direction vector in the wheel's plane of rotation.
-
-    This vector is always perpendicular to the axle's direction and is calculated
-    by finding the component of the global down vector that is orthogonal to
-    the axle vector (using Gram-Schmidt orthogonalization).
-
-    Args:
-        positions: Dictionary of point coordinates. Must contain AXLE_INBOARD
-                   and AXLE_OUTBOARD.
-
-    Returns:
-        A normalized 3D vector representing the 'down' direction in the
-        wheel's plane.
-
-    Raises:
-        ValueError: If the axle has zero length or the resulting projected
-                    down vector is a zero vector (i.e., axle is vertical).
-    """
-    axle_inboard = positions[PointID.AXLE_INBOARD]
-    axle_outboard = positions[PointID.AXLE_OUTBOARD]
-
-    # Compute the normalized axle direction (wheel's spin axis).
-    axle_vector = axle_outboard - axle_inboard
-    axle_direction = normalize_vector(axle_vector)
-
-    # Find the 'down' direction within the wheel plane (perpendicular to the axle).
-    global_down = -1 * WorldAxisSystem.Z
-
-    # Project global down onto the plane perpendicular to the axle. This removes
-    # the component of 'down' that is parallel to the axle.
-    down_parallel_to_axle = np.dot(global_down, axle_direction) * axle_direction
-    wheel_down = global_down - down_parallel_to_axle
-
-    # Normalize to get the final unit vector. This will raise a ValueError if
-    # the axle is vertical, which is the correct fail-fast behavior.
-    return normalize_vector(wheel_down)
-
-
 def get_axle_midpoint(positions: dict[PointKey, Any]) -> Any:
     """
-    Computes the center point between the inboard and outboard axle positions.
+    Compute the centre point between the inboard and outboard axle positions.
 
     Args:
-        positions: Dictionary mapping point IDs to their 3D coordinates.
-                  Must contain AXLE_INBOARD and AXLE_OUTBOARD entries.
+        positions: Dictionary containing AXLE_INBOARD and AXLE_OUTBOARD.
 
     Returns:
-        A numpy array representing the 3D coordinates of the axle midpoint.
+        The axle midpoint position.
     """
     p1 = positions[PointID.AXLE_INBOARD]
     p2 = positions[PointID.AXLE_OUTBOARD]
@@ -91,102 +46,69 @@ def get_axle_midpoint(positions: dict[PointKey, Any]) -> Any:
 
 def get_wheel_center(positions: dict[PointKey, Any], wheel_offset: float) -> Any:
     """
-    Determine wheel center from hub face using ISO/SAE wheel-offset convention.
+    Determine wheel centre from hub face using the ISO/SAE wheel-offset convention.
 
-    Starting at `AXLE_OUTBOARD` (hub mounting face), this moves along the axle
-    axis by `wheel_offset` toward axle inboard for positive values.
+    Starting at AXLE_OUTBOARD (the hub mounting face), this moves along the
+    axle axis toward inboard for positive wheel offset.
 
     Args:
-        positions: Dictionary mapping point IDs to their 3D coordinates.
-                Must contain AXLE_INBOARD and AXLE_OUTBOARD entries.
-        wheel_offset: Wheel offset (ET) from hub mounting face to wheel center
-                  plane in mm. Positive values place the wheel centerline
-                  inboard of the hub face; negative values place it outboard.
+        positions: Dictionary containing AXLE_INBOARD and AXLE_OUTBOARD.
+        wheel_offset: Offset from hub mounting face to wheel centre plane in mm.
 
     Returns:
-        A numpy array representing the 3D coordinates of the wheel center.
+        The wheel-centre position.
     """
     p1 = positions[PointID.AXLE_OUTBOARD]  # Hub face.
     p2 = positions[PointID.AXLE_INBOARD]  # Axle inboard point.
-    v = p1 - p2  # Points outboard; from inboard to axle outboard (hub face).
-    v = normalize_vector(v)
-
-    # ISO/SAE wheel offset convention: positive offset places centerline inboard.
+    v = normalize_vector(p1 - p2)  # Points outboard from axle inboard to hub face.
+    # Positive ISO/SAE offset places the centreline inboard.
     return p1 - v * wheel_offset
 
 
 def get_wheel_inboard(positions: dict[PointKey, Any], wheel_width: float) -> Any:
     """
-    Determines the inboard edge position of the wheel by moving inward from the wheel
-    center by half the wheel width along the axle axis.
+    Determine the inboard wheel edge from the centre and total wheel width.
 
     Args:
-        positions: Dictionary mapping point IDs to their 3D coordinates.
-                Must contain AXLE_INBOARD and WHEEL_CENTER entries.
-        wheel_width: Total width of the wheel across its axial dimension.
+        positions: Dictionary containing AXLE_INBOARD and WHEEL_CENTER.
+        wheel_width: Total wheel width across its axial dimension.
 
     Returns:
-        A numpy array representing the 3D coordinates of the wheel's inboard lip/edge.
+        The inboard wheel-face position.
     """
     p1 = positions[PointID.AXLE_INBOARD]
     p2 = positions[PointID.WHEEL_CENTER]
-    v = p2 - p1  # Points outboard; from inboard to wheel center.
-    v = normalize_vector(v)
+    v = normalize_vector(p2 - p1)  # Points outboard from axle inboard.
     return p2 - v * (wheel_width / 2)
 
 
 def get_wheel_outboard(positions: dict[PointKey, Any], wheel_width: float) -> Any:
     """
-    Determines the outboard edge position of the wheel by moving outward from the wheel
-    center by half the wheel width along the axle axis.
+    Determine the outboard wheel edge from the centre and total wheel width.
 
     Args:
-        positions: Dictionary mapping point IDs to their 3D coordinates.
-                Must contain WHEEL_CENTER and AXLE_INBOARD entries.
-        wheel_width: Total width of the wheel across its axial dimension.
+        positions: Dictionary containing AXLE_INBOARD and WHEEL_CENTER.
+        wheel_width: Total wheel width across its axial dimension.
 
     Returns:
-        A numpy array representing the 3D coordinates of the wheel's outboard lip/edge.
+        The outboard wheel-face position.
     """
     p1 = positions[PointID.WHEEL_CENTER]
     p2 = positions[PointID.AXLE_INBOARD]
-    v = p1 - p2  # Points outboard; from axle inboard to wheel center.
-    v = normalize_vector(v)
+    v = normalize_vector(p1 - p2)  # Points outboard from axle inboard.
     return p1 + v * (wheel_width / 2)
-
-
-def get_contact_patch_center(positions: dict[PointKey, Any], tire_radius: float) -> Any:
-    """
-    Computes the position of the geometric contact patch center.
-
-    This is the lowest point on an ideal tire circle in the wheel's center
-    plane. It is found by moving from the wheel center in the wheel-plane
-    'down' direction by a distance equal to the tire radius. Its Z-coordinate
-    is not fixed and will move with the suspension.
-
-    Args:
-        positions: Dictionary of point coordinates.
-        tire_radius: The radius of the tire in mm.
-
-    Returns:
-        The 3D coordinates of the geometric contact point.
-    """
-    wheel_center = positions[PointID.WHEEL_CENTER]
-    wheel_down_normalized = get_wheel_plane_down_vector(positions)
-
-    # Calculate the contact point by moving from the wheel center by the radius.
-    contact_point = wheel_center + wheel_down_normalized * tire_radius
-
-    return contact_point
 
 
 def build_wheel_derived_spec(wheel: "WheelConfig") -> "DerivedPointsSpec":
     """
     Build the standard wheel derived-point specification.
 
-    Every corner whose wheel spin axis is AXLE_INBOARD -> AXLE_OUTBOARD
-    derives the wheel center, rim faces, and contact patch the same way;
-    this is that shared declaration.
+    Every corner whose wheel spin axis is AXLE_INBOARD -> AXLE_OUTBOARD derives
+    the wheel centre, rim faces, and flat-ground wheel contact centre the same way.
+    When both corners are composed, AxleSuspension removes the WHEEL_CONTACT_CENTRE
+    entries from the composed derived-point graph entirely and writes both
+    contact centres from its post-solve ground closure instead, so no
+    per-corner flat-ground result can reach an axle state.
     """
     tire_radius = wheel.tire.nominal_radius
     functions = {
@@ -198,8 +120,8 @@ def build_wheel_derived_spec(wheel: "WheelConfig") -> "DerivedPointsSpec":
         PointID.WHEEL_OUTBOARD: partial(
             get_wheel_outboard, wheel_width=wheel.tire.section_width
         ),
-        PointID.CONTACT_PATCH_CENTER: partial(
-            get_contact_patch_center, tire_radius=tire_radius
+        PointID.WHEEL_CONTACT_CENTRE: partial(
+            get_wheel_contact_centre, tire_radius=tire_radius
         ),
     }
     dependencies = {
@@ -207,7 +129,7 @@ def build_wheel_derived_spec(wheel: "WheelConfig") -> "DerivedPointsSpec":
         PointID.WHEEL_CENTER: {PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD},
         PointID.WHEEL_INBOARD: {PointID.WHEEL_CENTER, PointID.AXLE_INBOARD},
         PointID.WHEEL_OUTBOARD: {PointID.WHEEL_CENTER, PointID.AXLE_INBOARD},
-        PointID.CONTACT_PATCH_CENTER: {
+        PointID.WHEEL_CONTACT_CENTRE: {
             PointID.WHEEL_CENTER,
             PointID.AXLE_INBOARD,
             PointID.AXLE_OUTBOARD,

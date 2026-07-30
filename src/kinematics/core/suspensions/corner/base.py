@@ -10,7 +10,7 @@ from kinematics.core.enums import PointID, SuspensionType
 from kinematics.core.metrics.main import compute_metrics_for_state
 from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.base import Suspension
-from kinematics.core.targeting import ActuatorDOF, WorldAxisSystem
+from kinematics.core.targeting import ActuatorDOF, ChassisAxisSystem
 
 if TYPE_CHECKING:
     from kinematics.core.metrics.main import MetricRow
@@ -86,7 +86,7 @@ class CornerSuspension(Suspension):
             ActuatorDOF(
                 name="steering rack",
                 point_keys=(rack_point,),
-                direction=WorldAxisSystem.Y,
+                direction=ChassisAxisSystem.Y,
             ),
         )
 

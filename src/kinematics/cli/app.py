@@ -12,6 +12,7 @@ def require_visualization() -> ModuleType:
     Load the optional visualization API or exit with installation guidance.
     """
     try:
+        import_module("matplotlib")
         return import_module("kinematics.cli.visualization.api")
     except ImportError as error:
         typer.echo(
@@ -76,8 +77,8 @@ def visualize(
     Visualize a suspension geometry at its design condition.
 
     This command loads a single geometry file, calculates its initial state, and
-    generates a debug plot. It also reports whether the contact patch approximation
-    (minimum Z position on wheel center plane) is tangent to the ground plane (Z=0).
+    generates a debug plot. It also reports whether the wheel contact centres
+    points lie on the reconstructed design road plane.
 
     Example:
     uv run kinematics visualize --geometry=tests/data/geometry.yaml --output=plot.png
@@ -92,22 +93,22 @@ def visualize(
         suspension=suspension,
         output_path=output,
     )
-    contact_patch_z = ", ".join(f"{value:.3f}" for value in result.contact_patch_z)
-    if result.contact_patch_on_ground:
+    road_distances = ", ".join(
+        f"{value:.3f}" for value in result.wheel_contact_centre_road_distance_mm
+    )
+    if result.wheel_contact_centres_on_road:
         typer.secho(
-            "Geometry Check: OK. Contact patches at ground "
-            f"(Z = {contact_patch_z} mm).",
+            "Geometry Check: OK. Wheel contact centres lie on the reconstructed "
+            f"design road plane (distances = {road_distances} mm).",
             fg=typer.colors.GREEN,
         )
     else:
         typer.secho(
-            "Geometry Check: WARNING. Contact patch center is not on the ground.",
+            "Geometry Check: WARNING. Wheel contact centres do not lie on the "
+            "reconstructed design road plane.",
             fg=typer.colors.RED,
         )
-        typer.echo(
-            "The contact patch centers are currently located at "
-            f"Z = {contact_patch_z} mm."
-        )
+        typer.echo(f"Their signed distances from that plane are {road_distances} mm.")
     typer.secho(
         f"Visualization saved to: {result.output_path}",
         fg=typer.colors.GREEN,

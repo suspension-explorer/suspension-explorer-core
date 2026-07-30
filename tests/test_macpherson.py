@@ -124,8 +124,9 @@ def test_sweep_metrics_and_derivatives(macpherson):
         assert droop_row[key] is not None
         assert bump_row[key] is not None
 
-    # Steered corner: the bump-steer derivative is declared and evaluated.
-    assert bump_row["deriv_roadwheel_angle_wrt_rack_displacement"] is not None
+    # Steered corner: both project toe and ISO steer derivatives are declared.
+    assert bump_row["deriv_toe_angle_wrt_rack_displacement"] is not None
+    assert bump_row["deriv_steer_angle_wrt_rack_displacement"] is not None
     assert bump_row["deriv_damper_length_wrt_hub_z"] is not None
 
     # The damper length metric reads the strut through damper_points().

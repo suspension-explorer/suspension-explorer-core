@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import TYPE_CHECKING, Any, ClassVar, Sequence
 
 from kinematics.core.constraints import Constraint, DistanceConstraint
@@ -22,12 +23,16 @@ from kinematics.core.elements import (
 )
 from kinematics.core.enums import Axis, PointID, SuspensionType
 from kinematics.core.metrics.main import AxleMetricRows, compute_metrics_for_axle_state
+from kinematics.core.points.derived.ground import (
+    seed_from_contact_centres,
+    solve_axle_wheel_contact_centres,
+)
 from kinematics.core.points.derived.manager import (
     DerivedPointsSpec,
     PositionFn,
     PositionValue,
 )
-from kinematics.core.primitives.geometry import Point3
+from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import (
     PointKey,
     PointRef,
@@ -37,6 +42,7 @@ from kinematics.core.primitives.point_ref import (
 from kinematics.core.primitives.vector_utils.geometric import (
     compute_point_point_distance,
 )
+from kinematics.core.road import RoadPlane
 from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.axle.mechanisms import (
     ArbNone,
@@ -46,7 +52,7 @@ from kinematics.core.suspensions.axle.mechanisms import (
 )
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.suspensions.corner.base import CornerSuspension
-from kinematics.core.targeting import ActuatorDOF, WorldAxisSystem
+from kinematics.core.targeting import ActuatorDOF, ChassisAxisSystem
 
 if TYPE_CHECKING:
     from kinematics.core.diagnostics import DiagnosticIssue
@@ -139,7 +145,7 @@ class AxleSuspension(Suspension):
                     PointRef(Side.LEFT, rack[0]),
                     PointRef(Side.RIGHT, rack[1]),
                 ),
-                direction=WorldAxisSystem.Y,
+                direction=ChassisAxisSystem.Y,
             ),
         )
 
@@ -164,6 +170,10 @@ class AxleSuspension(Suspension):
 
         state = SuspensionState(positions, free_points)
         self.anti_roll.add_to_state(state)
+        # Corners construct their own flat-road contact centres before they are
+        # composed; the closure overwrites both with the coupled shared-plane
+        # solution so the design state carries one consistent ground.
+        self.apply_ground_closure(state.positions)
         state.free_points_order = sorted(state.free_points)
         self._initial_state = state
         return self._initial_state
@@ -185,6 +195,48 @@ class AxleSuspension(Suspension):
             for point in self.corners[side].output_points()
         )
         return tuple(dict.fromkeys((*corner_points, *self.anti_roll.output_points)))
+
+    def output_only_points(self) -> tuple[PointKey, ...]:
+        """Return each corner's undriveable outputs under side-qualified keys."""
+        return tuple(
+            dict.fromkeys(
+                side_qualified(side, point)
+                for side in (Side.LEFT, Side.RIGHT)
+                for point in self.corners[side].output_only_points()
+            )
+        )
+
+    def closure_points(self) -> tuple[PointKey, ...]:
+        """Return the coupled contact centres when ground closure owns them."""
+        if self._ground_closure_plan() is None:
+            return ()
+        return (
+            PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE),
+            PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE),
+        )
+
+    @cached_property
+    def design_road_plane(self) -> RoadPlane | None:
+        """Return the authored level road plane in chassis coordinates.
+
+        ISO 8855 vehicle and earth-fixed axes are assumed aligned at design.
+        A materially banked axle contact line violates that contract and is
+        rejected rather than reinterpreted as a rolled design condition.
+        """
+        state = self.initial_state()
+        left = state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE))
+        right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE))
+        try:
+            road = RoadPlane.from_axle_contact_centres(left, right)
+        except ValueError:
+            return None
+        if not road.normal.almost_equals(
+            Direction3((0.0, 0.0, 1.0)),
+            atol=1e-7,
+            rtol=0.0,
+        ):
+            return None
+        return road
 
     def constraints(self) -> list[Constraint]:
         """Combine remapped corner constraints and the rigid rack coupling."""
@@ -265,7 +317,76 @@ class AxleSuspension(Suspension):
         anti_roll_spec = self.anti_roll.derived_spec()
         functions.update(anti_roll_spec.functions)
         dependencies.update(anti_roll_spec.dependencies)
+        if self._ground_closure_plan() is not None:
+            # The coupled contact centres are post-solve closure outputs, not derived
+            # points: dropping the composed flat-ground entries means nothing
+            # can silently write per-corner flat-road centres into an axle state.
+            for side in (Side.LEFT, Side.RIGHT):
+                contact_centre = PointRef(side, PointID.WHEEL_CONTACT_CENTRE)
+                functions.pop(contact_centre, None)
+                dependencies.pop(contact_centre, None)
         return DerivedPointsSpec(functions, dependencies)
+
+    def _ground_closure_plan(self) -> dict[str, Any] | None:
+        """Return the coupled tangency solve arguments, or None when inapplicable.
+
+        The closure needs both corners' wheel radii and spin axes. Corners
+        without a wheel configuration have no radius to couple, and a custom
+        corner that solves its own authored contact centre as a free point owns
+        that point outright; both cases leave contact-centre ownership with the
+        corners.
+        """
+        left_corner = self.corners[Side.LEFT]
+        right_corner = self.corners[Side.RIGHT]
+        if left_corner.config is None or right_corner.config is None:
+            return None
+        if (
+            PointID.WHEEL_CONTACT_CENTRE in left_corner.free_points()
+            or PointID.WHEEL_CONTACT_CENTRE in right_corner.free_points()
+        ):
+            return None
+
+        left_axis_inboard, left_axis_outboard = left_corner.wheel_axis_points()
+        right_axis_inboard, right_axis_outboard = right_corner.wheel_axis_points()
+        return {
+            "left_center": PointRef(Side.LEFT, PointID.WHEEL_CENTER),
+            "left_axis_inboard": PointRef(Side.LEFT, left_axis_inboard),
+            "left_axis_outboard": PointRef(Side.LEFT, left_axis_outboard),
+            "left_radius": left_corner.config.wheel.tire.nominal_radius,
+            "right_center": PointRef(Side.RIGHT, PointID.WHEEL_CENTER),
+            "right_axis_inboard": PointRef(Side.RIGHT, right_axis_inboard),
+            "right_axis_outboard": PointRef(Side.RIGHT, right_axis_outboard),
+            "right_radius": right_corner.config.wheel.tire.nominal_radius,
+        }
+
+    def apply_ground_closure(
+        self,
+        positions: dict[PointKey, Any],
+        seed: float | None = None,
+    ) -> float | None:
+        """Overwrite both wheel contact centres with the coupled solution.
+
+        Runs once per accepted state, after solving. With no explicit ``seed``,
+        the angle implied by the contact-centre values already stored in
+        ``positions``
+        is recovered as the seed, so branch continuity needs no hidden state.
+        Returns the solved primal ground-normal angle, or ``None`` when the
+        corners own their contact centres.
+        """
+        plan = self._ground_closure_plan()
+        if plan is None:
+            return None
+        left_contact_centre = PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE)
+        right_contact_centre = PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE)
+        if seed is None:
+            stored_left = positions.get(left_contact_centre)
+            stored_right = positions.get(right_contact_centre)
+            if stored_left is not None and stored_right is not None:
+                seed = seed_from_contact_centres(stored_left, stored_right)
+        contact_centres = solve_axle_wheel_contact_centres(positions, **plan, seed=seed)
+        positions[left_contact_centre] = contact_centres.left
+        positions[right_contact_centre] = contact_centres.right
+        return contact_centres.normal_angle
 
     @staticmethod
     def _wrap_derived(function: PositionFn, side: Side) -> PositionFn:

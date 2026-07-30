@@ -6,7 +6,11 @@ import numpy as np
 import pytest
 
 from kinematics.cli.io.loaders import load_geometry
-from kinematics.cli.visualization.main import ELEMENT_STYLES, renderer_elements
+from kinematics.cli.visualization.main import (
+    ELEMENT_STYLES,
+    build_render_model,
+    renderer_elements,
+)
 from kinematics.core.elements import (
     ElementType,
     RackElement,
@@ -24,6 +28,7 @@ from kinematics.core.presentation import (
     named_point_keys,
     point_midpoint_name,
     resolve_positions,
+    wheel_references,
 )
 from kinematics.core.primitives.point_ref import PointRef, Side, point_key_name
 
@@ -133,9 +138,10 @@ def test_cli_renderer_adds_styles_to_unstyled_element_paths(
 
     rendered = renderer_elements(paths)
 
-    assert [link.element for link in rendered] == paths
+    assert [link.element for link in rendered] == list(paths)
     assert all(point in positions for link in rendered for point in link.points)
     assert all(link.style.color for link in rendered)
+    assert ElementType.WHEEL_CONTACT_CENTRE in ELEMENT_STYLES
     torsion_bar_paths = [
         path.points for path in paths if path.type is ElementType.TORSION_BAR
     ]
@@ -154,3 +160,88 @@ def test_cli_renderer_has_distinct_heave_link_style() -> None:
     assert heave_style != ELEMENT_STYLES[ElementType.SPRING_DAMPER]
     assert heave_style.color
     assert heave_style.linestyle == "--"
+
+
+def test_wheel_reference_uses_contact_centre_name(
+    test_data_dir: Path,
+) -> None:
+    suspension = load_geometry(test_data_dir / "geometry.yaml")
+    reference = wheel_references(suspension.assembly())[0]
+
+    assert reference.wheel_contact_centre == "wheel_contact_centre"
+
+
+def test_wheel_element_and_path_use_canonical_contact_centre_name(
+    test_data_dir: Path,
+) -> None:
+    suspension = load_geometry(test_data_dir / "geometry.yaml")
+    assembly = suspension.assembly()
+    wheel = next(
+        element for element in assembly.elements if isinstance(element, WheelElement)
+    )
+    path = next(
+        path
+        for path in named_element_paths(assembly)
+        if path.type is ElementType.WHEEL_CONTACT_CENTRE
+    )
+
+    assert wheel.wheel_contact_centre is PointID.WHEEL_CONTACT_CENTRE
+    assert path.type.value == "wheel_contact_centre"
+    assert path.label == "Wheel Contact Centre"
+
+
+def test_cli_renderer_styles_wheel_contact_centre_as_a_marker(
+    test_data_dir: Path,
+) -> None:
+    suspension = load_geometry(test_data_dir / "geometry.yaml")
+    render_model = build_render_model(suspension)
+    visualizer = render_model.visualizer
+
+    contact_centres = [
+        link
+        for link in visualizer.links
+        if link.element.type is ElementType.WHEEL_CONTACT_CENTRE
+    ]
+
+    assert len(contact_centres) == 1
+    assert all(len(link.points) == 1 for link in contact_centres)
+    assert all(link.style.linewidth == 0.0 for link in contact_centres)
+    assert all(link.style.markersize > 0.0 for link in contact_centres)
+    assert all(
+        len(link.points) > 1
+        for link in visualizer.links
+        if link.element.type is not ElementType.WHEEL_CONTACT_CENTRE
+    )
+
+
+def test_cli_renderer_static_and_animation_topology_includes_contact_centre(
+    test_data_dir: Path,
+) -> None:
+    plt = pytest.importorskip("matplotlib.pyplot")
+    from kinematics.cli.visualization.plots import plot_suspension_on_axis
+
+    suspension = load_geometry(test_data_dir / "geometry.yaml")
+    state = suspension.initial_state()
+    render_model = build_render_model(suspension)
+    visualizer = render_model.visualizer
+    positions = render_model.positions(state)
+
+    fig = plt.figure()
+    try:
+        static_axis = fig.add_subplot(121, projection="3d")
+        plot_suspension_on_axis(
+            static_axis,
+            visualizer,
+            positions,
+            view_name="iso",
+        )
+        # The single-point contact centre is drawn as a scatter collection.
+        assert len(static_axis.collections) == 1
+
+        animation_axis = fig.add_subplot(122, projection="3d")
+        artists = visualizer.draw_links(animation_axis, positions)
+        visualizer.update_links(artists, positions)
+        assert len(artists) == len(visualizer.links)
+        assert len(animation_axis.lines) == len(visualizer.links)
+    finally:
+        plt.close(fig)

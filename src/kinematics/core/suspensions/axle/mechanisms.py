@@ -384,7 +384,7 @@ class ArbUBar:
         return tuple(
             DerivativeMetricDefinition(
                 response=response,
-                driver=PointCoordinateResponse.from_world_axis(
+                driver=PointCoordinateResponse.from_chassis_axis(
                     PointRef(side, PointID.WHEEL_CENTER),
                     Axis.Z,
                     name=f"hub_z_{side.name.lower()}",
@@ -746,7 +746,7 @@ class ArbTBar:
         )
         definitions: list[DerivativeMetricDefinition] = []
         for side in (Side.LEFT, Side.RIGHT):
-            driver = PointCoordinateResponse.from_world_axis(
+            driver = PointCoordinateResponse.from_chassis_axis(
                 PointRef(side, PointID.WHEEL_CENTER),
                 Axis.Z,
                 name=f"hub_z_{side.name.lower()}",
@@ -913,7 +913,7 @@ class HeaveLinkRockerToRocker:
         return tuple(
             DerivativeMetricDefinition(
                 response=response,
-                driver=PointCoordinateResponse.from_world_axis(
+                driver=PointCoordinateResponse.from_chassis_axis(
                     PointRef(side, PointID.WHEEL_CENTER),
                     Axis.Z,
                     name=f"hub_z_{side.name.lower()}",

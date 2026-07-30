@@ -39,7 +39,10 @@ class GeometrySpecBase(BaseModel):
 
     name: str = "unnamed"
     version: str = "0.0.0"
-    units: Units = Units.MILLIMETERS
+    # Every length-valued schema, solver tolerance, and metric currently uses
+    # millimetres. Reject a misleading declaration until input normalization is
+    # implemented end to end.
+    units: Literal[Units.MILLIMETERS] = Units.MILLIMETERS
     type: SuspensionType
     scope: Scope
 

@@ -12,6 +12,7 @@ class MetricUnit(Enum):
     MM = "mm"
     DEG = "deg"
     PERCENT = "%"
+    DIMENSIONLESS = "1"
 
     @property
     def symbol(self) -> str:

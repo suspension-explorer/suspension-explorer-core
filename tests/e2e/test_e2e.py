@@ -421,7 +421,7 @@ class TestCliEndToEnd:
         assert solve_mock.call_count == 1
 
     @requires_viz
-    def test_axle_geometry_visualization_uses_both_contact_patches(
+    def test_axle_geometry_visualization_uses_both_ground_tangents(
         self,
         temp_dir: Path,
         test_data_dir: Path,
@@ -435,8 +435,8 @@ class TestCliEndToEnd:
         result = visualize_geometry(suspension, output_file)
 
         assert output_file.exists()
-        assert len(result.contact_patch_z) == 2
-        assert result.contact_patch_on_ground
+        assert len(result.wheel_contact_centre_z) == 2
+        assert result.wheel_contact_centres_on_road
 
     @requires_viz
     def test_csv_output_with_animation(

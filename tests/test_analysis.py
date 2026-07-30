@@ -46,6 +46,7 @@ def test_corner_analysis_is_complete_and_structured(corner_analysis) -> None:
     assert "wheel_center" in first.positions
     assert first.metrics
     assert first.corner_metrics == {}
+    assert first.world_space is None
     assert first.solver.converged
     assert "setup" in corner_analysis.references
     assert list(corner_analysis.references["setup"].metrics) == (
@@ -60,6 +61,9 @@ def test_axle_metrics_keep_corner_location_structural(axle_analysis) -> None:
     assert set(frame.corner_metrics) == {"left", "right"}
     assert all(frame.corner_metrics.values())
     assert frame.metrics
+    assert frame.world_space is not None
+    assert "ride_height_change" in frame.metrics
+    assert not any(key.startswith("ground_") for key in frame.metrics)
     assert not any(key.endswith("_left") for key in frame.corner_metrics["left"])
     assert set(axle_analysis.references["setup"].corner_metrics) == {
         "left",

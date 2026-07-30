@@ -7,15 +7,21 @@ braking), and anti-squat (driven axle under acceleration). All are expressed
 as a percentage where 100 percent means the geometry fully reacts the
 load-transfer pitch moment and 0 percent means it reacts none of it.
 
-All quantities are evaluated in the side view (the XZ plane). The governing
-line is the line from a reaction point (contact patch for outboard brakes,
-wheel center for inboard-sprung drive) to the side-view instant center
-(SVIC). Its inclination, expressed as tan(theta), together with the wheelbase
-L and CG height above ground h, sets the anti percentage.
+The anti percentages model brake and tractive forces relative to the
+axle-local road plane. Following the ISO 8855 vehicle and road-plane
+conventions, its normal and forward direction are expressed in chassis
+coordinates. In the supported straight, level environment road space and
+world space are aligned, but the single-axle metric does not infer or predict
+whole-vehicle pitch. The governing line runs from a reaction point
+(wheel contact centre for outboard brakes, wheel center for inboard-sprung
+drive) to the side-view instant center (SVIC). Its inclination, expressed as
+tan(theta), together with the wheelbase L and CG height above ground h, sets
+the anti percentage.
 
-Sign conventions follow ISO 8855 (X forward, Z up). Every metric returns None
-when the SVIC is undefined, a denominator is within EPS_GEOMETRIC of zero, the
-CG is not above the ground plane, or a required configuration field is unset.
+Sign conventions follow the ISO 8855 vehicle-axis orientation (X forward,
+Y left, Z up). Every metric returns None when the SVIC is undefined, a
+denominator is within EPS_GEOMETRIC of zero, the CG is not above the road
+plane, or a required configuration field is unset.
 """
 
 from __future__ import annotations
@@ -34,12 +40,16 @@ def calculate_svsa_angle(ctx: "MetricContext") -> float | None:
     """
     Side-view swing-arm line inclination in degrees.
 
-    This is the inclination of the side-view line from the contact patch to
-    the SVIC. A side-view line has a 180-degree ambiguity (it is a line, not
-    a ray), so the angle is taken as the atan of the slope rather than atan2,
-    giving a range of (-90, 90) degrees:
+    This is deliberately a chassis-space construction: the line from the wheel
+    contact centre to the SVIC is resolved in the chassis XZ plane, using the
+    ISO 8855 vehicle-axis orientation. It does not use the road plane, world
+    space, or inferred chassis attitude.
 
-        svsa_angle = degrees(atan((SVIC_z - CP_z) / (SVIC_x - CP_x)))
+    A side-view line has a 180-degree ambiguity (it is a line, not a ray), so
+    the angle is taken as the atan of the slope rather than atan2, giving a
+    range of (-90, 90) degrees:
+
+        svsa_angle = degrees(atan((SVIC_z - T_z) / (SVIC_x - T_x)))
 
     Positive means the line rises toward +X (toward the vehicle front).
     Returns None if the SVIC is undefined or the line is vertical (the
@@ -48,26 +58,31 @@ def calculate_svsa_angle(ctx: "MetricContext") -> float | None:
     svic = ctx.side_view_ic
     if svic is None:
         return None
-    cp = ctx.contact_patch_center
+    contact_centre = ctx.wheel_contact_centre
 
-    run = float(svic[Axis.X]) - float(cp[Axis.X])
+    # Deliberately a chassis-frame side-view construction: this angle describes
+    # the linkage's XZ swing-arm line, not a ground-relative force line. The anti
+    # percentages resolve their rise along the ground normal instead.
+    run = float(svic[Axis.X]) - float(contact_centre[Axis.X])
     if abs(run) < EPS_GEOMETRIC:
         # Vertical side-view line: slope undefined.
         return None
-    rise = float(svic[Axis.Z]) - float(cp[Axis.Z])
+    rise = float(svic[Axis.Z]) - float(contact_centre[Axis.Z])
     return degrees(atan(rise / run))
 
 
-def _cg_height_above_ground(ctx: "MetricContext") -> float | None:
+def _cg_height_above_road(ctx: "MetricContext") -> float | None:
     """
-    CG height above the ground plane in mm, or None if not strictly positive.
+    CG height above the road plane in mm, or None if not strictly positive.
 
-    In the chassis-fixed frame the ground follows the tire, so ground level is
-    the contact-patch Z. A non-positive height would put the CG at or below the
-    road, which is non-physical for these anti formulas, so guard it to None.
+    The CG point and road plane are represented in chassis coordinates. The
+    load-transfer moment arm in the anti formulas is the CG's perpendicular
+    distance to the ISO-style local road plane because the braking or tractive
+    force acts parallel to that plane. This is not a world-space CG height or a
+    prediction of whole-vehicle pitch. A non-positive height would put the CG
+    at or below the road, which is non-physical here.
     """
-    cp = ctx.contact_patch_center
-    height = float(ctx.cg_position[Axis.Z]) - float(cp[Axis.Z])
+    height = ctx.road.signed_distance(ctx.cg_position)
     if height <= EPS_GEOMETRIC:
         return None
     return height
@@ -77,15 +92,23 @@ def calculate_anti_dive_pct(ctx: "MetricContext") -> float | None:
     """
     Front-axle anti-dive percentage under braking.
 
+    This is an axle-local geometric anti percentage, not an actual chassis
+    pitch prediction. Following the ISO 8855 road-plane concept, the reaction
+    line is resolved along the local road forward direction and normal, both
+    expressed in chassis coordinates. World-space presentation is not used.
+
     Only defined for a front axle with a known front brake bias. With outboard
-    brakes the front suspension reacts the brake force along the contact-patch
-    -> SVIC line. With L the wheelbase and h the CG height above ground, the
-    line inclination is taken about the contact patch as:
+    brakes the front suspension reacts the brake force along the wheel contact
+    centre-to-SVIC line. With L the wheelbase, h the CG height above road, and
+    n the road plane's upward normal, the line inclination is taken about the
+    contact centre as:
 
-        tan_theta = (SVIC_z - CP_z) / (CP_x - SVIC_x)
+        tan_theta = n . (SVIC - T) / (T_x - SVIC_x)
 
-    which is positive in the classic anti-dive layout (SVIC above and BEHIND
-    the front contact patch). Then:
+    The contact centre T lies on the road plane, so the rise n . (SVIC - T) is the
+    SVIC's signed distance to that plane; on a level road plane it reduces
+    exactly to SVIC_z - T_z. tan_theta is positive in the classic anti-dive
+    layout (SVIC above and BEHIND the front wheel contact centre). Then:
 
         anti_dive_pct = 100 * front_brake_bias * (L / h) * tan_theta
 
@@ -101,18 +124,20 @@ def calculate_anti_dive_pct(ctx: "MetricContext") -> float | None:
     svic = ctx.side_view_ic
     if svic is None:
         return None
-    cp = ctx.contact_patch_center
+    contact_centre = ctx.wheel_contact_centre
 
-    # Run measured from SVIC to contact patch so tan_theta is positive when the
-    # SVIC sits behind (-X of) the front contact patch: the anti-dive geometry.
-    run = float(cp[Axis.X]) - float(svic[Axis.X])
+    # Run measured from SVIC to the contact centre so tan_theta is positive
+    # when the SVIC sits behind (-X of) it: the anti-dive geometry.
+    run = float(ctx.road.forward.dot(contact_centre - svic))
     if abs(run) < EPS_GEOMETRIC:
         return None
-    height = _cg_height_above_ground(ctx)
+    height = _cg_height_above_road(ctx)
     if height is None:
         return None
 
-    tan_theta = (float(svic[Axis.Z]) - float(cp[Axis.Z])) / run
+    # The contact centre lies on the road plane, so its rise to the SVIC along
+    # the road normal is the SVIC's signed distance to that plane.
+    tan_theta = ctx.road.signed_distance(svic) / run
     return 100.0 * config.front_brake_bias * (ctx.wheelbase / height) * tan_theta
 
 
@@ -120,15 +145,23 @@ def calculate_anti_lift_pct(ctx: "MetricContext") -> float | None:
     """
     Rear-axle anti-lift percentage under braking.
 
+    This is an axle-local geometric anti percentage, not an actual chassis
+    pitch prediction. Following the ISO 8855 road-plane concept, the reaction
+    line is resolved along the local road forward direction and normal, both
+    expressed in chassis coordinates. World-space presentation is not used.
+
     Only defined for a rear axle with a known front brake bias; the rear share
     of the braking force is (1 - front_brake_bias). With outboard brakes the
-    rear suspension reacts the brake force along the contact-patch -> SVIC line.
-    The line inclination is taken about the contact patch as:
+    rear suspension reacts the brake force along the wheel-contact-centre to
+    SVIC line. With n the road plane's upward normal, the line inclination is
+    taken about the contact centre as:
 
-        tan_theta = (SVIC_z - CP_z) / (SVIC_x - CP_x)
+        tan_theta = n . (SVIC - T) / (SVIC_x - T_x)
 
-    which is positive when the SVIC sits above and AHEAD (+X) of the rear
-    contact patch. Then:
+    The contact centre T lies on the road plane, so the rise n . (SVIC - T) is the
+    SVIC's signed distance to that plane; on a level road plane it reduces
+    exactly to SVIC_z - T_z. tan_theta is positive when the SVIC sits above
+    and AHEAD (+X) of the rear wheel contact centre. Then:
 
         anti_lift_pct = 100 * (1 - front_brake_bias) * (L / h) * tan_theta
 
@@ -144,17 +177,19 @@ def calculate_anti_lift_pct(ctx: "MetricContext") -> float | None:
     svic = ctx.side_view_ic
     if svic is None:
         return None
-    cp = ctx.contact_patch_center
+    contact_centre = ctx.wheel_contact_centre
 
-    run = float(svic[Axis.X]) - float(cp[Axis.X])
+    run = float(ctx.road.forward.dot(svic - contact_centre))
     if abs(run) < EPS_GEOMETRIC:
         return None
-    height = _cg_height_above_ground(ctx)
+    height = _cg_height_above_road(ctx)
     if height is None:
         return None
 
     rear_brake_bias = 1.0 - config.front_brake_bias
-    tan_theta = (float(svic[Axis.Z]) - float(cp[Axis.Z])) / run
+    # The contact centre lies on the road plane, so its rise to the SVIC along
+    # the road normal is the SVIC's signed distance to that plane.
+    tan_theta = ctx.road.signed_distance(svic) / run
     return 100.0 * rear_brake_bias * (ctx.wheelbase / height) * tan_theta
 
 
@@ -162,17 +197,26 @@ def calculate_anti_squat_pct(ctx: "MetricContext") -> float | None:
     """
     Anti-squat (rear) / anti-lift (front) percentage under acceleration.
 
+    This is an axle-local geometric anti percentage, not an actual chassis
+    pitch prediction. Following the ISO 8855 road-plane concept, the reaction
+    line is resolved along the local road forward direction and normal, both
+    expressed in chassis coordinates. World-space presentation is not used.
+
     Only defined when a driven axle is configured AND it is this axle
     (driven_axle == axle_position, both non-None). With inboard-sprung drive
     (halfshafts) the tractive force reacts along the WHEEL-CENTER -> SVIC line,
-    not the contact-patch line. The full drive torque is carried by the driven
-    axle. With L the wheelbase and h the CG height above ground:
+    not the wheel contact centre line. The full drive torque is carried by
+    the driven axle. With L the wheelbase, h the CG height above ground, and
+    n the road plane's upward normal:
 
-        rear axle:  tan_theta = (SVIC_z - WC_z) / (SVIC_x - WC_x)
-        front axle: tan_theta = (SVIC_z - WC_z) / (WC_x - SVIC_x)
+        rear axle:  tan_theta = n . (SVIC - WC) / (SVIC_x - WC_x)
+        front axle: tan_theta = n . (SVIC - WC) / (WC_x - SVIC_x)
 
-    tan_theta is positive when the geometry resists the acceleration pitch
-    (squat at the rear, lift at the front). Then:
+    Neither endpoint lies on the road plane, so the rise n . (SVIC - WC) is
+    the difference of their signed distances to it; on a level road plane it
+    reduces exactly to SVIC_z - WC_z. tan_theta is positive when the geometry
+    resists the acceleration pitch (squat at the rear, lift at the front).
+    Then:
 
         anti_squat_pct = 100 * (L / h) * tan_theta
 
@@ -193,14 +237,17 @@ def calculate_anti_squat_pct(ctx: "MetricContext") -> float | None:
     # Front (FWD) and rear axles flip the sense of the horizontal run so that
     # positive tan_theta always means "resists the acceleration pitch".
     if config.axle_position is AxlePosition.FRONT:
-        run = float(wc[Axis.X]) - float(svic[Axis.X])
+        run = float(ctx.road.forward.dot(wc - svic))
     else:
-        run = float(svic[Axis.X]) - float(wc[Axis.X])
+        run = float(ctx.road.forward.dot(svic - wc))
     if abs(run) < EPS_GEOMETRIC:
         return None
-    height = _cg_height_above_ground(ctx)
+    height = _cg_height_above_road(ctx)
     if height is None:
         return None
 
-    tan_theta = (float(svic[Axis.Z]) - float(wc[Axis.Z])) / run
+    # Neither endpoint lies on the road plane, so the rise along the road
+    # normal is the signed-distance difference (the plane offset cancels).
+    rise = ctx.road.signed_distance(svic) - ctx.road.signed_distance(wc)
+    tan_theta = rise / run
     return 100.0 * (ctx.wheelbase / height) * tan_theta

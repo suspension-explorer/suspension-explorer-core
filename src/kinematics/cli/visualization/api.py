@@ -8,24 +8,95 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from kinematics.cli.visualization.animation import create_animation
-from kinematics.cli.visualization.main import build_render_model
-from kinematics.cli.visualization.plots import create_four_view_plot
+from kinematics.cli.visualization.main import SuspensionVisualizer, build_render_model
+from kinematics.core.primitives.geometry import Point3
+from kinematics.core.road import RoadPlane
 
 if TYPE_CHECKING:
     from kinematics.core.state import SuspensionState
     from kinematics.core.suspensions.base import Suspension
 
 
+def create_animation(
+    position_states: list[dict[str, tuple[float, float, float]]],
+    initial_positions: dict[str, tuple[float, float, float]],
+    visualizer: SuspensionVisualizer,
+    output_path: Path,
+    fps: int = 20,
+    writer: str | None = None,
+    codec: str = "libx264",
+    dpi: int = 200,
+    show_live: bool = True,
+) -> None:
+    """Load the optional animation renderer only when animation is requested."""
+    from kinematics.cli.visualization.animation import create_animation as render
+
+    render(
+        position_states,
+        initial_positions,
+        visualizer,
+        output_path,
+        fps=fps,
+        writer=writer,
+        codec=codec,
+        dpi=dpi,
+        show_live=show_live,
+    )
+
+
+def create_four_view_plot(
+    state: "SuspensionState",
+    suspension: "Suspension",
+    output_path: Path,
+    title: str = "Suspension Geometry Visualization",
+    dpi: int = 150,
+) -> None:
+    """Load the optional static renderer only when a plot is requested."""
+    from kinematics.cli.visualization.plots import create_four_view_plot as render
+
+    render(
+        state=state,
+        suspension=suspension,
+        output_path=output_path,
+        title=title,
+        dpi=dpi,
+    )
+
+
 @dataclass(frozen=True)
 class GeometryVisualizationResult:
     """
-    Ground-plane check returned after rendering a static geometry.
+    Contact-plane check returned after rendering a static geometry.
+
+    ``wheel_contact_centre_z`` remains available as the raw chassis-coordinate
+    diagnostic.  It is not used to decide whether a point is on the road: the
+    chassis origin may be vertically translated or rolled relative to the
+    reconstructed road plane.
     """
 
     output_path: Path
-    contact_patch_z: tuple[float, ...]
-    contact_patch_on_ground: bool
+    wheel_contact_centre_z: tuple[float, ...]
+    wheel_contact_centre_road_distance_mm: tuple[float, ...]
+    wheel_contact_centres_on_road: bool
+
+
+def _road_plane_for_wheel_contact_centres(
+    contact_centres: tuple[Point3, ...],
+) -> RoadPlane:
+    """Reconstruct the supported road datum from rendered contact points.
+
+    A standalone corner has one contact point, so its equivalent road plane is
+    horizontal through that point.  A two-wheel axle uses the same
+    longitudinally-extruded plane as the axle contact closure.  The renderer
+    has no supported topology with any other wheel count.
+    """
+    if len(contact_centres) == 1:
+        return RoadPlane.horizontal_at(contact_centres[0])
+    if len(contact_centres) == 2:
+        return RoadPlane.from_axle_contact_centres(*contact_centres)
+    raise ValueError(
+        "Suspension assembly must expose one corner or two axle wheel contact centres"
+    )
 
 
 def visualize_suspension_sweep(
@@ -73,7 +144,7 @@ def visualize_geometry(
     output_path: Path,
 ) -> GeometryVisualizationResult:
     """
-    Creates a debug plot for a single suspension state and checks ground tangency.
+    Creates a debug plot for a single suspension state and checks contact support.
 
     Args:
         suspension: The Suspension instance for the geometry.
@@ -82,12 +153,19 @@ def visualize_geometry(
     state = suspension.initial_state()
     render_model = build_render_model(suspension)
     positions = render_model.positions(state)
-    contact_patch_z = tuple(
-        float(positions[references.contact_patch][2])
+    contact_centres = tuple(
+        Point3(positions[references.wheel_contact_centre])
         for references in render_model.visualizer.wheel_references
     )
-    if not contact_patch_z:
-        raise ValueError("Suspension assembly has no wheel contact patches")
+    if not contact_centres:
+        raise ValueError("Suspension assembly has no wheel contact centres")
+    road = _road_plane_for_wheel_contact_centres(contact_centres)
+    wheel_contact_centre_z = tuple(
+        float(contact_centre[2]) for contact_centre in contact_centres
+    )
+    wheel_contact_centre_road_distance_mm = tuple(
+        road.signed_distance(contact_centre) for contact_centre in contact_centres
+    )
 
     # Create the four-view plot.
     create_four_view_plot(
@@ -100,8 +178,9 @@ def visualize_geometry(
 
     return GeometryVisualizationResult(
         output_path=output_path,
-        contact_patch_z=contact_patch_z,
-        contact_patch_on_ground=bool(
-            np.all(np.isclose(contact_patch_z, 0.0, atol=1e-2))
+        wheel_contact_centre_z=wheel_contact_centre_z,
+        wheel_contact_centre_road_distance_mm=wheel_contact_centre_road_distance_mm,
+        wheel_contact_centres_on_road=bool(
+            np.all(np.isclose(wheel_contact_centre_road_distance_mm, 0.0, atol=1e-2))
         ),
     )

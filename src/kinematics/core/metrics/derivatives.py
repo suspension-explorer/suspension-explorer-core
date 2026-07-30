@@ -1,4 +1,9 @@
-"""Generic declarative derivatives of scalar geometric responses."""
+"""Generic declarative derivatives of scalar geometric responses.
+
+Positions and custom axes are represented in chassis coordinates. Each scalar
+response declares its own chassis, wheel, or road reference; differentiating
+it does not change that reference system or introduce world-space dependence.
+"""
 
 from __future__ import annotations
 
@@ -33,7 +38,7 @@ def _validate_semantics(name: str, unit: MetricUnit) -> None:
 
 
 class ScalarResponse(Protocol):
-    """A scalar geometric quantity evaluable on dual-number positions."""
+    """A scalar quantity whose implementation defines its reference system."""
 
     @property
     def name(self) -> str:
@@ -48,7 +53,7 @@ class ScalarResponse(Protocol):
         """Optional explicitly authored display label."""
 
     def evaluate(self, positions: DualPositions) -> DualScalar:
-        """Evaluate the response value and directional derivative."""
+        """Evaluate the value and derivative in the response's declared system."""
 
 
 class ScalarDriver(ScalarResponse, Protocol):
@@ -61,7 +66,7 @@ class ScalarDriver(ScalarResponse, Protocol):
 
 @dataclass(frozen=True)
 class PointCoordinateResponse:
-    """Coordinate of a point along a normalized world or custom axis."""
+    """Point coordinate along an axis expressed in chassis coordinates."""
 
     point: PointKey
     axis: Direction3
@@ -78,7 +83,7 @@ class PointCoordinateResponse:
         return self.point
 
     @classmethod
-    def from_world_axis(
+    def from_chassis_axis(
         cls,
         point: PointKey,
         axis: Axis,
@@ -87,7 +92,7 @@ class PointCoordinateResponse:
         unit: MetricUnit,
         label: str | None = None,
     ) -> "PointCoordinateResponse":
-        """Build a coordinate response along a principal world axis."""
+        """Build a coordinate response along a principal chassis axis."""
         direction = np.zeros(3, dtype=np.float64)
         direction[int(axis)] = 1.0
         return cls(
@@ -110,7 +115,7 @@ class PointCoordinateResponse:
     ) -> "PointCoordinateResponse":
         """Build a coordinate response, normalizing the supplied axis."""
         if isinstance(axis, Axis):
-            return cls.from_world_axis(
+            return cls.from_chassis_axis(
                 point,
                 axis,
                 name=name,
@@ -126,7 +131,7 @@ class PointCoordinateResponse:
         )
 
     def evaluate(self, positions: DualPositions) -> DualScalar:
-        """Project the point position onto the configured axis."""
+        """Project a chassis-space point onto the configured chassis-space axis."""
         result = dot(positions[self.point], self.axis.data)
         assert isinstance(result, DualScalar)
         return result
@@ -134,7 +139,11 @@ class PointCoordinateResponse:
 
 @dataclass(frozen=True)
 class PointDistanceResponse:
-    """Euclidean distance between two points."""
+    """Euclidean distance between two chassis-coordinate points.
+
+    The result is invariant under a rigid transformation to world space and
+    does not reference the road plane.
+    """
 
     point_a: PointKey
     point_b: PointKey
@@ -152,7 +161,7 @@ class PointDistanceResponse:
         return self.driving_point
 
     def evaluate(self, positions: DualPositions) -> DualScalar:
-        """Evaluate ``|point_a - point_b|`` and its tangent derivative."""
+        """Evaluate chassis-space separation and its tangent derivative."""
         separation = positions[self.point_a] - positions[self.point_b]
         if float(np.linalg.norm(separation.val)) < EPS_GEOMETRIC:
             raise ValueError("Point-distance derivative is undefined at zero length")
@@ -161,7 +170,11 @@ class PointDistanceResponse:
 
 @dataclass(frozen=True)
 class PointDisplacementMagnitudeResponse:
-    """Magnitude of one point's displacement from a fixed reference position."""
+    """Chassis-space displacement magnitude from a fixed reference position.
+
+    The Euclidean magnitude is invariant under a common rigid world transform
+    and has no road-plane reference.
+    """
 
     point: PointKey
     reference: np.ndarray
@@ -205,7 +218,7 @@ class PointDisplacementMagnitudeResponse:
         )
 
     def evaluate(self, positions: DualPositions) -> DualScalar:
-        """Evaluate displacement magnitude away from its singular origin."""
+        """Evaluate chassis-space displacement away from its singular origin."""
         displacement = positions[self.point] - self.reference
         if float(np.linalg.norm(displacement.val)) < EPS_GEOMETRIC:
             raise ValueError(
@@ -216,7 +229,7 @@ class PointDisplacementMagnitudeResponse:
 
 @dataclass(frozen=True)
 class CallableScalarResponse:
-    """Adapter for an arbitrary dual-safe scalar response callable."""
+    """Adapter preserving the wrapped scalar's declared reference system."""
 
     function: DualSafeScalarCallable
     name: str
@@ -233,7 +246,7 @@ class CallableScalarResponse:
         return self.driving_point
 
     def evaluate(self, positions: DualPositions) -> DualScalar:
-        """Evaluate the wrapped callable and require a dual scalar result."""
+        """Evaluate the wrapped callable without changing its reference system."""
         result = self.function(positions)
         if not isinstance(result, DualScalar):
             raise TypeError(
@@ -245,7 +258,12 @@ class CallableScalarResponse:
 
 @dataclass(frozen=True)
 class DerivativeMetricDefinition:
-    """Declarative derivative ``d(response) / d(driver)``."""
+    """Declarative ``d(response) / d(driver)`` in the scalars' own systems.
+
+    The response and driver may use different declared references, such as a
+    chassis-space alignment angle with respect to chassis Z travel. The
+    derivative does not transform either quantity into road or world space.
+    """
 
     response: ScalarResponse
     driver: ScalarDriver
@@ -262,7 +280,11 @@ class DerivativeMetricDefinition:
         return self.response.unit / self.driver.unit
 
     def evaluate(self, state: SuspensionState, tangent: TangentField) -> float:
-        """Evaluate this derivative along one solution-manifold tangent."""
+        """Evaluate along a chassis-space solution-manifold tangent.
+
+        The response and driver retain the reference systems declared by their
+        implementations; no road or world transform is applied here.
+        """
         positions = _dual_positions(state, tangent)
         response_rate = self.response.evaluate(positions).deriv
         driver_rate = self.driver.evaluate(positions).deriv
@@ -313,7 +335,7 @@ class DerivativeMetricDefinition:
         state: SuspensionState,
         tangents: Sequence[TangentField],
     ) -> float | None:
-        """Select a driver tangent and evaluate, or return None if absent."""
+        """Evaluate in the response and driver's declared reference systems."""
         tangent = self.select_tangent(state, tangents)
         if tangent is None:
             return None
@@ -338,7 +360,12 @@ def evaluate_derivative_metrics(
     state: SuspensionState,
     tangents: Sequence[TangentField],
 ) -> DerivativeMetricRow:
-    """Evaluate declarations in order without topology-specific dispatch."""
+    """Evaluate declarations without changing their reference systems.
+
+    Tangent velocities and solved points are expressed in chassis coordinates.
+    Each response and driver decides whether it further resolves geometry into
+    wheel or local road axes; this dispatcher never introduces world space.
+    """
     row: DerivativeMetricRow = OrderedDict()
     for definition in definitions:
         if definition.column_name in row:

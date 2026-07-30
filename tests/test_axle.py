@@ -1,5 +1,6 @@
 """Integration tests for basic full-axle composition."""
 
+from math import atan2, degrees, hypot
 from pathlib import Path
 
 import pytest
@@ -8,18 +9,30 @@ import yaml
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.sweep_loader import load_sweep
 from kinematics.core.enums import Axis, PointID
+from kinematics.core.input import build_sweep
 from kinematics.core.metrics import (
     AxleMetricRows,
     compute_metrics_for_state_from_suspension,
     compute_metrics_for_sweep,
 )
+from kinematics.core.metrics import main as metrics_main
+from kinematics.core.points.derived import ground as ground_module
+from kinematics.core.points.derived.manager import DerivedPointsManager
+from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import PointRef, Side
+from kinematics.core.road import RoadPlane
+from kinematics.core.solver import solve_suspension_sweep
+from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.corner import (
     ActuationDirect,
     DoubleWishboneSuspension,
 )
-from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
+from kinematics.core.sweep import (
+    compute_sweep_metrics,
+    evaluate_solved_sweep,
+    solve_sweep,
+)
 
 
 def test_mirrored_axle_builds_two_explicit_corners(test_data_dir: Path) -> None:
@@ -152,12 +165,137 @@ def test_basic_axle_sweep_solves_and_emits_structural_metrics(
     assert "camber" in midpoint.corners[Side.RIGHT]
     assert "camber_left" not in midpoint.corners[Side.LEFT]
     assert "rack_displacement" in midpoint.axle
+    for key in (
+        "steering_axis_offset_ground",
+        "scrub_radius",
+        "mechanical_trail",
+    ):
+        assert midpoint.corners[Side.LEFT][key] == pytest.approx(
+            midpoint.corners[Side.RIGHT][key]
+        )
+    left_offset = midpoint.corners[Side.LEFT]["steering_axis_offset_ground"]
+    left_scrub = midpoint.corners[Side.LEFT]["scrub_radius"]
+    left_trail = midpoint.corners[Side.LEFT]["mechanical_trail"]
+    assert left_offset is not None
+    assert left_scrub is not None
+    assert left_trail is not None
+    assert left_scrub == pytest.approx((left_offset**2 + left_trail**2) ** 0.5)
     assert midpoint.axle["heave"] == pytest.approx(0.0, abs=1e-5)
+    assert midpoint.axle["ride_height_change"] == pytest.approx(0.0, abs=1e-5)
 
     final = states[-1]
     left_z = final.get(PointRef(Side.LEFT, PointID.WHEEL_CENTER))[Axis.Z]
     right_z = final.get(PointRef(Side.RIGHT, PointID.WHEEL_CENTER))[Axis.Z]
     assert left_z == pytest.approx(right_z, abs=1e-5)
+
+
+def test_ground_closure_threads_one_seeded_search_per_solved_state(
+    test_data_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+    sweep = load_sweep(test_data_dir / "axle_sweep.yaml", axle)
+    # Build and cache the design state before recording, so the closure run at
+    # initial-state construction is not counted against the sweep.
+    axle.initial_state()
+    original_search = ground_module._search_ground_normal_angle
+    searches: list[tuple[float | None, float]] = []
+
+    def record_search(*args, seed=None):
+        root = original_search(*args, seed=seed)
+        searches.append((seed, root))
+        return root
+
+    monkeypatch.setattr(
+        ground_module,
+        "_search_ground_normal_angle",
+        record_search,
+    )
+
+    states, _ = solve_sweep(axle, sweep)
+    solve_searches = list(searches)
+
+    assert len(solve_searches) == len(states), (
+        "The closure solves the shared plane exactly once per accepted state"
+    )
+    assert solve_searches[0][0] is not None, (
+        "The first state seeds from the stored design tangents, not from nothing"
+    )
+    for (seed, _), (_, previous_root) in zip(
+        solve_searches[1:], solve_searches[:-1], strict=True
+    ):
+        assert seed == pytest.approx(previous_root), (
+            "Each state must be seeded from the previously accepted root"
+        )
+
+    solved_roots = [root for _, root in solve_searches]
+    metrics = compute_sweep_metrics(axle, sweep, states)
+    metric_searches = searches[len(solve_searches) :]
+
+    assert metrics.derivative_error is None
+    # Metrics may re-solve the plane for their dual evaluations, but every such
+    # solve must be handed a seed that is already on the solved branch.
+    assert all(seed is not None for seed, _ in metric_searches), (
+        "Metric-time searches must reuse a solved root as their seed"
+    )
+    deviations = [
+        min(abs(seed - root) for root in solved_roots)
+        for seed, _ in metric_searches
+        if seed is not None
+    ]
+    assert max(deviations, default=0.0) < 1e-6
+
+
+def test_ground_closure_is_applied_at_every_public_state_boundary(
+    test_data_dir: Path,
+) -> None:
+    """No public path may hand out axle states with stale closure outputs.
+
+    The low-level solver requires an explicit finaliser; a deliberate no-op
+    yields kinematic intermediates whose tangents still sit at design values.
+    solve_sweep() finalises at the solver's accept boundary, and
+    evaluate_solved_sweep() finalises copies of externally supplied states
+    without mutating the caller's, so both public boundaries must agree with
+    a direct closure of the raw states.
+    """
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+    sweep = load_sweep(test_data_dir / "axle_sweep.yaml", axle)
+    tangent_refs = (
+        PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE),
+        PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE),
+    )
+
+    raw_states, raw_stats = solve_suspension_sweep(
+        initial_state=axle.initial_state(),
+        constraints=axle.constraints(),
+        sweep_config=sweep,
+        derived_manager=DerivedPointsManager(axle.derived_spec()),
+        finalize_state=lambda positions: None,
+    )
+    # The no-op finaliser documents the hazard: tangents still sit at their
+    # design positions while the wheel has moved through the sweep.
+    stale_left = raw_states[0].get(tangent_refs[0]).copy()
+    design_left = axle.initial_state().get(tangent_refs[0])
+    assert float((stale_left - design_left).norm()) < 1e-9
+
+    solved_states, _ = solve_sweep(axle, sweep)
+    step = 0  # -30 mm bump: the stale error is macroscopic here.
+    closed_left = solved_states[step].get(tangent_refs[0])
+    assert float((closed_left - stale_left).norm()) > 10.0
+
+    # evaluate_solved_sweep() must finalise COPIES of the raw states to the
+    # same closure, leaving the caller's states untouched.
+    evaluated = evaluate_solved_sweep(axle, sweep, raw_states, raw_stats)
+    for state, reference in zip(evaluated.states, solved_states, strict=True):
+        for ref in tangent_refs:
+            difference = state.get(ref) - reference.get(ref)
+            assert float(difference.norm()) < 1e-9
+    untouched_left = raw_states[0].get(tangent_refs[0])
+    assert float((untouched_left - stale_left).norm()) < 1e-12, (
+        "evaluate_solved_sweep must not mutate the states it was handed"
+    )
 
 
 def test_axle_targets_require_side(test_data_dir: Path) -> None:
@@ -183,4 +321,162 @@ def test_generic_metric_helpers_preserve_structural_axle_rows(
     assert isinstance(sweep_metrics[0], AxleMetricRows)
     assert state_metrics.corners.keys() == {Side.LEFT, Side.RIGHT}
     assert "track" in state_metrics.axle
+    assert "ride_height_change" in state_metrics.axle
     assert "camber" in state_metrics.corners[Side.LEFT]
+
+
+def test_axle_metrics_do_not_depend_on_world_placement(
+    monkeypatch: pytest.MonkeyPatch,
+    test_data_dir: Path,
+) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+
+    def fail_world_placement(*_args, **_kwargs):
+        raise AssertionError("metric calculation must not construct WorldSpace")
+
+    # ``raising=False`` keeps this assertion valid after the production import
+    # has been removed: an accidentally reintroduced module-level call will
+    # still fail, while the desired road-datum path ignores this sentinel.
+    monkeypatch.setattr(
+        metrics_main,
+        "world_space_for_axle_state",
+        fail_world_placement,
+        raising=False,
+    )
+
+    rows = compute_metrics_for_state_from_suspension(axle.initial_state(), axle)
+
+    assert isinstance(rows, AxleMetricRows)
+    assert rows.axle["ride_height_change"] == pytest.approx(0.0)
+
+
+def test_axle_metrics_reject_degenerate_road_contacts(test_data_dir: Path) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+    state = axle.initial_state().copy()
+    left_tangent = PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE)
+    right_tangent = PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE)
+    state.set(left_tangent, state.get(right_tangent))
+
+    with pytest.raises(ValueError):
+        compute_metrics_for_state_from_suspension(state, axle)
+
+
+def test_axle_metrics_share_one_ground_line_instance_with_both_corners(
+    monkeypatch: pytest.MonkeyPatch,
+    test_data_dir: Path,
+) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+    assert axle.config is not None
+    received_ground: list[RoadPlane | None] = []
+    original_compute = metrics_main.compute_metrics_for_state
+
+    def capture_ground(*args, **kwargs):
+        received_ground.append(kwargs["road"])
+        return original_compute(*args, **kwargs)
+
+    monkeypatch.setattr(metrics_main, "compute_metrics_for_state", capture_ground)
+    states, _ = solve_sweep(
+        axle,
+        load_sweep(test_data_dir / "axle_sweep.yaml", axle),
+    )
+    state = states[-1]
+    metrics_main.compute_metrics_for_axle_state(state, axle, axle.config)
+
+    assert len(received_ground) == 2
+    assert received_ground[0] is not None
+    assert received_ground[0] is received_ground[1]
+    road = received_ground[0]
+    assert road.normal[Axis.X] == pytest.approx(0.0, abs=1e-12)
+    for side in (Side.LEFT, Side.RIGHT):
+        tangent = state.get(PointRef(side, PointID.WHEEL_CONTACT_CENTRE))
+        assert road.signed_distance(tangent) == pytest.approx(0.0, abs=1e-8)
+
+
+def _road_datum_from_axle_contact_centres(state: SuspensionState) -> RoadPlane:
+    """Build the zero-grade YZ road plane implied by the stored contacts."""
+    left = state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE))
+    right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE))
+    dy = float(left[Axis.Y] - right[Axis.Y])
+    dz = float(left[Axis.Z] - right[Axis.Z])
+    magnitude = hypot(dy, dz)
+    normal_y = -dz / magnitude
+    normal_z = dy / magnitude
+    if normal_z < 0.0:
+        normal_y = -normal_y
+        normal_z = -normal_z
+    return RoadPlane.through(Direction3((0.0, normal_y, normal_z)), left)
+
+
+def test_ride_height_change_uses_axle_local_road_plane(test_data_dir: Path) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+    states, _ = solve_sweep(
+        axle,
+        load_sweep(test_data_dir / "axle_sweep.yaml", axle),
+    )
+    state = states[-1]
+    rows = compute_metrics_for_state_from_suspension(state, axle)
+    assert isinstance(rows, AxleMetricRows)
+    current_ground = _road_datum_from_axle_contact_centres(state)
+    design_road = axle.design_road_plane
+    assert design_road is not None
+    chassis_origin = Point3((0.0, 0.0, 0.0))
+    expected = current_ground.signed_distance(
+        chassis_origin
+    ) - design_road.signed_distance(chassis_origin)
+    assert rows.axle["ride_height_change"] == pytest.approx(expected)
+
+
+def test_iso_roll_track_and_generic_track_change(test_data_dir: Path) -> None:
+    """Axle attitude uses wheel centres; ISO track remains the rest dimension."""
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+    spec = yaml.safe_load(
+        (test_data_dir / "axle_sweep.yaml").read_text(encoding="utf-8")
+    )
+    del spec["steps"]
+    values = (20.0, -20.0, 0.0)
+    for target, value in zip(spec["targets"], values, strict=True):
+        target.pop("start", None)
+        target.pop("stop", None)
+        target["values"] = [value]
+
+    states, _ = solve_sweep(axle, build_sweep(spec, axle))
+    state = states[0]
+    rows = compute_metrics_for_state_from_suspension(state, axle)
+    assert isinstance(rows, AxleMetricRows)
+
+    left_wheel = state.get(PointRef(Side.LEFT, PointID.WHEEL_CENTER))
+    right_wheel = state.get(PointRef(Side.RIGHT, PointID.WHEEL_CENTER))
+    wheel_line = left_wheel - right_wheel
+    expected_roll = degrees(
+        atan2(
+            float(wheel_line[Axis.Z]),
+            hypot(float(wheel_line[Axis.X]), float(wheel_line[Axis.Y])),
+        )
+    )
+
+    design = axle.initial_state()
+    design_left = design.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE))
+    design_right = design.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE))
+    expected_track = abs(float(design_left[Axis.Y] - design_right[Axis.Y]))
+
+    road = _road_datum_from_axle_contact_centres(state)
+    current_left = state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE))
+    current_right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE))
+    current_track = abs(float(road.lateral.dot(current_left - current_right)))
+
+    assert rows.axle["roll"] == pytest.approx(expected_roll)
+    assert rows.axle["track"] == pytest.approx(expected_track)
+    assert rows.axle["track_change"] == pytest.approx(current_track - expected_track)
+
+
+def test_axle_reuses_one_design_road_plane(test_data_dir: Path) -> None:
+    axle = load_geometry(test_data_dir / "axle_geometry.yaml")
+    assert isinstance(axle, AxleSuspension)
+
+    assert axle.design_road_plane is not None
+    assert axle.design_road_plane is axle.design_road_plane
