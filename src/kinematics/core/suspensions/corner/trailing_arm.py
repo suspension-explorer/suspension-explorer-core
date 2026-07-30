@@ -102,19 +102,13 @@ def _rotate_arm_attached_point(
         current_radial = moving - moving_axis_foot
         cosine = dual_dot(current_radial, moving_design_radial) / moving_radius_sq
         sine = dual_dot(current_radial, tangent) / moving_radius_sq
-        return (
-            target_axis_foot
-            + cosine * target_design_radial
-            + sine * target_tangent
-        )
+        return target_axis_foot + cosine * target_design_radial + sine * target_tangent
 
     current_radial = extract_array(moving) - moving_axis_foot
     cosine = float(np.dot(current_radial, moving_design_radial)) / moving_radius_sq
     sine = float(np.dot(current_radial, tangent)) / moving_radius_sq
     return Point3(
-        target_axis_foot
-        + cosine * target_design_radial
-        + sine * target_tangent
+        target_axis_foot + cosine * target_design_radial + sine * target_tangent
     )
 
 
@@ -155,11 +149,10 @@ class TrailingArmSuspension(CornerSuspension):
         PointID.WHEEL_CENTER,
         PointID.WHEEL_INBOARD,
         PointID.WHEEL_OUTBOARD,
-        PointID.WHEEL_PLANE_ROAD_TANGENT,
+        PointID.WHEEL_CONTACT_CENTRE,
     )
-    FREE_POINTS: ClassVar[tuple[PointID, ...]] = (
-        PointID.TRAILING_ARM_OUTBOARD,
-    )
+    OUTPUT_ONLY_POINTS: ClassVar[tuple[PointID, ...]] = (PointID.WHEEL_CONTACT_CENTRE,)
+    FREE_POINTS: ClassVar[tuple[PointID, ...]] = (PointID.TRAILING_ARM_OUTBOARD,)
 
     spring_type: CornerSpringType = CornerSpringType.COILOVER
 
@@ -379,9 +372,7 @@ class TrailingArmSuspension(CornerSuspension):
         """Return arm motion projected about the authored torsion-bar axis."""
         initial = self.initial_state()
         axis_point = initial.get(PointID.TORSION_BAR_AXIS_A)
-        axis = (
-            initial.get(PointID.TORSION_BAR_AXIS_B) - axis_point
-        ).normalize()
+        axis = (initial.get(PointID.TORSION_BAR_AXIS_B) - axis_point).normalize()
         return self.side.lateral_sign * degrees(
             signed_angle_about_axis(
                 initial.get(PointID.TRAILING_ARM_OUTBOARD),
@@ -395,7 +386,7 @@ class TrailingArmSuspension(CornerSuspension):
         self,
     ) -> tuple[DerivativeMetricDefinition, ...]:
         """Declare selected spring response relative to hub vertical travel."""
-        driver = PointCoordinateResponse.from_world_axis(
+        driver = PointCoordinateResponse.from_chassis_axis(
             PointID.WHEEL_CENTER,
             Axis.Z,
             name="hub_z",
@@ -414,15 +405,9 @@ class TrailingArmSuspension(CornerSuspension):
         )
         if self.spring_type is CornerSpringType.COILOVER:
             return (damper_definition,)
-        design = extract_array(
-            self.initial_state().get(PointID.TRAILING_ARM_OUTBOARD)
-        )
-        axis_a = extract_array(
-            self.initial_state().get(PointID.TORSION_BAR_AXIS_A)
-        )
-        axis_b = extract_array(
-            self.initial_state().get(PointID.TORSION_BAR_AXIS_B)
-        )
+        design = extract_array(self.initial_state().get(PointID.TRAILING_ARM_OUTBOARD))
+        axis_a = extract_array(self.initial_state().get(PointID.TORSION_BAR_AXIS_A))
+        axis_b = extract_array(self.initial_state().get(PointID.TORSION_BAR_AXIS_B))
         axis = axis_b - axis_a
         axis /= float((axis**2).sum() ** 0.5)
 
@@ -501,7 +486,7 @@ class TrailingArmSuspension(CornerSuspension):
                 outboard=PointID.WHEEL_OUTBOARD,
                 axle_inboard=PointID.AXLE_INBOARD,
                 axle_outboard=PointID.AXLE_OUTBOARD,
-                wheel_plane_road_tangent=PointID.WHEEL_PLANE_ROAD_TANGENT,
+                wheel_contact_centre=PointID.WHEEL_CONTACT_CENTRE,
             ),
         )
         if self.spring_type is CornerSpringType.COILOVER:

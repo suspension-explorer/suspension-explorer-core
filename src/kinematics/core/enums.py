@@ -63,8 +63,8 @@ class PointID(IntEnum):
     WHEEL_OUTBOARD = 20
 
     # Geometric support point where the wheel plane is tangent to the axle's
-    # shared, zero-grade road plane.
-    WHEEL_PLANE_ROAD_TANGENT = 21
+    # shared, zero-grade ground plane.
+    WHEEL_CONTACT_CENTRE = 21
 
     # Outboard camber shim geometry. Datum points A and B lie on the design
     # mid-thickness plane; the face normal is perpendicular to that plane.
@@ -84,12 +84,24 @@ class PointID(IntEnum):
 
     # Unsteered semi-trailing-arm locating geometry. A/B are the fixed chassis
     # mounts defining the oblique arm pivot. Torsion-bar springing uses a
-    # separate transverse axis, lever pickup, and arm-side link pickup.
+    # separate transverse axis through pivot A.
     TRAILING_ARM_PIVOT_A = 34
     TRAILING_ARM_PIVOT_B = 35
     TRAILING_ARM_OUTBOARD = 36
     TORSION_BAR_AXIS_A = 37
     TORSION_BAR_AXIS_B = 38
+
+    @property
+    def output_only_target_guidance(self) -> str | None:
+        """Return point-specific guidance when an output cannot be driven."""
+        if self is PointID.WHEEL_CONTACT_CENTRE:
+            return (
+                "Target 'wheel_center' along Z as the available heave input; "
+                "wheel orientation can still move the wheel contact centre, so read "
+                "ride height from the 'ride_height_change' metric of the solved "
+                "output."
+            )
+        return None
 
 
 class ShimType(StrEnum):

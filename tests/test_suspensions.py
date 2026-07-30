@@ -227,7 +227,7 @@ class TestDoubleWishboneSuspension:
         )
         spec = suspension.derived_spec()
         assert PointID.WHEEL_CENTER in spec.functions
-        assert PointID.WHEEL_PLANE_ROAD_TANGENT in spec.functions
+        assert PointID.WHEEL_CONTACT_CENTRE in spec.functions
 
     def test_suspension_elements(self, valid_hardpoints, valid_config):
         """
@@ -515,7 +515,7 @@ class TestIntegration:
 
         # Verify derived points calculated
         assert PointID.WHEEL_CENTER in state.positions
-        assert PointID.WHEEL_PLANE_ROAD_TANGENT in state.positions
+        assert PointID.WHEEL_CONTACT_CENTRE in state.positions
 
         # Verify constraints can be built
         constraints = suspension.constraints()

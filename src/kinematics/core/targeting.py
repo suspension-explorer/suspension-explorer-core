@@ -1,5 +1,5 @@
 """
-Sweep target definitions and world-direction resolution.
+Sweep target definitions and chassis-direction resolution.
 """
 
 from __future__ import annotations
@@ -25,21 +25,21 @@ def frozen_unit_axis(values: tuple[float, float, float]) -> np.ndarray:
     Returns:
         A numpy array with writeable flag set to False to prevent mutation.
     """
-    # Build a non-writeable unit-axis array so the shared WorldAxisSystem
+    # Build a non-writeable unit-axis array so the shared ChassisAxisSystem
     # constants cannot be mutated through their .data attribute.
     arr = np.array(values, dtype=np.float64)
     arr.flags.writeable = False
     return arr
 
 
-class WorldAxisSystem:
+class ChassisAxisSystem:
     """
-    World coordinate system unit axis directions.
+    Chassis-space unit axis directions.
 
     Usage:
-        WorldAxisSystem.X  # -> Direction3 along [1, 0, 0]
-        WorldAxisSystem.Y  # -> Direction3 along [0, 1, 0]
-        WorldAxisSystem.Z  # -> Direction3 along [0, 0, 1]
+        ChassisAxisSystem.X  # -> Direction3 along [1, 0, 0]
+        ChassisAxisSystem.Y  # -> Direction3 along [0, 1, 0]
+        ChassisAxisSystem.Z  # -> Direction3 along [0, 0, 1]
     """
 
     X: Final[Direction3] = Direction3.from_trusted(frozen_unit_axis((1.0, 0.0, 0.0)))
@@ -132,14 +132,14 @@ PointTargetDirection = Union[PointTargetAxis, PointTargetVector]
 
 
 def resolve_target(target: PointTargetDirection) -> Direction3:
-    """Resolve a target direction specification to a world unit direction."""
+    """Resolve a target direction specification to a chassis-space unit direction."""
     if isinstance(target, PointTargetAxis):
         if target.axis is Axis.X:
-            return WorldAxisSystem.X
+            return ChassisAxisSystem.X
         if target.axis is Axis.Y:
-            return WorldAxisSystem.Y
+            return ChassisAxisSystem.Y
         if target.axis is Axis.Z:
-            return WorldAxisSystem.Z
+            return ChassisAxisSystem.Z
         raise ValueError(f"Unsupported axis: {target.axis!r}")
 
     if isinstance(target, PointTargetVector):

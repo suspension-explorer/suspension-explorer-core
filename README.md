@@ -36,23 +36,23 @@ tool.
 
 ## What is supported
 
-| Area | Supported | Important limits |
-| --- | --- | --- |
-| Locating architectures | Double wishbone and MacPherson strut | Each may be built as one corner or a composed two-corner axle. |
-| Axle geometry | Mirrored or explicitly authored left and right corners | If `hardpoints.right` is omitted, the complete left geometry and side-local setup are mirrored through `Y = 0`. |
-| Wheel-heading control | Translating steering rack or fixed toe link | Select `steering.type: rack` or `steering.type: none`; front/rear position does not select steering automatically. |
-| Double-wishbone actuation | Direct or pushrod-rocker, mounted to the lower wishbone or upright | Direct actuation cannot be combined with a torsion bar. |
-| Double-wishbone springs | None, coilover, or torsion bar | A torsion bar requires pushrod-rocker actuation. |
-| Axle mechanisms | U-bar or T-bar anti-roll mechanism and rocker-to-rocker heave link | These mechanisms require a double-wishbone axle with pushrod-rocker actuation. |
-| Setup changes | Outboard camber shims on double-wishbone corners | Explicit asymmetric axle hardpoints require corresponding side-local setup when a shim is used. |
-| Outputs | Solved point positions, solver statistics, diagnostics, metrics, in either CSV or Parquet | Plotting and animation require the optional visualization dependencies. |
+| Area                      | Supported                                                                                 | Important limits                                                                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Locating architectures    | Double wishbone and MacPherson strut                                                      | Each may be built as one corner or a composed two-corner axle.                                                     |
+| Axle geometry             | Mirrored or explicitly authored left and right corners                                    | If `hardpoints.right` is omitted, the complete left geometry and side-local setup are mirrored through `Y = 0`.    |
+| Wheel-heading control     | Translating steering rack or fixed toe link                                               | Select `steering.type: rack` or `steering.type: none`; front/rear position does not select steering automatically. |
+| Double-wishbone actuation | Direct or pushrod-rocker, mounted to the lower wishbone or upright                        | Direct actuation cannot be combined with a torsion bar.                                                            |
+| Double-wishbone springs   | None, coilover, or torsion bar                                                            | A torsion bar requires pushrod-rocker actuation.                                                                   |
+| Axle mechanisms           | U-bar or T-bar anti-roll mechanism and rocker-to-rocker heave link                        | These mechanisms require a double-wishbone axle with pushrod-rocker actuation.                                     |
+| Setup changes             | Outboard camber shims on double-wishbone corners                                          | Explicit asymmetric axle hardpoints require corresponding side-local setup when a shim is used.                    |
+| Outputs                   | Solved point positions, solver statistics, diagnostics, metrics, in either CSV or Parquet | Plotting and animation require the optional visualization dependencies.                                            |
 
 The calculated metrics include wheel travel, longitudinal wheel-center travel,
-half-track and track, roadwheel angle, camber, caster, kingpin inclination,
-scrub radius, mechanical trail, instant-center geometry, roll center, heave,
-roll, anti-pitch geometry, damper and mechanism travel, and applicable motion
-ratios. Metric availability depends on the architecture and installed
-mechanisms.
+half-track, ISO track, track change, toe angle, ISO steer angle, camber, caster,
+kingpin inclination, scrub radius, mechanical trail, instant-center geometry,
+roll center, heave, suspension roll, ride-height change, anti-pitch geometry,
+damper and mechanism travel, and applicable motion ratios. Metric availability
+depends on the architecture and installed mechanisms.
 
 Analytical constraint Jacobians are used by the nonlinear solver. Applicable
 motion ratios and response derivatives are evaluated from the solved constraint
@@ -81,18 +81,78 @@ Suspension Explorer uses the ISO 8855 vehicle coordinate system:
 - Angles use radians internally and degrees in configuration and output.
 - Wheel offset follows the ET convention: positive offset is inboard.
 
-Hardpoints describe the design-condition assembly in a chassis-fixed frame.
-Fixed chassis hardpoints remain fixed while suspension, wheel, and tire points
-move relative to them. There is currently no separate inertial/world frame or
-road-frame transform. Left-side hardpoints therefore normally have positive Y
+Hardpoints describe the design-condition assembly in chassis space. Fixed
+chassis hardpoints remain fixed while suspension, wheel, and tire points move
+relative to them. Left-side hardpoints therefore normally have positive Y
 coordinates and right-side hardpoints normally have negative Y coordinates.
 
-For a solved two-corner axle, metrics also derive a shared chassis-frame road line in
-`YZ` from both wheel-plane road-tangent points. Its road-plane interpretation is the
-mathematical extrusion parallel to chassis `±X`, so longitudinal grade is assumed zero
-and is not inferred. This axle-local construction needs neither a rear axle nor a
-world frame; standalone corners instead assume a local `+Z` road normal. The axle
-metric row exports its normal, offset, angle, and chassis-centerline height.
+### Chassis and world axis systems
+
+The system introduces two right-handed coordinate systems as `Chassis` and
+`World`. Chassis space follows the ISO 8855:2011 vehicle axis system: X points
+forwards, Y left, and Z upwards, with the basis fixed to the sprung mass.
+Solver variables, constraints, hardpoints, and solved positions exist only in
+this system.
+
+World space follows the ISO earth-fixed axis system. World X and Y lie in the
+ISO ground plane, world Z points upwards, and gravity is always world `-Z`.
+This project considers only a straight, level road, so the ISO local road
+plane, ground plane, and world `Z = 0` plane coincide. Road grade, road bank,
+yaw, and non-planar surfaces are outside the model.
+
+At design condition the chassis and world axes are aligned, the front axle
+centreline is `X = 0`, and the wheel contact-centre line is `Z = 0`. During a sweep,
+fixed hardpoints remain fixed in chassis space while the road plane may move
+relative to them as the modelled axle heaves or rolls. This represents
+suspension motion associated with vehicle-generated vertical, lateral, or
+longitudinal forces; the solver is kinematic and does not calculate those
+forces or a dynamic body attitude.
+
+The axle contact closure models each tyre as a rigid disc and returns two
+wheel contact centres. It constructs the single plane tangent to both wheels
+and extrudes the contact line parallel to chassis X. Consequently:
+
+- local axle heave and roll relative to the road are observable;
+- longitudinal road gradient is zero by construction;
+- one axle cannot determine whole-vehicle pitch, yaw, or longitudinal
+  translation, so these are assigned zero rather than inferred;
+- an opposite-axle pivot is neither required nor modelled; and
+- `wheel_contact_centre` is an output and cannot be a sweep target.
+
+The resulting `WorldSpace` value is a presentation transform only. It maps the
+same axle-local road plane to world `Z = 0`, preserves chassis +X as world +X,
+and rotates/translates for local roll and heave. Metric calculation does not
+consume this transform.
+
+Metric reference systems are deliberate:
+
+- `camber` is the ISO vehicle-relative camber angle, while road-relative wheel
+  inclination is not currently exported;
+- `caster`, `kpi`, and ISO `steer_angle` use the chassis/vehicle axes;
+- `toe_angle` is the project convention: a side-folded roadwheel heading where
+  positive means toe-in; it is reported alongside, rather than substituted for,
+  the ISO vehicle-fixed `steer_angle`;
+- `steering_axis_offset_ground`, `scrub_radius`, and `mechanical_trail` use
+  the ISO tyre axes on the local road plane;
+- `track` is the ISO rest dimension on horizontal ground; `track_change`,
+  `ride_height_change`, swing-arm lengths, and geometric anti percentages use
+  the axle-local road plane represented in chassis coordinates;
+- wheel travel, heave, instant-centre coordinates, rack displacement, and
+  roll-centre coordinates use chassis axes; and
+- damper length and other Euclidean link lengths are invariant under the
+  chassis-to-world rigid transform.
+
+`ride_height_change` is therefore the change in perpendicular clearance from
+the chassis origin to the axle-local road plane. It is not a full-vehicle ride
+height or pitch result. Likewise, the exported `roll` is a kinematic axle
+state calculated as the ISO suspension roll angle of the current line joining
+the wheel centres, not a solved sprung-mass attitude. The anti percentages are
+geometric construction metrics; they do not predict pitch under load.
+
+The contact model omits tyre deflection, loaded radius, contact-patch extent,
+forces, compliance, and interaction with another axle. A future full-vehicle
+model could observe pitch from both axles, but that degree of freedom is
+intentionally absent from the present single-axle model.
 
 ## Installation
 
@@ -173,23 +233,23 @@ config:
       aspect_ratio: 0.55
       section_width: 270
       rim_diameter: 13
-  cg_position: {x: 1250, y: 0, z: 450}
+  cg_position: { x: 1250, y: 0, z: 450 }
   wheelbase: 2500
 
 hardpoints:
-  lower_wishbone_inboard_front: {x: 250, y: 400, z: 200}
-  lower_wishbone_inboard_rear: {x: -250, y: 450, z: 200}
-  lower_wishbone_outboard: {x: 0, y: 900, z: 200}
+  lower_wishbone_inboard_front: { x: 250, y: 400, z: 200 }
+  lower_wishbone_inboard_rear: { x: -250, y: 450, z: 200 }
+  lower_wishbone_outboard: { x: 0, y: 900, z: 200 }
 
-  upper_wishbone_inboard_front: {x: 225, y: 350, z: 500}
-  upper_wishbone_inboard_rear: {x: -275, y: 350, z: 500}
-  upper_wishbone_outboard: {x: -25, y: 750, z: 500}
+  upper_wishbone_inboard_front: { x: 225, y: 350, z: 500 }
+  upper_wishbone_inboard_rear: { x: -275, y: 350, z: 500 }
+  upper_wishbone_outboard: { x: -25, y: 750, z: 500 }
 
-  trackrod_inboard: {x: 50, y: 200, z: 250}
-  trackrod_outboard: {x: 150, y: 800, z: 275}
+  trackrod_inboard: { x: 50, y: 200, z: 250 }
+  trackrod_outboard: { x: 150, y: 800, z: 275 }
 
-  axle_inboard: {x: -20, y: 800, z: 308.426}
-  axle_outboard: {x: -20, y: 950, z: 313.426}
+  axle_inboard: { x: -20, y: 800, z: 308.426 }
+  axle_outboard: { x: -20, y: 950, z: 313.426 }
 ```
 
 For `steering.type: rack`, use `trackrod_inboard` and `trackrod_outboard`.
@@ -207,13 +267,13 @@ version: 1
 steps: 41
 targets:
   - point: wheel_center
-    direction: {axis: z}
+    direction: { axis: z }
     mode: relative
     start: -40
     stop: 40
 
   - point: trackrod_inboard
-    direction: {axis: y}
+    direction: { axis: y }
     mode: relative
     start: 0
     stop: 0
@@ -222,7 +282,7 @@ targets:
 Every physical actuator must be controlled exactly once. A rack-steered model
 therefore needs one `trackrod_inboard` target along Y, even when the rack is
 held at zero displacement. `relative` values are measured from the authored
-design condition; `absolute` values are coordinates in the chassis-fixed frame.
+design condition; `absolute` values are coordinates in chassis space.
 
 All target sequences must have the same number of values. Multiple targets are
 paired by index rather than expanded into a Cartesian product. Use `start`,
@@ -235,9 +295,10 @@ paired by index rather than expanded into a Cartesian product. Use `start`,
 uv run kinematics visualize --geometry geometry.yaml --output geometry.png
 ```
 
-This validates and builds the geometry, reports whether the derived wheel-plane
-road-tangent point lies on `Z = 0`, and writes a static image. It requires
-`[cli,viz]`.
+This validates and builds the geometry, reports whether every derived wheel
+contact centre lies on the reconstructed road plane, and writes a static
+image. The diagnostic also prints each centre's raw chassis Z coordinate and
+signed road-plane distance. It requires `[cli,viz]`.
 
 ### 4. Solve and export the sweep
 
@@ -279,16 +340,16 @@ version: 1.0.0
 units: millimeters
 
 vehicle_config:
-  cg_position: {x: 1250, y: 0, z: 450}
+  cg_position: { x: 1250, y: 0, z: 450 }
   wheelbase: 2500
 
 axle_config:
   axle_position: front
-  steering: {type: rack}
-  actuation: {type: direct, mount: lower_wishbone}
-  spring: {type: none}
-  anti_roll: {type: none}
-  heave_link: {type: none}
+  steering: { type: rack }
+  actuation: { type: direct, mount: lower_wishbone }
+  spring: { type: none }
+  anti_roll: { type: none }
+  heave_link: { type: none }
   wheel:
     offset: 0
     tire:
@@ -320,19 +381,19 @@ version: 1
 targets:
   - point: wheel_center
     side: left
-    direction: {axis: z}
+    direction: { axis: z }
     mode: relative
     values: [-30, 0, 30]
 
   - point: wheel_center
     side: right
-    direction: {axis: z}
+    direction: { axis: z }
     mode: relative
     values: [30, 0, -30]
 
   - point: trackrod_inboard
     side: left
-    direction: {axis: y}
+    direction: { axis: y }
     mode: relative
     values: [0, 0, 0]
 ```

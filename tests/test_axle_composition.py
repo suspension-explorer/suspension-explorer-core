@@ -28,7 +28,13 @@ from kinematics.core.elements import (
     RigidLinkElement,
     SuspensionElement,
 )
-from kinematics.core.enums import Axis, PointID, SteeringType, SuspensionType
+from kinematics.core.enums import (
+    Axis,
+    AxlePosition,
+    PointID,
+    SteeringType,
+    SuspensionType,
+)
 from kinematics.core.metrics.context import MetricContext
 from kinematics.core.metrics.main import AxleMetricRows
 from kinematics.core.points.derived.manager import DerivedPointsSpec
@@ -69,18 +75,18 @@ class TrailingArmCorner(CornerSuspension):
             CHASSIS_REAR,
             KNUCKLE,
             PointID.WHEEL_CENTER,
-            PointID.WHEEL_PLANE_ROAD_TANGENT,
+            PointID.WHEEL_CONTACT_CENTRE,
         }
     )
     FREE_POINTS: ClassVar[tuple[PointID, ...]] = (
         KNUCKLE,
         PointID.WHEEL_CENTER,
-        PointID.WHEEL_PLANE_ROAD_TANGENT,
+        PointID.WHEEL_CONTACT_CENTRE,
     )
     OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
         KNUCKLE,
         PointID.WHEEL_CENTER,
-        PointID.WHEEL_PLANE_ROAD_TANGENT,
+        PointID.WHEEL_CONTACT_CENTRE,
     )
 
     def initial_state(self) -> SuspensionState:
@@ -112,10 +118,8 @@ class TrailingArmCorner(CornerSuspension):
             for anchor in (CHASSIS_FRONT, CHASSIS_REAR)
         ]
         constraints.append(distance(KNUCKLE, PointID.WHEEL_CENTER))
-        constraints.append(
-            distance(PointID.WHEEL_CENTER, PointID.WHEEL_PLANE_ROAD_TANGENT)
-        )
-        constraints.append(distance(KNUCKLE, PointID.WHEEL_PLANE_ROAD_TANGENT))
+        constraints.append(distance(PointID.WHEEL_CENTER, PointID.WHEEL_CONTACT_CENTRE))
+        constraints.append(distance(KNUCKLE, PointID.WHEEL_CONTACT_CENTRE))
         return constraints
 
     def derived_spec(self) -> DerivedPointsSpec:
@@ -186,7 +190,7 @@ def build_stub_corner(
             CHASSIS_REAR: Point3([-100.0, 0.3 * lateral, 150.0]),
             KNUCKLE: Point3([0.0, 0.9 * lateral, 50.0]),
             PointID.WHEEL_CENTER: Point3([0.0, lateral, 0.0]),
-            PointID.WHEEL_PLANE_ROAD_TANGENT: Point3([0.0, lateral, -200.0]),
+            PointID.WHEEL_CONTACT_CENTRE: Point3([0.0, lateral, -200.0]),
         },
     )
 
@@ -194,7 +198,10 @@ def build_stub_corner(
 def build_stub_axle(config: SuspensionConfig | None = None) -> AxleSuspension:
     if config is not None:
         config = config.model_copy(
-            update={"steering": SteeringConfig(type=SteeringType.NONE)}
+            update={
+                "steering": SteeringConfig(type=SteeringType.NONE),
+                "axle_position": AxlePosition.FRONT,
+            }
         )
     # The stub corners have no registered architecture; any member works as
     # the reported identity here.
@@ -287,7 +294,8 @@ def test_stub_axle_solves_and_reports_metrics_through_role_hooks():
         assert row["caster"] is not None
         assert row["deriv_camber_wrt_hub_z"] is not None
         # Corners without a rack declare no rack-driven derivatives.
-        assert "deriv_roadwheel_angle_wrt_rack_displacement" not in row
+        assert "deriv_toe_angle_wrt_rack_displacement" not in row
+        assert "deriv_steer_angle_wrt_rack_displacement" not in row
 
     assert final.axle["heave"] == pytest.approx(bump_values[-1], abs=1e-6)
     assert final.axle["rack_displacement"] is None

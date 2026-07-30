@@ -83,7 +83,8 @@ def _metric_rows_at(
     ("column", "base_metric", "sign"),
     [
         ("deriv_camber_wrt_hub_z", "camber", 1.0),
-        ("deriv_roadwheel_angle_wrt_hub_z", "roadwheel_angle", 1.0),
+        ("deriv_toe_angle_wrt_hub_z", "toe_angle", 1.0),
+        ("deriv_steer_angle_wrt_hub_z", "steer_angle", 1.0),
         ("deriv_caster_wrt_hub_z", "caster", 1.0),
         ("deriv_kpi_wrt_hub_z", "kpi", 1.0),
         ("deriv_half_track_wrt_hub_z", "half_track", 1.0),
@@ -165,7 +166,8 @@ def test_wheel_center_x_derivative_matches_finite_difference(
 @pytest.mark.parametrize(
     ("column", "base_metric"),
     [
-        ("deriv_roadwheel_angle_wrt_rack_displacement", "roadwheel_angle"),
+        ("deriv_toe_angle_wrt_rack_displacement", "toe_angle"),
+        ("deriv_steer_angle_wrt_rack_displacement", "steer_angle"),
         ("deriv_camber_wrt_rack_displacement", "camber"),
     ],
 )

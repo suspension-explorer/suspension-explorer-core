@@ -20,7 +20,7 @@ from kinematics.core.suspensions.corner.attachments import (
     anchored_rigid_point_constraints,
     validate_rigid_anchor_points,
 )
-from kinematics.core.targeting import WorldAxisSystem
+from kinematics.core.targeting import ChassisAxisSystem
 
 
 @dataclass(frozen=True)
@@ -92,7 +92,7 @@ class TrackRod:
             PointOnLineConstraint(
                 point_id=PointID.TRACKROD_INBOARD,
                 line_point=positions[PointID.TRACKROD_INBOARD],
-                line_direction=WorldAxisSystem.Y,
+                line_direction=ChassisAxisSystem.Y,
             ),
         ]
 

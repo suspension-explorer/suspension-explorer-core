@@ -219,6 +219,13 @@ def plot_front_view_comparison(
                 alpha=wheel_config.alpha,
             )
 
+        # Wheel-plane contact centre marker.
+        if PointID.WHEEL_CONTACT_CENTRE in positions:
+            tangent = extract_array(positions[PointID.WHEEL_CONTACT_CENTRE])
+            ax.scatter(
+                tangent[0], tangent[1], tangent[2], color=color, s=100, marker="o"
+            )
+
     _draw_suspension(design_suspension, design_state, "#1f77b4", "Design [Shim = 30mm]")
     _draw_suspension(
         setup_suspension,

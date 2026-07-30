@@ -4,6 +4,145 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-30
+
+### Added
+
+- A `WorldSpace` API maps the axle-local road plane to the straight, level
+  world `Z = 0` plane for presentation. Gravity is always world `-Z`; local
+  axle heave and roll are represented, while unobservable whole-vehicle pitch
+  and yaw are not inferred. The structured transform is carried on axle
+  analysis frames.
+
+### Changed
+
+- Steering metrics now report both `toe_angle` (the project toe-in-positive
+  convention) and ISO vehicle-fixed `steer_angle`; both have hub-Z and,
+  where applicable, rack-displacement derivatives.
+- A two-corner axle now derives both wheel contact centre points from the solved
+  wheel geometry using one shared zero-grade ground plane, extruded along
+  chassis `X`, instead of letting each corner independently assume a flat `+Z`
+  ground. Standalone corners keep the local `+Z` assumption, since one wheel
+  cannot define a ground line.
+- Metric calculation and world presentation now reconstruct the same
+  axle-local `RoadPlane` independently from the two stored wheel contact centres.
+  Metrics no longer depend on `WorldSpace`, and the opposite-axle height input
+  and inferred-pitch model have been removed.
+- Steering-axis ground metrics follow the ISO 8855 tyre-axis decomposition on
+  the full shared ground plane, including bank, with the right-handed
+  `X_T × Y_T = Z_T` basis. `steering_axis_offset_ground`
+  is the signed lateral component along tyre `Y_T`, `mechanical_trail` is the
+  signed longitudinal component along tyre `X_T`, and `scrub_radius` is the
+  unsigned distance between the tyre contact centre and steering-axis ground
+  intersection.
+- The coupled axle tangency solve is a stateless post-solve closure rather than a
+  derived point. `AxleSuspension` drops the composed `WHEEL_CONTACT_CENTRE`
+  entries from its derived specification and writes both contact centres once
+  per accepted state, so no per-corner flat-road centre can reach an axle state.
+- State finalisation has one authoritative boundary. The low-level solver
+  requires an accepted-state finaliser — a caller that passes a no-op receives
+  kinematic intermediates, never complete-looking solved states — and
+  `solve_sweep()` passes the ground closure through it, so every state is
+  closed inside the solver's accept path. `evaluate_solved_sweep()` copies
+  externally supplied states and finalises the copies without mutating the
+  caller's, while `solve_evaluated_sweep()` evaluates its own already
+  finalised states directly, so nothing is closed twice and
+  `analyze_solved_sweep()` can no longer evaluate scalar metrics against stale
+  tangents while derivative evaluation closes its own dual positions.
+- `PointCatalog` separates how a point is computed from whether it may be
+  driven. Suspensions declare `closure_points()` — points the post-solve
+  closure writes — and those classify as derived, so the catalog no longer
+  publishes an axle's coupled wheel contact centres as fixed geometry.
+  `output_only` is pure targeting policy, never changes classification, and
+  is invariantly a subset of `derived`.
+- Ground-root branch continuity is threaded explicitly through a seed argument
+  instead of solver-side continuation state. The previously accepted
+  ground-normal angle is passed forward, and with no seed the closure recovers
+  one from the contact centres already stored in the state; the earlier
+  per-geometry root cache inside the derived-point graph is gone. Identical
+  inputs and an identical seed always reproduce the same root.
+- Anti-dive, anti-lift, and anti-squat are resolved consistently in the
+  longitudinal–ground-normal plane: CG height is the perpendicular distance to
+  the shared axle ground plane and the reaction-line rise is measured along the
+  ground normal, while the run remains chassis X, which lies exactly in the
+  X-extruded plane. On flat ground this reduces bit-for-bit to the previous
+  chassis-Z formulation. The side-view swing-arm metrics remain chassis-frame
+  descriptive constructions and are documented as such.
+- Axle ride-height change compares current and design ground height at chassis
+  centerline, avoiding contamination from bank angle, asymmetric track, tire
+  radii, or lateral track migration.
+- Axle `roll` is ISO 8855 suspension roll angle (§5.2.5), calculated from the
+  current line joining the wheel centres with positive rotation about vehicle
+  X. `track` is the ISO §4.4 rest dimension on horizontal ground.
+  `track_change` is the generic current road-lateral contact-centre separation
+  minus that design value; it is not called ride track change because ISO
+  §8.1.1 reserves that term for symmetric wheel-to-body displacement.
+- The public rigid-disc support point is named `wheel_contact_centre`, matching
+  ISO 8855 §4.1.4 and distinguishing it from the deformable tyre contact patch.
+- `RoadPlane` rejects normals without a resolvable positive upward component.
+  Static visualization tests contact centres against the reconstructed road
+  plane rather than assuming chassis `Z = 0`.
+- Geometry inputs now reject non-millimetre unit declarations. Length
+  normalization is not implemented, so accepting another label would silently
+  mis-scale tire, ground, tolerance, and metric calculations.
+- Residual and Jacobian evaluation updates only the derived-point chains that
+  the active constraints and step targets actually require, which keeps the
+  coupled axle ground derivation out of the least-squares hot loop. The complete
+  derived set is still recomputed once a step is accepted.
+
+### Breaking changes
+
+- Renamed the geometric tyre-road support point everywhere it is exposed.
+  Released `PointID.CONTACT_PATCH_CENTER` and the interim ground-plane branch's
+  `PointID.WHEEL_GROUND_TANGENT` become `PointID.WHEEL_CONTACT_CENTRE`.
+  Likewise, `ElementType.CONTACT_PATCH` and interim
+  `ElementType.WHEEL_GROUND_TANGENT` become
+  `ElementType.WHEEL_CONTACT_CENTRE`; the `WheelElement` and `WheelReferences`
+  fields become `wheel_contact_centre`. Exported point columns change from
+  released `contact_patch_center_x/y/z` or interim
+  `wheel_ground_tangent_x/y/z` to `wheel_contact_centre_x/y/z`, so anything
+  reading those names from CSV, Parquet, or the structured payload must be
+  updated.
+- The released derived-point function `get_contact_patch_center` and interim
+  `get_wheel_ground_tangent` are replaced by `get_wheel_contact_centre` in
+  `kinematics.core.points.derived.ground` alongside the coupled axle ground
+  derivation.
+- Removed the `get_wheel_plane_down_vector` derived-point helper. The ground
+  support-point construction in `kinematics.core.points.derived.ground` projects
+  the ground normal into the wheel plane directly, so the separate flat-ground
+  down-vector helper no longer had a caller.
+- The wheel contact centre point is a derived output that cannot be driven,
+  so sweeps that target it are rejected during validation. On an axle the point
+  comes from a coupled derivation across both corners, with a bounded validity
+  domain and non-unique roots, so supporting it as an actuator would require an
+  explicit branch policy.
+- The static geometry check reports raw wheel-contact-centre chassis Z and
+  signed distance to the reconstructed road plane. The released
+  `contact_patch_z`/`contact_patch_on_ground` and interim
+  `wheel_ground_tangent_z`/`wheel_ground_tangent_on_ground` result fields are
+  replaced by `wheel_contact_centre_z`,
+  `wheel_contact_centre_road_distance_mm`, and
+  `wheel_contact_centres_on_road`.
+- Steering-axis ground metrics now use their ISO meanings.
+  `steering_axis_offset_ground` replaces the signed lateral quantity previously
+  reported as `scrub_radius`; `scrub_radius` is now the total unsigned ground
+  distance; and `mechanical_trail` is projected along the wheel-relative tyre
+  longitudinal axis rather than chassis `X`.
+
+## [0.4.1] - 2026-07-19
+
+### Added
+
+- Added Suspension Explorer wordmarks for light and dark GitHub themes.
+
+### Changed
+
+- Renamed the project from `open-kinematics` to Suspension Explorer and
+  rewrote the README around the supported architectures, mechanisms, workflows,
+  outputs, and current limitations.
+
+## [0.4.0] - 2026-07-18
+
 ### Added
 
 - Generic point references support ordinary corner points and side-qualified axle points throughout the constraint, state, solver, and derived-point systems.
@@ -41,7 +180,7 @@ All notable changes to this project will be documented in this file.
 - Physical elements and assemblies own renderer-neutral path topology. CLI plots
   and animations add Matplotlib styling client-side, and structured analysis
   exposes the same unstyled paths for external clients. Static visualization
-  supports both corner and axle assemblies and checks every wheel-plane road-tangent point.
+  supports both corner and axle assemblies and checks every wheel contact patch.
 - Core-only CI now exercises numerical, constraint, Jacobian, state, target,
   derived-point, and rigid-body tests without CLI or visualization dependencies.
 - Derived-point target Jacobians now evaluate only the target's transitive dependency chain and seed only relevant free points, substantially reducing solve time.
@@ -61,7 +200,8 @@ All notable changes to this project will be documented in this file.
   `right_setup` supports a different camber-shim setup.
 - Geometry configuration is separated by ownership: vehicle inputs hold CG,
   wheelbase, brake bias, and driven axle; axle inputs hold steering, wheel/tire,
-  and axle-position data; corner inputs hold side-local setup such as camber shims.
+  and axle-position data; corner inputs hold side-local setup such as camber
+  shims.
 - Steering configuration now selects an explicit `rack` or `none` actuator.
   Double-wishbone and MacPherson corners use a rack-driven track rod when
   steered and a chassis-fixed toe link when non-steered. Selecting `none`
@@ -80,7 +220,9 @@ All notable changes to this project will be documented in this file.
   and installed mechanisms contribute only the state metric metadata they emit.
 - Rocker-to-rocker heave links reject design-state pickup separations at or below
   the geometric tolerance, where their length derivative would be undefined.
-- Steering metrics use `roadwheel_angle`; the concrete steering input is `trackrod_inboard`, and wheel-center longitudinal motion is expressed directly as `deriv_wheel_center_x_wrt_hub_z`.
+- Steering metrics use `roadwheel_angle`; the concrete steering input is
+  `trackrod_inboard`, and wheel-center longitudinal motion is expressed directly
+  as `deriv_wheel_center_x_wrt_hub_z`.
 - Half-track is exported as the absolute `half_track` state metric rather than a design-condition delta.
 
 ### Breaking changes
@@ -104,38 +246,75 @@ All notable changes to this project will be documented in this file.
   use distinct toe-link identifiers.
 - `AxleMetricRows.corners` now uses `Side` keys instead of serialized side names.
 
+## [0.3.1] - 2026-04-09
+
+### Changed
+
+- Expanded the README to cover analytical Jacobians, camber-shim simulation,
+  suspension metrics, and the current sweep workflow, with refreshed plot and
+  animation media.
+
+### Fixed
+
+- Removed the duplicate contact-patch marker from four-view plots and shortened
+  the model point label to “Contact Patch”.
+
 ## [0.3.0] - 2026-04-09
 
 ### Added
-- Split-body camber shim assembly solver (`suspensions/config/shims.py`): solves for the outboard camber shim configuration using a least-squares formulation. The upper ball joint position, camber block rotation, and upright body rotation are solved simultaneously to satisfy wishbone arc constraints, shim face closure, normal alignment, and heading-link length preservation.
+
+- Added a split-body camber-shim assembly solver. It solves the upper ball joint
+  position, camber-block rotation, and upright-body rotation together to satisfy
+  wishbone arc constraints, shim-face closure, normal alignment, and trackrod
+  length preservation.
+- Added `ResidualComputer.validate_target_count` to enforce a consistent target
+  count across evaluations, with a regression test for Jacobian shape
+  consistency.
+- Added a front-view comparison plot to `visualize_camber_shim.py`, overlaying
+  design and setup suspensions with distinct colours.
+- Added direct sign and known-value tests for `camber_deg`, `caster_deg`, and
+  `roadwheel_angle_deg`, plus catalog coverage for the trusted corner-metric
+  export set.
+- Added kingpin inclination (`kpi_deg`), scrub radius (`scrub_radius_mm`), and
+  mechanical trail (`mechanical_trail_mm`) metrics.
 
 ### Changed
-- Relaxed `Vec3` type alias from `NDArray[np.float64]` to `NDArray[np.floating[Any]]` so that numpy arithmetic results satisfy the type checker without wrapping. `make_vec3` is retained at system boundaries (I/O, config loading, solver output extraction, dual-number passthrough) but removed from internal arithmetic call sites where it served only as type-checker appeasement.
-- Adopted ISO/SAE wheel offset (ET) convention in `get_wheel_center`.
-- Positive `wheel.offset` now places the wheel centerline inboard of the hub face (reduced track for larger positive ET).
-- Updated wheel offset configuration docs to explicitly describe ET sign convention.
-- Updated derived-point expectations to match ISO/SAE offset behavior for wheel center, wheel inboard, and wheel outboard.
-- `ResidualComputer` now uses a fixed-size residual vector and Jacobian matrix, removing per-step trimming. The target count is validated once at each evaluation rather than allowing variable-length slicing.
-- `ResidualComputer` internals are no longer private: `_n_vars` → `n_vars`, `_jac_buffer` → `jac_buffer`, `_jac_plans` → `jac_plan`, `_validate_target_count` → `validate_target_count`.
-- Renamed Jacobian "scatter" operations to "distribute" in `ResidualComputer._build_jac_plan`.
-- Moved underdetermined-system check out of the per-step loop in `solve_suspension_sweep` (both `n_vars` and `m_res` are constant across a sweep).
-- Simplified `DoubleWishboneSuspension._apply_camber_shim` docstring.
-- Default corner-metric exports now use `roadwheel_angle_deg` as the canonical steer column and no longer export duplicate `toe_deg` or placeholder anti-dive / anti-squat metrics.
 
-### Added
-- `ResidualComputer.validate_target_count` enforces that every evaluation receives the same number of targets configured at init time.
-- Test for Jacobian shape consistency (`test_residual_computer_rejects_target_count_changes`).
-- Front-view (Y-Z) comparison plot in `visualize_camber_shim.py` overlaying design and setup suspensions with distinct colors.
-- Direct sign and known-value tests for `camber_deg`, `caster_deg`, and `roadwheel_angle_deg`, plus catalog coverage for the trusted corner-metric export set.
-- Kingpin inclination metric (`kpi_deg`): steering axis angle in the front-view (YZ) plane.
-- Scrub radius metric (`scrub_radius_mm`): lateral offset from steering axis ground intersection to the wheel-plane road-tangent point.
-- Mechanical trail metric (`mechanical_trail_mm`): longitudinal offset from steering axis ground intersection to the wheel-plane road-tangent point.
+- Relaxed the `Vec3` type alias from `NDArray[np.float64]` to
+  `NDArray[np.floating[Any]]` so NumPy arithmetic results satisfy the type
+  checker without wrapping. `make_vec3` remains at system boundaries but was
+  removed from internal arithmetic call sites.
+- Adopted ISO/SAE wheel offset (ET) convention in `get_wheel_center`.
+- Positive `wheel.offset` now places the wheel centerline inboard of the hub face,
+  reducing track as positive ET increases. Configuration documentation and
+  derived-point expectations were updated to match.
+- `ResidualComputer` now uses a fixed-size residual vector and Jacobian matrix,
+  with the target count validated once per evaluation.
+- Made the residual-computer internals `n_vars`, `jac_buffer`, `jac_plan`, and
+  `validate_target_count` public, and renamed Jacobian “scatter” operations to
+  “distribute”.
+- Moved the underdetermined-system check out of the per-step loop in
+  `solve_suspension_sweep`.
+- Simplified `DoubleWishboneSuspension._apply_camber_shim` docstring.
+- Default corner-metric exports now use `roadwheel_angle_deg` as the canonical
+  steer column and no longer export duplicate `toe_deg` or placeholder
+  anti-dive / anti-squat metrics.
 
 ### Removed
-- `WHEEL_CENTER_ON_GROUND` point and `get_wheel_center_on_ground` derived point function. The Z=0 ground plane assumption was incorrect in a chassis-fixed frame; ground-plane intersections now use the wheel-plane road-tangent Z via `MetricContext.ground_z`.
+
+- Removed the `WHEEL_CENTER_ON_GROUND` point and
+  `get_wheel_center_on_ground` derived-point function. The `Z = 0` ground-plane
+  assumption was incorrect in a chassis-fixed frame; intersections now use the
+  contact-patch Z through `MetricContext.ground_z`.
 
 ### Fixed
-- Scrub radius now projects along the wheel axle direction in the ground plane instead of the global Y axis, giving correct values when the wheel is steered or cambered.
-- Scrub radius and mechanical trail now intersect the steering axis at the wheel-plane road-tangent Z rather than Z=0, giving correct values through bump travel.
-- Clarified `get_wheel_plane_road_tangent` docstring as the lowest point on an ideal tire circle in the wheel center plane.
-- Dashboard plots now show KPI, mechanical trail, and scrub radius instead of swing arm lengths and FVIC height. Camber plot Y-axis tuned to [-2.5, -1.5] degrees.
+
+- Scrub radius now projects along the wheel-axle direction in the ground plane
+  instead of global Y, giving correct values for steered or cambered wheels.
+- Scrub radius and mechanical trail now intersect the steering axis at the
+  contact-patch Z rather than `Z = 0`, giving correct values through bump travel.
+- Clarified `get_contact_patch_center` as the lowest point on an ideal tyre
+  circle in the wheel-centre plane.
+- Dashboard plots now show KPI, mechanical trail, and scrub radius instead of
+  swing-arm lengths and FVIC height. The camber plot Y-axis is tuned to
+  `[-2.5, -1.5]` degrees.

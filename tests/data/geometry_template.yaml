@@ -14,7 +14,7 @@ actuation:
 spring:
   type: none
 
-# Hardpoints: World Axis, Design Condition.
+# Hardpoints: Chassis Space, Design Condition.
 hardpoints:
   # Lower Wishbone.
   lower_wishbone_inboard_front: {x: 250, y: 400, z: 200}

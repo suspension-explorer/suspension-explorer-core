@@ -81,8 +81,8 @@ def test_coilover_semi_trailing_arm_solves_about_an_oblique_axis(coilover):
     assert final_metrics["deriv_damper_length_wrt_hub_z"] is not None
     first_camber = first_metrics["camber"]
     final_camber = final_metrics["camber"]
-    first_toe = first_metrics["roadwheel_angle"]
-    final_toe = final_metrics["roadwheel_angle"]
+    first_toe = first_metrics["toe_angle"]
+    final_toe = final_metrics["toe_angle"]
     assert first_camber is not None and final_camber is not None
     assert first_toe is not None and final_toe is not None
     assert abs(final_camber - first_camber) > 0.01

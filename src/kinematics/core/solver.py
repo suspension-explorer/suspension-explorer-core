@@ -213,6 +213,30 @@ class ResidualComputer:
         self.jac_buffer = np.zeros((self.n_residuals, self.n_vars), dtype=np.float64)
         self.jac_plan = [self.build_jac_plan(c) for c in constraints]
 
+        # The constraint contribution to the required-point set is fixed for this
+        # object's lifetime, so it is resolved once rather than on every residual
+        # and Jacobian evaluation.
+        self.constraint_required_points = frozenset(
+            point for constraint in constraints for point in constraint.involved_points
+        )
+        self._required_points_cache: dict[
+            tuple[PointKey, ...], frozenset[PointKey]
+        ] = {}
+
+    def required_points(self, step_targets: list[PointTarget]) -> frozenset[PointKey]:
+        """
+        Return every point whose derived chain must be refreshed for an evaluation.
+
+        A solve step re-evaluates the same targets many times, so results are
+        memoized against the step's target identifiers.
+        """
+        target_ids = tuple(target.point_id for target in step_targets)
+        required = self._required_points_cache.get(target_ids)
+        if required is None:
+            required = self.constraint_required_points.union(target_ids)
+            self._required_points_cache[target_ids] = required
+        return required
+
     def validate_target_count(self, step_targets: list[PointTarget]) -> None:
         """
         Ensure each evaluation uses the fixed target count configured at init time.
@@ -254,14 +278,8 @@ class ResidualComputer:
         # Update state buffer in-place with current guess.
         self.state_buffer.update_from_array(free_array)
 
-        required_points = {
-            point
-            for constraint in self.constraints
-            for point in constraint.involved_points
-        }
-        required_points.update(target.point_id for target in step_targets)
         self.derived_manager.update_required_in_place(
-            self.state_buffer.positions, required_points
+            self.state_buffer.positions, self.required_points(step_targets)
         )
 
         # Fill constraint residuals section: residuals[0:n_constraints].
@@ -520,14 +538,8 @@ class ResidualComputer:
         self.validate_target_count(step_targets)
 
         self.state_buffer.update_from_array(free_array)
-        required_points = {
-            point
-            for constraint in self.constraints
-            for point in constraint.involved_points
-        }
-        required_points.update(target.point_id for target in step_targets)
         self.derived_manager.update_required_in_place(
-            self.state_buffer.positions, required_points
+            self.state_buffer.positions, self.required_points(step_targets)
         )
 
         jac = self.jac_buffer
@@ -672,6 +684,8 @@ def solve_suspension_sweep(
     sweep_config: SweepConfig,
     derived_manager: DerivedPointsManager,
     solver_config: SolverConfig = SolverConfig(),
+    *,
+    finalize_state: Callable[[dict[PointKey, Point3]], None],
 ) -> tuple[list[SuspensionState], list[SolverInfo]]:
     """
     Solves a series of kinematic states by sweeping through target
@@ -686,6 +700,15 @@ def solve_suspension_sweep(
         sweep_config: Configuration for the sweep, including step count and targets.
         derived_manager: Manager to compute derived points in-place.
         solver_config: Configuration parameters for the solver.
+        finalize_state: Required finaliser invoked on every accepted state's
+            positions, after the derived-point update and before the state is
+            stored. Suspensions with post-solve closure outputs (an axle's
+            coupled wheel contact centres) pass their closure here so no state
+            can leave the solver carrying stale closure values; suspensions
+            without closure outputs pass `Suspension.apply_ground_closure`,
+            which is a no-op for them. The parameter is deliberately required:
+            a caller that skips finalisation receives kinematic intermediates,
+            never complete-looking solved states.
 
     Returns:
         Tuple of (solved_states, solver_stats) where:
@@ -773,6 +796,7 @@ def solve_suspension_sweep(
         # The tradeoff is this explicit sync requirement.
         working_state.update_from_array(result.x)
         derived_manager.update_in_place(working_state.positions)
+        finalize_state(working_state.positions)
 
         # Store finalized state for this step.
         solution_states.append(working_state.copy())

@@ -39,7 +39,8 @@ def main() -> None:
     wheel_center_z: list[float] = []
     camber: list[float | None] = []
     caster: list[float | None] = []
-    roadwheel_angle: list[float | None] = []
+    toe_angle: list[float | None] = []
+    steer_angle: list[float | None] = []
     svic_x: list[float | None] = []
     svic_z: list[float | None] = []
     fvic_y: list[float | None] = []
@@ -63,7 +64,8 @@ def main() -> None:
         metrics = frame.metrics
         camber.append(metrics["camber"])
         caster.append(metrics["caster"])
-        roadwheel_angle.append(metrics["roadwheel_angle"])
+        toe_angle.append(metrics["toe_angle"])
+        steer_angle.append(metrics["steer_angle"])
         svic_x.append(metrics["svic_x"])
         svic_z.append(metrics["svic_z"])
         fvic_y.append(metrics["fvic_y"])
@@ -90,7 +92,8 @@ def main() -> None:
 
     camber_m = to_masked(camber)
     caster_m = to_masked(caster)
-    rwa_m = to_masked(roadwheel_angle)
+    toe_m = to_masked(toe_angle)
+    steer_m = to_masked(steer_angle)
     kpi_m = to_masked(kpi)
     svic_x_m = to_masked(svic_x)
     svic_z_m = to_masked(svic_z)
@@ -168,12 +171,14 @@ def main() -> None:
     axes4[0, 1].set_xlabel(x_label)
     axes4[0, 1].grid(True, alpha=0.3)
 
-    axes4[0, 2].plot(bump, rwa_m, "g-", linewidth=1.5)
-    axes4[0, 2].set_ylabel("RWA [deg]")
-    axes4[0, 2].set_title("Roadwheel Angle")
+    axes4[0, 2].plot(bump, toe_m, "g-", linewidth=1.5, label="Toe")
+    axes4[0, 2].plot(bump, steer_m, "c--", linewidth=1.5, label="ISO steer")
+    axes4[0, 2].set_ylabel("Angle [deg]")
+    axes4[0, 2].set_title("Toe and Steer Angle")
     axes4[0, 2].set_xlabel(x_label)
     axes4[0, 2].grid(True, alpha=0.3)
     axes4[0, 2].axhline(0, color="k", linewidth=0.5)
+    axes4[0, 2].legend()
 
     axes4[1, 0].plot(bump, kpi_m, "m-", linewidth=1.5)
     axes4[1, 0].set_ylabel("KPI [deg]")

@@ -17,9 +17,11 @@ PUBLIC_CORE_MODULES = {
     "kinematics.core.metrics.main",
     "kinematics.core.metrics.registry",
     "kinematics.core.enums",
+    "kinematics.core.pose",
     "kinematics.core.primitives.geometry",
     "kinematics.core.primitives.point_ref",
     "kinematics.core.presentation",
+    "kinematics.core.road",
     "kinematics.core.schema.geometry",
     "kinematics.core.schema.sweep",
     "kinematics.core.solver",
@@ -39,7 +41,11 @@ def test_core_import_succeeds_without_cli_dependencies() -> None:
         "import kinematics\n"
         "import kinematics.core\n"
         "from kinematics.core.input import build_suspension, build_sweep\n"
-        "from kinematics.core.metrics import AxleGroundLine\n"
+        "from kinematics.core.pose import (\n"
+        "    WorldSpace,\n"
+        "    world_space_for_axle_state,\n"
+        "    world_spaces_for_sweep,\n"
+        ")\n"
     )
 
     result = subprocess.run(
@@ -51,6 +57,25 @@ def test_core_import_succeeds_without_cli_dependencies() -> None:
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_pose_module_declares_its_public_names() -> None:
+    from kinematics.core import pose
+
+    assert set(pose.__all__) == {
+        "WorldSpace",
+        "world_space_for_axle_state",
+        "world_spaces_for_sweep",
+    }
+    for name in pose.__all__:
+        assert hasattr(pose, name)
+
+
+def test_road_module_declares_its_public_names() -> None:
+    from kinematics.core import road
+
+    assert road.__all__ == ["RoadPlane"]
+    assert road.RoadPlane is not None
 
 
 def test_low_level_core_import_does_not_load_solver_stack() -> None:

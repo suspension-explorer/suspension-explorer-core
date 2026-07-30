@@ -22,7 +22,7 @@ class ElementType(StrEnum):
     TOE_LINK = "toe_link"
     RACK = "rack"
     AXLE = "axle"
-    WHEEL_PLANE_ROAD_TANGENT = "wheel_plane_road_tangent"
+    WHEEL_CONTACT_CENTRE = "wheel_contact_centre"
     PUSHROD = "pushrod"
     ROCKER = "rocker"
     SPRING_DAMPER = "spring_damper"
@@ -240,14 +240,14 @@ class RockerElement(SuspensionElement):
 
 @dataclass(frozen=True)
 class WheelElement(SuspensionElement):
-    """A wheel, hub axis, and wheel-plane road-tangent point."""
+    """A wheel, hub axis, and nominal-radius rigid-disc contact centre."""
 
     center: PointKey
     inboard: PointKey
     outboard: PointKey
     axle_inboard: PointKey
     axle_outboard: PointKey
-    wheel_plane_road_tangent: PointKey
+    wheel_contact_centre: PointKey
 
     @property
     def point_keys(self) -> tuple[PointKey, ...]:
@@ -260,7 +260,7 @@ class WheelElement(SuspensionElement):
             self.outboard,
             self.axle_inboard,
             self.axle_outboard,
-            self.wheel_plane_road_tangent,
+            self.wheel_contact_centre,
         )
 
 
@@ -335,6 +335,6 @@ def map_element_points(
             outboard=transform(element.outboard),
             axle_inboard=transform(element.axle_inboard),
             axle_outboard=transform(element.axle_outboard),
-            wheel_plane_road_tangent=transform(element.wheel_plane_road_tangent),
+            wheel_contact_centre=transform(element.wheel_contact_centre),
         )
     raise TypeError(f"Unsupported suspension element: {type(element)!r}")

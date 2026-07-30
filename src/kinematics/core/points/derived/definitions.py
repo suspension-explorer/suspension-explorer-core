@@ -1,7 +1,7 @@
-"""Common non-road derived point calculation functions.
+"""Common non-ground derived point calculation functions.
 
 These functions calculate positions of derived points based on other suspension
-points. Coupled axle road-tangency geometry lives in :mod:`.road`.
+points. Coupled axle ground-tangency geometry lives in :mod:`.ground`.
 """
 
 from __future__ import annotations
@@ -9,15 +9,12 @@ from __future__ import annotations
 from functools import partial
 from typing import Any
 
-import numpy as np
-
 from kinematics.core.enums import PointID
+from kinematics.core.points.derived.ground import get_wheel_contact_centre
 from kinematics.core.points.derived.manager import DerivedPointsSpec
-from kinematics.core.points.derived.road import get_wheel_plane_road_tangent
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.primitives.vector_utils.generic import normalize_vector
 from kinematics.core.schema.config import WheelConfig
-from kinematics.core.targeting import WorldAxisSystem
 
 
 def get_point_along_line(
@@ -30,37 +27,6 @@ def get_point_along_line(
     start = positions[start_point]
     line_direction = normalize_vector(positions[end_point] - start)
     return start + line_direction * distance_from_start
-
-
-def get_wheel_plane_down_vector(positions: dict[PointKey, Any]) -> Any:
-    """
-    Calculate the flat-road down direction in the wheel's plane of rotation.
-
-    It is the component of global down orthogonal to the axle direction, using
-    Gram-Schmidt projection. The standalone wheel tangent uses the equivalent
-    road helper; this remains a public utility for callers that need the
-    projected direction itself.
-
-    Args:
-        positions: Dictionary containing AXLE_INBOARD and AXLE_OUTBOARD.
-
-    Returns:
-        A normalized 3D vector in the wheel plane pointing toward flat-road down.
-
-    Raises:
-        ValueError: If the axle is zero length or vertical.
-    """
-    axle_inboard = positions[PointID.AXLE_INBOARD]
-    axle_outboard = positions[PointID.AXLE_OUTBOARD]
-
-    # Compute the normalized axle direction (wheel spin axis).
-    axle_direction = normalize_vector(axle_outboard - axle_inboard)
-
-    # Project global down into the plane perpendicular to the axle.
-    global_down = -1 * WorldAxisSystem.Z
-    down_parallel_to_axle = np.dot(global_down, axle_direction) * axle_direction
-    wheel_down = global_down - down_parallel_to_axle
-    return normalize_vector(wheel_down)
 
 
 def get_axle_midpoint(positions: dict[PointKey, Any]) -> Any:
@@ -138,9 +104,11 @@ def build_wheel_derived_spec(wheel: "WheelConfig") -> "DerivedPointsSpec":
     Build the standard wheel derived-point specification.
 
     Every corner whose wheel spin axis is AXLE_INBOARD -> AXLE_OUTBOARD derives
-    the wheel centre, rim faces, and flat-road wheel-plane tangent the same way.
-    AxleSuspension replaces the tangent calculation with its coupled road-plane
-    version when both corners are composed.
+    the wheel centre, rim faces, and flat-ground wheel contact centre the same way.
+    When both corners are composed, AxleSuspension removes the WHEEL_CONTACT_CENTRE
+    entries from the composed derived-point graph entirely and writes both
+    contact centres from its post-solve ground closure instead, so no
+    per-corner flat-ground result can reach an axle state.
     """
     tire_radius = wheel.tire.nominal_radius
     functions = {
@@ -152,8 +120,8 @@ def build_wheel_derived_spec(wheel: "WheelConfig") -> "DerivedPointsSpec":
         PointID.WHEEL_OUTBOARD: partial(
             get_wheel_outboard, wheel_width=wheel.tire.section_width
         ),
-        PointID.WHEEL_PLANE_ROAD_TANGENT: partial(
-            get_wheel_plane_road_tangent, tire_radius=tire_radius
+        PointID.WHEEL_CONTACT_CENTRE: partial(
+            get_wheel_contact_centre, tire_radius=tire_radius
         ),
     }
     dependencies = {
@@ -161,7 +129,7 @@ def build_wheel_derived_spec(wheel: "WheelConfig") -> "DerivedPointsSpec":
         PointID.WHEEL_CENTER: {PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD},
         PointID.WHEEL_INBOARD: {PointID.WHEEL_CENTER, PointID.AXLE_INBOARD},
         PointID.WHEEL_OUTBOARD: {PointID.WHEEL_CENTER, PointID.AXLE_INBOARD},
-        PointID.WHEEL_PLANE_ROAD_TANGENT: {
+        PointID.WHEEL_CONTACT_CENTRE: {
             PointID.WHEEL_CENTER,
             PointID.AXLE_INBOARD,
             PointID.AXLE_OUTBOARD,

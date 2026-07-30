@@ -4,29 +4,29 @@ import pytest
 from kinematics.core.enums import Axis
 from kinematics.core.primitives.geometry import Direction3
 from kinematics.core.targeting import (
+    ChassisAxisSystem,
     PointTargetAxis,
     PointTargetVector,
-    WorldAxisSystem,
     resolve_target,
 )
 
 
 def test_resolve_axis_targets_returns_unit_axes():
     np.testing.assert_allclose(
-        resolve_target(PointTargetAxis(Axis.X)).data, WorldAxisSystem.X.data
+        resolve_target(PointTargetAxis(Axis.X)).data, ChassisAxisSystem.X.data
     )
     np.testing.assert_allclose(
-        resolve_target(PointTargetAxis(Axis.Y)).data, WorldAxisSystem.Y.data
+        resolve_target(PointTargetAxis(Axis.Y)).data, ChassisAxisSystem.Y.data
     )
     np.testing.assert_allclose(
-        resolve_target(PointTargetAxis(Axis.Z)).data, WorldAxisSystem.Z.data
+        resolve_target(PointTargetAxis(Axis.Z)).data, ChassisAxisSystem.Z.data
     )
 
 
 def test_resolve_vector_target_normalizes():
     direction = resolve_target(PointTargetVector(Direction3([10.0, 0.0, 0.0])))
 
-    np.testing.assert_allclose(direction.data, WorldAxisSystem.X.data)
+    np.testing.assert_allclose(direction.data, ChassisAxisSystem.X.data)
     assert np.isclose(np.linalg.norm(direction.data), 1.0)
 
 

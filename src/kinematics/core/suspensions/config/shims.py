@@ -187,8 +187,8 @@ def compute_camber_shim_assembly_residuals(
         upright_body_rot_vec,
     )
 
-    # Reconstruct the world positions of the A/B interface datums from the solved
-    # rigid-body pose of each half.
+    # Reconstruct the chassis-space positions of the A/B interface datums from
+    # the solved rigid-body pose of each half.
     solved_camber_block_datum_a = (
         solved_ubj_position + rotated_ubj_to_camber_block_datum_a
     )

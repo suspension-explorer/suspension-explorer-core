@@ -39,7 +39,10 @@ class GeometrySpecBase(BaseModel):
 
     name: str = "unnamed"
     version: str = "0.0.0"
-    units: Units = Units.MILLIMETERS
+    # Every length-valued schema, solver tolerance, and metric currently uses
+    # millimetres. Reject a misleading declaration until input normalization is
+    # implemented end to end.
+    units: Literal[Units.MILLIMETERS] = Units.MILLIMETERS
     type: SuspensionType
     scope: Scope
 
@@ -117,9 +120,7 @@ class MacPhersonGeometrySpec(CornerGeometrySpecBase):
 def check_trailing_arm_spring(spring: CornerSpringSpec) -> None:
     """Require one of the semi-trailing arm's implemented spring layouts."""
     if spring.type not in (CornerSpringType.COILOVER, CornerSpringType.TORSION_BAR):
-        raise ValueError(
-            "Semi-trailing arm spring must be 'coilover' or 'torsion_bar'"
-        )
+        raise ValueError("Semi-trailing arm spring must be 'coilover' or 'torsion_bar'")
 
 
 class TrailingArmGeometrySpec(CornerGeometrySpecBase):

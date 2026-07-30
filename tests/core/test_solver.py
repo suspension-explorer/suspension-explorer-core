@@ -163,6 +163,7 @@ def test_solve_sweep(
         sweep_config=simple_sweep_config,
         derived_manager=make_noop_derived_manager(),
         solver_config=SolverConfig(ftol=1e-6, xtol=1e-6, verbose=0),
+        finalize_state=lambda positions: None,
     )
 
     assert len(states) == len(displacement_values)
@@ -228,4 +229,5 @@ def test_solve_sweep_rejects_converged_infeasible_target(
             constraints=simple_constraints,
             sweep_config=SweepConfig([[infeasible_target]]),
             derived_manager=make_noop_derived_manager(),
+            finalize_state=lambda positions: None,
         )

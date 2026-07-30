@@ -56,6 +56,14 @@ def test_axle_geometry_uses_left_corner_as_mirror_source(
     assert spec.axle_config.left_setup.camber_shim is None
 
 
+def test_geometry_rejects_unsupported_length_units(test_data_dir: Path) -> None:
+    data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
+    data["units"] = "degrees"
+
+    with pytest.raises(ValueError, match="millimeters"):
+        parse_geometry_spec(data)
+
+
 def test_geometry_selectors_parse_as_enums_and_serialize_as_strings(
     test_data_dir: Path,
 ) -> None:
@@ -155,10 +163,7 @@ def test_core_schema_accepts_enum_objects() -> None:
 
 def test_core_enum_parser_is_case_sensitive() -> None:
     assert parse_enum(PointID, "wheel_center") is PointID.WHEEL_CENTER
-    assert (
-        parse_enum(PointID, "wheel_plane_road_tangent")
-        is PointID.WHEEL_PLANE_ROAD_TANGENT
-    )
+    assert parse_enum(PointID, "wheel_contact_centre") is PointID.WHEEL_CONTACT_CENTRE
 
     with pytest.raises(ValueError, match="Invalid PointID"):
         parse_enum(PointID, "WHEEL_CENTER")
@@ -339,6 +344,18 @@ def test_sweep_spec_reports_expanded_step_count() -> None:
     )
 
     assert spec.n_steps == 7
+
+
+def test_hold_is_a_frontend_convenience_not_a_core_sweep_field() -> None:
+    """Core callers express a held actuator as an ordinary relative zero target."""
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        TargetSpec.model_validate(
+            {
+                "point": PointID.TRACKROD_INBOARD,
+                "direction": {"axis": Axis.Y},
+                "hold": True,
+            }
+        )
 
 
 def test_sweep_spec_step_count_validates_target_lengths() -> None:
