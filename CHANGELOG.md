@@ -6,12 +6,6 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Generic point references support ordinary corner points and side-qualified axle points throughout the constraint, state, solver, and derived-point systems.
-- Validated geometry schemas and a shared registry select explicit double-wishbone corner, coilover, pushrod-rocker, axle, and shared anti-roll-bar topologies.
-- Declarative derivative metrics use analytical solution-manifold tangents and forward-mode automatic differentiation for arbitrary scalar responses and drivers.
-- Advisory sweep diagnostics report convergence, residual acceptance, branch continuity, derivative availability, rocker and anti-roll-bar chirality, and transmission margin.
-- Coupled axle models solve left and right corners together and support either mirrored or independently authored geometry.
-- The public `analyze_sweep()` and `initial_pose()` APIs return structured positions, metrics, locations, metadata, renderer-neutral element paths, diagnostics, references, and solved frames.
 - A `WorldSpace` API maps the axle-local road plane to the straight, level
   world `Z = 0` plane for presentation. Gravity is always world `-Z`; local
   axle heave and roll are represented, while unobservable whole-vehicle pitch
@@ -20,79 +14,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Split the package into a transport-independent `kinematics.core` solver API and
-  a `kinematics.cli` adapter for YAML files, result writing, terminal behavior,
-  and optional visualization. CLI-only dependencies now live in the `cli` extra.
-- Core suspension models now compose explicit rigid-link, variable-link, rack,
-  upright, torsion, rocker, and wheel elements in a validated
-  `SuspensionAssembly`. Its identifier-only `PointCatalog` relates elements to
-  fixed, free, and derived points without duplicating solver state. Matplotlib
-  styles are owned by the CLI visualization adapter.
-- Sweep analysis can consume existing solved states, so CLI animation reuses the
-  primary solve instead of solving the same sweep twice.
-- File-based sweeps use a lean evaluated result containing solved states,
-  metrics, solver statistics, and diagnostics. Rich presentation analysis is
-  built only for consumers that request it.
-- The root `kinematics` package is no longer a second API facade. Public solver
-  workflows and value types are imported from their defining `kinematics.core`
-  modules, and transport flattening helpers live in `kinematics.core.export`.
-- Sweep target definitions and target-direction resolution now share the
-  canonical `kinematics.core.targeting` module. Presentation-model helpers live
-  in `kinematics.core.presentation`.
-- Optional diagnostic, derivative, and setup-reference failures are exposed as
-  structured advisory warnings instead of disappearing silently.
-- Diagnostic categories and severities use typed string enums across the core
-  and CLI boundary.
-- Physical elements and assemblies own renderer-neutral path topology. CLI plots
-  and animations add Matplotlib styling client-side, and structured analysis
-  exposes the same unstyled paths for external clients. Static visualization
-  supports both corner and axle assemblies and checks every wheel contact
-  centre against the reconstructed road plane.
-- Core-only CI now exercises numerical, constraint, Jacobian, state, target,
-  derived-point, and rigid-body tests without CLI or visualization dependencies.
-- Derived-point target Jacobians now evaluate only the target's transitive dependency chain and seed only relevant free points, substantially reducing solve time.
-- Geometry parsing, validation, and construction now pass through
-  the transport-neutral `kinematics.core.input` facade; filesystem access remains
-  in `kinematics.cli.io`.
-- Core schemas now decode canonical enum names, coordinate mappings, and coordinate
-  sequences directly. The CLI schema-tree parser was removed, and malformed
-  coordinates report field-located validation errors instead of leaking `KeyError`.
-- Axle inputs now group data under `vehicle_config`, `axle_config`, and
-  `hardpoints`. The axle configuration includes a required front/rear position,
-  wheel and tire data, steering state, shared mechanisms, and one symmetric
-  actuation and spring selection. Hardpoints contain a mandatory left map plus
-  optional explicit right and shared center maps.
-- Omitting right hardpoints and side-local setup mirrors the complete left geometry
-  and setup. Explicit right hardpoints support asymmetric geometry, while optional
-  `right_setup` supports a different camber-shim setup.
-- Geometry configuration is separated by ownership: vehicle inputs hold CG,
-  wheelbase, brake bias, and driven axle; axle inputs hold steering, wheel/tire,
-  and axle-position data; corner inputs hold side-local setup such as camber
-  shims.
-- Steering configuration now selects an explicit `rack` or `none` actuator.
-  Double-wishbone and MacPherson corners use a rack-driven track rod when
-  steered and a chassis-fixed toe link when non-steered. Selecting `none`
-  removes rack coupling, presentation, metrics, derivatives, and sweep targeting.
-- Rack-steered sweeps now require exactly one explicit rack target. The shared
-  rack is one actuator coordinate across both axle corners, so rack-displacement
-  derivatives are emitted for both sides regardless of which pickup is targeted.
-- Explicit asymmetric right hardpoints now require explicit `right_setup` when
-  the left corner contains side-local setup geometry.
-- The camber-shim assembly solve includes rocker rotation when the pushrod is
-  upright-mounted, preserving pushrod length and rotating every rocker-mounted
-  pickup together.
-- Metric identities are lowercase, unit-free `snake_case`. Units use typed metadata and are written in CSV metadata or Parquet field metadata.
-- Corner locations remain structural in the analysis API and are rendered as `_left` and `_right` suffixes only in flat result files.
-- Axle topology metrics now retain typed `Side` locations until analysis or export,
-  and installed mechanisms contribute only the state metric metadata they emit.
-- Rocker-to-rocker heave links reject design-state pickup separations at or below
-  the geometric tolerance, where their length derivative would be undefined.
 - Steering metrics now report both `toe_angle` (the project toe-in-positive
   convention) and ISO vehicle-fixed `steer_angle`; both have hub-Z and,
-  where applicable, rack-displacement derivatives. The concrete steering input
-  is `trackrod_inboard`, and wheel-center longitudinal motion is expressed
-  directly as `deriv_wheel_center_x_wrt_hub_z`.
-- Half-track is exported as the absolute `half_track` state metric rather than a design-condition delta.
+  where applicable, rack-displacement derivatives.
 - A two-corner axle now derives both wheel contact centre points from the solved
   wheel geometry using one shared zero-grade ground plane, extruded along
   chassis `X`, instead of letting each corner independently assume a flat `+Z`
@@ -132,9 +56,9 @@ All notable changes to this project will be documented in this file.
 - Ground-root branch continuity is threaded explicitly through a seed argument
   instead of solver-side continuation state. The previously accepted
   ground-normal angle is passed forward, and with no seed the closure recovers
-  one from the contact centres already stored in the state; the earlier per-geometry
-  root cache inside the derived-point graph is gone. Identical inputs and an
-  identical seed always reproduce the same root.
+  one from the contact centres already stored in the state; the earlier
+  per-geometry root cache inside the derived-point graph is gone. Identical
+  inputs and an identical seed always reproduce the same root.
 - Anti-dive, anti-lift, and anti-squat are resolved consistently in the
   longitudinal–ground-normal plane: CG height is the perpendicular distance to
   the shared axle ground plane and the reaction-line rise is measured along the
@@ -166,24 +90,6 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking changes
 
-- Moved implementation imports under `kinematics.core`; moved low-level geometry
-  and numerical types under `kinematics.core.primitives`.
-- Replaced visualization-specific suspension methods and style-bearing core links
-  with physical declarations in `core.elements` and `core.assembly`.
-- Workflows and adapters are imported from their defining modules rather than
-  re-exported from `kinematics.core`.
-- Suspension capabilities now come from the physical assembly instead of
-  matching free-form suspension type strings in visualization code.
-- Suspension type selection accepts only the architecture keys `double_wishbone`
-  and `macpherson`.
-- Renamed `SweepFile` to `SweepSpec`.
-- Removed units from metric keys and changed flat axle corner columns from side prefixes to side suffixes, for example `left_camber_deg` to `camber_left`.
-- Replaced the flat axle configuration and corner blocks with explicit
-  `vehicle_config`, `axle_config`, and `hardpoints` ownership blocks.
-- Replaced the `steered` boolean with `steering: {type: rack | none}`. Rack
-  steering retains track-rod point and element identifiers; non-steered corners
-  use distinct toe-link identifiers.
-- `AxleMetricRows.corners` now uses `Side` keys instead of serialized side names.
 - Renamed the geometric tyre-road support point everywhere it is exposed.
   Released `PointID.CONTACT_PATCH_CENTER` and the interim ground-plane branch's
   `PointID.WHEEL_GROUND_TANGENT` become `PointID.WHEEL_CONTACT_CENTRE`.
@@ -212,8 +118,8 @@ All notable changes to this project will be documented in this file.
   signed distance to the reconstructed road plane. The released
   `contact_patch_z`/`contact_patch_on_ground` and interim
   `wheel_ground_tangent_z`/`wheel_ground_tangent_on_ground` result fields are
-  replaced by
-  `wheel_contact_centre_z`, `wheel_contact_centre_road_distance_mm`, and
+  replaced by `wheel_contact_centre_z`,
+  `wheel_contact_centre_road_distance_mm`, and
   `wheel_contact_centres_on_road`.
 - Steering-axis ground metrics now use their ISO meanings.
   `steering_axis_offset_ground` replaces the signed lateral quantity previously
@@ -221,42 +127,192 @@ All notable changes to this project will be documented in this file.
   distance; and `mechanical_trail` is projected along the wheel-relative tyre
   longitudinal axis rather than chassis `X`.
 
+## [0.4.1] - 2026-07-19
+
+### Added
+
+- Added Suspension Explorer wordmarks for light and dark GitHub themes.
+
+### Changed
+
+- Renamed the project from `open-kinematics` to Suspension Explorer and
+  rewrote the README around the supported architectures, mechanisms, workflows,
+  outputs, and current limitations.
+
+## [0.4.0] - 2026-07-18
+
+### Added
+
+- Generic point references support ordinary corner points and side-qualified axle points throughout the constraint, state, solver, and derived-point systems.
+- Validated geometry schemas and a shared registry select explicit double-wishbone corner, coilover, pushrod-rocker, axle, and shared anti-roll-bar topologies.
+- Declarative derivative metrics use analytical solution-manifold tangents and forward-mode automatic differentiation for arbitrary scalar responses and drivers.
+- Advisory sweep diagnostics report convergence, residual acceptance, branch continuity, derivative availability, rocker and anti-roll-bar chirality, and transmission margin.
+- Coupled axle models solve left and right corners together and support either mirrored or independently authored geometry.
+- The public `analyze_sweep()` and `initial_pose()` APIs return structured positions, metrics, locations, metadata, renderer-neutral element paths, diagnostics, references, and solved frames.
+
+### Changed
+
+- Split the package into a transport-independent `kinematics.core` solver API and
+  a `kinematics.cli` adapter for YAML files, result writing, terminal behavior,
+  and optional visualization. CLI-only dependencies now live in the `cli` extra.
+- Core suspension models now compose explicit rigid-link, variable-link, rack,
+  upright, torsion, rocker, and wheel elements in a validated
+  `SuspensionAssembly`. Its identifier-only `PointCatalog` relates elements to
+  fixed, free, and derived points without duplicating solver state. Matplotlib
+  styles are owned by the CLI visualization adapter.
+- Sweep analysis can consume existing solved states, so CLI animation reuses the
+  primary solve instead of solving the same sweep twice.
+- File-based sweeps use a lean evaluated result containing solved states,
+  metrics, solver statistics, and diagnostics. Rich presentation analysis is
+  built only for consumers that request it.
+- The root `kinematics` package is no longer a second API facade. Public solver
+  workflows and value types are imported from their defining `kinematics.core`
+  modules, and transport flattening helpers live in `kinematics.core.export`.
+- Sweep target definitions and target-direction resolution now share the
+  canonical `kinematics.core.targeting` module. Presentation-model helpers live
+  in `kinematics.core.presentation`.
+- Optional diagnostic, derivative, and setup-reference failures are exposed as
+  structured advisory warnings instead of disappearing silently.
+- Diagnostic categories and severities use typed string enums across the core
+  and CLI boundary.
+- Physical elements and assemblies own renderer-neutral path topology. CLI plots
+  and animations add Matplotlib styling client-side, and structured analysis
+  exposes the same unstyled paths for external clients. Static visualization
+  supports both corner and axle assemblies and checks every wheel contact patch.
+- Core-only CI now exercises numerical, constraint, Jacobian, state, target,
+  derived-point, and rigid-body tests without CLI or visualization dependencies.
+- Derived-point target Jacobians now evaluate only the target's transitive dependency chain and seed only relevant free points, substantially reducing solve time.
+- Geometry parsing, validation, and construction now pass through
+  the transport-neutral `kinematics.core.input` facade; filesystem access remains
+  in `kinematics.cli.io`.
+- Core schemas now decode canonical enum names, coordinate mappings, and coordinate
+  sequences directly. The CLI schema-tree parser was removed, and malformed
+  coordinates report field-located validation errors instead of leaking `KeyError`.
+- Axle inputs now group data under `vehicle_config`, `axle_config`, and
+  `hardpoints`. The axle configuration includes a required front/rear position,
+  wheel and tire data, steering state, shared mechanisms, and one symmetric
+  actuation and spring selection. Hardpoints contain a mandatory left map plus
+  optional explicit right and shared center maps.
+- Omitting right hardpoints and side-local setup mirrors the complete left geometry
+  and setup. Explicit right hardpoints support asymmetric geometry, while optional
+  `right_setup` supports a different camber-shim setup.
+- Geometry configuration is separated by ownership: vehicle inputs hold CG,
+  wheelbase, brake bias, and driven axle; axle inputs hold steering, wheel/tire,
+  and axle-position data; corner inputs hold side-local setup such as camber
+  shims.
+- Steering configuration now selects an explicit `rack` or `none` actuator.
+  Double-wishbone and MacPherson corners use a rack-driven track rod when
+  steered and a chassis-fixed toe link when non-steered. Selecting `none`
+  removes rack coupling, presentation, metrics, derivatives, and sweep targeting.
+- Rack-steered sweeps now require exactly one explicit rack target. The shared
+  rack is one actuator coordinate across both axle corners, so rack-displacement
+  derivatives are emitted for both sides regardless of which pickup is targeted.
+- Explicit asymmetric right hardpoints now require explicit `right_setup` when
+  the left corner contains side-local setup geometry.
+- The camber-shim assembly solve includes rocker rotation when the pushrod is
+  upright-mounted, preserving pushrod length and rotating every rocker-mounted
+  pickup together.
+- Metric identities are lowercase, unit-free `snake_case`. Units use typed metadata and are written in CSV metadata or Parquet field metadata.
+- Corner locations remain structural in the analysis API and are rendered as `_left` and `_right` suffixes only in flat result files.
+- Axle topology metrics now retain typed `Side` locations until analysis or export,
+  and installed mechanisms contribute only the state metric metadata they emit.
+- Rocker-to-rocker heave links reject design-state pickup separations at or below
+  the geometric tolerance, where their length derivative would be undefined.
+- Steering metrics use `roadwheel_angle`; the concrete steering input is
+  `trackrod_inboard`, and wheel-center longitudinal motion is expressed directly
+  as `deriv_wheel_center_x_wrt_hub_z`.
+- Half-track is exported as the absolute `half_track` state metric rather than a design-condition delta.
+
+### Breaking changes
+
+- Moved implementation imports under `kinematics.core`; moved low-level geometry
+  and numerical types under `kinematics.core.primitives`.
+- Replaced visualization-specific suspension methods and style-bearing core links
+  with physical declarations in `core.elements` and `core.assembly`.
+- Workflows and adapters are imported from their defining modules rather than
+  re-exported from `kinematics.core`.
+- Suspension capabilities now come from the physical assembly instead of
+  matching free-form suspension type strings in visualization code.
+- Suspension type selection accepts only the architecture keys `double_wishbone`
+  and `macpherson`.
+- Renamed `SweepFile` to `SweepSpec`.
+- Removed units from metric keys and changed flat axle corner columns from side prefixes to side suffixes, for example `left_camber_deg` to `camber_left`.
+- Replaced the flat axle configuration and corner blocks with explicit
+  `vehicle_config`, `axle_config`, and `hardpoints` ownership blocks.
+- Replaced the `steered` boolean with `steering: {type: rack | none}`. Rack
+  steering retains track-rod point and element identifiers; non-steered corners
+  use distinct toe-link identifiers.
+- `AxleMetricRows.corners` now uses `Side` keys instead of serialized side names.
+
+## [0.3.1] - 2026-04-09
+
+### Changed
+
+- Expanded the README to cover analytical Jacobians, camber-shim simulation,
+  suspension metrics, and the current sweep workflow, with refreshed plot and
+  animation media.
+
+### Fixed
+
+- Removed the duplicate contact-patch marker from four-view plots and shortened
+  the model point label to “Contact Patch”.
+
 ## [0.3.0] - 2026-04-09
 
 ### Added
-- Split-body camber shim assembly solver (`suspensions/config/shims.py`): solves for the outboard camber shim configuration using a least-squares formulation. The upper ball joint position, camber block rotation, and upright body rotation are solved simultaneously to satisfy wishbone arc constraints, shim face closure, normal alignment, and heading-link length preservation.
+
+- Added a split-body camber-shim assembly solver. It solves the upper ball joint
+  position, camber-block rotation, and upright-body rotation together to satisfy
+  wishbone arc constraints, shim-face closure, normal alignment, and trackrod
+  length preservation.
+- Added `ResidualComputer.validate_target_count` to enforce a consistent target
+  count across evaluations, with a regression test for Jacobian shape
+  consistency.
+- Added a front-view comparison plot to `visualize_camber_shim.py`, overlaying
+  design and setup suspensions with distinct colours.
+- Added direct sign and known-value tests for `camber_deg`, `caster_deg`, and
+  `roadwheel_angle_deg`, plus catalog coverage for the trusted corner-metric
+  export set.
+- Added kingpin inclination (`kpi_deg`), scrub radius (`scrub_radius_mm`), and
+  mechanical trail (`mechanical_trail_mm`) metrics.
 
 ### Changed
-- Relaxed `Vec3` type alias from `NDArray[np.float64]` to `NDArray[np.floating[Any]]` so that numpy arithmetic results satisfy the type checker without wrapping. `make_vec3` is retained at system boundaries (I/O, config loading, solver output extraction, dual-number passthrough) but removed from internal arithmetic call sites where it served only as type-checker appeasement.
-- Adopted ISO/SAE wheel offset (ET) convention in `get_wheel_center`.
-- Positive `wheel.offset` now places the wheel centerline inboard of the hub face (reduced track for larger positive ET).
-- Updated wheel offset configuration docs to explicitly describe ET sign convention.
-- Updated derived-point expectations to match ISO/SAE offset behavior for wheel center, wheel inboard, and wheel outboard.
-- `ResidualComputer` now uses a fixed-size residual vector and Jacobian matrix, removing per-step trimming. The target count is validated once at each evaluation rather than allowing variable-length slicing.
-- `ResidualComputer` internals are no longer private: `_n_vars` → `n_vars`, `_jac_buffer` → `jac_buffer`, `_jac_plans` → `jac_plan`, `_validate_target_count` → `validate_target_count`.
-- Renamed Jacobian "scatter" operations to "distribute" in `ResidualComputer._build_jac_plan`.
-- Moved underdetermined-system check out of the per-step loop in `solve_suspension_sweep` (both `n_vars` and `m_res` are constant across a sweep).
-- Simplified `DoubleWishboneSuspension._apply_camber_shim` docstring.
-- Default corner-metric exports report separate `toe_angle_deg` and
-  `steer_angle_deg` columns, rather than an ambiguous roadwheel-angle column;
-  placeholder anti-dive / anti-squat metrics are not exported.
 
-### Added
-- `ResidualComputer.validate_target_count` enforces that every evaluation receives the same number of targets configured at init time.
-- Test for Jacobian shape consistency (`test_residual_computer_rejects_target_count_changes`).
-- Front-view (Y-Z) comparison plot in `visualize_camber_shim.py` overlaying design and setup suspensions with distinct colors.
-- Direct sign and known-value tests for `camber_deg`, `caster_deg`,
-  `toe_angle_deg`, and `steer_angle_deg`, plus catalog coverage for the trusted
-  corner-metric export set.
-- Kingpin inclination metric (`kpi_deg`): steering axis angle in the front-view (YZ) plane.
-- Scrub radius metric (`scrub_radius_mm`): lateral offset from steering axis ground intersection to contact patch center.
-- Mechanical trail metric (`mechanical_trail_mm`): longitudinal offset from steering axis ground intersection to contact patch center.
+- Relaxed the `Vec3` type alias from `NDArray[np.float64]` to
+  `NDArray[np.floating[Any]]` so NumPy arithmetic results satisfy the type
+  checker without wrapping. `make_vec3` remains at system boundaries but was
+  removed from internal arithmetic call sites.
+- Adopted ISO/SAE wheel offset (ET) convention in `get_wheel_center`.
+- Positive `wheel.offset` now places the wheel centerline inboard of the hub face,
+  reducing track as positive ET increases. Configuration documentation and
+  derived-point expectations were updated to match.
+- `ResidualComputer` now uses a fixed-size residual vector and Jacobian matrix,
+  with the target count validated once per evaluation.
+- Made the residual-computer internals `n_vars`, `jac_buffer`, `jac_plan`, and
+  `validate_target_count` public, and renamed Jacobian “scatter” operations to
+  “distribute”.
+- Moved the underdetermined-system check out of the per-step loop in
+  `solve_suspension_sweep`.
+- Simplified `DoubleWishboneSuspension._apply_camber_shim` docstring.
+- Default corner-metric exports now use `roadwheel_angle_deg` as the canonical
+  steer column and no longer export duplicate `toe_deg` or placeholder
+  anti-dive / anti-squat metrics.
 
 ### Removed
-- `WHEEL_CENTER_ON_GROUND` point and `get_wheel_center_on_ground` derived point function. The Z=0 ground plane assumption was incorrect in chassis space; ground-plane intersections now use the contact patch Z via `MetricContext.ground_z`.
+
+- Removed the `WHEEL_CENTER_ON_GROUND` point and
+  `get_wheel_center_on_ground` derived-point function. The `Z = 0` ground-plane
+  assumption was incorrect in a chassis-fixed frame; intersections now use the
+  contact-patch Z through `MetricContext.ground_z`.
 
 ### Fixed
-- Scrub radius now projects along the wheel axle direction in the ground plane instead of the global Y axis, giving correct values when the wheel is steered or cambered.
-- Scrub radius and mechanical trail now intersect the steering axis at the contact patch Z rather than Z=0, giving correct values through bump travel.
-- Clarified `get_contact_patch_center` docstring as the lowest point on an ideal tire circle in the wheel center plane.
-- Dashboard plots now show KPI, mechanical trail, and scrub radius instead of swing arm lengths and FVIC height. Camber plot Y-axis tuned to [-2.5, -1.5] degrees.
+
+- Scrub radius now projects along the wheel-axle direction in the ground plane
+  instead of global Y, giving correct values for steered or cambered wheels.
+- Scrub radius and mechanical trail now intersect the steering axis at the
+  contact-patch Z rather than `Z = 0`, giving correct values through bump travel.
+- Clarified `get_contact_patch_center` as the lowest point on an ideal tyre
+  circle in the wheel-centre plane.
+- Dashboard plots now show KPI, mechanical trail, and scrub radius instead of
+  swing-arm lengths and FVIC height. The camber plot Y-axis is tuned to
+  `[-2.5, -1.5]` degrees.
