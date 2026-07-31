@@ -307,6 +307,10 @@ class Suspension(ABC):
         """Return physical actuator coordinates that every sweep must control."""
         return ()
 
+    def steering_actuator_dof(self) -> "ActuatorDOF | None":
+        """Return the steering actuator coordinate, if this suspension has one."""
+        return None
+
     def closure_points(self) -> tuple[PointKey, ...]:
         """
         Return points written by the post-solve closure rather than the graph.

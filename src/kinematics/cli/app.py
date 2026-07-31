@@ -61,6 +61,7 @@ def sweep(
             output_path=animation_out,
             fps=20,
             show_live=False,
+            instantaneous_steering_axes=(run.evaluated.instantaneous_steering_axes),
         )
 
         typer.echo(f"Wrote animation: {animation_out}")

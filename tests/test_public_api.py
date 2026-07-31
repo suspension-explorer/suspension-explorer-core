@@ -22,6 +22,7 @@ PUBLIC_CORE_MODULES = {
     "kinematics.core.primitives.point_ref",
     "kinematics.core.presentation",
     "kinematics.core.road",
+    "kinematics.core.rigid_motion",
     "kinematics.core.schema.geometry",
     "kinematics.core.schema.sweep",
     "kinematics.core.solver",

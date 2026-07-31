@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
+import numpy as np
+
 from kinematics.core.assembly import SuspensionAssembly
 from kinematics.core.diagnostics import (
     DiagnosticCategory,
@@ -36,6 +38,7 @@ from kinematics.core.primitives.point_ref import (
     Side,
     point_key_name,
 )
+from kinematics.core.rigid_motion import ScrewAxisStatus, UprightScrewAxisResult
 from kinematics.core.solver import SolverInfo
 from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.base import Suspension
@@ -73,6 +76,24 @@ class SweepParameter:
 
 
 @dataclass(frozen=True)
+class AnalyzedInstantaneousSteeringAxis:
+    """Renderer-independent steering-axis result for one upright and frame."""
+
+    upright_label: str
+    point_keys: tuple[str, ...]
+    status: ScrewAxisStatus
+    point: tuple[float, float, float] | None
+    direction: tuple[float, float, float] | None
+    pitch: float | None
+    angular_rate: float | None
+    fit_rms: float | None
+    fit_max: float | None
+    fit_rank: int
+    point_count: int
+    message: str | None
+
+
+@dataclass(frozen=True)
 class AnalyzedFrame:
     """One solved and analyzed sweep step."""
 
@@ -82,6 +103,7 @@ class AnalyzedFrame:
     corner_metrics: dict[str, MetricRow]
     world_space: WorldSpace | None
     solver: SolverInfo
+    instantaneous_steering_axes: tuple[AnalyzedInstantaneousSteeringAxis, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -186,6 +208,40 @@ def _split_metric_rows(
     return rows, {}
 
 
+def _finite_or_none(value: float) -> float | None:
+    """Return a JSON-safe finite float, or ``None`` for unavailable diagnostics."""
+    return float(value) if np.isfinite(value) else None
+
+
+def _vector_tuple(values: np.ndarray) -> tuple[float, float, float]:
+    """Convert a three-component internal array to a fixed primitive tuple."""
+    return (float(values[0]), float(values[1]), float(values[2]))
+
+
+def _analyzed_steering_axis(
+    result: UprightScrewAxisResult,
+) -> AnalyzedInstantaneousSteeringAxis:
+    """Convert one core result to primitive structured analysis values."""
+    axis = result.axis
+    twist = result.twist
+    fit_rms = axis.fit_rms if axis is not None else (twist.fit_rms if twist else None)
+    fit_max = axis.fit_max if axis is not None else (twist.fit_max if twist else None)
+    return AnalyzedInstantaneousSteeringAxis(
+        upright_label=result.upright_label,
+        point_keys=tuple(point_key_name(key) for key in result.point_keys),
+        status=result.status,
+        point=_vector_tuple(axis.point.data) if axis else None,
+        direction=_vector_tuple(axis.direction.data) if axis else None,
+        pitch=float(axis.pitch) if axis else None,
+        angular_rate=float(axis.angular_rate) if axis else None,
+        fit_rms=_finite_or_none(fit_rms) if fit_rms is not None else None,
+        fit_max=_finite_or_none(fit_max) if fit_max is not None else None,
+        fit_rank=twist.fit_rank if twist is not None else 0,
+        point_count=result.point_count,
+        message=result.message,
+    )
+
+
 def _setup_reference(
     suspension: Suspension,
     sweep_config: SweepConfig,
@@ -260,8 +316,14 @@ def analyze_evaluated_sweep(
     assembly = suspension.assembly()
 
     frames: list[AnalyzedFrame] = []
-    for index, (state, info, row) in enumerate(
-        zip(evaluated.states, evaluated.solver_stats, evaluated.metrics.rows)
+    for index, (state, info, row, steering_axes) in enumerate(
+        zip(
+            evaluated.states,
+            evaluated.solver_stats,
+            evaluated.metrics.rows,
+            evaluated.instantaneous_steering_axes,
+            strict=True,
+        )
     ):
         metrics, corner_metrics = _split_metric_rows(row)
         frames.append(
@@ -279,6 +341,9 @@ def analyze_evaluated_sweep(
                     else None
                 ),
                 solver=info,
+                instantaneous_steering_axes=tuple(
+                    _analyzed_steering_axis(result) for result in steering_axes
+                ),
             )
         )
 

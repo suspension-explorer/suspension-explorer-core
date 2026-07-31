@@ -3,6 +3,10 @@ from typing import TYPE_CHECKING, Mapping, Sequence
 
 import numpy as np
 
+from kinematics.cli.visualization.clipping import (
+    Bounds3D,
+    clip_infinite_line_to_bounds,
+)
 from kinematics.core.assembly import SuspensionAssembly
 from kinematics.core.elements import ElementType
 from kinematics.core.presentation import (
@@ -16,6 +20,7 @@ from kinematics.core.presentation import (
 from kinematics.core.state import SuspensionState
 
 if TYPE_CHECKING:
+    from kinematics.core.rigid_motion import UprightScrewAxisResult
     from kinematics.core.suspensions.base import Suspension
 
 
@@ -158,6 +163,53 @@ class SuspensionVisualizer:
             pts = np.asarray([positions[name] for name in link.points])
             line.set_data(pts[:, 0], pts[:, 1])
             line.set_3d_properties(pts[:, 2])
+
+    @staticmethod
+    def draw_instantaneous_steering_axes(
+        ax,
+        upright_labels: Sequence[str],
+    ) -> list:
+        """Allocate one persistent steering-axis line per upright."""
+        artists = []
+        for label in upright_labels:
+            (line,) = ax.plot(
+                [],
+                [],
+                [],
+                color="deeppink",
+                linewidth=2.0,
+                linestyle="-.",
+                marker=None,
+                label=f"{label} instantaneous steering axis",
+            )
+            artists.append(line)
+        return artists
+
+    @staticmethod
+    def update_instantaneous_steering_axes(
+        artists: Sequence,
+        upright_labels: Sequence[str],
+        results: Sequence["UprightScrewAxisResult"],
+        bounds: Bounds3D,
+    ) -> None:
+        """Update or hide persistent steering-axis artists for one frame."""
+        by_label = {result.upright_label: result for result in results}
+        for artist, label in zip(artists, upright_labels, strict=True):
+            result = by_label.get(label)
+            segment = None
+            if result is not None and result.axis is not None:
+                segment = clip_infinite_line_to_bounds(
+                    result.axis.point,
+                    result.axis.direction,
+                    bounds,
+                )
+            if segment is None:
+                artist.set_data([], [])
+                artist.set_3d_properties([])
+                continue
+            start, end = segment
+            artist.set_data([start[0], end[0]], [start[1], end[1]])
+            artist.set_3d_properties([start[2], end[2]])
 
     @staticmethod
     def get_band_endpoints(

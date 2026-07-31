@@ -4,7 +4,7 @@ Public API for optional visualization features.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
 
@@ -13,6 +13,7 @@ from kinematics.core.primitives.geometry import Point3
 from kinematics.core.road import RoadPlane
 
 if TYPE_CHECKING:
+    from kinematics.core.rigid_motion import UprightScrewAxisResult
     from kinematics.core.state import SuspensionState
     from kinematics.core.suspensions.base import Suspension
 
@@ -27,6 +28,8 @@ def create_animation(
     codec: str = "libx264",
     dpi: int = 200,
     show_live: bool = True,
+    instantaneous_steering_axes: Sequence[Sequence["UprightScrewAxisResult"]]
+    | None = None,
 ) -> None:
     """Load the optional animation renderer only when animation is requested."""
     from kinematics.cli.visualization.animation import create_animation as render
@@ -41,6 +44,7 @@ def create_animation(
         codec=codec,
         dpi=dpi,
         show_live=show_live,
+        instantaneous_steering_axes=instantaneous_steering_axes,
     )
 
 
@@ -105,6 +109,8 @@ def visualize_suspension_sweep(
     output_path: Path,
     fps: int = 20,
     show_live: bool = False,
+    instantaneous_steering_axes: Sequence[Sequence["UprightScrewAxisResult"]]
+    | None = None,
 ) -> None:
     """
     Create an animation of a suspension sweep.
@@ -118,6 +124,7 @@ def visualize_suspension_sweep(
         output_path: Path where the animation file will be saved.
         fps: Frames per second for the animation.
         show_live: Whether to show the animation during creation.
+        instantaneous_steering_axes: Per-frame axes from the evaluated sweep.
 
     """
     render_model = build_render_model(suspension)
@@ -136,6 +143,7 @@ def visualize_suspension_sweep(
         output_path,
         fps=fps,
         show_live=show_live,
+        instantaneous_steering_axes=instantaneous_steering_axes,
     )
 
 

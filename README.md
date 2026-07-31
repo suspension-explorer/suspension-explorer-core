@@ -422,6 +422,28 @@ metric metadata, per-frame solver information, applicable corner and axle
 metrics, renderer-neutral element paths, reference conditions, and diagnostics.
 The CLI is a thin adapter around this core API for YAML input and file output.
 
+### Instantaneous steering axes
+
+> The instantaneous steering axis is obtained from the analytical partial
+> derivative with respect to positive rack displacement at the current solved
+> configuration, with other controlled targets held fixed.
+
+One screw-axis result is calculated for every upright at every rack-steered
+sweep step and exposed as `frame.instantaneous_steering_axes`. The result carries
+the axis point and direction, angular rate, screw pitch, rigid-body fit residuals,
+point count, and an explicit validity status. The same data is drawn as a clipped
+dash-dot line in every view of CLI animations without contributing to automatic
+plot bounds.
+
+This is an instantaneous kinematic axis, not necessarily a physical kingpin or
+ball-joint line. A general spatial linkage may produce nonzero screw pitch. Near
+pure translation, a singular tangent solve, degenerate upright geometry, or a
+poor rigid-body fit leaves the axis unavailable for that frame and reports a
+diagnostic instead of inventing a distant line. The calculation uses the
+analytical tangent field at that state; it does not finite-difference adjacent
+sweep frames or perturb and re-solve the rack. Existing caster, KPI, scrub-radius,
+and mechanical-trail metrics retain their physical steering-axis definitions.
+
 ## How the solver works
 
 ```text
@@ -440,7 +462,7 @@ validate and expand coordinated sweep targets
 solve each step with scipy.optimize.least_squares
         |
         v
-calculate derived points, metrics, derivatives, and diagnostics
+calculate analytical tangents once, then metrics, steering axes, and diagnostics
         |
         v
 structured analysis or CLI file export

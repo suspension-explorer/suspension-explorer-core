@@ -135,18 +135,21 @@ class AxleSuspension(Suspension):
 
     def actuator_dofs(self) -> tuple[ActuatorDOF, ...]:
         """Require one shared rack coordinate for a steered axle."""
+        steering = self.steering_actuator_dof()
+        return (steering,) if steering is not None else ()
+
+    def steering_actuator_dof(self) -> ActuatorDOF | None:
+        """Return the shared rack coordinate for a steered axle."""
         rack = self.rack_attachment_points()
         if rack is None:
-            return ()
-        return (
-            ActuatorDOF(
-                name="steering rack",
-                point_keys=(
-                    PointRef(Side.LEFT, rack[0]),
-                    PointRef(Side.RIGHT, rack[1]),
-                ),
-                direction=ChassisAxisSystem.Y,
+            return None
+        return ActuatorDOF(
+            name="steering rack",
+            point_keys=(
+                PointRef(Side.LEFT, rack[0]),
+                PointRef(Side.RIGHT, rack[1]),
             ),
+            direction=ChassisAxisSystem.Y,
         )
 
     def initial_state(self) -> SuspensionState:

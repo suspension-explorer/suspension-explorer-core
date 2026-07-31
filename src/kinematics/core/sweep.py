@@ -18,6 +18,7 @@ from kinematics.core.diagnostics import (
 from kinematics.core.metrics.main import AxleMetricRows, MetricRow
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.point_ref import PointKey
+from kinematics.core.rigid_motion import ScrewAxisStatus, UprightScrewAxisResult
 from kinematics.core.sensitivity import (
     TangentField,
     TangentSolveInfo,
@@ -29,6 +30,7 @@ from kinematics.core.solver import (
     solve_suspension_sweep,
 )
 from kinematics.core.state import SuspensionState
+from kinematics.core.steering_axis import compute_instantaneous_steering_axes
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.targeting import SweepConfig, validate_sweep_controls
 
@@ -122,17 +124,30 @@ class EvaluatedSweep:
     solver_stats: list[SolverInfo]
     metrics: SweepMetricsResult
     diagnostics: list[DiagnosticIssue]
+    instantaneous_steering_axes: tuple[tuple[UprightScrewAxisResult, ...], ...] = ()
 
     def __post_init__(self) -> None:
         """
         Reject partial results that would truncate adapter output.
         """
+        if not self.instantaneous_steering_axes and self.states:
+            object.__setattr__(
+                self,
+                "instantaneous_steering_axes",
+                tuple(() for _ in self.states),
+            )
         lengths = (len(self.states), len(self.solver_stats), len(self.metrics.rows))
         if len(set(lengths)) != 1:
             raise ValueError(
                 "Evaluated sweep state, solver-stat, and metric counts must match: "
                 f"{lengths[0]} states, {lengths[1]} solver stats, "
                 f"{lengths[2]} metric rows."
+            )
+        if len(self.instantaneous_steering_axes) != len(self.states):
+            raise ValueError(
+                "Evaluated sweep steering-axis and state counts must match: "
+                f"{len(self.instantaneous_steering_axes)} axis frames, "
+                f"{len(self.states)} states."
             )
 
 
@@ -179,12 +194,40 @@ def compute_sweep_metrics(
     if suspension.config is None:
         return SweepMetricsResult(rows=[OrderedDict() for _ in states])
 
-    derivative_error: str | None = None
+    tangents, derivative_error = _compute_sweep_tangents_safely(
+        suspension,
+        sweep_config,
+        states,
+    )
+    return _compute_sweep_metrics_from_tangents(
+        suspension,
+        states,
+        tangents,
+        derivative_error,
+    )
+
+
+def _compute_sweep_tangents_safely(
+    suspension: Suspension,
+    sweep_config: SweepConfig,
+    states: list[SuspensionState],
+) -> tuple[SweepTangents | None, str | None]:
+    """Compute one shared tangent bundle, degrading advisory outputs on failure."""
     try:
-        tangents = compute_sweep_tangents(suspension, sweep_config, states)
-    except Exception as error:  # noqa: BLE001 - metrics degrade without derivatives
-        tangents = None
-        derivative_error = f"{type(error).__name__}: {error}"
+        return compute_sweep_tangents(suspension, sweep_config, states), None
+    except Exception as error:  # noqa: BLE001 - derivatives are advisory
+        return None, f"{type(error).__name__}: {error}"
+
+
+def _compute_sweep_metrics_from_tangents(
+    suspension: Suspension,
+    states: list[SuspensionState],
+    tangents: SweepTangents | None,
+    derivative_error: str | None,
+) -> SweepMetricsResult:
+    """Evaluate metrics from an already-computed tangent bundle."""
+    if suspension.config is None:
+        return SweepMetricsResult(rows=[OrderedDict() for _ in states])
 
     rows = [
         suspension.compute_state_metrics(
@@ -241,6 +284,47 @@ def _derivative_issues(result: SweepMetricsResult) -> list[DiagnosticIssue]:
     return issues
 
 
+def _steering_axis_issues(
+    per_frame: tuple[tuple[UprightScrewAxisResult, ...], ...],
+) -> list[DiagnosticIssue]:
+    """Summarize unavailable instantaneous axes without flooding diagnostics."""
+    grouped: dict[
+        ScrewAxisStatus,
+        list[tuple[int, UprightScrewAxisResult]],
+    ] = {}
+    for step, results in enumerate(per_frame):
+        for result in results:
+            if result.status is ScrewAxisStatus.VALID:
+                continue
+            grouped.setdefault(result.status, []).append((step, result))
+
+    issues: list[DiagnosticIssue] = []
+    for status, occurrences in grouped.items():
+        first_step, first_result = occurrences[0]
+        message = (
+            f"Instantaneous steering axis status '{status.value}' occurred for "
+            f"{len(occurrences)} upright frame(s); first at step {first_step} "
+            f"for '{first_result.upright_label}'."
+        )
+        if first_result.message:
+            message = f"{message} {first_result.message}"
+        issues.append(
+            DiagnosticIssue(
+                step=first_step,
+                category=DiagnosticCategory.STEERING_AXIS,
+                severity=DiagnosticSeverity.WARNING,
+                message=message,
+                value=(
+                    first_result.twist.fit_max
+                    if first_result.twist is not None
+                    and first_result.status is ScrewAxisStatus.EXCESSIVE_FIT_ERROR
+                    else None
+                ),
+            )
+        )
+    return issues
+
+
 def evaluate_solved_sweep(
     suspension: Suspension,
     sweep_config: SweepConfig,
@@ -289,7 +373,26 @@ def _evaluate_finalized_sweep(
     exactly once, at solving time; only externally supplied states pay the
     copy-and-finalise pass in :func:`evaluate_solved_sweep`.
     """
-    metrics = compute_sweep_metrics(suspension, sweep_config, states)
+    tangents, derivative_error = _compute_sweep_tangents_safely(
+        suspension,
+        sweep_config,
+        states,
+    )
+    metrics = _compute_sweep_metrics_from_tangents(
+        suspension,
+        states,
+        tangents,
+        derivative_error,
+    )
+    steering_axes = tuple(
+        compute_instantaneous_steering_axes(
+            suspension,
+            state,
+            tangents.per_step[index] if tangents is not None else None,
+            tangents.solve_infos[index] if tangents is not None else None,
+        )
+        for index, state in enumerate(states)
+    )
     try:
         diagnostics = list(diagnose_sweep(suspension, states, solver_stats).issues)
     except Exception as error:  # noqa: BLE001 - diagnostics are advisory
@@ -306,11 +409,13 @@ def _evaluate_finalized_sweep(
             )
         ]
     diagnostics.extend(_derivative_issues(metrics))
+    diagnostics.extend(_steering_axis_issues(steering_axes))
     return EvaluatedSweep(
         states=states,
         solver_stats=solver_stats,
         metrics=metrics,
         diagnostics=diagnostics,
+        instantaneous_steering_axes=steering_axes,
     )
 
 

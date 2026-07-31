@@ -40,6 +40,7 @@ class DiagnosticCategory(StrEnum):
     RESIDUAL = "residual"
     JUMP = "jump"
     DERIVATIVES = "derivatives"
+    STEERING_AXIS = "steering_axis"
     DIAGNOSTICS = "diagnostics"
     REFERENCE = "reference"
     CHIRALITY = "chirality"

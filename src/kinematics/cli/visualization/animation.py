@@ -5,17 +5,56 @@ This module provides animation functionality for suspension systems, making use 
 common plotting utilities from plots.py.
 """
 
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 
+from kinematics.cli.visualization.clipping import Bounds3D
 from kinematics.cli.visualization.main import SuspensionVisualizer
 from kinematics.cli.visualization.plots import (
     compute_bounds_from_states,
     configure_3d_axis,
     create_four_view_axes,
 )
+from kinematics.core.rigid_motion import UprightScrewAxisResult
+
+
+@dataclass(frozen=True)
+class AnimationFrame:
+    """Position and steering-axis data that must remain frame-aligned."""
+
+    positions: dict[str, tuple[float, float, float]]
+    instantaneous_steering_axes: tuple[UprightScrewAxisResult, ...] = ()
+
+
+def aligned_animation_frames(
+    position_states: Sequence[dict[str, tuple[float, float, float]]],
+    instantaneous_steering_axes: Sequence[Sequence[UprightScrewAxisResult]]
+    | None = None,
+) -> list[AnimationFrame]:
+    """Bundle positions and axes before any animation sequencing is applied."""
+    axis_frames = (
+        [()] * len(position_states)
+        if instantaneous_steering_axes is None
+        else instantaneous_steering_axes
+    )
+    if len(position_states) != len(axis_frames):
+        raise ValueError(
+            "Animation position and steering-axis frame counts must match: "
+            f"{len(position_states)} positions, {len(axis_frames)} axis frames."
+        )
+    return [
+        AnimationFrame(positions, tuple(axes))
+        for positions, axes in zip(position_states, axis_frames, strict=True)
+    ]
+
+
+def pingpong_animation_frames(frames: Sequence[AnimationFrame]) -> list[AnimationFrame]:
+    """Return forward then interior-reverse playback without breaking alignment."""
+    return [*frames, *frames[-2:0:-1]]
 
 
 def create_animation(
@@ -28,6 +67,8 @@ def create_animation(
     codec: str = "libx264",
     dpi: int = 200,
     show_live: bool = True,
+    instantaneous_steering_axes: Sequence[Sequence[UprightScrewAxisResult]]
+    | None = None,
 ) -> None:
     """
     Create an animation showing suspension movement through multiple states.
@@ -42,12 +83,20 @@ def create_animation(
         codec: Video codec to use (for ffmpeg writer).
         dpi: DPI for the output animation.
         show_live: Whether to show the animation live during creation.
+        instantaneous_steering_axes: Per-frame upright axes aligned with positions.
     """
+    frames = aligned_animation_frames(position_states, instantaneous_steering_axes)
+    if not frames:
+        raise ValueError("Animation requires at least one position state")
+
     # Create figure with four subplots using common function.
     fig, axes = create_four_view_axes()
 
-    # Compute global bounds for all states.
-    _, _, (x_mid, y_mid, z_mid, max_range) = compute_bounds_from_states(position_states)
+    # Compute global bounds solely from suspension and wheel geometry.
+    min_bounds, max_bounds, (x_mid, y_mid, z_mid, max_range) = (
+        compute_bounds_from_states([frame.positions for frame in frames])
+    )
+    clipping_bounds = Bounds3D(min_bounds, max_bounds)
 
     # Configure axes once using common function.
     for view_name, ax in axes.items():
@@ -57,6 +106,19 @@ def create_animation(
     link_artists: dict[str, list] = {k: [] for k in axes.keys()}
     for view_name, ax in axes.items():
         link_artists[view_name] = visualizer.draw_links(ax, initial_positions)
+
+    upright_labels = tuple(
+        dict.fromkeys(
+            result.upright_label
+            for frame in frames
+            for result in frame.instantaneous_steering_axes
+        )
+    )
+    steering_axis_artists: dict[str, list] = {k: [] for k in axes}
+    for view_name, ax in axes.items():
+        steering_axis_artists[view_name] = visualizer.draw_instantaneous_steering_axes(
+            ax, upright_labels
+        )
 
     # Add legend once on iso view.
     axes["iso"].legend(loc="upper left")
@@ -81,8 +143,9 @@ def create_animation(
     )
 
     # Update function that only updates artist data (no clears/plots)
-    def update(frame: int):
-        positions = position_states[frame]
+    def update(frame_index: int):
+        frame = frames[frame_index]
+        positions = frame.positions
 
         # Update links.
         for view_name in axes.keys():
@@ -93,10 +156,16 @@ def create_animation(
             visualizer.update_wheel(
                 wheel_artists[view_name], positions, num_bands=num_bands
             )
+            visualizer.update_instantaneous_steering_axes(
+                steering_axis_artists[view_name],
+                upright_labels,
+                frame.instantaneous_steering_axes,
+                clipping_bounds,
+            )
 
         # Update global title.
         if title_center_key is None:
-            title_artist.set_text(f"Frame {frame}")
+            title_artist.set_text(f"Frame {frame_index}")
         else:
             wheel_center_z = positions[title_center_key][2]
             initial_wheel_center_z = initial_positions[title_center_key][2]
@@ -110,11 +179,12 @@ def create_animation(
             for wheel in wheel_artists[view_name]:
                 artists.extend(wheel["rims"])
                 artists.extend(wheel["bands"])
+            artists.extend(steering_axis_artists[view_name])
         return artists
 
     # Play forward then reverse (ping-pong).
-    pingpong_states = position_states + position_states[-2:0:-1]
-    frame_indices = range(0, len(pingpong_states), 1)
+    pingpong_frames = pingpong_animation_frames(frames)
+    frame_indices = range(0, len(pingpong_frames), 1)
 
     # Choose writer automatically if not provided.
     out_suffix = output_path.suffix.lower()
@@ -144,22 +214,31 @@ def create_animation(
 
     try:
         with writer_inst.saving(fig, str(output_path), dpi):
-            for frame in frame_indices:
-                positions = pingpong_states[frame]
+            for frame_index in frame_indices:
+                frame = pingpong_frames[frame_index]
+                positions = frame.positions
                 # Update all artists for this frame.
                 for view_name in axes.keys():
                     visualizer.update_links(link_artists[view_name], positions)
                     visualizer.update_wheel(
                         wheel_artists[view_name], positions, num_bands=num_bands
                     )
+                    visualizer.update_instantaneous_steering_axes(
+                        steering_axis_artists[view_name],
+                        upright_labels,
+                        frame.instantaneous_steering_axes,
+                        clipping_bounds,
+                    )
                 # Update global title.
-                wheel_center_z = positions[title_center_key][2]
-                initial_wheel_center_z = initial_positions[title_center_key][2]
-                title_string = (
-                    f"Wheel Center Z: "
-                    f"{wheel_center_z - initial_wheel_center_z:.1f} [mm]",
-                )
-                title_artist.set_text("\n".join(title_string))
+                if title_center_key is None:
+                    title_artist.set_text(f"Frame {frame_index}")
+                else:
+                    wheel_center_z = positions[title_center_key][2]
+                    initial_wheel_center_z = initial_positions[title_center_key][2]
+                    title_artist.set_text(
+                        "Wheel Center Z: "
+                        f"{wheel_center_z - initial_wheel_center_z:.1f} [mm]"
+                    )
                 if show_live:
                     fig.canvas.draw()
                     fig.canvas.flush_events()

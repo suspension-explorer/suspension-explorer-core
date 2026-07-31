@@ -79,15 +79,18 @@ class CornerSuspension(Suspension):
 
     def actuator_dofs(self) -> tuple[ActuatorDOF, ...]:
         """Require the rack translation coordinate for a steered corner."""
+        steering = self.steering_actuator_dof()
+        return (steering,) if steering is not None else ()
+
+    def steering_actuator_dof(self) -> ActuatorDOF | None:
+        """Return the rack translation coordinate for a steered corner."""
         rack_point = self.rack_attachment_point()
         if rack_point is None:
-            return ()
-        return (
-            ActuatorDOF(
-                name="steering rack",
-                point_keys=(rack_point,),
-                direction=ChassisAxisSystem.Y,
-            ),
+            return None
+        return ActuatorDOF(
+            name="steering rack",
+            point_keys=(rack_point,),
+            direction=ChassisAxisSystem.Y,
         )
 
     def compute_state_metrics(
