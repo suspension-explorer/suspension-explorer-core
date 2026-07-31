@@ -298,7 +298,7 @@ class TestRegistry:
         Test listing supported types.
         """
         types = list_supported_types()
-        assert types == ["double_wishbone", "macpherson"]
+        assert types == ["double_wishbone", "macpherson", "trailing_arm"]
 
     def test_get_suspension_class(self):
         """

@@ -82,6 +82,15 @@ class PointID(IntEnum):
     ARB_T_BAR_PIVOT = 32
     DROPLINK_T_BAR = 33
 
+    # Unsteered semi-trailing-arm locating geometry. A/B are the fixed chassis
+    # mounts defining the oblique arm pivot. Torsion-bar springing uses a
+    # separate transverse axis through pivot A.
+    TRAILING_ARM_PIVOT_A = 34
+    TRAILING_ARM_PIVOT_B = 35
+    TRAILING_ARM_OUTBOARD = 36
+    TORSION_BAR_AXIS_A = 37
+    TORSION_BAR_AXIS_B = 38
+
     @property
     def output_only_target_guidance(self) -> str | None:
         """Return point-specific guidance when an output cannot be driven."""
@@ -106,6 +115,7 @@ class SuspensionType(StrEnum):
 
     DOUBLE_WISHBONE = "double_wishbone"
     MACPHERSON = "macpherson"
+    TRAILING_ARM = "trailing_arm"
 
 
 class Scope(StrEnum):

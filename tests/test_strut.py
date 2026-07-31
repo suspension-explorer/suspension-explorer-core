@@ -129,6 +129,7 @@ def test_corner_registry_has_one_complete_definition_per_architecture() -> None:
     expected_types = {
         "double_wishbone",
         "macpherson",
+        "trailing_arm",
     }
 
     assert set(list_supported_types()) == expected_types

@@ -26,6 +26,7 @@ class ElementType(StrEnum):
     PUSHROD = "pushrod"
     ROCKER = "rocker"
     SPRING_DAMPER = "spring_damper"
+    DAMPER = "damper"
     ANTI_ROLL_BAR = "anti_roll_bar"
     TORSION_BAR = "torsion_bar"
     DROPLINK = "droplink"
@@ -116,11 +117,15 @@ class VariableLengthLinkElement(SuspensionElement):
         """
         Require a variable-length link type.
         """
-        valid_types = {ElementType.SPRING_DAMPER, ElementType.HEAVE_LINK}
+        valid_types = {
+            ElementType.SPRING_DAMPER,
+            ElementType.DAMPER,
+            ElementType.HEAVE_LINK,
+        }
         if self.type not in valid_types:
             raise ValueError(
-                "Variable-length links require type 'spring_damper' or "
-                f"'heave_link', got '{self.type.value}'."
+                "Variable-length links require type 'spring_damper', 'damper', "
+                f"or 'heave_link', got '{self.type.value}'."
             )
 
     @property

@@ -11,6 +11,8 @@ from kinematics.core.schema.geometry import (
     GeometrySpecBase,
     MacPhersonAxleGeometrySpec,
     MacPhersonGeometrySpec,
+    TrailingArmAxleGeometrySpec,
+    TrailingArmGeometrySpec,
 )
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.base import Suspension
@@ -19,10 +21,13 @@ from kinematics.core.suspensions.build import (
     build_double_wishbone_axle,
     build_macpherson,
     build_macpherson_axle,
+    build_trailing_arm,
+    build_trailing_arm_axle,
 )
 from kinematics.core.suspensions.corner import (
     DoubleWishboneSuspension,
     MacPhersonSuspension,
+    TrailingArmSuspension,
 )
 
 SuspensionBuilder = Callable[[GeometrySpecBase], Suspension]
@@ -67,6 +72,20 @@ SUSPENSION_DEFINITIONS = (
         Scope.AXLE,
         MacPhersonAxleGeometrySpec,
         build_macpherson_axle,
+        AxleSuspension,
+    ),
+    SuspensionDefinition(
+        SuspensionType.TRAILING_ARM,
+        Scope.CORNER,
+        TrailingArmGeometrySpec,
+        build_trailing_arm,
+        TrailingArmSuspension,
+    ),
+    SuspensionDefinition(
+        SuspensionType.TRAILING_ARM,
+        Scope.AXLE,
+        TrailingArmAxleGeometrySpec,
+        build_trailing_arm_axle,
         AxleSuspension,
     ),
 )

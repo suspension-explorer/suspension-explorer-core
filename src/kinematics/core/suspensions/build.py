@@ -26,6 +26,8 @@ from kinematics.core.schema.geometry import (
     GeometrySpecBase,
     MacPhersonAxleGeometrySpec,
     MacPhersonGeometrySpec,
+    TrailingArmAxleGeometrySpec,
+    TrailingArmGeometrySpec,
 )
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.axle.mechanisms import (
@@ -42,6 +44,7 @@ from kinematics.core.suspensions.corner import (
     CornerSuspension,
     DoubleWishboneSuspension,
     MacPhersonSuspension,
+    TrailingArmSuspension,
 )
 from kinematics.core.suspensions.corner.mechanisms import (
     Actuation,
@@ -88,6 +91,24 @@ def build_macpherson(spec: GeometrySpecBase) -> Suspension:
             point: position.copy() for point, position in typed.hardpoints.items()
         },
         config=typed.config,
+    )
+
+
+def build_trailing_arm(spec: GeometrySpecBase) -> Suspension:
+    """Build one unsteered semi-trailing-arm corner."""
+    typed = cast(TrailingArmGeometrySpec, spec)
+    _validate_side_signs(typed.hardpoints, typed.side)
+    _check_shim_support(typed.config, TrailingArmSuspension)
+    return TrailingArmSuspension(
+        name=typed.name,
+        version=typed.version,
+        units=typed.units,
+        side=typed.side,
+        hardpoints={
+            point: position.copy() for point, position in typed.hardpoints.items()
+        },
+        config=typed.config,
+        spring_type=typed.spring.type,
     )
 
 
@@ -141,6 +162,29 @@ def build_macpherson_axle(spec: GeometrySpecBase) -> Suspension:
             hardpoints=side_points[side],
         )
         corners[side] = cast(CornerSuspension, build_macpherson(corner_geometry))
+    return _assemble_axle(typed, corners, {})
+
+
+def build_trailing_arm_axle(spec: GeometrySpecBase) -> Suspension:
+    """Build a mirrored or explicit full axle of unsteered semi-trailing arms."""
+    typed = cast(TrailingArmAxleGeometrySpec, spec)
+    side_points = _build_axle_side_points(typed.hardpoints)
+    corners: dict[Side, CornerSuspension] = {}
+    for side in (Side.LEFT, Side.RIGHT):
+        corner_geometry = TrailingArmGeometrySpec(
+            name=f"{typed.name}_{side.name.lower()}",
+            version=typed.version,
+            units=typed.units,
+            side=side,
+            config=SuspensionConfig.from_parts(
+                typed.vehicle_config,
+                typed.axle_config,
+                CornerConfig(),
+            ),
+            spring=typed.axle_config.spring,
+            hardpoints=side_points[side],
+        )
+        corners[side] = cast(CornerSuspension, build_trailing_arm(corner_geometry))
     return _assemble_axle(typed, corners, {})
 
 
