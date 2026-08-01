@@ -23,7 +23,7 @@ from kinematics.core.road import RoadPlane
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
-from kinematics.core.targeting import SweepConfig
+from kinematics.core.targeting import PointTarget, SweepConfig
 
 TEST_DATA = Path(__file__).parent / "data"
 
@@ -101,7 +101,7 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     suspension = load_geometry(TEST_DATA / "corner_strut_geometry.yaml")
     assert isinstance(suspension, CornerSuspension)
     assert suspension.config is not None
-    sweep = load_sweep(TEST_DATA / "sweep.yaml")
+    sweep = load_sweep(TEST_DATA / "sweep.yaml", suspension)
     states, _ = solve_sweep(suspension, sweep)
 
     result = compute_sweep_metrics(suspension, sweep, states)
@@ -125,12 +125,15 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     midpoint = len(states) // 2
     midpoint_targets = [target_sweep[midpoint] for target_sweep in sweep.target_sweeps]
     bump_target = next(
-        target for target in midpoint_targets if target.point_id == PointID.WHEEL_CENTER
+        target
+        for target in midpoint_targets
+        if isinstance(target, PointTarget) and target.point_id == PointID.WHEEL_CENTER
     )
     rack_target = next(
         target
         for target in midpoint_targets
-        if target.point_id == PointID.TRACKROD_INBOARD
+        if isinstance(target, PointTarget)
+        and target.point_id == PointID.TRACKROD_INBOARD
     )
     finite_difference_step = 0.25
     finite_difference_sweep = SweepConfig(
@@ -183,7 +186,7 @@ def test_tangent_failure_is_visible_and_preserves_base_metrics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     suspension = load_geometry(TEST_DATA / "geometry.yaml")
-    sweep = load_sweep(TEST_DATA / "sweep.yaml")
+    sweep = load_sweep(TEST_DATA / "sweep.yaml", suspension)
     states, _ = solve_sweep(suspension, sweep)
 
     def fail_tangents(*_args: object, **_kwargs: object) -> None:

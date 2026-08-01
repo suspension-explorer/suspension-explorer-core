@@ -66,7 +66,7 @@ def test_static_state_reproduces_input_geometry(macpherson):
 
 
 def test_sweep_solves_with_physical_invariants(macpherson):
-    sweep = load_sweep(TEST_DATA / "sweep.yaml")
+    sweep = load_sweep(TEST_DATA / "sweep.yaml", macpherson)
     states, infos = solve_sweep(macpherson, sweep)
     assert all(info.converged for info in infos)
     assert all(info.max_residual < 1e-3 for info in infos)
@@ -108,7 +108,7 @@ def test_sweep_solves_with_physical_invariants(macpherson):
 
 
 def test_sweep_metrics_and_derivatives(macpherson):
-    sweep = load_sweep(TEST_DATA / "sweep.yaml")
+    sweep = load_sweep(TEST_DATA / "sweep.yaml", macpherson)
     states, _ = solve_sweep(macpherson, sweep)
     metrics = compute_sweep_metrics(macpherson, sweep, states)
 

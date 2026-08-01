@@ -2,6 +2,7 @@ version: 1
 steps: 41
 targets:
   - point: wheel_center
+    side: left
     direction:
       axis: z
     mode: relative

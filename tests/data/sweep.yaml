@@ -2,12 +2,14 @@ version: 1
 steps: 41
 targets:
   - point: trackrod_inboard
+    side: left
     direction:
       axis: y
     mode: relative
     start: -40
     stop: 40
   - point: wheel_center
+    side: left
     direction:
       axis: z
     start: -40

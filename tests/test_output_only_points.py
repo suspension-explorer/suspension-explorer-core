@@ -21,7 +21,11 @@ from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
 OUTPUT_ONLY_MESSAGE = "is a derived output of suspension type .* and cannot be driven"
 
 
-def _target(point: PointID, axis: Axis, side: Side | None = None) -> dict[str, object]:
+def _target(
+    point: PointID,
+    axis: Axis,
+    side: Side | None = Side.LEFT,
+) -> dict[str, object]:
     """Build one relative single-step target specification."""
     target: dict[str, object] = {
         "point": point,
@@ -118,7 +122,11 @@ def test_corner_accepts_wheel_center_sweep_target(test_data_dir: Path) -> None:
 
     config = build_sweep_config(spec, corner)
 
-    assert [sweep[0].point_id for sweep in config.target_sweeps] == [
+    targets = [sweep[0] for sweep in config.target_sweeps]
+    assert all(isinstance(target, PointTarget) for target in targets)
+    assert [
+        target.point_id for target in targets if isinstance(target, PointTarget)
+    ] == [
         PointID.TRACKROD_INBOARD,
         PointID.WHEEL_CENTER,
     ]
@@ -145,7 +153,11 @@ def test_axle_accepts_wheel_center_sweep_target(test_data_dir: Path) -> None:
 
     config = build_sweep_config(spec, axle)
 
-    assert [sweep[0].point_id for sweep in config.target_sweeps] == [
+    targets = [sweep[0] for sweep in config.target_sweeps]
+    assert all(isinstance(target, PointTarget) for target in targets)
+    assert [
+        target.point_id for target in targets if isinstance(target, PointTarget)
+    ] == [
         PointRef(Side.LEFT, PointID.WHEEL_CENTER),
         PointRef(Side.RIGHT, PointID.WHEEL_CENTER),
         PointRef(Side.LEFT, PointID.TRACKROD_INBOARD),

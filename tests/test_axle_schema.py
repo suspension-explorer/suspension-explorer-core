@@ -28,7 +28,7 @@ from kinematics.core.schema.geometry import (
     DoubleWishboneGeometrySpec,
 )
 from kinematics.core.schema.sweep import SweepSpec, TargetSpec, build_sweep_config
-from kinematics.core.targeting import PointTargetAxis
+from kinematics.core.targeting import PointTarget, PointTargetAxis
 
 
 def _read_yaml_mapping(path: Path, kind: str) -> dict[str, Any]:
@@ -323,6 +323,7 @@ def test_x_axis_remains_an_axis_target() -> None:
 
     config = build_sweep_config(spec)
     target = config.target_sweeps[0][0]
+    assert isinstance(target, PointTarget)
     assert target.point_id is PointID.WHEEL_CENTER
     assert isinstance(target.direction, PointTargetAxis)
     assert target.direction.axis is Axis.X
