@@ -17,12 +17,18 @@ from kinematics.core.enums import (
     ElementLengthCoordinateID,
     PointID,
     Scope,
-    TargetPositionMode,
+    TargetValueMode,
+    Units,
 )
 from kinematics.core.jacobians import jac_distance
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
 from kinematics.core.primitives.geometry import Direction3, Point3
-from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
+from kinematics.core.primitives.point_ref import (
+    PointKey,
+    PointRef,
+    Side,
+    point_key_name,
+)
 from kinematics.core.primitives.soft_math import softnorm
 from kinematics.core.primitives.vector_utils.generic import project_coordinate
 
@@ -87,18 +93,27 @@ class SweepConfig:
             )
 
         for step_index in range(lengths[0]):
-            identities = [
-                dimension[step_index].coordinate_identity
-                for dimension in self.target_sweeps
-            ]
-            duplicates = {
-                identity for identity in identities if identities.count(identity) > 1
-            }
-            if duplicates:
-                duplicate = sorted(repr(identity) for identity in duplicates)[0]
+            targets = [dimension[step_index] for dimension in self.target_sweeps]
+            indices_by_identity: dict[tuple[object, ...], list[int]] = {}
+            for target_index, target in enumerate(targets):
+                indices_by_identity.setdefault(target.coordinate_identity, []).append(
+                    target_index
+                )
+            duplicate = next(
+                (
+                    (identity, indices)
+                    for identity, indices in indices_by_identity.items()
+                    if len(indices) > 1
+                ),
+                None,
+            )
+            if duplicate is not None:
+                _identity, target_indices = duplicate
+                description = targets[target_indices[0]].coordinate_description
+                rendered_indices = ", ".join(str(index) for index in target_indices)
                 raise ValueError(
-                    "The same scalar coordinate is targeted more than once at "
-                    f"step {step_index}: {duplicate}."
+                    f"Sweep targets {rendered_indices} drive the same {description} "
+                    f"at step {step_index}."
                 )
 
     @property
@@ -128,7 +143,7 @@ class PointTarget(NamedTuple):
     point_id: PointKey
     direction: "PointTargetDirection"
     value: float
-    mode: TargetPositionMode = TargetPositionMode.RELATIVE
+    mode: TargetValueMode = TargetValueMode.RELATIVE
 
     @property
     def kind(self) -> "TargetKind":
@@ -143,12 +158,7 @@ class PointTarget(NamedTuple):
     @property
     def coordinate_identity(self) -> tuple[object, ...]:
         """Return a stable identity independent of value and mode."""
-        direction = resolve_target(self.direction)
-        return (
-            self.kind.value,
-            self.point_id,
-            *(float(value) for value in direction.data),
-        )
+        return _projected_coordinate_identity(self.kind, self.point_id, self.direction)
 
     @property
     def selector_point(self) -> PointKey:
@@ -157,23 +167,19 @@ class PointTarget(NamedTuple):
 
     def measure(self, positions: Mapping[PointKey, Point3]) -> float:
         """Evaluate the projected scalar coordinate."""
-        return project_coordinate(
-            positions[self.point_id],
-            resolve_target(self.direction),
-        )
+        return _measure_projected_coordinate(self.point_id, self.direction, positions)
 
     def point_partials(
         self,
         positions: Mapping[PointKey, Point3],
     ) -> tuple[tuple[PointKey, np.ndarray], ...]:
         """Return analytical partials with respect to involved point positions."""
-        _ = positions
-        return ((self.point_id, resolve_target(self.direction).data),)
+        return _projected_coordinate_partials(self.point_id, self.direction, positions)
 
     def with_value(
         self,
         value: float,
-        mode: TargetPositionMode,
+        mode: TargetValueMode,
     ) -> "PointTarget":
         """Return this coordinate with a new scalar value and mode."""
         return self._replace(value=value, mode=mode)
@@ -185,8 +191,7 @@ class PointTarget(NamedTuple):
     @property
     def coordinate_id(self) -> str:
         """Return a deterministic presentation identifier."""
-        axis = getattr(self.direction, "axis", None)
-        suffix = axis.name.lower() if axis is not None else "projection"
+        suffix = _target_axis_name(self.direction) or "projection"
         point = (
             self.point_id.point
             if isinstance(self.point_id, PointRef)
@@ -198,6 +203,54 @@ class PointTarget(NamedTuple):
     def label(self) -> str:
         """Return a concise display label."""
         return self.coordinate_id.replace("_", " ").title()
+
+    @property
+    def unit(self) -> str:
+        return Units.MILLIMETERS.symbol
+
+    @property
+    def structural_side(self) -> Side | None:
+        return _point_key_side(self.point_id)
+
+    @property
+    def parameter_point(self) -> str:
+        return point_key_name(self.point_id)
+
+    @property
+    def parameter_axis(self) -> str | None:
+        return _target_axis_name(self.direction)
+
+    @property
+    def parameter_actuator(self) -> None:
+        return None
+
+    @property
+    def parameter_element(self) -> None:
+        return None
+
+    @property
+    def driven_points(self) -> tuple[PointKey, ...]:
+        return self.required_points
+
+    @property
+    def drive_coordinate_key(self) -> None:
+        return None
+
+    @property
+    def actuator_coordinate_id(self) -> None:
+        return None
+
+    @property
+    def actuator_direction(self) -> None:
+        return None
+
+    @property
+    def export_coordinate_id(self) -> str:
+        return self.coordinate_id
+
+    @property
+    def coordinate_description(self) -> str:
+        return f"point coordinate '{self.coordinate_id}'"
 
 
 @dataclass(slots=True, frozen=True)
@@ -227,6 +280,48 @@ class PointTargetVector:
 PointTargetDirection = Union[PointTargetAxis, PointTargetVector]
 
 
+def _target_axis_name(direction: PointTargetDirection) -> str | None:
+    if isinstance(direction, PointTargetAxis):
+        return direction.axis.name.lower()
+    return None
+
+
+def _point_key_side(point: PointKey) -> Side | None:
+    if isinstance(point, PointRef) and point.side is not Side.CENTER:
+        return point.side
+    return None
+
+
+def _projected_coordinate_identity(
+    kind: "TargetKind",
+    identifier: object,
+    direction: PointTargetDirection,
+) -> tuple[object, ...]:
+    resolved = resolve_target(direction)
+    return (
+        kind.value,
+        identifier,
+        *(float(value) for value in resolved.data),
+    )
+
+
+def _measure_projected_coordinate(
+    point: PointKey,
+    direction: PointTargetDirection,
+    positions: Mapping[PointKey, Point3],
+) -> float:
+    return project_coordinate(positions[point], resolve_target(direction))
+
+
+def _projected_coordinate_partials(
+    point: PointKey,
+    direction: PointTargetDirection,
+    positions: Mapping[PointKey, Point3],
+) -> tuple[tuple[PointKey, np.ndarray], ...]:
+    _ = positions
+    return ((point, resolve_target(direction).data),)
+
+
 class ActuatorPositionTarget(NamedTuple):
     """One named actuator position measured at a canonical physical point."""
 
@@ -234,7 +329,7 @@ class ActuatorPositionTarget(NamedTuple):
     point_id: PointKey
     direction: PointTargetDirection
     value: float
-    mode: TargetPositionMode = TargetPositionMode.RELATIVE
+    mode: TargetValueMode = TargetValueMode.RELATIVE
     label: str = "Actuator Position"
 
     @property
@@ -250,11 +345,10 @@ class ActuatorPositionTarget(NamedTuple):
     @property
     def coordinate_identity(self) -> tuple[object, ...]:
         """Return a stable identity independent of value and mode."""
-        direction = resolve_target(self.direction)
-        return (
-            self.kind.value,
+        return _projected_coordinate_identity(
+            self.kind,
             self.actuator_id,
-            *(float(value) for value in direction.data),
+            self.direction,
         )
 
     @property
@@ -269,23 +363,19 @@ class ActuatorPositionTarget(NamedTuple):
 
     def measure(self, positions: Mapping[PointKey, Point3]) -> float:
         """Evaluate actuator position along the authored direction."""
-        return project_coordinate(
-            positions[self.point_id],
-            resolve_target(self.direction),
-        )
+        return _measure_projected_coordinate(self.point_id, self.direction, positions)
 
     def point_partials(
         self,
         positions: Mapping[PointKey, Point3],
     ) -> tuple[tuple[PointKey, np.ndarray], ...]:
         """Return the coordinate partial at the canonical physical point."""
-        _ = positions
-        return ((self.point_id, resolve_target(self.direction).data),)
+        return _projected_coordinate_partials(self.point_id, self.direction, positions)
 
     def with_value(
         self,
         value: float,
-        mode: TargetPositionMode,
+        mode: TargetValueMode,
     ) -> "ActuatorPositionTarget":
         """Return this coordinate with a new scalar value and mode."""
         return self._replace(value=value, mode=mode)
@@ -296,6 +386,56 @@ class ActuatorPositionTarget(NamedTuple):
     ) -> "ActuatorPositionTarget":
         """Return this actuator coordinate remapped to another point namespace."""
         return self._replace(point_id=mapping(self.point_id))
+
+    @property
+    def unit(self) -> str:
+        return ActuatorPositionCoordinateID(self.actuator_id).unit
+
+    @property
+    def structural_side(self) -> None:
+        return None
+
+    @property
+    def parameter_point(self) -> None:
+        return None
+
+    @property
+    def parameter_axis(self) -> str | None:
+        return _target_axis_name(self.direction)
+
+    @property
+    def parameter_actuator(self) -> str:
+        return self.actuator_id
+
+    @property
+    def parameter_element(self) -> None:
+        return None
+
+    @property
+    def driven_points(self) -> tuple[PointKey, ...]:
+        return self.required_points
+
+    @property
+    def drive_coordinate_key(
+        self,
+    ) -> tuple[TargetKind, str, tuple[PointKey, ...] | None, None]:
+        return (self.kind, self.actuator_id, None, None)
+
+    @property
+    def actuator_coordinate_id(self) -> str:
+        return self.actuator_id
+
+    @property
+    def actuator_direction(self) -> Direction3:
+        return resolve_target(self.direction)
+
+    @property
+    def export_coordinate_id(self) -> str:
+        return self.coordinate_id
+
+    @property
+    def coordinate_description(self) -> str:
+        return f"actuator-position coordinate '{self.coordinate_id}'"
 
 
 class TargetKind(StrEnum):
@@ -318,40 +458,25 @@ ELEMENT_LENGTH_TARGET_IDS: Final[tuple[str, ...]] = tuple(
     coordinate.value for coordinate in ElementLengthCoordinateID
 )
 SidePolicy = Literal["corner", "shared"]
-_SHARED_POINT_POSITION_IDS: Final[frozenset[str]] = frozenset(
-    point.name.lower()
-    for point in (
-        PointID.ARB_U_BAR_AXIS_A,
-        PointID.ARB_U_BAR_AXIS_B,
-        PointID.ARB_T_BAR_PIVOT,
-    )
-)
-_ELEMENT_LENGTH_SIDE_POLICIES: Final[
-    Mapping[ElementLengthCoordinateID, SidePolicy]
-] = {
-    ElementLengthCoordinateID.DAMPER: "corner",
-    ElementLengthCoordinateID.HEAVE_LINK: "shared",
-}
-_ACTUATOR_POSITION_SIDE_POLICIES: Final[
-    Mapping[ActuatorPositionCoordinateID, SidePolicy]
-] = {
-    ActuatorPositionCoordinateID.RACK: "shared",
-}
 
 
 def sweep_target_side_policy(kind: TargetKind, coordinate_id: str) -> SidePolicy:
     """Return static side ownership for one globally recognized coordinate."""
-    if kind is TargetKind.POINT:
-        return "shared" if coordinate_id in _SHARED_POINT_POSITION_IDS else "corner"
-    if kind is TargetKind.ACTUATOR_POSITION:
-        return _ACTUATOR_POSITION_SIDE_POLICIES[
-            ActuatorPositionCoordinateID(coordinate_id)
-        ]
-    if kind is TargetKind.ELEMENT_LENGTH:
-        return _ELEMENT_LENGTH_SIDE_POLICIES[
-            ElementLengthCoordinateID(coordinate_id)
-        ]
-    raise ValueError(f"Unsupported sweep target kind: {kind}")
+    try:
+        policy = {
+            TargetKind.POINT: lambda: PointID[coordinate_id.upper()].sweep_side_policy,
+            TargetKind.ACTUATOR_POSITION: lambda: ActuatorPositionCoordinateID(
+                coordinate_id
+            ).side_policy,
+            TargetKind.ELEMENT_LENGTH: lambda: ElementLengthCoordinateID(
+                coordinate_id
+            ).side_policy,
+        }[kind]()
+    except (KeyError, ValueError) as error:
+        raise ValueError(
+            f"Unknown {kind.value} coordinate ID '{coordinate_id}'."
+        ) from error
+    return policy.value
 
 
 def resolve_published_target_side(
@@ -383,7 +508,7 @@ def resolve_published_target_side(
 class PointTargetVocabularyItem(TypedDict):
     """One JSON-native point-target vocabulary entry."""
 
-    kind: Literal["point"]
+    type: Literal["point"]
     id: str
     label: str
     featured: bool
@@ -393,7 +518,7 @@ class PointTargetVocabularyItem(TypedDict):
 class ActuatorPositionVocabularyItem(TypedDict):
     """One JSON-native actuator-position vocabulary entry."""
 
-    kind: Literal["actuator_position"]
+    type: Literal["actuator_position"]
     id: str
     label: str
     featured: bool
@@ -403,6 +528,7 @@ class ActuatorPositionVocabularyItem(TypedDict):
 class ElementLengthVocabularyItem(TypedDict):
     """One JSON-native element-length vocabulary entry."""
 
+    type: Literal["element_length"]
     id: str
     label: str
     unit: str
@@ -447,7 +573,7 @@ def sweep_target_vocabulary() -> SweepTargetVocabulary:
     )
     positions: list[PointTargetVocabularyItem | ActuatorPositionVocabularyItem] = [
         ActuatorPositionVocabularyItem(
-            kind="actuator_position",
+            type="actuator_position",
             id=ActuatorPositionCoordinateID.RACK.value,
             label="Rack",
             featured=True,
@@ -459,7 +585,7 @@ def sweep_target_vocabulary() -> SweepTargetVocabulary:
     ]
     positions.extend(
         PointTargetVocabularyItem(
-            kind="point",
+            type="point",
             id=point_id,
             label=_point_target_label(point_id),
             featured=point_id in featured_point_ids,
@@ -471,6 +597,7 @@ def sweep_target_vocabulary() -> SweepTargetVocabulary:
         "positions": positions,
         "element_lengths": [
             {
+                "type": "element_length",
                 "id": coordinate.value,
                 "label": coordinate.label,
                 "unit": coordinate.unit,
@@ -493,8 +620,9 @@ class ElementLengthTarget:
     point_a: PointKey
     point_b: PointKey
     value: float
-    mode: TargetPositionMode = TargetPositionMode.RELATIVE
+    mode: TargetValueMode = TargetValueMode.RELATIVE
     label: str = "Element Length"
+    unit: str = Units.MILLIMETERS.symbol
     scope: Scope = Scope.CORNER
     side: Side | None = None
 
@@ -506,10 +634,10 @@ class ElementLengthTarget:
                 f"Element-length target '{self.element_id}' must be finite, "
                 f"got {self.value}."
             )
-        if self.mode is TargetPositionMode.ABSOLUTE and self.value < 0.0:
+        if self.mode is TargetValueMode.ABSOLUTE and self.value < EPS_GEOMETRIC:
             raise ValueError(
                 f"Absolute element length for '{self.element_id}' must be "
-                f"non-negative, got {self.value}."
+                f"at least {EPS_GEOMETRIC:g} {self.unit}, got {self.value}."
             )
 
     @property
@@ -533,6 +661,56 @@ class ElementLengthTarget:
     def coordinate_id(self) -> str:
         return self.element_id
 
+    @property
+    def structural_side(self) -> Side | None:
+        return self.side
+
+    @property
+    def parameter_point(self) -> None:
+        return None
+
+    @property
+    def parameter_axis(self) -> None:
+        return None
+
+    @property
+    def parameter_actuator(self) -> None:
+        return None
+
+    @property
+    def parameter_element(self) -> str:
+        return self.element_id
+
+    @property
+    def driven_points(self) -> tuple[PointKey, ...]:
+        return ()
+
+    @property
+    def drive_coordinate_key(
+        self,
+    ) -> tuple[TargetKind, str, tuple[PointKey, ...], Side | None]:
+        return (self.kind, self.element_id, self.required_points, self.side)
+
+    @property
+    def actuator_coordinate_id(self) -> None:
+        return None
+
+    @property
+    def actuator_direction(self) -> None:
+        return None
+
+    @property
+    def export_coordinate_id(self) -> str:
+        return (
+            self.coordinate_id
+            if self.coordinate_id.endswith("_length")
+            else f"{self.coordinate_id}_length"
+        )
+
+    @property
+    def coordinate_description(self) -> str:
+        return f"element-length coordinate '{self.coordinate_id}'"
+
     def measure(self, positions: Mapping[PointKey, Point3]) -> float:
         """Return true pin-centre length using the solver's soft-norm policy."""
         delta = positions[self.point_b] - positions[self.point_a]
@@ -545,11 +723,6 @@ class ElementLengthTarget:
         """Return analytical length partials for both endpoints."""
         point_a = positions[self.point_a]
         point_b = positions[self.point_b]
-        if (point_b - point_a).norm() < EPS_GEOMETRIC:
-            raise ValueError(
-                f"Element-length target '{self.element_id}' has coincident "
-                "endpoints and no resolvable length Jacobian."
-            )
         derivatives = jac_distance(point_a.data, point_b.data)
         return (
             (self.point_a, derivatives[:3]),
@@ -559,7 +732,7 @@ class ElementLengthTarget:
     def with_value(
         self,
         value: float,
-        mode: TargetPositionMode,
+        mode: TargetValueMode,
     ) -> "ElementLengthTarget":
         return replace(self, value=value, mode=mode)
 
@@ -579,23 +752,12 @@ type ScalarTarget = PointTarget | ActuatorPositionTarget | ElementLengthTarget
 
 def target_side(target: ScalarTarget) -> Side | None:
     """Return the structural side of a resolved target, if any."""
-    if isinstance(target, ElementLengthTarget):
-        return target.side
-    if isinstance(target, ActuatorPositionTarget):
-        return None
-    if (
-        isinstance(target.point_id, PointRef)
-        and target.point_id.side is not Side.CENTER
-    ):
-        return target.point_id.side
-    return None
+    return target.structural_side
 
 
 def target_export_column_name(target: ScalarTarget) -> str:
     """Return the deterministic measured-coordinate export column name."""
-    coordinate = target.coordinate_id
-    if target.kind is TargetKind.ELEMENT_LENGTH and not coordinate.endswith("_length"):
-        coordinate = f"{coordinate}_length"
+    coordinate = target.export_coordinate_id
     side = target_side(target)
     side_suffix = f"_{side.name.lower()}" if side is not None else ""
     return f"target_{coordinate}{side_suffix}"
@@ -623,7 +785,7 @@ class DriveCoordinate:
     def target(
         self,
         value: float,
-        mode: TargetPositionMode = TargetPositionMode.RELATIVE,
+        mode: TargetValueMode = TargetValueMode.RELATIVE,
     ) -> ElementLengthTarget:
         """Build a resolved element target for this coordinate."""
         if self.kind is not TargetKind.ELEMENT_LENGTH:
@@ -635,6 +797,7 @@ class DriveCoordinate:
             value=value,
             mode=mode,
             label=self.label,
+            unit=self.unit,
             scope=self.scope,
             side=self.side,
         )
@@ -643,7 +806,7 @@ class DriveCoordinate:
         self,
         direction: PointTargetDirection,
         value: float,
-        mode: TargetPositionMode = TargetPositionMode.RELATIVE,
+        mode: TargetValueMode = TargetValueMode.RELATIVE,
     ) -> ActuatorPositionTarget:
         """Build a named actuator-position target using its canonical point."""
         if self.kind is not TargetKind.ACTUATOR_POSITION:
@@ -686,15 +849,11 @@ class ActuatorDOF:
 
     def matches(self, target: ScalarTarget) -> bool:
         """Whether a target controls this actuator coordinate."""
-        if isinstance(target, ActuatorPositionTarget):
-            if target.actuator_id != self.id:
-                return False
-        elif isinstance(target, PointTarget):
-            if target.point_id not in self.point_keys:
-                return False
-        else:
+        if target.actuator_coordinate_id != self.id:
             return False
-        target_direction = resolve_target(target.direction)
+        target_direction = target.actuator_direction
+        if target_direction is None:
+            return False
         alignment = abs(float(np.dot(target_direction.data, self.direction.data)))
         return alignment >= 1.0 - EPS_GEOMETRIC
 
@@ -704,11 +863,11 @@ def validate_sweep_controls(
     actuator_dofs: tuple[ActuatorDOF, ...],
 ) -> None:
     """Require exactly one target for every physical actuator coordinate."""
-    for actuator in actuator_dofs:
-        for step_index in range(sweep_config.n_steps):
-            step_targets = [
-                target_sweep[step_index] for target_sweep in sweep_config.target_sweeps
-            ]
+    for step_index in range(sweep_config.n_steps):
+        step_targets = [
+            target_sweep[step_index] for target_sweep in sweep_config.target_sweeps
+        ]
+        for actuator in actuator_dofs:
             matching_targets = [
                 target for target in step_targets if actuator.matches(target)
             ]

@@ -266,14 +266,15 @@ to 40 mm of bump while the rack remains at its design position.
 version: 1
 steps: 41
 targets:
-  - point: wheel_center
+  - type: point
+    point: wheel_center
     side: left
     direction: { axis: z }
     mode: relative
     start: -40
     stop: 40
 
-  - kind: actuator_position
+  - type: actuator_position
     actuator: rack
     direction: { axis: y }
     mode: relative
@@ -282,13 +283,13 @@ targets:
 ```
 
 Every physical actuator must be controlled exactly once. A rack-steered model
-therefore needs one `kind: actuator_position`, `actuator: rack` target along Y,
+therefore needs one `type: actuator_position`, `actuator: rack` target along Y,
 even when the rack is held at zero displacement. `relative` values are measured
 from the authored design condition; `absolute` values are coordinates in chassis
 space. Every corner-owned target must identify `side: left` or `side: right`.
 A standalone corner exposes only `left`; an axle exposes both sides. Shared
-coordinates such as `rack` remain unsided. Legacy physical-point targets for
-`trackrod_inboard` remain supported when their side is explicit.
+coordinates such as `rack` remain unsided. A physical `trackrod_inboard` point
+target does not substitute for the named rack actuator coordinate.
 
 All target sequences must have the same number of values. Multiple targets are
 paired by index rather than expanded into a Cartesian product. Use `start`,
@@ -386,19 +387,21 @@ is:
 ```yaml
 version: 1
 targets:
-  - point: wheel_center
+  - type: point
+    point: wheel_center
     side: left
     direction: { axis: z }
     mode: relative
     values: [-30, 0, 30]
 
-  - point: wheel_center
+  - type: point
+    point: wheel_center
     side: right
     direction: { axis: z }
     mode: relative
     values: [30, 0, -30]
 
-  - kind: actuator_position
+  - type: actuator_position
     actuator: rack
     direction: { axis: y }
     mode: relative

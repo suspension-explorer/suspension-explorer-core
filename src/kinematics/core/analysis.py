@@ -17,7 +17,7 @@ from kinematics.core.diagnostics import (
     DiagnosticIssue,
     DiagnosticSeverity,
 )
-from kinematics.core.enums import TargetPositionMode
+from kinematics.core.enums import TargetValueMode
 from kinematics.core.metrics.main import AxleMetricRows, MetricRow
 from kinematics.core.metrics.metadata import MetricDisplay, metric_display_for_keys
 from kinematics.core.metrics.registry import metric_specs_for_suspension
@@ -32,10 +32,7 @@ from kinematics.core.presentation import (
     wheel_dimensions,
     wheel_references,
 )
-from kinematics.core.primitives.point_ref import (
-    PointRef,
-    point_key_name,
-)
+from kinematics.core.primitives.point_ref import point_key_name
 from kinematics.core.solver import SolverInfo
 from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.base import Suspension
@@ -46,14 +43,7 @@ from kinematics.core.sweep import (
     solve_evaluated_sweep,
     solve_sweep,
 )
-from kinematics.core.targeting import (
-    ActuatorPositionTarget,
-    ElementLengthTarget,
-    PointTarget,
-    SweepConfig,
-    TargetKind,
-    target_side,
-)
+from kinematics.core.targeting import SweepConfig
 
 if TYPE_CHECKING:
     from kinematics.core.suspensions.axle import AxleSuspension
@@ -74,7 +64,7 @@ class SuspensionInfo:
 class SweepParameter:
     """One measured scalar sweep dimension usable as a chart axis."""
 
-    kind: str
+    type: str
     coordinate_id: str
     label: str
     unit: str
@@ -91,7 +81,7 @@ class DriveCoordinateInfo:
     """Transport-safe metadata for one topology-declared drive coordinate."""
 
     id: str
-    kind: str
+    type: str
     label: str
     unit: str
     scope: str
@@ -181,57 +171,23 @@ def sweep_parameters(
             if states is not None
             else [float(item.value) for item in dimension]
         )
-        if isinstance(target, ActuatorPositionTarget):
-            axis_value = getattr(target.direction, "axis", None)
-            axis = axis_value.name.lower() if axis_value is not None else None
-            parameters.append(
-                SweepParameter(
-                    kind=TargetKind.ACTUATOR_POSITION.value,
-                    coordinate_id=target.actuator_id,
-                    label=target.label,
-                    unit="mm",
-                    values=values,
-                    axis=axis,
-                    actuator=target.actuator_id,
-                )
-            )
-            continue
-        if isinstance(target, PointTarget):
-            axis_value = getattr(target.direction, "axis", None)
-            axis = axis_value.name.lower() if axis_value is not None else None
-            key = target.point_id
-            structural_side = target_side(target)
-            side = structural_side.name.lower() if structural_side is not None else None
-            base_name = (
-                key.point.name.lower()
-                if isinstance(key, PointRef)
-                else key.name.lower()
-            )
-            coordinate_id = f"{base_name}_{axis or 'projection'}"
-            parameters.append(
-                SweepParameter(
-                    kind=TargetKind.POINT.value,
-                    coordinate_id=coordinate_id,
-                    label=target.label,
-                    unit="mm",
-                    values=values,
-                    point=point_key_name(key),
-                    axis=axis,
-                    side=side,
-                )
-            )
-            continue
-
-        assert isinstance(target, ElementLengthTarget)
+        structural_side = target.structural_side
         parameters.append(
             SweepParameter(
-                kind=TargetKind.ELEMENT_LENGTH.value,
-                coordinate_id=target.element_id,
+                type=target.kind.value,
+                coordinate_id=target.coordinate_id,
                 label=target.label,
-                unit="mm",
+                unit=target.unit,
                 values=values,
-                element=target.element_id,
-                side=(target.side.name.lower() if target.side is not None else None),
+                point=target.parameter_point,
+                axis=target.parameter_axis,
+                actuator=target.parameter_actuator,
+                element=target.parameter_element,
+                side=(
+                    structural_side.name.lower()
+                    if structural_side is not None
+                    else None
+                ),
             )
         )
     return parameters
@@ -243,7 +199,7 @@ def _hold_sweep_config(sweep_config: SweepConfig) -> SweepConfig | None:
         if not dimension:
             continue
         target = dimension[0]
-        hold_dimensions.append([target.with_value(0.0, TargetPositionMode.RELATIVE)])
+        hold_dimensions.append([target.with_value(0.0, TargetValueMode.RELATIVE)])
     return SweepConfig(hold_dimensions) if hold_dimensions else None
 
 
@@ -415,7 +371,7 @@ def initial_pose(suspension: Suspension) -> StaticPose:
         drive_coordinates=[
             DriveCoordinateInfo(
                 id=coordinate.id,
-                kind=coordinate.kind.value,
+                type=coordinate.kind.value,
                 label=coordinate.label,
                 unit=coordinate.unit,
                 scope=coordinate.scope.value,

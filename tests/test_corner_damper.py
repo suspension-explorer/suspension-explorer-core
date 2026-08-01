@@ -113,15 +113,15 @@ def test_linear_damper_is_fixed_to_chassis_and_rigidly_carried_by_rocker() -> No
         {
             "targets": [
                 {
-                    "kind": "element_length",
+                    "type": "element_length",
                     "element": "damper",
                     "side": "left",
                     "mode": "relative",
                     "values": [0.0, -1.0],
                 },
                 {
-                    "point": "trackrod_inboard",
-                    "side": "left",
+                    "type": "actuator_position",
+                    "actuator": "rack",
                     "direction": {"axis": "y"},
                     "mode": "relative",
                     "values": [0.0, 0.0],

@@ -9,7 +9,7 @@ from typing import Annotated, TypeVar, cast
 import numpy as np
 from pydantic import BeforeValidator, PlainSerializer
 
-from kinematics.core.enums import Axis, PointID, TargetPositionMode
+from kinematics.core.enums import Axis, PointID, TargetValueMode
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.primitives.point_ref import Side
 
@@ -85,7 +85,7 @@ SideValue = Annotated[
     PlainSerializer(serialize_side, return_type=str, when_used="json"),
 ]
 AxisValue = Annotated[Axis, BeforeValidator(lambda value: parse_enum(Axis, value))]
-TargetPositionModeValue = Annotated[
-    TargetPositionMode,
-    BeforeValidator(lambda value: parse_enum(TargetPositionMode, value)),
+TargetValueModeValue = Annotated[
+    TargetValueMode,
+    BeforeValidator(lambda value: parse_enum(TargetValueMode, value)),
 ]

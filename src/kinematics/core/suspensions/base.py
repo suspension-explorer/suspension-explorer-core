@@ -262,7 +262,7 @@ class Suspension(ABC):
             )
 
         selected_side = resolve_published_target_side(
-            f"{coordinate_kind.title()} '{coordinate_id}'",
+            f"{coordinate_kind.capitalize()} '{coordinate_id}'",
             tuple(item.side for item in candidates),
             side,
         )
@@ -365,37 +365,42 @@ class Suspension(ABC):
                 )
 
     def validate_sweep_targets(self, targets: Iterable["ScalarTarget"]) -> None:
-        """Validate point inputs and topology-declared element coordinates."""
-        from kinematics.core.targeting import (
-            ActuatorPositionTarget,
-            ElementLengthTarget,
-            PointTarget,
-        )
-
+        """Validate driven points and topology-declared scalar coordinates."""
         target_list = tuple(targets)
         self.validate_sweep_target_points(
-            target.point_id
+            point
             for target in target_list
-            if isinstance(target, PointTarget | ActuatorPositionTarget)
+            for point in target.driven_points
         )
         available = self.drive_coordinates()
         for target in target_list:
-            if not isinstance(target, ElementLengthTarget):
+            target_key = target.drive_coordinate_key
+            if target_key is None:
                 continue
+            target_kind, target_id, target_points, target_side = target_key
             if not any(
-                coordinate.id == target.element_id
-                and coordinate.point_keys == (target.point_a, target.point_b)
-                and coordinate.side is target.side
+                coordinate.kind is target_kind
+                and coordinate.id == target_id
+                and (target_points is None or coordinate.point_keys == target_points)
+                and coordinate.side is target_side
                 for coordinate in available
             ):
                 available_ids = (
-                    ", ".join(sorted({coordinate.id for coordinate in available}))
+                    ", ".join(
+                        sorted(
+                            {
+                                coordinate.id
+                                for coordinate in available
+                                if coordinate.kind is target_kind
+                            }
+                        )
+                    )
                     or "none"
                 )
                 raise ValueError(
-                    f"Element-length target '{target.element_id}' is not declared "
-                    "driveable for this suspension. Available driveable element "
-                    f"IDs: {available_ids}."
+                    f"{target.coordinate_description.capitalize()} is not declared "
+                    f"driveable for this suspension. Available driveable "
+                    f"{target_kind.value} IDs: {available_ids}."
                 )
 
     def resolve_target_key(self, point: PointID, side: Side | None) -> PointKey:

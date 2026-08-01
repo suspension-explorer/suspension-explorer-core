@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Sequence
+from typing import TYPE_CHECKING, Annotated, Literal, Sequence
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, field_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
 
-from kinematics.core.enums import Axis, PointID, TargetPositionMode
+from kinematics.core.enums import Axis, PointID, TargetValueMode
 from kinematics.core.primitives.geometry import Direction3, extract_array
 from kinematics.core.primitives.point_ref import Side
 from kinematics.core.schema.decoding import (
     AxisValue,
     PointIDValue,
     SideValue,
-    TargetPositionModeValue,
+    TargetValueModeValue,
 )
 from kinematics.core.targeting import (
     ACTUATOR_POSITION_TARGET_IDS,
@@ -80,29 +80,64 @@ class DirectionSpec(BaseModel):
         return vector / norm
 
 
-class TargetSpec(BaseModel):
-    """One point-coordinate target dimension in a suspension sweep."""
+class SweepValueSpec(BaseModel):
+    """Value/range fields shared by every scalar sweep target specification."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    kind: Literal["point"] = "point"
-    point: PointIDValue
-    direction: DirectionSpec
     name: str | None = None
     side: SideValue | None = None
-    mode: TargetPositionModeValue = TargetPositionMode.RELATIVE
+    mode: TargetValueModeValue = TargetValueMode.RELATIVE
     start: float | None = None
     stop: float | None = None
     values: Sequence[float] | None = None
 
     @model_validator(mode="after")
-    def check_side(self) -> "TargetSpec":
+    def check_side(self) -> "SweepValueSpec":
+        if self.side == Side.CENTER:
+            raise ValueError("Sweep target side must be 'left' or 'right'.")
+        return self
+
+    def expand_values(self, default_steps: int | None) -> list[float]:
+        """Expand explicit values or a start-stop range exactly once."""
+        if self.values is not None:
+            return [float(value) for value in self.values]
+        target_name = self.name or self.coordinate_name
+        if self.start is None or self.stop is None:
+            raise ValueError(
+                f"Target '{target_name}': must specify either 'values' or both "
+                "'start' and 'stop'"
+            )
+        if default_steps is None:
+            raise ValueError(
+                f"Target '{target_name}': no 'steps' count available "
+                "(specify at target or file level)"
+            )
+        return list(np.linspace(float(self.start), float(self.stop), default_steps))
+
+    @property
+    def coordinate_name(self) -> str:
+        """Return the coordinate identifier used in validation errors."""
+        return type(self).__name__
+
+
+class TargetSpec(SweepValueSpec):
+    """One point-coordinate target dimension in a suspension sweep."""
+
+    type: Literal["point"]
+    point: PointIDValue
+    direction: DirectionSpec
+
+    @property
+    def coordinate_name(self) -> str:
+        return self.point.name.lower()
+
+    @model_validator(mode="after")
+    def check_point(self) -> "TargetSpec":
         if self.point is PointID.NOT_ASSIGNED:
             raise ValueError(
                 "Point target ID 'not_assigned' is reserved and cannot be used"
             )
-        if self.side == Side.CENTER:
-            raise ValueError("Sweep target side must be 'left' or 'right'.")
         return self
 
     @field_serializer("point")
@@ -110,39 +145,19 @@ class TargetSpec(BaseModel):
         """Write point identifiers using their canonical wire names."""
         return point.name.lower()
 
-    def expand_values(self, default_steps: int | None) -> list[float]:
-        """Expand explicit values or a start-stop range."""
-        if self.values is not None:
-            return [float(value) for value in self.values]
-        if self.start is None or self.stop is None:
-            raise ValueError(
-                f"Target '{self.name or self.point.name}': must specify either "
-                "'values' or both 'start' and 'stop'"
-            )
-        if default_steps is None:
-            raise ValueError(
-                f"Target '{self.name or self.point.name}': no 'steps' count "
-                "available (specify at target or file level)"
-            )
-        return list(np.linspace(float(self.start), float(self.stop), default_steps))
 
-
-class ElementLengthTargetSpec(BaseModel):
+class ElementLengthTargetSpec(SweepValueSpec):
     """One stable topology-owned element-length target dimension."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    kind: Literal["element_length"]
+    type: Literal["element_length"]
     element: str
-    name: str | None = None
-    side: SideValue | None = None
-    mode: TargetPositionModeValue = TargetPositionMode.RELATIVE
-    start: float | None = None
-    stop: float | None = None
-    values: Sequence[float] | None = None
+
+    @property
+    def coordinate_name(self) -> str:
+        return self.element
 
     @model_validator(mode="after")
-    def check_side(self) -> "ElementLengthTargetSpec":
+    def check_element(self) -> "ElementLengthTargetSpec":
         if not self.element.strip():
             raise ValueError("Element target ID must not be empty")
         if self.element not in ELEMENT_LENGTH_TARGET_IDS:
@@ -151,41 +166,19 @@ class ElementLengthTargetSpec(BaseModel):
                 f"Unknown element-length target ID '{self.element}'. "
                 f"Expected one of: {expected}."
             )
-        if self.side == Side.CENTER:
-            raise ValueError("Sweep target side must be 'left' or 'right'.")
         return self
 
-    def expand_values(self, default_steps: int | None) -> list[float]:
-        """Expand explicit values or a start-stop range."""
-        if self.values is not None:
-            return [float(value) for value in self.values]
-        if self.start is None or self.stop is None:
-            raise ValueError(
-                f"Target '{self.name or self.element}': must specify either "
-                "'values' or both 'start' and 'stop'"
-            )
-        if default_steps is None:
-            raise ValueError(
-                f"Target '{self.name or self.element}': no 'steps' count "
-                "available (specify at target or file level)"
-            )
-        return list(np.linspace(float(self.start), float(self.stop), default_steps))
 
-
-class ActuatorPositionTargetSpec(BaseModel):
+class ActuatorPositionTargetSpec(SweepValueSpec):
     """One topology-owned actuator position along an authored direction."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    kind: Literal["actuator_position"]
+    type: Literal["actuator_position"]
     actuator: str
     direction: DirectionSpec
-    side: SideValue | None = None
-    name: str | None = None
-    mode: TargetPositionModeValue = TargetPositionMode.RELATIVE
-    start: float | None = None
-    stop: float | None = None
-    values: Sequence[float] | None = None
+
+    @property
+    def coordinate_name(self) -> str:
+        return self.actuator
 
     @model_validator(mode="after")
     def check_actuator(self) -> "ActuatorPositionTargetSpec":
@@ -195,28 +188,13 @@ class ActuatorPositionTargetSpec(BaseModel):
                 f"Unknown actuator-position target ID '{self.actuator}'. "
                 f"Expected one of: {expected}."
             )
-        if self.side == Side.CENTER:
-            raise ValueError("Sweep target side must be 'left' or 'right'.")
         return self
 
-    def expand_values(self, default_steps: int | None) -> list[float]:
-        """Expand explicit values or a start-stop range."""
-        if self.values is not None:
-            return [float(value) for value in self.values]
-        if self.start is None or self.stop is None:
-            raise ValueError(
-                f"Target '{self.name or self.actuator}': must specify either "
-                "'values' or both 'start' and 'stop'"
-            )
-        if default_steps is None:
-            raise ValueError(
-                f"Target '{self.name or self.actuator}': no 'steps' count "
-                "available (specify at target or file level)"
-            )
-        return list(np.linspace(float(self.start), float(self.stop), default_steps))
 
-
-SweepTargetSpec = TargetSpec | ActuatorPositionTargetSpec | ElementLengthTargetSpec
+SweepTargetSpec = Annotated[
+    TargetSpec | ActuatorPositionTargetSpec | ElementLengthTargetSpec,
+    Field(discriminator="type"),
+]
 
 
 class SweepSpec(BaseModel):
@@ -225,8 +203,8 @@ class SweepSpec(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     version: int = 1
-    steps: int | None = None
-    targets: list[SweepTargetSpec]
+    steps: int | None = Field(default=None, ge=1)
+    targets: list[SweepTargetSpec] = Field(min_length=1)
 
     @model_validator(mode="after")
     def check_version(self) -> "SweepSpec":

@@ -47,15 +47,6 @@ def run_sweep_files(
     """
     suspension = load_geometry(geometry_path)
     sweep_config = load_sweep(sweep_path, suspension)
-    evaluated = solve_evaluated_sweep(suspension, sweep_config)
-
-    writer = create_writer_for_path(
-        output_path,
-        geometry_path=str(geometry_path),
-        sweep_path=str(sweep_path),
-    )
-    output_points = suspension.output_points()
-    metric_specs = flat_specs_for_suspension(suspension)
     target_columns = [
         (
             target_export_column_name(dimension[0]),
@@ -64,6 +55,33 @@ def run_sweep_files(
         for dimension in sweep_config.target_sweeps
         if dimension
     ]
+    indices_by_column: dict[str, list[int]] = {}
+    for target_index, (column, _target) in enumerate(target_columns):
+        indices_by_column.setdefault(column, []).append(target_index)
+    duplicate_column = next(
+        (
+            (column, indices)
+            for column, indices in indices_by_column.items()
+            if len(indices) > 1
+        ),
+        None,
+    )
+    if duplicate_column is not None:
+        column, indices = duplicate_column
+        rendered_indices = ", ".join(str(index) for index in indices)
+        raise ValueError(
+            f"Sweep targets {rendered_indices} produce duplicate export column "
+            f"'{column}'. Choose distinct point/axis coordinates or directions."
+        )
+
+    evaluated = solve_evaluated_sweep(suspension, sweep_config)
+    writer = create_writer_for_path(
+        output_path,
+        geometry_path=str(geometry_path),
+        sweep_path=str(sweep_path),
+    )
+    output_points = suspension.output_points()
+    metric_specs = flat_specs_for_suspension(suspension)
     for index, (state, solver_info, metric_row) in enumerate(
         zip(
             evaluated.states,
@@ -83,7 +101,7 @@ def run_sweep_files(
                     for column, target in target_columns
                 },
                 target_coordinate_units={
-                    column: "mm" for column, _target in target_columns
+                    column: target.unit for column, target in target_columns
                 },
             ),
         )

@@ -28,6 +28,7 @@ def _target(
 ) -> dict[str, object]:
     """Build one relative single-step target specification."""
     target: dict[str, object] = {
+        "type": "point",
         "point": point,
         "direction": {"axis": axis},
         "values": [0.0, 10.0],
@@ -42,10 +43,20 @@ def _spec(*targets: dict[str, object]) -> SweepSpec:
     return SweepSpec.model_validate({"version": 1, "targets": list(targets)})
 
 
+def _rack_target() -> dict[str, object]:
+    """Build the canonical shared rack actuator target."""
+    return {
+        "type": "actuator_position",
+        "actuator": "rack",
+        "direction": {"axis": "y"},
+        "values": [0.0, 0.0],
+    }
+
+
 def test_corner_rejects_ground_tangent_sweep_target(test_data_dir: Path) -> None:
     corner = load_geometry(test_data_dir / "geometry.yaml")
     spec = _spec(
-        _target(PointID.TRACKROD_INBOARD, Axis.Y),
+        _rack_target(),
         _target(PointID.WHEEL_CONTACT_CENTRE, Axis.Z),
     )
 
@@ -106,7 +117,7 @@ def test_axle_rejects_ground_tangent_sweep_target(test_data_dir: Path) -> None:
     spec = _spec(
         _target(PointID.WHEEL_CENTER, Axis.Z, Side.LEFT),
         _target(PointID.WHEEL_CONTACT_CENTRE, Axis.Z, Side.RIGHT),
-        _target(PointID.TRACKROD_INBOARD, Axis.Y, Side.LEFT),
+        _rack_target(),
     )
 
     with pytest.raises(ValueError, match=OUTPUT_ONLY_MESSAGE):
@@ -116,20 +127,16 @@ def test_axle_rejects_ground_tangent_sweep_target(test_data_dir: Path) -> None:
 def test_corner_accepts_wheel_center_sweep_target(test_data_dir: Path) -> None:
     corner = load_geometry(test_data_dir / "geometry.yaml")
     spec = _spec(
-        _target(PointID.TRACKROD_INBOARD, Axis.Y),
+        _rack_target(),
         _target(PointID.WHEEL_CENTER, Axis.Z),
     )
 
     config = build_sweep_config(spec, corner)
 
     targets = [sweep[0] for sweep in config.target_sweeps]
-    assert all(isinstance(target, PointTarget) for target in targets)
     assert [
         target.point_id for target in targets if isinstance(target, PointTarget)
-    ] == [
-        PointID.TRACKROD_INBOARD,
-        PointID.WHEEL_CENTER,
-    ]
+    ] == [PointID.WHEEL_CENTER]
 
 
 def test_repeated_target_validation_reuses_the_validated_assembly(
@@ -148,19 +155,17 @@ def test_axle_accepts_wheel_center_sweep_target(test_data_dir: Path) -> None:
     spec = _spec(
         _target(PointID.WHEEL_CENTER, Axis.Z, Side.LEFT),
         _target(PointID.WHEEL_CENTER, Axis.Z, Side.RIGHT),
-        _target(PointID.TRACKROD_INBOARD, Axis.Y, Side.LEFT),
+        _rack_target(),
     )
 
     config = build_sweep_config(spec, axle)
 
     targets = [sweep[0] for sweep in config.target_sweeps]
-    assert all(isinstance(target, PointTarget) for target in targets)
     assert [
         target.point_id for target in targets if isinstance(target, PointTarget)
     ] == [
         PointRef(Side.LEFT, PointID.WHEEL_CENTER),
         PointRef(Side.RIGHT, PointID.WHEEL_CENTER),
-        PointRef(Side.LEFT, PointID.TRACKROD_INBOARD),
     ]
 
 

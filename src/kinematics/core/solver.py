@@ -52,7 +52,7 @@ from kinematics.core.state import SuspensionState
 from kinematics.core.targeting import (
     ScalarTarget,
     SweepConfig,
-    TargetPositionMode,
+    TargetValueMode,
 )
 
 # Levenberg-Marquardt: damped least squares that can deal with the system being
@@ -591,18 +591,26 @@ class ResidualComputer:
         offset = self.n_constraints
         for i, target in enumerate(step_targets):
             row = offset + i
+            has_structural_dependency = False
             for point_id, point_partial in target.point_partials(positions):
                 direct_col = self.point_var_offsets.get(point_id)
                 if direct_col is not None:
+                    has_structural_dependency = True
                     jac[row, direct_col : direct_col + 3] += point_partial
                     continue
                 if point_id not in self.derived_manager.spec.functions:
                     continue
                 for dependency, block in derived_point_jacobian(point_id).items():
+                    has_structural_dependency = True
                     dependency_col = self.point_var_offsets[dependency]
                     jac[row, dependency_col : dependency_col + 3] += (
                         point_partial @ block
                     )
+            if not has_structural_dependency:
+                raise ValueError(
+                    f"{target.coordinate_description.capitalize()} has no free or "
+                    "derived point dependency and cannot define a solver row."
+                )
 
         return jac.copy()
 
@@ -631,7 +639,7 @@ def convert_targets_to_absolute(
         try:
             # Validate endpoint geometry even for already-absolute targets.
             target.point_partials(initial_state.positions)
-            if target.mode is TargetPositionMode.ABSOLUTE:
+            if target.mode is TargetValueMode.ABSOLUTE:
                 resolved.append(target)
                 continue
             absolute_value = target.measure(initial_state.positions) + target.value
@@ -641,8 +649,14 @@ def convert_targets_to_absolute(
                     f"got {absolute_value}."
                 )
             resolved.append(
-                target.with_value(absolute_value, TargetPositionMode.ABSOLUTE)
+                target.with_value(absolute_value, TargetValueMode.ABSOLUTE)
             )
+        except KeyError as error:
+            missing = getattr(error.args[0], "name", str(error.args[0]))
+            raise ValueError(
+                f"Sweep target {target_index}: required point '{missing}' is "
+                "missing from the initial state."
+            ) from error
         except ValueError as error:
             raise ValueError(f"Sweep target {target_index}: {error}") from error
 

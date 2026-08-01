@@ -18,9 +18,11 @@ class TargetValueMode(StrEnum):
     ABSOLUTE = "absolute"
 
 
-# Backward-compatible name retained for existing Python callers. Target value
-# semantics now apply to point projections and element lengths alike.
-TargetPositionMode = TargetValueMode
+class CoordinateSidePolicy(StrEnum):
+    """Static side ownership of a globally known sweep coordinate."""
+
+    CORNER = "corner"
+    SHARED = "shared"
 
 
 class Units(StrEnum):
@@ -100,6 +102,17 @@ class PointID(IntEnum):
     # the rocker pickup is carried by a pushrod/rocker actuation mechanism.
     DAMPER_CHASSIS = 39
     DAMPER_ROCKER = 40
+
+    @property
+    def sweep_side_policy(self) -> CoordinateSidePolicy:
+        """Return static side ownership for this point coordinate."""
+        if self in (
+            PointID.ARB_U_BAR_AXIS_A,
+            PointID.ARB_U_BAR_AXIS_B,
+            PointID.ARB_T_BAR_PIVOT,
+        ):
+            return CoordinateSidePolicy.SHARED
+        return CoordinateSidePolicy.CORNER
 
     @property
     def output_only_target_guidance(self) -> str | None:
@@ -184,7 +197,12 @@ class ActuatorPositionCoordinateID(StrEnum):
     @property
     def unit(self) -> str:
         """Return the stable scalar unit symbol."""
-        return "mm"
+        return Units.MILLIMETERS.symbol
+
+    @property
+    def side_policy(self) -> CoordinateSidePolicy:
+        """Return static side ownership for this coordinate."""
+        return CoordinateSidePolicy.SHARED
 
 
 class ElementLengthCoordinateID(StrEnum):
@@ -204,7 +222,15 @@ class ElementLengthCoordinateID(StrEnum):
     @property
     def unit(self) -> str:
         """Return the stable scalar unit symbol."""
-        return "mm"
+        return Units.MILLIMETERS.symbol
+
+    @property
+    def side_policy(self) -> CoordinateSidePolicy:
+        """Return static side ownership for this coordinate."""
+        return {
+            ElementLengthCoordinateID.DAMPER: CoordinateSidePolicy.CORNER,
+            ElementLengthCoordinateID.HEAVE_LINK: CoordinateSidePolicy.SHARED,
+        }[self]
 
 
 class ArbType(StrEnum):

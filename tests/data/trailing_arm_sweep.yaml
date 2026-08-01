@@ -1,7 +1,8 @@
 version: 1
 steps: 41
 targets:
-  - point: wheel_center
+  - type: point
+    point: wheel_center
     side: left
     direction:
       axis: z

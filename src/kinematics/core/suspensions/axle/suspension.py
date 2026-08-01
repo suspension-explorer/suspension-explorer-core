@@ -194,9 +194,9 @@ class AxleSuspension(Suspension):
                         kind=coordinate.kind,
                         label=coordinate.label,
                         unit=coordinate.unit,
-                        point_keys=(
-                            side_qualified(side, coordinate.point_keys[0]),
-                            side_qualified(side, coordinate.point_keys[1]),
+                        point_keys=tuple(
+                            side_qualified(side, point)
+                            for point in coordinate.point_keys
                         ),
                         scope=Scope.CORNER,
                         side=side,

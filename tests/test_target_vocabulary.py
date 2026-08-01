@@ -15,6 +15,7 @@ from kinematics.core.targeting import (
     ELEMENT_LENGTH_TARGET_IDS,
     POINT_TARGET_IDS,
     TargetKind,
+    sweep_target_side_policy,
     sweep_target_vocabulary,
 )
 
@@ -64,7 +65,7 @@ EXPECTED_POINT_IDS = (
 
 def _point_target(point: str, *, side: str | None = None) -> dict[str, object]:
     target: dict[str, object] = {
-        "kind": "point",
+        "type": "point",
         "point": point,
         "direction": {"axis": "z"},
         "values": [0.0],
@@ -76,7 +77,7 @@ def _point_target(point: str, *, side: str | None = None) -> dict[str, object]:
 
 def _element_target(element: str, *, side: str | None = None) -> dict[str, object]:
     target: dict[str, object] = {
-        "kind": "element_length",
+        "type": "element_length",
         "element": element,
         "values": [0.0],
     }
@@ -87,7 +88,7 @@ def _element_target(element: str, *, side: str | None = None) -> dict[str, objec
 
 def _actuator_target(actuator: str, *, side: str | None = None) -> dict[str, object]:
     target: dict[str, object] = {
-        "kind": "actuator_position",
+        "type": "actuator_position",
         "actuator": actuator,
         "direction": {"axis": "y"},
         "values": [0.0],
@@ -105,14 +106,14 @@ def test_public_sweep_target_vocabulary_is_complete_stable_and_json_native() -> 
     vocabulary = sweep_target_vocabulary()
     assert vocabulary["positions"][:2] == [
         {
-            "kind": "actuator_position",
+            "type": "actuator_position",
             "id": "rack",
             "label": "Rack",
             "featured": True,
             "side_policy": "shared",
         },
         {
-            "kind": "point",
+            "type": "point",
             "id": "wheel_center",
             "label": "Wheel Center",
             "featured": True,
@@ -120,7 +121,7 @@ def test_public_sweep_target_vocabulary_is_complete_stable_and_json_native() -> 
         },
     ]
     point_entries = [
-        item for item in vocabulary["positions"] if item["kind"] == "point"
+        item for item in vocabulary["positions"] if item["type"] == "point"
     ]
     assert {item["id"] for item in point_entries} == set(EXPECTED_POINT_IDS)
     assert all(
@@ -151,6 +152,7 @@ def test_public_sweep_target_vocabulary_is_complete_stable_and_json_native() -> 
     )
     assert vocabulary["element_lengths"] == [
         {
+            "type": "element_length",
             "id": "damper",
             "label": "Damper Length",
             "unit": "mm",
@@ -158,6 +160,7 @@ def test_public_sweep_target_vocabulary_is_complete_stable_and_json_native() -> 
             "side_policy": "corner",
         },
         {
+            "type": "element_length",
             "id": "heave_link",
             "label": "Heave Link Length",
             "unit": "mm",
@@ -189,6 +192,15 @@ def test_schema_rejects_reserved_point_and_unknown_element_ids() -> None:
 
     with pytest.raises(ValueError, match="Unknown actuator-position target ID 'bar'"):
         parse_sweep_spec({"targets": [_actuator_target("bar")]})
+
+
+@pytest.mark.parametrize("kind", list(TargetKind))
+def test_unknown_side_policy_ids_raise_public_value_errors(kind: TargetKind) -> None:
+    with pytest.raises(
+        ValueError,
+        match=rf"Unknown {kind.value} coordinate ID 'not_a_coordinate'",
+    ):
+        sweep_target_side_policy(kind, "not_a_coordinate")
 
 
 @pytest.mark.parametrize(
@@ -230,7 +242,7 @@ def test_known_actuator_parses_without_geometry_but_availability_is_deferred(
 ) -> None:
     raw = {"targets": [_actuator_target("rack")]}
     spec = parse_sweep_spec(raw)
-    assert spec.targets[0].kind == "actuator_position"
+    assert spec.targets[0].type == "actuator_position"
 
     unsteered = load_geometry(test_data_dir / "trailing_arm_torsion_geometry.yaml")
     with pytest.raises(

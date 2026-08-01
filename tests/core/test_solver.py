@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from kinematics.core.constraints import DistanceConstraint
-from kinematics.core.enums import Axis, PointID, TargetPositionMode
+from kinematics.core.enums import Axis, PointID, TargetValueMode
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
@@ -71,7 +71,7 @@ def simple_sweep_config():
             point_id=PointID.LOWER_WISHBONE_OUTBOARD,
             direction=PointTargetAxis(Axis.Z),
             value=d,
-            mode=TargetPositionMode.RELATIVE,
+            mode=TargetValueMode.RELATIVE,
         )
         for d in displacements
     ]
@@ -220,7 +220,7 @@ def test_solve_sweep_rejects_converged_infeasible_target(
         point_id=PointID.LOWER_WISHBONE_OUTBOARD,
         direction=PointTargetAxis(Axis.Z),
         value=10.0,
-        mode=TargetPositionMode.ABSOLUTE,
+        mode=TargetValueMode.ABSOLUTE,
     )
 
     with pytest.raises(RuntimeError, match="sweep step 0.*Worst residual row"):

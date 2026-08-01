@@ -91,6 +91,7 @@ def test_steered_axle_requires_rack_control_target(
                 "version": 1,
                 "targets": [
                     {
+                        "type": "point",
                         "point": "wheel_center",
                         "side": side,
                         "direction": {"axis": "z"},
@@ -122,15 +123,45 @@ def test_solve_revalidates_required_rack_control(test_data_dir: Path) -> None:
         solve_sweep(axle, sweep)
 
 
+def test_physical_trackrod_point_does_not_substitute_for_rack_actuator(
+    test_data_dir: Path,
+) -> None:
+    axle = build_suspension(_read_yaml_mapping(test_data_dir / "axle_geometry.yaml"))
+
+    with pytest.raises(ValueError, match=r"steering rack.*found 0"):
+        build_sweep(
+            {
+                "targets": [
+                    *[
+                        {
+                            "type": "point",
+                            "point": "wheel_center",
+                            "side": side,
+                            "direction": {"axis": "z"},
+                            "values": [0.0],
+                        }
+                        for side in ("left", "right")
+                    ],
+                    {
+                        "type": "point",
+                        "point": "trackrod_inboard",
+                        "side": "left",
+                        "direction": {"axis": "y"},
+                        "values": [0.0],
+                    },
+                ]
+            },
+            axle,
+        )
+
+
 @pytest.mark.parametrize(
     "geometry_name",
     ["axle_geometry.yaml", "macpherson_axle_geometry.yaml"],
 )
-@pytest.mark.parametrize("rack_side", ["left", "right"])
 def test_shared_rack_target_emits_derivatives_for_both_corners(
     test_data_dir: Path,
     geometry_name: str,
-    rack_side: str,
 ) -> None:
     axle = build_suspension(_read_yaml_mapping(test_data_dir / geometry_name))
     sweep = build_sweep(
@@ -139,6 +170,7 @@ def test_shared_rack_target_emits_derivatives_for_both_corners(
             "targets": [
                 *[
                     {
+                        "type": "point",
                         "point": "wheel_center",
                         "side": side,
                         "direction": {"axis": "z"},
@@ -147,8 +179,8 @@ def test_shared_rack_target_emits_derivatives_for_both_corners(
                     for side in ("left", "right")
                 ],
                 {
-                    "point": "trackrod_inboard",
-                    "side": rack_side,
+                    "type": "actuator_position",
+                    "actuator": "rack",
                     "direction": {"axis": "y"},
                     "values": [0.0],
                 },
@@ -184,6 +216,7 @@ def test_named_actuator_resolves_one_shared_rack_position(
             "targets": [
                 *[
                     {
+                        "type": "point",
                         "point": "wheel_center",
                         "side": side,
                         "direction": {"axis": "z"},
@@ -192,7 +225,7 @@ def test_named_actuator_resolves_one_shared_rack_position(
                     for side in ("left", "right")
                 ],
                 {
-                    "kind": "actuator_position",
+                    "type": "actuator_position",
                     "actuator": "rack",
                     "direction": {"axis": "y"},
                     "values": [0.0],
@@ -210,7 +243,7 @@ def test_named_actuator_resolves_one_shared_rack_position(
     assert target_export_column_name(target) == "target_rack"
 
     parameter = sweep_parameters(sweep)[-1]
-    assert parameter.kind == "actuator_position"
+    assert parameter.type == "actuator_position"
     assert parameter.actuator == "rack"
     assert parameter.point is None
     assert parameter.side is None
@@ -238,7 +271,7 @@ def test_named_rack_position_defers_compatibility_to_topology(
 ) -> None:
     axle = build_suspension(_read_yaml_mapping(test_data_dir / "axle_geometry.yaml"))
     rack_target: dict[str, object] = {
-        "kind": "actuator_position",
+        "type": "actuator_position",
         "actuator": "rack",
         "direction": {"axis": "y"},
         "values": [0.0],
@@ -247,12 +280,14 @@ def test_named_rack_position_defers_compatibility_to_topology(
     raw = {
         "targets": [
             {
+                "type": "point",
                 "point": "wheel_center",
                 "side": "left",
                 "direction": {"axis": "z"},
                 "values": [0.0],
             },
             {
+                "type": "point",
                 "point": "wheel_center",
                 "side": "right",
                 "direction": {"axis": "z"},
@@ -356,6 +391,7 @@ def test_nonsteered_axle_solves_bump_without_a_rack_target(
             "version": 1,
             "targets": [
                 {
+                    "type": "point",
                     "point": "wheel_center",
                     "side": side,
                     "direction": {"axis": "z"},
@@ -413,6 +449,7 @@ def test_nonsteered_axle_rejects_fixed_toe_link_sweep_target(
                 "version": 1,
                 "targets": [
                     {
+                        "type": "point",
                         "point": "toe_link_inboard",
                         "side": "left",
                         "direction": {"axis": "y"},

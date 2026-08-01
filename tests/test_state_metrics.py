@@ -23,7 +23,7 @@ from kinematics.core.road import RoadPlane
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
-from kinematics.core.targeting import PointTarget, SweepConfig
+from kinematics.core.targeting import ActuatorPositionTarget, PointTarget, SweepConfig
 
 TEST_DATA = Path(__file__).parent / "data"
 
@@ -132,8 +132,7 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     rack_target = next(
         target
         for target in midpoint_targets
-        if isinstance(target, PointTarget)
-        and target.point_id == PointID.TRACKROD_INBOARD
+        if isinstance(target, ActuatorPositionTarget) and target.actuator_id == "rack"
     )
     finite_difference_step = 0.25
     finite_difference_sweep = SweepConfig(

@@ -188,19 +188,20 @@ def test_axle_scoped_heave_link_is_driveable_without_a_side(
         {
             "targets": [
                 {
-                    "kind": "element_length",
+                    "type": "element_length",
                     "element": "heave_link",
                     "values": [0.0],
                 },
                 {
+                    "type": "point",
                     "point": "wheel_center",
                     "side": "left",
                     "direction": {"axis": "z"},
                     "values": [0.0],
                 },
                 {
-                    "point": "trackrod_inboard",
-                    "side": "left",
+                    "type": "actuator_position",
+                    "actuator": "rack",
                     "direction": {"axis": "y"},
                     "values": [0.0],
                 },
