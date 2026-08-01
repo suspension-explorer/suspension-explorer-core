@@ -17,11 +17,20 @@ from typing import TYPE_CHECKING, Any, ClassVar, Sequence
 
 from kinematics.core.constraints import Constraint, DistanceConstraint
 from kinematics.core.elements import (
+    ElementType,
     RackElement,
     SuspensionElement,
+    VariableLengthLinkElement,
     map_element_points,
 )
-from kinematics.core.enums import Axis, PointID, SuspensionType
+from kinematics.core.enums import (
+    ActuatorPositionCoordinateID,
+    Axis,
+    ElementLengthCoordinateID,
+    PointID,
+    Scope,
+    SuspensionType,
+)
 from kinematics.core.metrics.main import AxleMetricRows, compute_metrics_for_axle_state
 from kinematics.core.points.derived.ground import (
     seed_from_contact_centres,
@@ -52,7 +61,14 @@ from kinematics.core.suspensions.axle.mechanisms import (
 )
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.suspensions.corner.base import CornerSuspension
-from kinematics.core.targeting import ActuatorDOF, ChassisAxisSystem
+from kinematics.core.targeting import (
+    ActuatorDOF,
+    ChassisAxisSystem,
+    DriveCoordinate,
+    TargetKind,
+    resolve_published_target_side,
+    sweep_target_side_policy,
+)
 
 if TYPE_CHECKING:
     from kinematics.core.diagnostics import DiagnosticIssue
@@ -140,6 +156,7 @@ class AxleSuspension(Suspension):
             return ()
         return (
             ActuatorDOF(
+                id=ActuatorPositionCoordinateID.RACK,
                 name="steering rack",
                 point_keys=(
                     PointRef(Side.LEFT, rack[0]),
@@ -148,6 +165,61 @@ class AxleSuspension(Suspension):
                 direction=ChassisAxisSystem.Y,
             ),
         )
+
+    def drive_coordinates(self) -> tuple[DriveCoordinate, ...]:
+        """Compose sided corner dampers and axle-owned variable coordinates."""
+        coordinates: list[DriveCoordinate] = []
+        rack = self.rack_attachment_points()
+        if rack is not None:
+            coordinates.append(
+                DriveCoordinate(
+                    id=ActuatorPositionCoordinateID.RACK,
+                    kind=TargetKind.ACTUATOR_POSITION,
+                    label=ActuatorPositionCoordinateID.RACK.label,
+                    unit=ActuatorPositionCoordinateID.RACK.unit,
+                    point_keys=(
+                        PointRef(Side.LEFT, rack[0]),
+                        PointRef(Side.RIGHT, rack[1]),
+                    ),
+                    scope=Scope.AXLE,
+                )
+            )
+        for side in (Side.LEFT, Side.RIGHT):
+            for coordinate in self.corners[side].drive_coordinates():
+                if coordinate.kind is TargetKind.ACTUATOR_POSITION:
+                    continue
+                coordinates.append(
+                    DriveCoordinate(
+                        id=coordinate.id,
+                        kind=coordinate.kind,
+                        label=coordinate.label,
+                        unit=coordinate.unit,
+                        point_keys=(
+                            side_qualified(side, coordinate.point_keys[0]),
+                            side_qualified(side, coordinate.point_keys[1]),
+                        ),
+                        scope=Scope.CORNER,
+                        side=side,
+                    )
+                )
+
+        for element in self.heave_link.elements():
+            if (
+                isinstance(element, VariableLengthLinkElement)
+                and element.type is ElementType.HEAVE_LINK
+            ):
+                coordinate_id = ElementLengthCoordinateID.HEAVE_LINK
+                coordinates.append(
+                    DriveCoordinate(
+                        id=coordinate_id,
+                        kind=TargetKind.ELEMENT_LENGTH,
+                        label=coordinate_id.label,
+                        unit=coordinate_id.unit,
+                        point_keys=(element.point_a, element.point_b),
+                        scope=Scope.AXLE,
+                    )
+                )
+        return tuple(coordinates)
 
     def initial_state(self) -> SuspensionState:
         """Combine both corner states under side-qualified point keys."""
@@ -424,12 +496,19 @@ class AxleSuspension(Suspension):
         raise NotImplementedError("Use corner_state() and the selected corner.")
 
     def resolve_target_key(self, point: PointID, side: Side | None) -> PointKey:
-        """Require every axle target to select a physical side."""
-        if side not in (Side.LEFT, Side.RIGHT):
-            raise ValueError(
-                f"Axle sweep target for '{point.name}' requires side left or right."
-            )
-        return PointRef(side, point)
+        """Resolve shared center points or require a side for corner points."""
+        side_policy = sweep_target_side_policy(TargetKind.POINT, point.name.lower())
+        candidate_sides = (
+            (None,) if side_policy == "shared" else (Side.LEFT, Side.RIGHT)
+        )
+        selected_side = resolve_published_target_side(
+            f"Axle sweep target for '{point.name}'",
+            candidate_sides,
+            side,
+        )
+        if selected_side is None:
+            return PointRef(Side.CENTER, point)
+        return PointRef(selected_side, point)
 
     def compute_state_metrics(
         self,

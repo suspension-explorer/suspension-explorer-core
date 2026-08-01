@@ -8,7 +8,8 @@ from typing import Any
 from pydantic import ValidationError
 
 from kinematics.core.enums import Scope
-from kinematics.core.schema.geometry import GeometrySpecBase
+from kinematics.core.primitives.point_ref import Side
+from kinematics.core.schema.geometry import CornerGeometrySpecBase, GeometrySpecBase
 from kinematics.core.schema.sweep import SweepSpec, build_sweep_config
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.suspensions.registry import (
@@ -45,6 +46,11 @@ def _validate_geometry(
         spec = definition.spec_type.model_validate(normalized)
     except ValidationError as error:
         raise ValueError(f"Invalid geometry specification: {error}") from error
+    if isinstance(spec, CornerGeometrySpecBase) and spec.side is not Side.LEFT:
+        raise ValueError(
+            "Standalone corner geometry must use side 'left'; side 'right' is "
+            "available only through an axle geometry."
+        )
     return spec, definition
 
 

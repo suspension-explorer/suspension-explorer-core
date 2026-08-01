@@ -7,6 +7,7 @@ from kinematics.core.elements import RockerPickup, RockerPickupType
 from kinematics.core.enums import (
     ActuationType,
     ArbType,
+    CornerDamperType,
     CornerSpringType,
     HeaveLinkType,
     MountBody,
@@ -20,6 +21,7 @@ from kinematics.core.schema.geometry import (
     ActuationSpec,
     AxleGeometrySpecBase,
     AxleHardpointsSpec,
+    CornerDamperSpec,
     CornerSpringSpec,
     DoubleWishboneAxleGeometrySpec,
     DoubleWishboneGeometrySpec,
@@ -50,6 +52,9 @@ from kinematics.core.suspensions.corner.mechanisms import (
     Actuation,
     ActuationDirect,
     ActuationPushrodRocker,
+    CornerDamper,
+    CornerDamperLinear,
+    CornerDamperNone,
     CornerSpring,
     CornerSpringCoilover,
     CornerSpringNone,
@@ -74,7 +79,8 @@ def _build_double_wishbone_corner(
         external_pickups=external_pickups,
     )
     spring = build_corner_spring(spec.spring)
-    return _build_corner(spec, actuation, spring)
+    damper = build_corner_damper(spec.damper)
+    return _build_corner(spec, actuation, spring, damper)
 
 
 def build_macpherson(spec: GeometrySpecBase) -> Suspension:
@@ -134,6 +140,7 @@ def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
             ),
             actuation=typed.axle_config.actuation,
             spring=typed.axle_config.spring,
+            damper=typed.axle_config.damper,
             hardpoints=side_points[side],
         )
         corners[side] = _build_double_wishbone_corner(
@@ -282,6 +289,15 @@ def build_corner_spring(spec: CornerSpringSpec) -> CornerSpring:
     raise TypeError(f"Unsupported corner spring type: {spec.type}")
 
 
+def build_corner_damper(spec: CornerDamperSpec) -> CornerDamper:
+    """Build one optional independent corner damper mechanism."""
+    if spec.type is CornerDamperType.NONE:
+        return CornerDamperNone()
+    if spec.type is CornerDamperType.LINEAR:
+        return CornerDamperLinear()
+    raise TypeError(f"Unsupported corner damper type: {spec.type}")
+
+
 def build_anti_roll(
     spec: AxleGeometrySpecBase,
     droplink_points: dict[Side, Point3],
@@ -320,6 +336,7 @@ def _build_corner(
     spec: DoubleWishboneGeometrySpec,
     actuation: Actuation,
     spring: CornerSpring,
+    damper: CornerDamper,
 ) -> DoubleWishboneSuspension:
     """Build one corner after mechanism-aware point validation."""
     _validate_side_signs(spec.hardpoints, spec.side)
@@ -335,6 +352,7 @@ def _build_corner(
         config=spec.config,
         actuation=actuation,
         spring=spring,
+        damper=damper,
     )
 
 

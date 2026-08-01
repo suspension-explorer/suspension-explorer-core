@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Literal, Sequence
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_serializer, model_validator
 
-from kinematics.core.enums import Axis, TargetPositionMode
+from kinematics.core.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.primitives.geometry import Direction3, extract_array
-from kinematics.core.primitives.point_ref import PointKey, Side
+from kinematics.core.primitives.point_ref import Side
 from kinematics.core.schema.decoding import (
     AxisValue,
     PointIDValue,
@@ -17,11 +17,15 @@ from kinematics.core.schema.decoding import (
     TargetPositionModeValue,
 )
 from kinematics.core.targeting import (
+    ACTUATOR_POSITION_TARGET_IDS,
+    ELEMENT_LENGTH_TARGET_IDS,
     ChassisAxisSystem,
     PointTarget,
     PointTargetAxis,
     PointTargetVector,
+    ScalarTarget,
     SweepConfig,
+    TargetKind,
     validate_sweep_controls,
 )
 
@@ -58,6 +62,11 @@ class DirectionSpec(BaseModel):
             raise ValueError("Specify exactly one of 'axis' or 'vector'")
         return self
 
+    @field_serializer("axis")
+    def serialize_axis(self, axis: Axis | None) -> str | None:
+        """Write principal axes using their canonical lowercase names."""
+        return axis.name.lower() if axis is not None else None
+
     def to_unit_vector(self) -> np.ndarray:
         """Convert this specification to a normalized three-dimensional vector."""
         if self.axis is not None:
@@ -72,10 +81,11 @@ class DirectionSpec(BaseModel):
 
 
 class TargetSpec(BaseModel):
-    """One target dimension in a suspension sweep."""
+    """One point-coordinate target dimension in a suspension sweep."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    kind: Literal["point"] = "point"
     point: PointIDValue
     direction: DirectionSpec
     name: str | None = None
@@ -87,9 +97,18 @@ class TargetSpec(BaseModel):
 
     @model_validator(mode="after")
     def check_side(self) -> "TargetSpec":
+        if self.point is PointID.NOT_ASSIGNED:
+            raise ValueError(
+                "Point target ID 'not_assigned' is reserved and cannot be used"
+            )
         if self.side == Side.CENTER:
             raise ValueError("Sweep target side must be 'left' or 'right'.")
         return self
+
+    @field_serializer("point")
+    def serialize_point(self, point: PointIDValue) -> str:
+        """Write point identifiers using their canonical wire names."""
+        return point.name.lower()
 
     def expand_values(self, default_steps: int | None) -> list[float]:
         """Expand explicit values or a start-stop range."""
@@ -108,6 +127,98 @@ class TargetSpec(BaseModel):
         return list(np.linspace(float(self.start), float(self.stop), default_steps))
 
 
+class ElementLengthTargetSpec(BaseModel):
+    """One stable topology-owned element-length target dimension."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: Literal["element_length"]
+    element: str
+    name: str | None = None
+    side: SideValue | None = None
+    mode: TargetPositionModeValue = TargetPositionMode.RELATIVE
+    start: float | None = None
+    stop: float | None = None
+    values: Sequence[float] | None = None
+
+    @model_validator(mode="after")
+    def check_side(self) -> "ElementLengthTargetSpec":
+        if not self.element.strip():
+            raise ValueError("Element target ID must not be empty")
+        if self.element not in ELEMENT_LENGTH_TARGET_IDS:
+            expected = ", ".join(ELEMENT_LENGTH_TARGET_IDS)
+            raise ValueError(
+                f"Unknown element-length target ID '{self.element}'. "
+                f"Expected one of: {expected}."
+            )
+        if self.side == Side.CENTER:
+            raise ValueError("Sweep target side must be 'left' or 'right'.")
+        return self
+
+    def expand_values(self, default_steps: int | None) -> list[float]:
+        """Expand explicit values or a start-stop range."""
+        if self.values is not None:
+            return [float(value) for value in self.values]
+        if self.start is None or self.stop is None:
+            raise ValueError(
+                f"Target '{self.name or self.element}': must specify either "
+                "'values' or both 'start' and 'stop'"
+            )
+        if default_steps is None:
+            raise ValueError(
+                f"Target '{self.name or self.element}': no 'steps' count "
+                "available (specify at target or file level)"
+            )
+        return list(np.linspace(float(self.start), float(self.stop), default_steps))
+
+
+class ActuatorPositionTargetSpec(BaseModel):
+    """One topology-owned actuator position along an authored direction."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: Literal["actuator_position"]
+    actuator: str
+    direction: DirectionSpec
+    side: SideValue | None = None
+    name: str | None = None
+    mode: TargetPositionModeValue = TargetPositionMode.RELATIVE
+    start: float | None = None
+    stop: float | None = None
+    values: Sequence[float] | None = None
+
+    @model_validator(mode="after")
+    def check_actuator(self) -> "ActuatorPositionTargetSpec":
+        if self.actuator not in ACTUATOR_POSITION_TARGET_IDS:
+            expected = ", ".join(ACTUATOR_POSITION_TARGET_IDS)
+            raise ValueError(
+                f"Unknown actuator-position target ID '{self.actuator}'. "
+                f"Expected one of: {expected}."
+            )
+        if self.side == Side.CENTER:
+            raise ValueError("Sweep target side must be 'left' or 'right'.")
+        return self
+
+    def expand_values(self, default_steps: int | None) -> list[float]:
+        """Expand explicit values or a start-stop range."""
+        if self.values is not None:
+            return [float(value) for value in self.values]
+        if self.start is None or self.stop is None:
+            raise ValueError(
+                f"Target '{self.name or self.actuator}': must specify either "
+                "'values' or both 'start' and 'stop'"
+            )
+        if default_steps is None:
+            raise ValueError(
+                f"Target '{self.name or self.actuator}': no 'steps' count "
+                "available (specify at target or file level)"
+            )
+        return list(np.linspace(float(self.start), float(self.stop), default_steps))
+
+
+SweepTargetSpec = TargetSpec | ActuatorPositionTargetSpec | ElementLengthTargetSpec
+
+
 class SweepSpec(BaseModel):
     """Validated sweep file or API specification."""
 
@@ -115,7 +226,7 @@ class SweepSpec(BaseModel):
 
     version: int = 1
     steps: int | None = None
-    targets: list[TargetSpec]
+    targets: list[SweepTargetSpec]
 
     @model_validator(mode="after")
     def check_version(self) -> "SweepSpec":
@@ -146,43 +257,87 @@ def build_sweep_config(
             f"All targets must have the same length, got: {sorted(lengths)}"
         )
 
-    dimensions: list[list[PointTarget]] = []
-    resolved_point_keys: list[PointKey] = []
-    for target_spec, values in zip(spec.targets, target_sequences):
-        unit_vector = target_spec.direction.to_unit_vector()
-        axis = vector_to_axis(unit_vector)
-        direction: PointTargetAxis | PointTargetVector
-        if axis is not None:
-            direction = PointTargetAxis(axis)
-        else:
-            direction = PointTargetVector(Direction3(unit_vector))
+    dimensions: list[list[ScalarTarget]] = []
+    for target_index, (target_spec, values) in enumerate(
+        zip(spec.targets, target_sequences)
+    ):
+        try:
+            if isinstance(target_spec, ElementLengthTargetSpec):
+                if suspension is None:
+                    raise ValueError(
+                        f"Element target '{target_spec.element}' requires a "
+                        "suspension context to resolve its endpoints."
+                    )
+                coordinate = suspension.resolve_drive_coordinate(
+                    target_spec.element,
+                    target_spec.side,
+                    TargetKind.ELEMENT_LENGTH,
+                )
+                dimensions.append(
+                    [coordinate.target(value, target_spec.mode) for value in values]
+                )
+                continue
 
-        if suspension is not None:
-            point_key = suspension.resolve_target_key(
-                target_spec.point, target_spec.side
+            unit_vector = target_spec.direction.to_unit_vector()
+            axis = vector_to_axis(unit_vector)
+            direction: PointTargetAxis | PointTargetVector
+            if axis is not None:
+                direction = PointTargetAxis(axis)
+            else:
+                direction = PointTargetVector(Direction3(unit_vector))
+
+            if isinstance(target_spec, ActuatorPositionTargetSpec):
+                if suspension is None:
+                    raise ValueError(
+                        f"Actuator target '{target_spec.actuator}' requires a "
+                        "suspension context to resolve its physical coordinate."
+                    )
+                coordinate = suspension.resolve_drive_coordinate(
+                    target_spec.actuator,
+                    target_spec.side,
+                    TargetKind.ACTUATOR_POSITION,
+                )
+                dimensions.append(
+                    [
+                        coordinate.position_target(
+                            direction,
+                            value,
+                            target_spec.mode,
+                        )
+                        for value in values
+                    ]
+                )
+                continue
+
+            if suspension is not None:
+                point_key = suspension.resolve_target_key(
+                    target_spec.point, target_spec.side
+                )
+            else:
+                if target_spec.side is not None:
+                    raise ValueError(
+                        f"Sweep target for '{target_spec.point.name}' specifies a "
+                        "'side', which requires a suspension context to resolve."
+                    )
+                point_key = target_spec.point
+
+            dimensions.append(
+                [
+                    PointTarget(
+                        point_id=point_key,
+                        direction=direction,
+                        value=value,
+                        mode=target_spec.mode,
+                    )
+                    for value in values
+                ]
             )
-            resolved_point_keys.append(point_key)
-        else:
-            if target_spec.side is not None:
-                raise ValueError(
-                    f"Sweep target for '{target_spec.point.name}' specifies a "
-                    "'side', which requires a suspension context to resolve."
-                )
-            point_key = target_spec.point
-
-        dimensions.append(
-            [
-                PointTarget(
-                    point_id=point_key,
-                    direction=direction,
-                    value=value,
-                    mode=target_spec.mode,
-                )
-                for value in values
-            ]
-        )
+        except ValueError as error:
+            raise ValueError(f"Sweep target {target_index}: {error}") from error
     sweep_config = SweepConfig(dimensions)
     if suspension is not None:
-        suspension.validate_sweep_target_points(resolved_point_keys)
+        suspension.validate_sweep_targets(
+            target for dimension in dimensions for target in dimension
+        )
         validate_sweep_controls(sweep_config, suspension.actuator_dofs())
     return sweep_config

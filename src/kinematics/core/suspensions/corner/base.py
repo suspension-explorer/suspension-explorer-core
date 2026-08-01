@@ -6,11 +6,21 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Sequence
 
-from kinematics.core.enums import PointID, SuspensionType
+from kinematics.core.enums import (
+    ActuatorPositionCoordinateID,
+    PointID,
+    Scope,
+    SuspensionType,
+)
 from kinematics.core.metrics.main import compute_metrics_for_state
 from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.base import Suspension
-from kinematics.core.targeting import ActuatorDOF, ChassisAxisSystem
+from kinematics.core.targeting import (
+    ActuatorDOF,
+    ChassisAxisSystem,
+    DriveCoordinate,
+    TargetKind,
+)
 
 if TYPE_CHECKING:
     from kinematics.core.metrics.main import MetricRow
@@ -84,10 +94,29 @@ class CornerSuspension(Suspension):
             return ()
         return (
             ActuatorDOF(
+                id=ActuatorPositionCoordinateID.RACK,
                 name="steering rack",
                 point_keys=(rack_point,),
                 direction=ChassisAxisSystem.Y,
             ),
+        )
+
+    def drive_coordinates(self) -> tuple[DriveCoordinate, ...]:
+        """Expose a named rack position plus installed element coordinates."""
+        coordinates = super().drive_coordinates()
+        rack_point = self.rack_attachment_point()
+        if rack_point is None:
+            return coordinates
+        return (
+            DriveCoordinate(
+                id=ActuatorPositionCoordinateID.RACK,
+                kind=TargetKind.ACTUATOR_POSITION,
+                label=ActuatorPositionCoordinateID.RACK.label,
+                unit=ActuatorPositionCoordinateID.RACK.unit,
+                point_keys=(rack_point,),
+                scope=Scope.CORNER,
+            ),
+            *coordinates,
         )
 
     def compute_state_metrics(

@@ -6,6 +6,7 @@ satisfying geometric constraints and position targets using Levenberg-
 Marquardt.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Callable, NamedTuple
 
@@ -47,13 +48,11 @@ from kinematics.core.primitives.constants import (
 )
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointKey
-from kinematics.core.primitives.vector_utils.generic import project_coordinate
 from kinematics.core.state import SuspensionState
 from kinematics.core.targeting import (
-    PointTarget,
+    ScalarTarget,
     SweepConfig,
     TargetPositionMode,
-    resolve_target,
 )
 
 # Levenberg-Marquardt: damped least squares that can deal with the system being
@@ -220,24 +219,30 @@ class ResidualComputer:
             point for constraint in constraints for point in constraint.involved_points
         )
         self._required_points_cache: dict[
-            tuple[PointKey, ...], frozenset[PointKey]
+            tuple[tuple[object, ...], ...], frozenset[PointKey]
         ] = {}
 
-    def required_points(self, step_targets: list[PointTarget]) -> frozenset[PointKey]:
+    def required_points(
+        self,
+        step_targets: Sequence[ScalarTarget],
+    ) -> frozenset[PointKey]:
         """
         Return every point whose derived chain must be refreshed for an evaluation.
 
         A solve step re-evaluates the same targets many times, so results are
         memoized against the step's target identifiers.
         """
-        target_ids = tuple(target.point_id for target in step_targets)
+        target_ids = tuple(target.coordinate_identity for target in step_targets)
         required = self._required_points_cache.get(target_ids)
         if required is None:
-            required = self.constraint_required_points.union(target_ids)
+            target_points = {
+                point for target in step_targets for point in target.required_points
+            }
+            required = self.constraint_required_points.union(target_points)
             self._required_points_cache[target_ids] = required
         return required
 
-    def validate_target_count(self, step_targets: list[PointTarget]) -> None:
+    def validate_target_count(self, step_targets: Sequence[ScalarTarget]) -> None:
         """
         Ensure each evaluation uses the fixed target count configured at init time.
         """
@@ -250,7 +255,7 @@ class ResidualComputer:
     def compute(
         self,
         free_array: np.ndarray,
-        step_targets: list[PointTarget],
+        step_targets: Sequence[ScalarTarget],
     ) -> np.ndarray:
         """
         Compute residuals for the given free point positions and targets.
@@ -289,9 +294,7 @@ class ResidualComputer:
         # Fill target residuals: residuals[n_constraints:n_constraints+n_targets].
         offset = self.n_constraints
         for i, target in enumerate(step_targets):
-            direction = resolve_target(target.direction)
-            current_pos = self.state_buffer.positions[target.point_id]
-            current_coordinate = project_coordinate(current_pos, direction)
+            current_coordinate = target.measure(self.state_buffer.positions)
             self.residuals_buffer[offset + i] = current_coordinate - target.value
 
         # Return a copy of the fixed-size residual vector. Note that we must return a
@@ -527,7 +530,7 @@ class ResidualComputer:
     def compute_jacobian(
         self,
         free_array: np.ndarray,
-        step_targets: list[PointTarget],
+        step_targets: Sequence[ScalarTarget],
     ) -> np.ndarray:
         """
         Compute the analytical Jacobian matrix.
@@ -584,34 +587,30 @@ class ResidualComputer:
                     dependency_col = self.point_var_offsets[dependency]
                     jac[i, dependency_col : dependency_col + 3] += point_partial @ block
 
-        # Target rows: residual = dot(position, direction) - value.
+        # Target rows: each scalar target supplies analytical point partials.
         offset = self.n_constraints
         for i, target in enumerate(step_targets):
             row = offset + i
-            direction = resolve_target(target.direction)
-
-            if target.point_id in self.point_var_offsets:
-                # Free-point target: derivative w.r.t. its own coords is
-                # just the direction vector.
-                col = self.point_var_offsets[target.point_id]
-                jac[row, col : col + 3] = direction.data
-            else:
-                # Delegate derived-point chain-rule blocks to the manager, then
-                # project them through the target direction.
-                point_jacobian = derived_point_jacobian(target.point_id)
-                for pid, block in point_jacobian.items():
-                    col = self.point_var_offsets[pid]
-                    # d(dot(position, direction)) / d(input) is the target
-                    # direction projected through d(position) / d(input).
-                    jac[row, col : col + 3] = direction.data @ block
+            for point_id, point_partial in target.point_partials(positions):
+                direct_col = self.point_var_offsets.get(point_id)
+                if direct_col is not None:
+                    jac[row, direct_col : direct_col + 3] += point_partial
+                    continue
+                if point_id not in self.derived_manager.spec.functions:
+                    continue
+                for dependency, block in derived_point_jacobian(point_id).items():
+                    dependency_col = self.point_var_offsets[dependency]
+                    jac[row, dependency_col : dependency_col + 3] += (
+                        point_partial @ block
+                    )
 
         return jac.copy()
 
 
 def convert_targets_to_absolute(
-    targets: list[PointTarget],
+    targets: Sequence[ScalarTarget],
     initial_state: SuspensionState,
-) -> list[PointTarget]:
+) -> list[ScalarTarget]:
     """
     Convert all targets to absolute coordinates.
 
@@ -626,30 +625,26 @@ def convert_targets_to_absolute(
     Returns:
         List of targets with all modes converted to ABSOLUTE.
     """
-    resolved: list[PointTarget] = []
+    resolved: list[ScalarTarget] = []
 
-    for target in targets:
-        if target.mode == TargetPositionMode.ABSOLUTE:
-            resolved.append(target)
-            continue
-
-        # Convert a relative displacement to an absolute scalar coordinate along the
-        # target direction. Project the initial position onto the (unit) direction to
-        # get the initial coordinate, then add the displacement.
-        direction = resolve_target(target.direction)
-        initial_pos = initial_state.positions[target.point_id]
-        initial_coord = project_coordinate(initial_pos, direction)
-        absolute_value = initial_coord + target.value
-
-        # Create new target with absolute value and mode.
-        resolved.append(
-            PointTarget(
-                point_id=target.point_id,
-                direction=target.direction,
-                value=absolute_value,
-                mode=TargetPositionMode.ABSOLUTE,
+    for target_index, target in enumerate(targets):
+        try:
+            # Validate endpoint geometry even for already-absolute targets.
+            target.point_partials(initial_state.positions)
+            if target.mode is TargetPositionMode.ABSOLUTE:
+                resolved.append(target)
+                continue
+            absolute_value = target.measure(initial_state.positions) + target.value
+            if not np.isfinite(absolute_value):
+                raise ValueError(
+                    f"Resolved value for '{target.coordinate_id}' must be finite, "
+                    f"got {absolute_value}."
+                )
+            resolved.append(
+                target.with_value(absolute_value, TargetPositionMode.ABSOLUTE)
             )
-        )
+        except ValueError as error:
+            raise ValueError(f"Sweep target {target_index}: {error}") from error
 
     return resolved
 
@@ -667,15 +662,14 @@ def describe_constraint(constraint: Constraint) -> str:
 def describe_worst_residual(
     residuals: np.ndarray,
     constraints: list[Constraint],
-    step_targets: list[PointTarget],
+    step_targets: Sequence[ScalarTarget],
 ) -> str:
     """Describe the constraint or target owning the largest residual row."""
     worst_index = int(np.argmax(np.abs(residuals)))
     if worst_index < len(constraints):
         return f"constraint {describe_constraint(constraints[worst_index])}"
     target = step_targets[worst_index - len(constraints)]
-    point_name = getattr(target.point_id, "name", str(target.point_id))
-    return f"target on point '{point_name}' (direction {target.direction})"
+    return f"target '{target.coordinate_id}' ({target.kind.value})"
 
 
 def solve_suspension_sweep(

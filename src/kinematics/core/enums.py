@@ -11,11 +11,16 @@ class Axis(IntEnum):
     Z = 2
 
 
-class TargetPositionMode(StrEnum):
-    """Interpretation of a target position value."""
+class TargetValueMode(StrEnum):
+    """Interpretation of an authored scalar target value."""
 
     RELATIVE = "relative"
     ABSOLUTE = "absolute"
+
+
+# Backward-compatible name retained for existing Python callers. Target value
+# semantics now apply to point projections and element lengths alike.
+TargetPositionMode = TargetValueMode
 
 
 class Units(StrEnum):
@@ -91,6 +96,11 @@ class PointID(IntEnum):
     TORSION_BAR_AXIS_A = 37
     TORSION_BAR_AXIS_B = 38
 
+    # Independent linear damper endpoints. The chassis pickup is fixed while
+    # the rocker pickup is carried by a pushrod/rocker actuation mechanism.
+    DAMPER_CHASSIS = 39
+    DAMPER_ROCKER = 40
+
     @property
     def output_only_target_guidance(self) -> str | None:
         """Return point-specific guidance when an output cannot be driven."""
@@ -152,6 +162,49 @@ class CornerSpringType(StrEnum):
     NONE = "none"
     COILOVER = "coilover"
     TORSION_BAR = "torsion_bar"
+
+
+class CornerDamperType(StrEnum):
+    """Supported independent corner damper mechanisms."""
+
+    NONE = "none"
+    LINEAR = "linear"
+
+
+class ActuatorPositionCoordinateID(StrEnum):
+    """Stable wire IDs for globally known actuator-position coordinates."""
+
+    RACK = "rack"
+
+    @property
+    def label(self) -> str:
+        """Return the stable user-facing coordinate label."""
+        return "Rack Position"
+
+    @property
+    def unit(self) -> str:
+        """Return the stable scalar unit symbol."""
+        return "mm"
+
+
+class ElementLengthCoordinateID(StrEnum):
+    """Stable wire IDs for globally known element-length coordinates."""
+
+    DAMPER = "damper"
+    HEAVE_LINK = "heave_link"
+
+    @property
+    def label(self) -> str:
+        """Return the stable user-facing coordinate label."""
+        return {
+            ElementLengthCoordinateID.DAMPER: "Damper Length",
+            ElementLengthCoordinateID.HEAVE_LINK: "Heave Link Length",
+        }[self]
+
+    @property
+    def unit(self) -> str:
+        """Return the stable scalar unit symbol."""
+        return "mm"
 
 
 class ArbType(StrEnum):

@@ -7,7 +7,7 @@ from enum import Enum
 from typing import Annotated, TypeVar, cast
 
 import numpy as np
-from pydantic import BeforeValidator
+from pydantic import BeforeValidator, PlainSerializer
 
 from kinematics.core.enums import Axis, PointID, TargetPositionMode
 from kinematics.core.primitives.geometry import Direction3, Point3
@@ -69,12 +69,21 @@ def parse_direction3(value: object) -> Direction3:
     return Direction3(parse_point3(value).data)
 
 
+def serialize_side(side: Side) -> str:
+    """Write a side using its canonical lowercase wire name."""
+    return side.name.lower()
+
+
 Point3Value = Annotated[Point3, BeforeValidator(parse_point3)]
 Direction3Value = Annotated[Direction3, BeforeValidator(parse_direction3)]
 PointIDValue = Annotated[
     PointID, BeforeValidator(lambda value: parse_enum(PointID, value))
 ]
-SideValue = Annotated[Side, BeforeValidator(lambda value: parse_enum(Side, value))]
+SideValue = Annotated[
+    Side,
+    BeforeValidator(lambda value: parse_enum(Side, value)),
+    PlainSerializer(serialize_side, return_type=str, when_used="json"),
+]
 AxisValue = Annotated[Axis, BeforeValidator(lambda value: parse_enum(Axis, value))]
 TargetPositionModeValue = Annotated[
     TargetPositionMode,
