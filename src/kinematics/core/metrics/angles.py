@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+import kinematics.core.metrics.steering_axis_geometry as axis_geometry
 from kinematics.core.enums import Axis
 from kinematics.core.targeting import ChassisAxisSystem
 
@@ -57,7 +58,7 @@ def calculate_camber(ctx: MetricContext) -> float:
     return float(np.rad2deg(camber_rad))
 
 
-def calculate_caster(ctx: MetricContext) -> float:
+def calculate_caster(ctx: MetricContext) -> float | None:
     """
     Caster angle in degrees.
 
@@ -67,19 +68,10 @@ def calculate_caster(ctx: MetricContext) -> float:
     use the road plane or world vertical. Positive caster means the top of the
     steering axis is tilted rearward.
     """
-    steering = ctx.steering_axis
-
-    # Project onto the side view plane (XZ plane).
-    proj_x = steering[Axis.X]
-    proj_z = steering[Axis.Z]
-
-    # Positive caster = top tilted rearward (negative X relative to
-    # bottom). Negate x so rearward tilt gives a positive angle.
-    caster_rad = np.arctan2(-proj_x, proj_z)
-    return float(np.rad2deg(caster_rad))
+    return axis_geometry.calculate_caster(ctx.physical_steering_axis)
 
 
-def calculate_kpi(ctx: MetricContext) -> float:
+def calculate_kpi(ctx: MetricContext) -> float | None:
     """
     Kingpin inclination (KPI) angle in degrees.
 
@@ -89,18 +81,7 @@ def calculate_kpi(ctx: MetricContext) -> float:
     means the top of the steering axis is tilted inward, towards the vehicle
     centerline.
     """
-    side = ctx.side_sign
-    steering = ctx.steering_axis
-
-    # Project onto the front view plane (YZ plane).
-    proj_y = steering[Axis.Y]
-    proj_z = steering[Axis.Z]
-
-    # Positive KPI = top tilted inward. For the left side (Y > 0),
-    # inward tilt means negative Y component relative to bottom,
-    # so negate Y. For the right side, inward tilt is positive Y.
-    kpi_rad = np.arctan2(-side * proj_y, proj_z)
-    return float(np.rad2deg(kpi_rad))
+    return axis_geometry.calculate_kpi(ctx.physical_steering_axis, ctx.side_sign)
 
 
 def calculate_toe(ctx: MetricContext) -> float:

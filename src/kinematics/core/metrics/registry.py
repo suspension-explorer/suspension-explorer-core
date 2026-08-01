@@ -10,6 +10,7 @@ from kinematics.core.enums import Scope
 from kinematics.core.metrics.catalog import (
     get_default_corner_derivative_metrics,
     get_default_corner_metrics,
+    get_virtual_steering_metrics,
 )
 from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
 from kinematics.core.metrics.units import MetricUnit, MetricUnitQuotient
@@ -156,6 +157,17 @@ def specs_by_key(
 def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpec]:
     """Return all metadata that the selected topology can emit."""
     state_specs = list(all_static_metric_specs())
+    if suspension.steering_actuator_dof() is not None:
+        state_specs.extend(
+            MetricSpec(
+                metric.column_name,
+                metric.label,
+                metric.unit,
+                MetricKind.STATE,
+                Scope.CORNER,
+            )
+            for metric in get_virtual_steering_metrics()
+        )
     derivatives: list[tuple[DerivativeMetricDefinition, Scope]] = []
     if suspension.is_axle:
         axle = cast("AxleSuspension", suspension)

@@ -199,11 +199,30 @@ def compute_sweep_metrics(
         sweep_config,
         states,
     )
+    steering_axes = _compute_steering_axes(suspension, states, tangents)
     return _compute_sweep_metrics_from_tangents(
         suspension,
         states,
         tangents,
         derivative_error,
+        steering_axes,
+    )
+
+
+def _compute_steering_axes(
+    suspension: Suspension,
+    states: list[SuspensionState],
+    tangents: SweepTangents | None,
+) -> tuple[tuple[UprightScrewAxisResult, ...], ...]:
+    """Compute aligned rack-partial axes from an existing tangent bundle."""
+    return tuple(
+        compute_instantaneous_steering_axes(
+            suspension,
+            state,
+            tangents.per_step[index] if tangents is not None else None,
+            tangents.solve_infos[index] if tangents is not None else None,
+        )
+        for index, state in enumerate(states)
     )
 
 
@@ -224,15 +243,27 @@ def _compute_sweep_metrics_from_tangents(
     states: list[SuspensionState],
     tangents: SweepTangents | None,
     derivative_error: str | None,
+    instantaneous_steering_axes: tuple[tuple[UprightScrewAxisResult, ...], ...]
+    | None = None,
 ) -> SweepMetricsResult:
     """Evaluate metrics from an already-computed tangent bundle."""
     if suspension.config is None:
         return SweepMetricsResult(rows=[OrderedDict() for _ in states])
 
+    if instantaneous_steering_axes is not None and len(
+        instantaneous_steering_axes
+    ) != len(states):
+        raise ValueError("State/instantaneous-steering-axis row count mismatch")
+
     rows = [
         suspension.compute_state_metrics(
             state,
             tangents.per_step[index] if tangents is not None else None,
+            (
+                instantaneous_steering_axes[index]
+                if instantaneous_steering_axes is not None
+                else None
+            ),
         )
         for index, state in enumerate(states)
     ]
@@ -378,20 +409,13 @@ def _evaluate_finalized_sweep(
         sweep_config,
         states,
     )
+    steering_axes = _compute_steering_axes(suspension, states, tangents)
     metrics = _compute_sweep_metrics_from_tangents(
         suspension,
         states,
         tangents,
         derivative_error,
-    )
-    steering_axes = tuple(
-        compute_instantaneous_steering_axes(
-            suspension,
-            state,
-            tangents.per_step[index] if tangents is not None else None,
-            tangents.solve_infos[index] if tangents is not None else None,
-        )
-        for index, state in enumerate(states)
+        steering_axes,
     )
     try:
         diagnostics = list(diagnose_sweep(suspension, states, solver_stats).issues)

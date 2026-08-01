@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
     from kinematics.core.metrics.main import AxleMetricRows, MetricRow
     from kinematics.core.metrics.registry import MetricSpec
+    from kinematics.core.rigid_motion import UprightScrewAxisResult
     from kinematics.core.sensitivity import TangentField
     from kinematics.core.targeting import ActuatorDOF
 
@@ -206,6 +207,7 @@ class Suspension(ABC):
         self,
         state: SuspensionState,
         tangents: "Sequence[TangentField] | None" = None,
+        instantaneous_steering_axes: "Sequence[UprightScrewAxisResult] | None" = None,
     ) -> "MetricRow | AxleMetricRows":
         """Compute metric output for one solved state."""
         ...

@@ -185,6 +185,50 @@ def get_default_corner_metrics() -> tuple[MetricDefinition, ...]:
     return _build_default_corner_metrics()
 
 
+def get_virtual_steering_metrics() -> tuple[MetricDefinition, ...]:
+    """Return additive metrics derived from the rack-partial virtual axis."""
+    from kinematics.core.metrics.virtual_steering import (
+        calculate_virtual_caster,
+        calculate_virtual_kpi,
+        calculate_virtual_mechanical_trail,
+        calculate_virtual_scrub_radius,
+        calculate_virtual_steering_axis_offset_ground,
+    )
+
+    return (
+        MetricDefinition(
+            "virtual_caster",
+            calculate_virtual_caster,
+            "Virtual Caster",
+            MetricUnit.DEG,
+        ),
+        MetricDefinition(
+            "virtual_kpi",
+            calculate_virtual_kpi,
+            "Virtual KPI",
+            MetricUnit.DEG,
+        ),
+        MetricDefinition(
+            "virtual_steering_axis_offset_ground",
+            calculate_virtual_steering_axis_offset_ground,
+            "Virtual Steering-Axis Offset at Ground",
+            MetricUnit.MM,
+        ),
+        MetricDefinition(
+            "virtual_scrub_radius",
+            calculate_virtual_scrub_radius,
+            "Virtual Scrub Radius",
+            MetricUnit.MM,
+        ),
+        MetricDefinition(
+            "virtual_mechanical_trail",
+            calculate_virtual_mechanical_trail,
+            "Virtual Mechanical Trail",
+            MetricUnit.MM,
+        ),
+    )
+
+
 def get_default_corner_derivative_metrics(
     suspension: "CornerSuspension",
 ) -> tuple[DerivativeMetricDefinition, ...]:

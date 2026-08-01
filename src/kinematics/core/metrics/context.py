@@ -15,7 +15,7 @@ from functools import cached_property
 from typing import TYPE_CHECKING
 
 from kinematics.core.enums import PointID
-from kinematics.core.primitives.constants import EPS_GEOMETRIC
+from kinematics.core.metrics.steering_axis_geometry import SteeringAxis
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.road import RoadPlane
 from kinematics.core.schema.config import SuspensionConfig
@@ -42,6 +42,7 @@ class MetricContext:
     suspension: "CornerSuspension"
     config: SuspensionConfig
     road: RoadPlane
+    virtual_steering_axis: SteeringAxis | None
 
     def __init__(
         self,
@@ -49,11 +50,13 @@ class MetricContext:
         suspension: "CornerSuspension",
         config: SuspensionConfig,
         road: RoadPlane | None = None,
+        virtual_steering_axis: SteeringAxis | None = None,
     ) -> None:
         """Resolve one axle-local road datum in chassis coordinates."""
         self.state = state
         self.suspension = suspension
         self.config = config
+        self.virtual_steering_axis = virtual_steering_axis
         self.road = (
             road
             if road is not None
@@ -116,9 +119,14 @@ class MetricContext:
 
     @cached_property
     def steering_axis(self) -> Direction3:
-        """Return lower-to-upper steering direction in chassis coordinates."""
+        """Return lower-to-upper physical steering direction in chassis space."""
+        return self.physical_steering_axis.direction
+
+    @cached_property
+    def physical_steering_axis(self) -> SteeringAxis:
+        """Establish the physical steering axis from its resolved pivots."""
         lower, upper = self.steering_axis_pivots
-        return (upper - lower).normalize()
+        return SteeringAxis.from_pivots(lower, upper)
 
     @cached_property
     def steering_axis_ground_intersection(self) -> Point3 | None:
@@ -131,14 +139,7 @@ class MetricContext:
         not require world space or inferred chassis pitch. Returns None if the
         steering axis is parallel to the road plane.
         """
-        lower, upper = self.steering_axis_pivots
-        direction = upper - lower
-        normal = self.road.normal
-        denominator = normal.dot(direction)
-        if abs(denominator) < EPS_GEOMETRIC:
-            return None
-        t = -self.road.signed_distance(lower) / denominator
-        return lower + t * direction
+        return self.physical_steering_axis.intersect_road(self.road)
 
     @cached_property
     def side_sign(self) -> float:

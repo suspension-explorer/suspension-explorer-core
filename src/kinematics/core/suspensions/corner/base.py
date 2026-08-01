@@ -14,6 +14,7 @@ from kinematics.core.targeting import ActuatorDOF, ChassisAxisSystem
 
 if TYPE_CHECKING:
     from kinematics.core.metrics.main import MetricRow
+    from kinematics.core.rigid_motion import UprightScrewAxisResult
     from kinematics.core.sensitivity import TangentField
 
 
@@ -97,8 +98,15 @@ class CornerSuspension(Suspension):
         self,
         state: SuspensionState,
         tangents: "Sequence[TangentField] | None" = None,
+        instantaneous_steering_axes: "Sequence[UprightScrewAxisResult] | None" = None,
     ) -> "MetricRow":
         """Compute one corner metric row, including derivatives when tangents exist."""
         if self.config is None:
             raise ValueError("Suspension has no configuration")
-        return compute_metrics_for_state(state, self, self.config, tangents)
+        return compute_metrics_for_state(
+            state,
+            self,
+            self.config,
+            tangents,
+            instantaneous_steering_axes=instantaneous_steering_axes,
+        )
