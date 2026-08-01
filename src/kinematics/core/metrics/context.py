@@ -15,7 +15,7 @@ from functools import cached_property
 from typing import TYPE_CHECKING
 
 from kinematics.core.enums import PointID
-from kinematics.core.metrics.steering_axis_geometry import SteeringAxis
+from kinematics.core.metrics.steering import SteeringAxis
 from kinematics.core.primitives.geometry import Direction3, Point3
 from kinematics.core.road import RoadPlane
 from kinematics.core.schema.config import SuspensionConfig
@@ -42,7 +42,7 @@ class MetricContext:
     suspension: "CornerSuspension"
     config: SuspensionConfig
     road: RoadPlane
-    virtual_steering_axis: SteeringAxis | None
+    _steering_axis: SteeringAxis | None
 
     def __init__(
         self,
@@ -50,13 +50,13 @@ class MetricContext:
         suspension: "CornerSuspension",
         config: SuspensionConfig,
         road: RoadPlane | None = None,
-        virtual_steering_axis: SteeringAxis | None = None,
+        steering_axis: SteeringAxis | None = None,
     ) -> None:
         """Resolve one axle-local road datum in chassis coordinates."""
         self.state = state
         self.suspension = suspension
         self.config = config
-        self.virtual_steering_axis = virtual_steering_axis
+        self._steering_axis = steering_axis
         self.road = (
             road
             if road is not None
@@ -118,13 +118,10 @@ class MetricContext:
         return (self.state.get(lower_id), self.state.get(upper_id))
 
     @cached_property
-    def steering_axis(self) -> Direction3:
-        """Return lower-to-upper physical steering direction in chassis space."""
-        return self.physical_steering_axis.direction
-
-    @cached_property
-    def physical_steering_axis(self) -> SteeringAxis:
-        """Establish the physical steering axis from its resolved pivots."""
+    def steering_axis(self) -> SteeringAxis:
+        """Return the physical or motion-derived axis selected for this context."""
+        if self._steering_axis is not None:
+            return self._steering_axis
         lower, upper = self.steering_axis_pivots
         return SteeringAxis.from_pivots(lower, upper)
 
@@ -139,7 +136,7 @@ class MetricContext:
         not require world space or inferred chassis pitch. Returns None if the
         steering axis is parallel to the road plane.
         """
-        return self.physical_steering_axis.intersect_road(self.road)
+        return self.steering_axis.intersect_road(self.road)
 
     @cached_property
     def side_sign(self) -> float:

@@ -6,8 +6,7 @@ All functions accept a MetricContext and return angles in degrees.
 The calculations use the ISO 8855 vehicle-axis orientation (X forward,
 Y left, Z up), expressed here in chassis space. They are kinematic alignment
 angles relative to the chassis axes; they do not depend on world space or the
-road plane. Wheel-relative road metrics are documented separately in
-``steering_geometry``.
+road plane. Steering-axis metrics are documented separately in ``steering``.
 """
 
 from __future__ import annotations
@@ -16,7 +15,6 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-import kinematics.core.metrics.steering_axis_geometry as axis_geometry
 from kinematics.core.enums import Axis
 from kinematics.core.targeting import ChassisAxisSystem
 
@@ -56,32 +54,6 @@ def calculate_camber(ctx: MetricContext) -> float:
     # Invert to match convention.
     camber_rad = angle if side > 0 else -angle
     return float(np.rad2deg(camber_rad))
-
-
-def calculate_caster(ctx: MetricContext) -> float | None:
-    """
-    Caster angle in degrees.
-
-    This is ISO 8855:2011 castor angle (§7.2.2), exposed under the conventional
-    project spelling ``caster``. The steering axis is expressed in chassis
-    space and resolved in the chassis XZ plane against chassis +Z. It does not
-    use the road plane or world vertical. Positive caster means the top of the
-    steering axis is tilted rearward.
-    """
-    return axis_geometry.calculate_caster(ctx.physical_steering_axis)
-
-
-def calculate_kpi(ctx: MetricContext) -> float | None:
-    """
-    Kingpin inclination (KPI) angle in degrees.
-
-    This is ISO 8855:2011 steering-axis inclination (§7.2.5). The steering axis
-    is expressed in chassis space and resolved in the chassis YZ plane against
-    chassis +Z. It does not use the road plane or world vertical. Positive KPI
-    means the top of the steering axis is tilted inward, towards the vehicle
-    centerline.
-    """
-    return axis_geometry.calculate_kpi(ctx.physical_steering_axis, ctx.side_sign)
 
 
 def calculate_toe(ctx: MetricContext) -> float:

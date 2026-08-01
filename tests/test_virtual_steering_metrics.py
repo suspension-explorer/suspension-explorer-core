@@ -17,11 +17,11 @@ from kinematics.core.sweep import solve_evaluated_sweep
 DATA_DIR = Path(__file__).parent / "data"
 
 VIRTUAL_KEYS = (
-    "virtual_caster",
-    "virtual_kpi",
-    "virtual_steering_axis_offset_ground",
-    "virtual_scrub_radius",
-    "virtual_mechanical_trail",
+    "caster_virtual",
+    "kpi_virtual",
+    "steering_axis_offset_ground_virtual",
+    "scrub_radius_virtual",
+    "mechanical_trail_virtual",
 )
 PHYSICAL_STEERING_KEYS = (
     "caster",
@@ -31,14 +31,14 @@ PHYSICAL_STEERING_KEYS = (
     "mechanical_trail",
 )
 VIRTUAL_METADATA = {
-    "virtual_caster": ("Virtual Caster", "deg"),
-    "virtual_kpi": ("Virtual KPI", "deg"),
-    "virtual_steering_axis_offset_ground": (
-        "Virtual Steering-Axis Offset at Ground",
+    "caster_virtual": ("Caster, Virtual", "deg"),
+    "kpi_virtual": ("KPI, Virtual", "deg"),
+    "steering_axis_offset_ground_virtual": (
+        "Steering-Axis Offset at Ground, Virtual",
         "mm",
     ),
-    "virtual_scrub_radius": ("Virtual Scrub Radius", "mm"),
-    "virtual_mechanical_trail": ("Virtual Mechanical Trail", "mm"),
+    "scrub_radius_virtual": ("Scrub Radius, Virtual", "mm"),
+    "mechanical_trail_virtual": ("Mechanical Trail, Virtual", "mm"),
 }
 
 
@@ -66,6 +66,13 @@ def test_steered_corner_emits_finite_virtual_metrics_and_metadata() -> None:
     _assert_finite_values(frame.metrics, VIRTUAL_KEYS)
     assert set(PHYSICAL_STEERING_KEYS).issubset(frame.metrics)
     _assert_finite_values(frame.metrics, PHYSICAL_STEERING_KEYS)
+    ordered_keys = tuple(frame.metrics)
+    for physical_key, virtual_key in zip(
+        PHYSICAL_STEERING_KEYS,
+        VIRTUAL_KEYS,
+        strict=True,
+    ):
+        assert ordered_keys.index(virtual_key) == ordered_keys.index(physical_key) + 1
 
     display = {item.key: item for item in analysis.metric_display}
     for key, (label, unit) in VIRTUAL_METADATA.items():

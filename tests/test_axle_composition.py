@@ -346,4 +346,4 @@ def test_metric_context_resolves_steering_axis_through_role_hooks():
     assert (lower - initial.get(KNUCKLE)).norm() == pytest.approx(0.0)
     assert (upper - initial.get(CHASSIS_FRONT)).norm() == pytest.approx(0.0)
     expected_direction = (upper - lower).normalize()
-    assert ctx.steering_axis.data == pytest.approx(expected_direction.data)
+    assert ctx.steering_axis.direction.data == pytest.approx(expected_direction.data)

@@ -124,7 +124,7 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
         # steering metrics are state values too, but require the rack tangent
         # and are therefore populated only by the high-level sweep path.
         for key, value in non_derivative.items():
-            if key.startswith("virtual_"):
+            if key.endswith("_virtual"):
                 assert value is None
                 assert row[key] is not None
             else:

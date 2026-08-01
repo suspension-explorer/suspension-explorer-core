@@ -26,7 +26,7 @@ from kinematics.core.metrics.catalog import (
 from kinematics.core.metrics.context import MetricContext
 from kinematics.core.metrics.derivatives import evaluate_derivative_metrics
 from kinematics.core.metrics.registry import flat_key
-from kinematics.core.metrics.steering_axis_geometry import SteeringAxis
+from kinematics.core.metrics.steering import SteeringAxis
 from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
 from kinematics.core.road import RoadPlane
 from kinematics.core.schema.config import SuspensionConfig
@@ -236,16 +236,37 @@ def compute_metrics_for_state(
         suspension=suspension,
         config=config,
         road=road,
-        virtual_steering_axis=virtual_axis,
     )
 
     catalog = get_default_corner_metrics()
+    virtual_catalog = (
+        get_virtual_steering_metrics()
+        if suspension.steering_actuator_dof() is not None
+        else ()
+    )
+    virtual_by_physical_key = {
+        metric.column_name.removesuffix("_virtual"): metric
+        for metric in virtual_catalog
+    }
+    virtual_ctx = (
+        None
+        if virtual_axis is None
+        else MetricContext(
+            state=state,
+            suspension=suspension,
+            config=config,
+            road=ctx.road,
+            steering_axis=virtual_axis,
+        )
+    )
     row: MetricRow = OrderedDict()
     for metric in catalog:
         row[metric.column_name] = metric.compute(ctx)
-    if suspension.steering_actuator_dof() is not None:
-        for metric in get_virtual_steering_metrics():
-            row[metric.column_name] = metric.compute(ctx)
+        virtual_metric = virtual_by_physical_key.get(metric.column_name)
+        if virtual_metric is not None:
+            row[virtual_metric.column_name] = (
+                None if virtual_ctx is None else virtual_metric.compute(virtual_ctx)
+            )
     row.update(suspension.topology_metric_values(state))
     if tangents:
         definitions = (

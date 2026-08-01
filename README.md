@@ -445,15 +445,16 @@ sweep frames or perturb and re-solve the rack.
 
 Existing caster, KPI, steering-axis offset, scrub-radius, and mechanical-trail
 metrics retain their physical steering-axis definitions. Rack-steered results
-also report an additive, motion-derived family using the prefix `virtual_`:
-`virtual_caster`, `virtual_kpi`, `virtual_steering_axis_offset_ground`,
-`virtual_scrub_radius`, and `virtual_mechanical_trail`. Here **virtual steering
-axis** means the instantaneous rack-partial screw-axis line above. The values use
-the same chassis, tyre, road-plane, and sign conventions as their physical-axis
-counterparts. They are `None` when that frame has no valid finite axis; no user
-selection changes the meaning of the original metrics. Screw pitch and angular
-rate remain separate axis properties rather than being folded into these five
-line-based geometry values.
+also report an additive, motion-derived family using the suffix `_virtual`:
+`caster_virtual`, `kpi_virtual`, `steering_axis_offset_ground_virtual`,
+`scrub_radius_virtual`, and `mechanical_trail_virtual`. Each is ordered beside
+its physical counterpart and displayed with labels such as `Caster, Virtual`.
+Here **virtual steering axis** means the instantaneous rack-partial screw-axis
+line above. The values use the same chassis, tyre, road-plane, and sign
+conventions as their physical-axis counterparts. They are `None` when that
+frame has no valid finite axis; no user selection changes the meaning of the
+original metrics. Screw pitch and angular rate remain separate axis properties
+rather than being folded into these five line-based geometry values.
 
 Internally, physical pivots and the motion fit each establish the same
 source-agnostic `SteeringAxis` representation. One common geometry path then

@@ -194,7 +194,7 @@ def caster_deg(
     upper_pivot: PointKey,
 ) -> Scalar:
     """
-    Caster angle in degrees; mirrors metrics.angles.calculate_caster.
+    Caster angle in degrees; mirrors metrics.steering.calculate_caster.
 
     The steering-axis pivots are architecture-specific and must be supplied by
     the caller, normally from ``CornerSuspension.steering_axis_points()``. The
@@ -215,7 +215,7 @@ def kpi_deg(
     upper_pivot: PointKey,
 ) -> Scalar:
     """
-    Kingpin inclination in degrees; mirrors metrics.angles.calculate_kpi.
+    Kingpin inclination in degrees; mirrors metrics.steering.calculate_kpi.
 
     The steering-axis pivots are architecture-specific and must be supplied by
     the caller, normally from ``CornerSuspension.steering_axis_points()``. The

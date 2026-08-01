@@ -3,7 +3,7 @@ from math import atan2, degrees, sqrt
 import numpy as np
 import pytest
 
-from kinematics.core.metrics.steering_axis_geometry import (
+from kinematics.core.metrics.steering import (
     SteeringAxis,
     calculate_caster,
     calculate_kpi,
