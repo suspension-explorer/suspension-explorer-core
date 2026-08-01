@@ -242,6 +242,7 @@ def test_sweep_target_type_is_required() -> None:
             {
                 "targets": [
                     {
+                        "kind": "point",
                         "point": "wheel_center",
                         "direction": {"axis": "z"},
                         "values": [0.0],
