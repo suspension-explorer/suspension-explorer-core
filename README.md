@@ -456,6 +456,17 @@ frame has no valid finite axis; no user selection changes the meaning of the
 original metrics. Screw pitch and angular rate remain separate axis properties
 rather than being folded into these five line-based geometry values.
 
+Holding wheel-centre height during a steering sweep is not the same as fixing
+the wishbones. Rotation about an inclined physical steering axis would normally
+move the wheel centre vertically, so a fixed wheel-centre-Z target introduces a
+compensating bump motion. The rack-partial axis correctly describes that
+combined absolute upright twist and may be nearly parallel to, but displaced
+from, the ball-joint line. Physical and virtual double-wishbone metrics coincide
+when the other target fixes the wishbone degree of freedom using a coordinate
+on the physical steering axis. The comparison fixtures
+`tests/data/axle_steer_sweep.yaml` and
+`tests/data/axle_steer_balljoint_fixed_sweep.yaml` exercise both cases.
+
 Internally, physical pivots and the motion fit each establish the same
 source-agnostic `SteeringAxis` representation. One common geometry path then
 computes its road intersection, caster, KPI, offset, scrub radius, and trail.

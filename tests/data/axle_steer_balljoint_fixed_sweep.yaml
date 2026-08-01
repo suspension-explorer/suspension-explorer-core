@@ -1,0 +1,24 @@
+version: 1
+steps: 41
+targets:
+  # Holding one coordinate on each lower ball joint fixes the wishbone bump
+  # degrees of freedom without constraining a point carried by the upright away
+  # from the physical steering axis.
+  - point: lower_wishbone_outboard
+    side: left
+    direction: {axis: z}
+    mode: relative
+    start: 0
+    stop: 0
+  - point: lower_wishbone_outboard
+    side: right
+    direction: {axis: z}
+    mode: relative
+    start: 0
+    stop: 0
+  - point: trackrod_inboard
+    side: left
+    direction: {axis: y}
+    mode: relative
+    start: -50
+    stop: 50
