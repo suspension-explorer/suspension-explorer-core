@@ -120,7 +120,15 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
             suspension,
             suspension.config,
         )
-        assert list(row.items())[: len(non_derivative)] == list(non_derivative.items())
+        # Physical state metrics remain identical without tangents. Virtual
+        # steering metrics are state values too, but require the rack tangent
+        # and are therefore populated only by the high-level sweep path.
+        for key, value in non_derivative.items():
+            if key.startswith("virtual_"):
+                assert value is None
+                assert row[key] is not None
+            else:
+                assert row[key] == value
 
     midpoint = len(states) // 2
     midpoint_targets = [target_sweep[midpoint] for target_sweep in sweep.target_sweeps]

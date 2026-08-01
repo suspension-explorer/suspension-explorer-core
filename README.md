@@ -441,8 +441,23 @@ pure translation, a singular tangent solve, degenerate upright geometry, or a
 poor rigid-body fit leaves the axis unavailable for that frame and reports a
 diagnostic instead of inventing a distant line. The calculation uses the
 analytical tangent field at that state; it does not finite-difference adjacent
-sweep frames or perturb and re-solve the rack. Existing caster, KPI, scrub-radius,
-and mechanical-trail metrics retain their physical steering-axis definitions.
+sweep frames or perturb and re-solve the rack.
+
+Existing caster, KPI, steering-axis offset, scrub-radius, and mechanical-trail
+metrics retain their physical steering-axis definitions. Rack-steered results
+also report an additive, motion-derived family using the prefix `virtual_`:
+`virtual_caster`, `virtual_kpi`, `virtual_steering_axis_offset_ground`,
+`virtual_scrub_radius`, and `virtual_mechanical_trail`. Here **virtual steering
+axis** means the instantaneous rack-partial screw-axis line above. The values use
+the same chassis, tyre, road-plane, and sign conventions as their physical-axis
+counterparts. They are `None` when that frame has no valid finite axis; no user
+selection changes the meaning of the original metrics. Screw pitch and angular
+rate remain separate axis properties rather than being folded into these five
+line-based geometry values.
+
+Internally, physical pivots and the motion fit each establish the same
+source-agnostic `SteeringAxis` representation. One common geometry path then
+computes its road intersection, caster, KPI, offset, scrub radius, and trail.
 
 ## How the solver works
 
