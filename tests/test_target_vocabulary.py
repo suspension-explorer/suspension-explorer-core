@@ -268,11 +268,7 @@ def test_point_presence_mobility_and_side_rules_fail_actionably(
         )
     with pytest.raises(ValueError, match=r"'LOWER_WISHBONE_INBOARD_FRONT' is fixed"):
         build_sweep(
-            {
-                "targets": [
-                    _point_target("lower_wishbone_inboard_front", side="left")
-                ]
-            },
+            {"targets": [_point_target("lower_wishbone_inboard_front", side="left")]},
             corner,
         )
     sweep = build_sweep(
@@ -317,11 +313,14 @@ def test_element_side_rules_remain_topology_specific(test_data_dir: Path) -> Non
         unsteered_corner,
     )
     assert sweep.target_sweeps[0][0].coordinate_id == "damper"
-    assert next(
-        coordinate
-        for coordinate in unsteered_corner.drive_coordinates()
-        if coordinate.id == "damper"
-    ).side is Side.LEFT
+    assert (
+        next(
+            coordinate
+            for coordinate in unsteered_corner.drive_coordinates()
+            if coordinate.id == "damper"
+        ).side
+        is Side.LEFT
+    )
     with pytest.raises(ValueError, match="requires side left"):
         build_sweep(
             {"targets": [_element_target("damper")]},

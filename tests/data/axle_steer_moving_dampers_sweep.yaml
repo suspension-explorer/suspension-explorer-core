@@ -1,0 +1,21 @@
+version: 1
+steps: 41
+targets:
+  - type: element_length
+    element: damper
+    side: left
+    mode: relative
+    start: -8
+    stop: 8
+  - type: element_length
+    element: damper
+    side: right
+    mode: relative
+    start: 5
+    stop: -5
+  - type: actuator_position
+    actuator: rack
+    direction: {axis: y}
+    mode: relative
+    start: -40
+    stop: 40

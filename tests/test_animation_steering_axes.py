@@ -77,7 +77,7 @@ def test_pingpong_keeps_valid_unavailable_valid_axes_with_their_positions() -> N
     pingpong = pingpong_animation_frames(frames)
 
     assert [frame.positions["p"][0] for frame in pingpong] == [0.0, 1.0, 2.0, 1.0]
-    assert [frame.instantaneous_steering_axes[0].status for frame in pingpong] == [
+    assert [frame.steering_response_axes[0].status for frame in pingpong] == [
         ScrewAxisStatus.VALID,
         ScrewAxisStatus.TANGENT_UNAVAILABLE,
         ScrewAxisStatus.VALID,
@@ -94,7 +94,7 @@ def test_persistent_artist_updates_valid_then_hides_unavailable_and_outside() ->
     artist = _FakeLine()
     bounds = Bounds3D((0.0, 0.0, 0.0), (10.0, 10.0, 10.0))
 
-    SuspensionVisualizer.update_instantaneous_steering_axes(
+    SuspensionVisualizer.update_steering_response_axes(
         [artist],
         ["Upright"],
         [_axis_result("Upright")],
@@ -103,7 +103,7 @@ def test_persistent_artist_updates_valid_then_hides_unavailable_and_outside() ->
     assert artist.xy == ([5.0, 5.0], [5.0, 5.0])
     assert artist.z == [0.0, 10.0]
 
-    SuspensionVisualizer.update_instantaneous_steering_axes(
+    SuspensionVisualizer.update_steering_response_axes(
         [artist],
         ["Upright"],
         [_unavailable_result("Upright")],
@@ -112,7 +112,7 @@ def test_persistent_artist_updates_valid_then_hides_unavailable_and_outside() ->
     assert artist.xy == ([], [])
     assert artist.z == []
 
-    SuspensionVisualizer.update_instantaneous_steering_axes(
+    SuspensionVisualizer.update_steering_response_axes(
         [artist],
         ["Upright"],
         [_axis_result("Upright", point=(20.0, 5.0, 5.0))],
@@ -126,7 +126,7 @@ def test_multiple_upright_artists_update_independently() -> None:
     left_artist = _FakeLine()
     right_artist = _FakeLine()
 
-    SuspensionVisualizer.update_instantaneous_steering_axes(
+    SuspensionVisualizer.update_steering_response_axes(
         [left_artist, right_artist],
         ["Left", "Right"],
         [_axis_result("Right", direction=(1.0, 0.0, 0.0))],

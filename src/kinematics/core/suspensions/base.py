@@ -37,6 +37,10 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.registry import MetricSpec
     from kinematics.core.rigid_motion import UprightScrewAxisResult
     from kinematics.core.sensitivity import TangentField
+    from kinematics.core.steering_response import (
+        SteeringProbeCatalogue,
+        SteeringResponseDefinition,
+    )
     from kinematics.core.targeting import (
         ActuatorDOF,
         DriveCoordinate,
@@ -279,7 +283,7 @@ class Suspension(ABC):
         self,
         state: SuspensionState,
         tangents: "Sequence[TangentField] | None" = None,
-        instantaneous_steering_axes: "Sequence[UprightScrewAxisResult] | None" = None,
+        steering_response_axes: "Sequence[UprightScrewAxisResult] | None" = None,
     ) -> "MetricRow | AxleMetricRows":
         """Compute metric output for one solved state."""
         ...
@@ -370,9 +374,7 @@ class Suspension(ABC):
         """Validate driven points and topology-declared scalar coordinates."""
         target_list = tuple(targets)
         self.validate_sweep_target_points(
-            point
-            for target in target_list
-            for point in target.driven_points
+            point for target in target_list for point in target.driven_points
         )
         available = self.drive_coordinates()
         for target in target_list:
@@ -429,6 +431,56 @@ class Suspension(ABC):
     def steering_actuator_dof(self) -> "ActuatorDOF | None":
         """Return the steering actuator coordinate, if this suspension has one."""
         return None
+
+    def steering_probe_catalogue(self) -> "SteeringProbeCatalogue | None":
+        """Return topology-owned steering isolation choices, if implemented."""
+        return None
+
+    def resolve_steering_probe(
+        self,
+        requested_option_id: str | None = None,
+    ) -> "SteeringResponseDefinition | None":
+        """Resolve one explicit option or this topology's canonical default."""
+        from kinematics.core.steering_response import (
+            SteeringProbeOptionAvailability,
+            SteeringProbeSelectionSource,
+            SteeringResponseDefinition,
+        )
+
+        steering = self.steering_actuator_dof()
+        catalogue = self.steering_probe_catalogue()
+        if steering is None or catalogue is None:
+            if requested_option_id not in (None, "layout_default"):
+                raise ValueError(
+                    f"Suspension type '{self.reported_type_key().value}' does not "
+                    "publish steering-probe isolation options."
+                )
+            return None
+        uses_default = requested_option_id in (None, "layout_default")
+        option_id = catalogue.default_option_id if uses_default else requested_option_id
+        assert option_id is not None
+        option = catalogue.option(option_id)
+        if option.availability is SteeringProbeOptionAvailability.UNAVAILABLE:
+            reason = option.unavailable_reason or "The option is unavailable."
+            raise ValueError(
+                f"Steering-probe isolation '{option.id}' is unavailable: {reason}"
+            )
+        return SteeringResponseDefinition(
+            steering_actuator=steering,
+            held_coordinates=option.held_coordinates,
+            owner=self.reported_type_key().value,
+            definition_id=option.id,
+            requested_option_id=requested_option_id,
+            selection_source=(
+                SteeringProbeSelectionSource.LAYOUT_DEFAULT
+                if uses_default
+                else SteeringProbeSelectionSource.USER_OVERRIDE
+            ),
+            option_class=option.option_class,
+            label=option.label,
+            description=option.description,
+            warning=option.warning,
+        )
 
     def closure_points(self) -> tuple[PointKey, ...]:
         """

@@ -27,19 +27,18 @@ class AnimationFrame:
     """Position and steering-axis data that must remain frame-aligned."""
 
     positions: dict[str, tuple[float, float, float]]
-    instantaneous_steering_axes: tuple[UprightScrewAxisResult, ...] = ()
+    steering_response_axes: tuple[UprightScrewAxisResult, ...] = ()
 
 
 def aligned_animation_frames(
     position_states: Sequence[dict[str, tuple[float, float, float]]],
-    instantaneous_steering_axes: Sequence[Sequence[UprightScrewAxisResult]]
-    | None = None,
+    steering_response_axes: Sequence[Sequence[UprightScrewAxisResult]] | None = None,
 ) -> list[AnimationFrame]:
     """Bundle positions and axes before any animation sequencing is applied."""
     axis_frames = (
         [()] * len(position_states)
-        if instantaneous_steering_axes is None
-        else instantaneous_steering_axes
+        if steering_response_axes is None
+        else steering_response_axes
     )
     if len(position_states) != len(axis_frames):
         raise ValueError(
@@ -67,8 +66,7 @@ def create_animation(
     codec: str = "libx264",
     dpi: int = 200,
     show_live: bool = True,
-    instantaneous_steering_axes: Sequence[Sequence[UprightScrewAxisResult]]
-    | None = None,
+    steering_response_axes: Sequence[Sequence[UprightScrewAxisResult]] | None = None,
 ) -> None:
     """
     Create an animation showing suspension movement through multiple states.
@@ -83,9 +81,9 @@ def create_animation(
         codec: Video codec to use (for ffmpeg writer).
         dpi: DPI for the output animation.
         show_live: Whether to show the animation live during creation.
-        instantaneous_steering_axes: Per-frame upright axes aligned with positions.
+        steering_response_axes: Per-frame isolated upright axes aligned with positions.
     """
-    frames = aligned_animation_frames(position_states, instantaneous_steering_axes)
+    frames = aligned_animation_frames(position_states, steering_response_axes)
     if not frames:
         raise ValueError("Animation requires at least one position state")
 
@@ -111,12 +109,12 @@ def create_animation(
         dict.fromkeys(
             result.upright_label
             for frame in frames
-            for result in frame.instantaneous_steering_axes
+            for result in frame.steering_response_axes
         )
     )
     steering_axis_artists: dict[str, list] = {k: [] for k in axes}
     for view_name, ax in axes.items():
-        steering_axis_artists[view_name] = visualizer.draw_instantaneous_steering_axes(
+        steering_axis_artists[view_name] = visualizer.draw_steering_response_axes(
             ax, upright_labels
         )
 
@@ -156,10 +154,10 @@ def create_animation(
             visualizer.update_wheel(
                 wheel_artists[view_name], positions, num_bands=num_bands
             )
-            visualizer.update_instantaneous_steering_axes(
+            visualizer.update_steering_response_axes(
                 steering_axis_artists[view_name],
                 upright_labels,
-                frame.instantaneous_steering_axes,
+                frame.steering_response_axes,
                 clipping_bounds,
             )
 
@@ -223,10 +221,10 @@ def create_animation(
                     visualizer.update_wheel(
                         wheel_artists[view_name], positions, num_bands=num_bands
                     )
-                    visualizer.update_instantaneous_steering_axes(
+                    visualizer.update_steering_response_axes(
                         steering_axis_artists[view_name],
                         upright_labels,
-                        frame.instantaneous_steering_axes,
+                        frame.steering_response_axes,
                         clipping_bounds,
                     )
                 # Update global title.

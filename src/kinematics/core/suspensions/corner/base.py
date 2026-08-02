@@ -23,6 +23,7 @@ from kinematics.core.targeting import (
 )
 
 if TYPE_CHECKING:
+    from kinematics.core.isolation_coordinates import HingeAngleCoordinate
     from kinematics.core.metrics.main import MetricRow
     from kinematics.core.rigid_motion import UprightScrewAxisResult
     from kinematics.core.sensitivity import TangentField
@@ -123,11 +124,48 @@ class CornerSuspension(Suspension):
             *coordinates,
         )
 
+    def _installed_damper_coordinate(self) -> DriveCoordinate | None:
+        """Return the installed true damper/strut length coordinate, if any."""
+        from kinematics.core.enums import ElementLengthCoordinateID
+
+        return next(
+            (
+                coordinate
+                for coordinate in self.drive_coordinates()
+                if coordinate.kind is TargetKind.ELEMENT_LENGTH
+                and coordinate.id == ElementLengthCoordinateID.DAMPER
+            ),
+            None,
+        )
+
+    def _hinge_angle_coordinate(
+        self,
+        *,
+        coordinate_id: str,
+        label: str,
+        hinge_point_a: PointID,
+        hinge_point_b: PointID,
+        carried_point: PointID,
+    ) -> "HingeAngleCoordinate":
+        """Build one fixed-axis signed arm angle from the design state."""
+        from kinematics.core.isolation_coordinates import HingeAngleCoordinate
+
+        return HingeAngleCoordinate.from_positions(
+            id=coordinate_id,
+            label=label,
+            hinge_point_a=hinge_point_a,
+            hinge_point_b=hinge_point_b,
+            carried_point=carried_point,
+            positions=self.initial_state().positions,
+            scope=Scope.CORNER,
+            side=self.side,
+        )
+
     def compute_state_metrics(
         self,
         state: SuspensionState,
         tangents: "Sequence[TangentField] | None" = None,
-        instantaneous_steering_axes: "Sequence[UprightScrewAxisResult] | None" = None,
+        steering_response_axes: "Sequence[UprightScrewAxisResult] | None" = None,
     ) -> "MetricRow":
         """Compute one corner metric row, including derivatives when tangents exist."""
         if self.config is None:
@@ -137,5 +175,5 @@ class CornerSuspension(Suspension):
             self,
             self.config,
             tangents,
-            instantaneous_steering_axes=instantaneous_steering_axes,
+            steering_response_axes=steering_response_axes,
         )

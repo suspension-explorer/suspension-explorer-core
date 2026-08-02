@@ -1,7 +1,40 @@
-"""Renderer-neutral rigid-body twist and instantaneous screw-axis fitting.
+"""Fit rigid-body twists and extract instantaneous screw axes.
 
-The functions here consume a single analytical tangent field.  They do not
-perturb a solved configuration or infer motion from neighbouring sweep states.
+This module is deliberately ignorant of suspension and sweep semantics.  Its
+input is a velocity field for a collection of points on one rigid body; the
+caller decides whether that field represents isolated steering, combined
+bump-and-steer, or motion along an authored sweep.  The mathematics cannot make
+that distinction after the velocities have been supplied.
+
+For positions ``p_i``, velocities ``v_i`` and a reference point ``p_ref``, the
+least-squares fit recovers the rigid-body twist satisfying
+
+``v_i = v_ref + omega x (p_i - p_ref)``.
+
+When ``omega`` is nonzero, :func:`extract_screw_axis` converts the twist to the
+line about which the body instantaneously screws.  The result stores a closest
+point on that line, its unoriented direction, pitch (translation along the axis
+per radian), and angular rate.  Changing the scale of the supplied velocity
+field changes angular rate but not the line or pitch.
+
+The implementation performs no geometry perturbation and never differentiates
+neighbouring solved states or fitted axis values.  Invalid point geometry,
+rank-deficient fits, non-finite values, near-pure translation and excessive fit
+residuals are returned as explicit statuses.  Geometry, angular-rate and fit
+tolerances scale with the supplied body and velocity magnitudes so a tiny
+rotational residual of an almost pure translation does not create an arbitrary
+distant axis.
+
+Two extracted axes are compared as infinite, unoriented lines: direction
+agreement uses the absolute dot product, while position agreement uses the
+shortest line-to-line distance or the distance from known pivot points to the
+fitted line.  The signs of their direction vectors are not geometrically
+meaningful.
+
+An instantaneous screw axis becomes a *steering* axis only when its input
+velocity field was established by a steering-specific boundary condition.  In
+particular, this module must not infer or correct suspension-travel motion; that
+responsibility belongs to the steering-response orchestration layer.
 """
 
 from __future__ import annotations
@@ -31,7 +64,9 @@ class ScrewAxisStatus(StrEnum):
 
     VALID = "valid"
     NO_STEERING_ACTUATOR = "no_steering_actuator"
+    NO_ISOLATION_DEFINITION = "no_isolation_definition"
     TANGENT_UNAVAILABLE = "tangent_unavailable"
+    INCONSISTENT_TANGENT = "inconsistent_tangent"
     DEGENERATE_UPRIGHT = "degenerate_upright"
     RANK_DEFICIENT = "rank_deficient"
     NEAR_PURE_TRANSLATION = "near_pure_translation"
@@ -295,20 +330,18 @@ def compute_upright_screw_axis(
     """
     stable_keys = tuple(dict.fromkeys(point_keys))
     if tangent is None:
-        return UprightScrewAxisResult(
-            upright_label=upright_label,
-            point_keys=stable_keys,
-            axis=None,
-            status=ScrewAxisStatus.TANGENT_UNAVAILABLE,
-            message="No steering tangent field is available for this state.",
+        return unavailable_upright_screw_axis(
+            upright_label,
+            stable_keys,
+            ScrewAxisStatus.TANGENT_UNAVAILABLE,
+            "No steering tangent field is available for this state.",
         )
     if tangent_rank_deficient:
-        return UprightScrewAxisResult(
-            upright_label=upright_label,
-            point_keys=stable_keys,
-            axis=None,
-            status=ScrewAxisStatus.RANK_DEFICIENT,
-            message="The analytical tangent solve is rank-deficient.",
+        return unavailable_upright_screw_axis(
+            upright_label,
+            stable_keys,
+            ScrewAxisStatus.RANK_DEFICIENT,
+            "The analytical tangent solve is rank-deficient.",
         )
 
     twist = fit_rigid_body_twist(positions, tangent, stable_keys)
@@ -323,6 +356,30 @@ def compute_upright_screw_axis(
         axis=axis,
         status=status,
         twist=twist,
+        message=message,
+    )
+
+
+def unavailable_upright_screw_axis(
+    upright_label: str,
+    point_keys: Sequence[PointKey],
+    status: ScrewAxisStatus,
+    message: str,
+) -> UprightScrewAxisResult:
+    """Return one explicit unavailable result without inventing a twist.
+
+    Callers use this when the velocity field itself cannot be established, for
+    example because its boundary conditions are incomplete or inconsistent.
+    Rigid-body fitting failures continue to carry their diagnostic
+    :class:`RigidBodyTwist` through :func:`compute_upright_screw_axis`.
+    """
+    if status is ScrewAxisStatus.VALID:
+        raise ValueError("An unavailable screw-axis result cannot have valid status")
+    return UprightScrewAxisResult(
+        upright_label=upright_label,
+        point_keys=tuple(dict.fromkeys(point_keys)),
+        axis=None,
+        status=status,
         message=message,
     )
 

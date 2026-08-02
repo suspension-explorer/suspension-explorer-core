@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import Final, Literal, NamedTuple, TypedDict, Union
+from typing import Final, Literal, NamedTuple, Protocol, Self, TypedDict, Union
 
 import numpy as np
 
@@ -81,8 +81,11 @@ class SweepConfig:
     """
 
     target_sweeps: Sequence[Sequence["ScalarTarget"]]
+    steering_probe_isolation: str = "layout_default"
 
     def __post_init__(self):
+        if not self.steering_probe_isolation.strip():
+            raise ValueError("Steering-probe isolation ID must not be empty")
         if not self.target_sweeps:
             return
 
@@ -444,6 +447,7 @@ class TargetKind(StrEnum):
     POINT = "point"
     ACTUATOR_POSITION = "actuator_position"
     ELEMENT_LENGTH = "element_length"
+    HINGE_ANGLE = "hinge_angle"
 
 
 # This is a syntactic wire vocabulary, not a promise that every point exists or
@@ -750,6 +754,58 @@ class ElementLengthTarget:
 type ScalarTarget = PointTarget | ActuatorPositionTarget | ElementLengthTarget
 
 
+class ScalarCoordinateTarget(Protocol):
+    """Structural interface consumed by residual and tangent calculations.
+
+    Authored sweep targets are the closed :data:`ScalarTarget` union above.
+    Analysis probes may introduce additional scalar coordinates—such as a
+    signed chassis-hinge angle—without making those coordinates part of the
+    public sweep-target vocabulary.  The solver needs only this small common
+    analytical interface.
+    """
+
+    @property
+    def value(self) -> float: ...
+
+    @property
+    def mode(self) -> TargetValueMode: ...
+
+    @property
+    def kind(self) -> TargetKind: ...
+
+    @property
+    def required_points(self) -> tuple[PointKey, ...]: ...
+
+    @property
+    def coordinate_identity(self) -> tuple[object, ...]: ...
+
+    @property
+    def coordinate_id(self) -> str: ...
+
+    @property
+    def selector_point(self) -> PointKey | None: ...
+
+    @property
+    def coordinate_description(self) -> str: ...
+
+    @property
+    def actuator_coordinate_id(self) -> str | None: ...
+
+    @property
+    def actuator_direction(self) -> Direction3 | None: ...
+
+    def measure(self, positions: Mapping[PointKey, Point3]) -> float: ...
+
+    def point_partials(
+        self,
+        positions: Mapping[PointKey, Point3],
+    ) -> tuple[tuple[PointKey, np.ndarray], ...]: ...
+
+    def with_value(self, value: float, mode: TargetValueMode) -> Self: ...
+
+    def map_points(self, mapping: Callable[[PointKey], PointKey]) -> Self: ...
+
+
 def target_side(target: ScalarTarget) -> Side | None:
     """Return the structural side of a resolved target, if any."""
     return target.structural_side
@@ -781,6 +837,11 @@ class DriveCoordinate:
             raise ValueError("Element-length coordinates require exactly two points")
         if self.kind is TargetKind.ACTUATOR_POSITION and not self.point_keys:
             raise ValueError("Actuator-position coordinates require a physical point")
+
+    @property
+    def coordinate_identity(self) -> tuple[object, ...]:
+        """Return a stable topology identity independent of target value."""
+        return (self.kind.value, self.id, *self.point_keys)
 
     def target(
         self,
@@ -820,6 +881,44 @@ class DriveCoordinate:
             label=self.label,
         )
 
+    def current_value_target(
+        self,
+        positions: Mapping[PointKey, Point3],
+        *,
+        direction: PointTargetDirection | None = None,
+    ) -> ScalarTarget:
+        """Build an absolute target using this coordinate's value in ``positions``.
+
+        Element-length coordinates are self-describing.  A generic actuator
+        coordinate additionally needs its physical direction, supplied by its
+        :class:`ActuatorDOF`; this keeps the direction out of drive-coordinate
+        metadata that is also used by the sweep editor.
+        """
+        if self.kind is TargetKind.ELEMENT_LENGTH:
+            target = self.target(0.0)
+        elif self.kind is TargetKind.ACTUATOR_POSITION:
+            if direction is None:
+                raise ValueError(
+                    "Actuator current-value targets require an actuator direction"
+                )
+            target = self.position_target(direction, 0.0)
+        else:  # pragma: no cover - TargetKind is exhaustive at runtime.
+            raise ValueError(f"Unsupported drive coordinate kind: {self.kind}")
+        return target.with_value(target.measure(positions), TargetValueMode.ABSOLUTE)
+
+    def map_points(
+        self,
+        mapping: Callable[[PointKey], PointKey],
+        *,
+        side: Side | None = None,
+    ) -> "DriveCoordinate":
+        """Remap structural keys for a composed suspension namespace."""
+        return replace(
+            self,
+            point_keys=tuple(mapping(point) for point in self.point_keys),
+            side=self.side if side is None else side,
+        )
+
 
 def resolve_target(target: PointTargetDirection) -> Direction3:
     """Resolve a target direction specification to a chassis-space unit direction."""
@@ -847,7 +946,7 @@ class ActuatorDOF:
     point_keys: tuple[PointKey, ...]
     direction: Direction3
 
-    def matches(self, target: ScalarTarget) -> bool:
+    def matches(self, target: ScalarCoordinateTarget) -> bool:
         """Whether a target controls this actuator coordinate."""
         if target.actuator_coordinate_id != self.id:
             return False
@@ -856,6 +955,21 @@ class ActuatorDOF:
             return False
         alignment = abs(float(np.dot(target_direction.data, self.direction.data)))
         return alignment >= 1.0 - EPS_GEOMETRIC
+
+    def current_value_target(
+        self,
+        positions: Mapping[PointKey, Point3],
+    ) -> ActuatorPositionTarget:
+        """Build this actuator's absolute target measured at ``positions``."""
+        target = ActuatorPositionTarget(
+            actuator_id=self.id,
+            point_id=self.point_keys[0],
+            direction=PointTargetVector(self.direction),
+            value=0.0,
+            mode=TargetValueMode.RELATIVE,
+            label=self.name,
+        )
+        return target.with_value(target.measure(positions), TargetValueMode.ABSOLUTE)
 
 
 def validate_sweep_controls(

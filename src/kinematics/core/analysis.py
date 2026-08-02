@@ -46,7 +46,13 @@ from kinematics.core.sweep import (
     solve_evaluated_sweep,
     solve_sweep,
 )
-from kinematics.core.targeting import SweepConfig
+from kinematics.core.targeting import DriveCoordinate, SweepConfig
+
+if TYPE_CHECKING:
+    from kinematics.core.steering_response import (
+        IsolationCoordinate,
+        SteeringProbeCatalogue,
+    )
 
 if TYPE_CHECKING:
     from kinematics.core.suspensions.axle import AxleSuspension
@@ -93,7 +99,60 @@ class DriveCoordinateInfo:
 
 
 @dataclass(frozen=True)
-class AnalyzedInstantaneousSteeringAxis:
+class IsolationCoordinateInfo:
+    """Transport-safe metadata for one steering-probe isolation coordinate."""
+
+    id: str
+    type: str
+    label: str
+    unit: str
+    scope: str
+    side: str | None
+    point_keys: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SteeringResponseDefinitionInfo:
+    """Transport-safe provenance for the topology's steering probe."""
+
+    owner: str
+    definition_id: str
+    provenance: str
+    steering_coordinate_id: str
+    held_coordinates: tuple[IsolationCoordinateInfo, ...]
+    requested_option_id: str | None
+    resolved_option_id: str
+    selection_source: str
+    option_class: str
+    label: str
+    description: str
+    warning: str | None
+
+
+@dataclass(frozen=True)
+class SteeringProbeOptionInfo:
+    """Transport-safe metadata for one topology steering-probe option."""
+
+    id: str
+    label: str
+    description: str
+    option_class: str
+    availability: str
+    warning: str | None
+    unavailable_reason: str | None
+    held_coordinates: tuple[IsolationCoordinateInfo, ...]
+
+
+@dataclass(frozen=True)
+class SteeringProbeCatalogueInfo:
+    """Renderer-neutral steering-probe capability for one suspension."""
+
+    default_option_id: str
+    options: tuple[SteeringProbeOptionInfo, ...]
+
+
+@dataclass(frozen=True)
+class AnalyzedSteeringResponseAxis:
     """Renderer-independent steering-axis result for one upright and frame."""
 
     upright_label: str
@@ -120,7 +179,7 @@ class AnalyzedFrame:
     corner_metrics: dict[str, MetricRow]
     world_space: WorldSpace | None
     solver: SolverInfo
-    instantaneous_steering_axes: tuple[AnalyzedInstantaneousSteeringAxis, ...] = ()
+    steering_response_axes: tuple[AnalyzedSteeringResponseAxis, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -144,6 +203,7 @@ class StaticPose:
     elements: list[NamedElementPath]
     wheel_references: list[WheelReferences]
     drive_coordinates: list[DriveCoordinateInfo]
+    steering_probe: SteeringProbeCatalogueInfo | None
 
 
 @dataclass(frozen=True)
@@ -151,6 +211,7 @@ class SweepAnalysis:
     """Complete structured result of a suspension sweep."""
 
     suspension: SuspensionInfo
+    steering_response: SteeringResponseDefinitionInfo | None
     point_keys: list[str]
     metric_keys: list[str]
     corner_metric_keys: list[str]
@@ -175,6 +236,92 @@ def _suspension_info(suspension: Suspension) -> SuspensionInfo:
         name=suspension.name,
         type_key=suspension.reported_type_key(),
         units=suspension.units.symbol,
+    )
+
+
+def _drive_coordinate_info(
+    coordinate: DriveCoordinate,
+) -> DriveCoordinateInfo:
+    """Convert one topology coordinate to stable analysis metadata."""
+    return DriveCoordinateInfo(
+        id=coordinate.id,
+        type=coordinate.kind.value,
+        label=coordinate.label,
+        unit=coordinate.unit,
+        scope=coordinate.scope.value,
+        side=(coordinate.side.name.lower() if coordinate.side is not None else None),
+        point_keys=tuple(point_key_name(point) for point in coordinate.point_keys),
+    )
+
+
+def _isolation_coordinate_info(
+    coordinate: "IsolationCoordinate",
+) -> IsolationCoordinateInfo:
+    """Convert one internal isolation coordinate to stable metadata."""
+    return IsolationCoordinateInfo(
+        id=coordinate.id,
+        type=coordinate.kind.value,
+        label=coordinate.label,
+        unit=coordinate.unit,
+        scope=coordinate.scope.value,
+        side=(coordinate.side.name.lower() if coordinate.side is not None else None),
+        point_keys=tuple(point_key_name(point) for point in coordinate.point_keys),
+    )
+
+
+def _steering_response_info(
+    suspension: Suspension,
+    sweep_config: SweepConfig,
+) -> SteeringResponseDefinitionInfo | None:
+    """Describe the topology-owned steering isolation basis, when available."""
+    definition = suspension.resolve_steering_probe(
+        sweep_config.steering_probe_isolation
+    )
+    if definition is None:
+        return None
+    return SteeringResponseDefinitionInfo(
+        owner=definition.owner,
+        definition_id=definition.definition_id,
+        provenance=definition.provenance,
+        steering_coordinate_id=definition.steering_coordinate_id,
+        held_coordinates=tuple(
+            _isolation_coordinate_info(coordinate)
+            for coordinate in definition.held_coordinates
+        ),
+        requested_option_id=definition.requested_option_id,
+        resolved_option_id=definition.definition_id,
+        selection_source=definition.selection_source.value,
+        option_class=definition.option_class.value,
+        label=definition.label,
+        description=definition.description,
+        warning=definition.warning,
+    )
+
+
+def _steering_probe_catalogue_info(
+    catalogue: "SteeringProbeCatalogue | None",
+) -> SteeringProbeCatalogueInfo | None:
+    """Convert topology capability metadata without adding UI policy."""
+    if catalogue is None:
+        return None
+    return SteeringProbeCatalogueInfo(
+        default_option_id=catalogue.default_option_id,
+        options=tuple(
+            SteeringProbeOptionInfo(
+                id=option.id,
+                label=option.label,
+                description=option.description,
+                option_class=option.option_class.value,
+                availability=option.availability.value,
+                warning=option.warning,
+                unavailable_reason=option.unavailable_reason,
+                held_coordinates=tuple(
+                    _isolation_coordinate_info(coordinate)
+                    for coordinate in option.held_coordinates
+                ),
+            )
+            for option in catalogue.options
+        ),
     )
 
 
@@ -244,15 +391,15 @@ def _vector_tuple(values: np.ndarray) -> tuple[float, float, float]:
     return (float(values[0]), float(values[1]), float(values[2]))
 
 
-def _analyzed_steering_axis(
+def _analyzed_steering_response_axis(
     result: UprightScrewAxisResult,
-) -> AnalyzedInstantaneousSteeringAxis:
+) -> AnalyzedSteeringResponseAxis:
     """Convert one core result to primitive structured analysis values."""
     axis = result.axis
     twist = result.twist
     fit_rms = axis.fit_rms if axis is not None else (twist.fit_rms if twist else None)
     fit_max = axis.fit_max if axis is not None else (twist.fit_max if twist else None)
-    return AnalyzedInstantaneousSteeringAxis(
+    return AnalyzedSteeringResponseAxis(
         upright_label=result.upright_label,
         point_keys=tuple(point_key_name(key) for key in result.point_keys),
         status=result.status,
@@ -347,7 +494,7 @@ def analyze_evaluated_sweep(
             evaluated.states,
             evaluated.solver_stats,
             evaluated.metrics.rows,
-            evaluated.instantaneous_steering_axes,
+            evaluated.steering_response_axes,
             strict=True,
         )
     ):
@@ -367,8 +514,8 @@ def analyze_evaluated_sweep(
                     else None
                 ),
                 solver=info,
-                instantaneous_steering_axes=tuple(
-                    _analyzed_steering_axis(result) for result in steering_axes
+                steering_response_axes=tuple(
+                    _analyzed_steering_response_axis(result) for result in steering_axes
                 ),
             )
         )
@@ -404,6 +551,7 @@ def analyze_evaluated_sweep(
 
     return SweepAnalysis(
         suspension=_suspension_info(suspension),
+        steering_response=_steering_response_info(suspension, sweep_config),
         point_keys=named_point_keys(assembly),
         metric_keys=metric_keys,
         corner_metric_keys=corner_metric_keys,
@@ -434,21 +582,10 @@ def initial_pose(suspension: Suspension) -> StaticPose:
         elements=named_element_paths(assembly),
         wheel_references=wheel_references(assembly),
         drive_coordinates=[
-            DriveCoordinateInfo(
-                id=coordinate.id,
-                type=coordinate.kind.value,
-                label=coordinate.label,
-                unit=coordinate.unit,
-                scope=coordinate.scope.value,
-                side=(
-                    coordinate.side.name.lower()
-                    if coordinate.side is not None
-                    else None
-                ),
-                point_keys=tuple(
-                    point_key_name(point) for point in coordinate.point_keys
-                ),
-            )
+            _drive_coordinate_info(coordinate)
             for coordinate in suspension.drive_coordinates()
         ],
+        steering_probe=_steering_probe_catalogue_info(
+            suspension.steering_probe_catalogue()
+        ),
     )

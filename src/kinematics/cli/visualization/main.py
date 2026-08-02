@@ -165,7 +165,7 @@ class SuspensionVisualizer:
             line.set_3d_properties(pts[:, 2])
 
     @staticmethod
-    def draw_instantaneous_steering_axes(
+    def draw_steering_response_axes(
         ax,
         upright_labels: Sequence[str],
     ) -> list:
@@ -180,13 +180,13 @@ class SuspensionVisualizer:
                 linewidth=2.0,
                 linestyle="-.",
                 marker=None,
-                label=f"{label} instantaneous steering axis",
+                label=f"{label} steering-response axis",
             )
             artists.append(line)
         return artists
 
     @staticmethod
-    def update_instantaneous_steering_axes(
+    def update_steering_response_axes(
         artists: Sequence,
         upright_labels: Sequence[str],
         results: Sequence["UprightScrewAxisResult"],

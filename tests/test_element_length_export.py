@@ -101,7 +101,8 @@ targets:
 
     header = next(
         csv.reader(
-            line for line in output_path.read_text(encoding="utf-8").splitlines()
+            line
+            for line in output_path.read_text(encoding="utf-8").splitlines()
             if not line.startswith("#")
         )
     )

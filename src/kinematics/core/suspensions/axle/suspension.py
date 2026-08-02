@@ -76,6 +76,7 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.registry import MetricSpec
     from kinematics.core.rigid_motion import UprightScrewAxisResult
     from kinematics.core.sensitivity import TangentField
+    from kinematics.core.steering_response import SteeringProbeCatalogue
 
 
 class _CornerPositionView(Mapping[PointID, Any]):
@@ -224,6 +225,100 @@ class AxleSuspension(Suspension):
                     )
                 )
         return tuple(coordinates)
+
+    def steering_probe_catalogue(self) -> "SteeringProbeCatalogue | None":
+        """Compose compatible corner options into one axle-level selection.
+
+        Each semantic option remains one user choice but expands to one
+        independent held coordinate per corner.  Shared axle mechanisms are
+        deliberately excluded: their motion may follow from the two corner
+        travel coordinates and is not an additional jounce degree of freedom.
+        """
+        from kinematics.core.steering_response import (
+            SteeringProbeCatalogue,
+            SteeringProbeOption,
+            SteeringProbeOptionAvailability,
+        )
+
+        catalogues = tuple(
+            self.corners[side].steering_probe_catalogue()
+            for side in (Side.LEFT, Side.RIGHT)
+        )
+        if any(catalogue is None for catalogue in catalogues):
+            return None
+        left_catalogue, right_catalogue = catalogues
+        assert left_catalogue is not None and right_catalogue is not None
+        if left_catalogue.default_option_id != right_catalogue.default_option_id:
+            raise ValueError(
+                "Axle corners declare incompatible steering-probe defaults"
+            )
+
+        right_by_id = {option.id: option for option in right_catalogue.options}
+        composed: list[SteeringProbeOption] = []
+        for left_option in left_catalogue.options:
+            right_option = right_by_id.get(left_option.id)
+            if right_option is None:
+                continue
+            if left_option.option_class is not right_option.option_class:
+                raise ValueError(
+                    f"Axle corners classify steering-probe option "
+                    f"'{left_option.id}' differently"
+                )
+            held = tuple(
+                coordinate.map_points(
+                    lambda point, selected_side=side: side_qualified(
+                        selected_side, point
+                    ),
+                    side=side,
+                )
+                for side, option in (
+                    (Side.LEFT, left_option),
+                    (Side.RIGHT, right_option),
+                )
+                for coordinate in option.held_coordinates
+            )
+            unavailable_reasons = tuple(
+                reason
+                for reason in (
+                    left_option.unavailable_reason,
+                    right_option.unavailable_reason,
+                )
+                if reason
+            )
+            warnings = tuple(
+                warning
+                for warning in (left_option.warning, right_option.warning)
+                if warning
+            )
+            availability = max(
+                (left_option.availability, right_option.availability),
+                key=(
+                    SteeringProbeOptionAvailability.AVAILABLE,
+                    SteeringProbeOptionAvailability.AVAILABLE_WITH_WARNING,
+                    SteeringProbeOptionAvailability.UNAVAILABLE,
+                ).index,
+            )
+            composed.append(
+                SteeringProbeOption(
+                    id=left_option.id,
+                    label=left_option.label,
+                    description=left_option.description,
+                    option_class=left_option.option_class,
+                    held_coordinates=held,
+                    availability=availability,
+                    warning=" ".join(dict.fromkeys(warnings)) or None,
+                    unavailable_reason=(
+                        " ".join(dict.fromkeys(unavailable_reasons)) or None
+                    ),
+                )
+            )
+
+        if not composed:
+            return None
+        return SteeringProbeCatalogue(
+            default_option_id=left_catalogue.default_option_id,
+            options=tuple(composed),
+        )
 
     def initial_state(self) -> SuspensionState:
         """Combine both corner states under side-qualified point keys."""
@@ -518,7 +613,7 @@ class AxleSuspension(Suspension):
         self,
         state: SuspensionState,
         tangents: "Sequence[TangentField] | None" = None,
-        instantaneous_steering_axes: "Sequence[UprightScrewAxisResult] | None" = None,
+        steering_response_axes: "Sequence[UprightScrewAxisResult] | None" = None,
     ) -> "AxleMetricRows":
         """Compute structural corner and axle-level metric rows."""
         if self.config is None:
@@ -528,7 +623,7 @@ class AxleSuspension(Suspension):
             self,
             self.config,
             tangents,
-            instantaneous_steering_axes,
+            steering_response_axes,
         )
 
     def elements(self) -> tuple[SuspensionElement, ...]:

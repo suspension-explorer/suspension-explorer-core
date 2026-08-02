@@ -1,4 +1,4 @@
-"""Integration coverage for rack-partial virtual steering metrics."""
+"""Integration coverage for isolated virtual steering metrics."""
 
 from pathlib import Path
 from typing import cast
@@ -59,7 +59,10 @@ def _assert_finite_values(row: MetricRow, keys: tuple[str, ...]) -> None:
 
 
 def test_steered_corner_emits_finite_virtual_metrics_and_metadata() -> None:
-    _evaluated, analysis = _evaluated_and_analysis("geometry.yaml", "sweep.yaml")
+    _evaluated, analysis = _evaluated_and_analysis(
+        "corner_rocker_damper_geometry.yaml",
+        "corner_steer_bump_sweep.yaml",
+    )
     frame = analysis.frames[len(analysis.frames) // 2]
 
     assert set(VIRTUAL_KEYS).issubset(frame.metrics)
@@ -89,8 +92,8 @@ def test_steered_corner_emits_finite_virtual_metrics_and_metadata() -> None:
 
 def test_steered_axle_maps_virtual_metrics_into_both_corner_rows() -> None:
     _evaluated, analysis = _evaluated_and_analysis(
-        "axle_geometry.yaml",
-        "axle_sweep.yaml",
+        "axle_geometry_rocker_damper.yaml",
+        "axle_steer_sweep.yaml",
     )
     frame = analysis.frames[len(analysis.frames) // 2]
 
@@ -108,13 +111,13 @@ def test_steered_axle_maps_virtual_metrics_into_both_corner_rows() -> None:
         _assert_finite_values(row, VIRTUAL_KEYS)
 
 
-def test_tangent_failure_keeps_virtual_metric_columns_but_makes_values_null(
+def test_authored_tangent_failure_does_not_disable_virtual_metrics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import kinematics.core.sweep as sweep_module
 
-    suspension = load_geometry(DATA_DIR / "geometry.yaml")
-    sweep = load_sweep(DATA_DIR / "sweep.yaml", suspension)
+    suspension = load_geometry(DATA_DIR / "corner_rocker_damper_geometry.yaml")
+    sweep = load_sweep(DATA_DIR / "corner_steer_bump_sweep.yaml", suspension)
 
     def fail_tangents(*_args, **_kwargs):
         raise RuntimeError("synthetic tangent failure")
@@ -126,8 +129,28 @@ def test_tangent_failure_keeps_virtual_metric_columns_but_makes_values_null(
     for raw_row in evaluated.metrics.rows:
         row = cast(MetricRow, raw_row)
         assert set(VIRTUAL_KEYS).issubset(row)
-        assert all(row[key] is None for key in VIRTUAL_KEYS)
+        _assert_finite_values(row, VIRTUAL_KEYS)
         assert set(PHYSICAL_STEERING_KEYS).issubset(row)
+
+
+def test_missing_isolation_definition_keeps_virtual_columns_null(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    suspension = load_geometry(DATA_DIR / "geometry.yaml")
+    sweep = load_sweep(DATA_DIR / "sweep.yaml", suspension)
+    monkeypatch.setattr(suspension, "steering_probe_catalogue", lambda: None)
+    evaluated = solve_evaluated_sweep(suspension, sweep)
+    analysis = analyze_evaluated_sweep(suspension, sweep, evaluated)
+
+    for raw_row in evaluated.metrics.rows:
+        row = cast(MetricRow, raw_row)
+        assert set(VIRTUAL_KEYS).issubset(row)
+        assert all(row[key] is None for key in VIRTUAL_KEYS)
+    assert any(
+        result.status.value == "no_isolation_definition"
+        for frame in analysis.frames
+        for result in frame.steering_response_axes
+    )
 
 
 def test_unsteered_suspension_does_not_advertise_virtual_metrics() -> None:
@@ -143,13 +166,13 @@ def test_unsteered_suspension_does_not_advertise_virtual_metrics() -> None:
     assert set(VIRTUAL_KEYS).isdisjoint(analysis.references["setup"].metrics)
 
 
-def test_virtual_metrics_reuse_the_single_sweep_tangent_bundle(
+def test_virtual_metrics_are_independent_of_the_single_sweep_tangent_bundle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import kinematics.core.sweep as sweep_module
 
-    suspension = load_geometry(DATA_DIR / "geometry.yaml")
-    sweep = load_sweep(DATA_DIR / "sweep.yaml", suspension)
+    suspension = load_geometry(DATA_DIR / "corner_rocker_damper_geometry.yaml")
+    sweep = load_sweep(DATA_DIR / "corner_steer_bump_sweep.yaml", suspension)
     original = sweep_module.compute_sweep_tangents
     call_count = 0
 

@@ -74,7 +74,7 @@ def compute_metrics_for_axle_state(
     axle: AxleSuspension,
     config: SuspensionConfig,
     tangents: "Sequence[TangentField] | None" = None,
-    instantaneous_steering_axes: "Sequence[UprightScrewAxisResult] | None" = None,
+    steering_response_axes: "Sequence[UprightScrewAxisResult] | None" = None,
 ) -> AxleMetricRows:
     """Compute corner and axle metrics against one axle-local road plane.
 
@@ -90,7 +90,7 @@ def compute_metrics_for_axle_state(
         state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE)),
         state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE)),
     )
-    steering_axes_by_side = _steering_axes_by_side(instantaneous_steering_axes)
+    steering_axes_by_side = _steering_axes_by_side(steering_response_axes)
     for side in (Side.LEFT, Side.RIGHT):
         corner = axle.corners[side]
         corner_state = axle.corner_state(state, side)
@@ -103,7 +103,7 @@ def compute_metrics_for_axle_state(
             if tangents
             else None,
             road=road,
-            instantaneous_steering_axes=steering_axes_by_side.get(side),
+            steering_response_axes=steering_axes_by_side.get(side),
         )
         corner_rows[side] = side_row
 
@@ -209,7 +209,7 @@ def compute_metrics_for_state(
     tangents: "Sequence[TangentField] | None" = None,
     *,
     road: RoadPlane | None = None,
-    instantaneous_steering_axes: "Sequence[UprightScrewAxisResult] | None" = None,
+    steering_response_axes: "Sequence[UprightScrewAxisResult] | None" = None,
 ) -> MetricRow:
     """
     Compute all corner-level metrics for a single solved state.
@@ -229,7 +229,7 @@ def compute_metrics_for_state(
         road: Optional shared axle road plane in chassis coordinates.
             Standalone corner callers omit this and use the horizontal plane
             through their wheel contact centre.
-        instantaneous_steering_axes: Optional rack-partial upright results.
+        steering_response_axes: Optional isolated steering-response results.
             A valid result supplies the additive virtual steering metrics;
             invalid or unavailable results leave those values undefined.
 
@@ -238,7 +238,7 @@ def compute_metrics_for_state(
         None when the underlying geometry is undefined (e.g. parallel
         links producing an IC at infinity).
     """
-    axis_results = tuple(instantaneous_steering_axes or ())
+    axis_results = tuple(steering_response_axes or ())
     motion_axis = axis_results[0].axis if len(axis_results) == 1 else None
     virtual_axis = (
         None

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import partial
-from typing import ClassVar, Sequence
+from typing import TYPE_CHECKING, ClassVar, Sequence
 
 from kinematics.core.constraints import (
     Constraint,
@@ -70,6 +70,9 @@ from kinematics.core.suspensions.corner.attachments import (
 from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.suspensions.corner.toe_link import ToeLink
 from kinematics.core.suspensions.corner.track_rod import TrackRod
+
+if TYPE_CHECKING:
+    from kinematics.core.steering_response import SteeringProbeCatalogue
 
 # How far the authored strut clamp may sit off the design steering axis, in
 # millimetres, before the coincident-axis modelling choice is considered
@@ -225,6 +228,52 @@ class MacPhersonSuspension(CornerSuspension):
     def damper_points(self) -> tuple[PointKey, PointKey] | None:
         """The strut is the spring/damper: top mount to upright clamp."""
         return (PointID.STRUT_TOP, PointID.STRUT_BOTTOM)
+
+    def steering_probe_catalogue(self) -> "SteeringProbeCatalogue | None":
+        """Declare strut and lower-arm fixed-travel steering definitions."""
+        from kinematics.core.steering_response import (
+            SteeringProbeCatalogue,
+            SteeringProbeOption,
+            SteeringProbeOptionClass,
+        )
+
+        if self.steering_actuator_dof() is None:
+            return None
+        strut = self._installed_damper_coordinate()
+        if strut is None:
+            return None
+        lower_arm = self._hinge_angle_coordinate(
+            coordinate_id="lower_arm_hinge_angle",
+            label="Lower arm angle",
+            hinge_point_a=PointID.LOWER_WISHBONE_INBOARD_FRONT,
+            hinge_point_b=PointID.LOWER_WISHBONE_INBOARD_REAR,
+            carried_point=PointID.LOWER_WISHBONE_OUTBOARD,
+        )
+        return SteeringProbeCatalogue(
+            default_option_id="strut_length",
+            options=(
+                SteeringProbeOption(
+                    id="strut_length",
+                    label="Strut length",
+                    description=(
+                        "Fixes strut compression, the locating travel coordinate "
+                        "of the supported ideal MacPherson mechanism."
+                    ),
+                    option_class=SteeringProbeOptionClass.CANONICAL,
+                    held_coordinates=(strut,),
+                ),
+                SteeringProbeOption(
+                    id="lower_arm_hinge_angle",
+                    label="Lower arm hinge angle",
+                    description=(
+                        "Uses the equivalent lower-control-arm travel coordinate "
+                        "for the supported ideal MacPherson mechanism."
+                    ),
+                    option_class=SteeringProbeOptionClass.EQUIVALENT,
+                    held_coordinates=(lower_arm,),
+                ),
+            ),
+        )
 
     def derivative_metric_definitions(
         self,

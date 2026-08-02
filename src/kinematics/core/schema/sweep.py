@@ -197,6 +197,30 @@ SweepTargetSpec = Annotated[
 ]
 
 
+class SteeringProbeAnalysisSpec(BaseModel):
+    """Analysis-only selection of a topology-declared steering response."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    isolation: str = "layout_default"
+
+    @model_validator(mode="after")
+    def check_isolation(self) -> "SteeringProbeAnalysisSpec":
+        if not self.isolation.strip():
+            raise ValueError("Steering-probe isolation ID must not be empty")
+        return self
+
+
+class SweepAnalysisSpec(BaseModel):
+    """Optional calculations requested alongside the authored state sweep."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    steering_probe: SteeringProbeAnalysisSpec = Field(
+        default_factory=SteeringProbeAnalysisSpec
+    )
+
+
 class SweepSpec(BaseModel):
     """Validated sweep file or API specification."""
 
@@ -205,6 +229,7 @@ class SweepSpec(BaseModel):
     version: int = 1
     steps: int | None = Field(default=None, ge=1)
     targets: list[SweepTargetSpec] = Field(min_length=1)
+    analysis: SweepAnalysisSpec = Field(default_factory=SweepAnalysisSpec)
 
     @model_validator(mode="after")
     def check_version(self) -> "SweepSpec":
@@ -312,10 +337,16 @@ def build_sweep_config(
             )
         except ValueError as error:
             raise ValueError(f"Sweep target {target_index}: {error}") from error
-    sweep_config = SweepConfig(dimensions)
+    sweep_config = SweepConfig(
+        dimensions,
+        steering_probe_isolation=spec.analysis.steering_probe.isolation,
+    )
     if suspension is not None:
         suspension.validate_sweep_targets(
             target for dimension in dimensions for target in dimension
         )
         validate_sweep_controls(sweep_config, suspension.actuator_dofs())
+        # Selection is analysis-only: validate it after the state-driving
+        # target basis is built, without adding a residual to the sweep solve.
+        suspension.resolve_steering_probe(sweep_config.steering_probe_isolation)
     return sweep_config

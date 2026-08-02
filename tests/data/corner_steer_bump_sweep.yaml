@@ -1,0 +1,16 @@
+version: 1
+steps: 9
+targets:
+  - type: point
+    point: wheel_center
+    side: left
+    direction: {axis: z}
+    mode: relative
+    start: -10
+    stop: 10
+  - type: actuator_position
+    actuator: rack
+    direction: {axis: y}
+    mode: relative
+    start: -5
+    stop: 5

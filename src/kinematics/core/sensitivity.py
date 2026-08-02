@@ -1,16 +1,46 @@
-"""
-Solution-manifold sensitivities via the implicit function theorem.
+"""Analytical tangent fields on a solved suspension configuration.
 
-A solved step satisfies r(q, t) = 0. Differentiating gives
-J * dq/dt_j = e_j, where J is the analytical residual Jacobian and e_j
-selects the target residual row. Derived-point velocities are propagated by
-one forward dual-number pass.
+Let ``q`` contain the free point coordinates, ``C(q)`` the permanent
+kinematic constraints, and ``g(q) - t`` the residuals for a supplied basis of
+scalar targets.  At a solved state, differentiating
+
+``r(q, t) = [C(q), g(q) - t] = 0``
+
+with respect to target ``t_j`` gives the implicit-function tangent equation
+
+``r_q dq/dt_j = [0, e_j]``.
+
+Consequently, each :class:`TangentField` is a *partial* response to one scalar
+target: its selected target has unit rate and every other target in the same
+basis has zero rate.  Changing that target basis changes which coordinates are
+held at zero rate and can therefore produce a different partial derivative at
+the same solved position.  The basis is part of the question being asked, not
+just a numerical implementation detail.
+
+The least-squares solve acts on free points.  Their velocities are then
+propagated through the derived-point dependency graph with dual numbers, and
+an optional post-derived closure applies the same implicit closure used by the
+state solver.  Thus derived and closure-owned outputs participate in the
+reported velocity field without becoming independent solve variables.
+
+:class:`TangentSolveInfo` reports column rank, remaining nullity, singular
+values and conditioning for the common tangent matrix.  Each requested
+response also records permanent-constraint and full target-basis rate
+residuals.  Rate consistency uses an absolute floor plus a relative term
+scaled by ``||J||_inf ||dq||_inf + ||b||_inf``.  This is essential for an
+overdetermined system: full column rank can make a least-squares answer unique
+while still making it an inconsistent compromise that satisfies neither the
+constraints nor the requested target rates.
+
+This module deliberately assigns no physical meaning such as steering, bump,
+roll, or sweep-path motion to a field.  Callers establish that meaning by
+choosing a target basis and selecting a response semantically.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Callable, Mapping, Sequence
 
 import numpy as np
 
@@ -20,7 +50,10 @@ from kinematics.core.primitives.dual import DualVec3, seed_positions_with_tangen
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.solver import ResidualComputer
 from kinematics.core.state import SuspensionState
-from kinematics.core.targeting import ScalarTarget
+from kinematics.core.targeting import ScalarCoordinateTarget
+
+_RATE_RESIDUAL_ABSOLUTE_TOLERANCE = 1e-12
+_RATE_RESIDUAL_RELATIVE_TOLERANCE = 1e-10
 
 
 @dataclass(frozen=True)
@@ -28,7 +61,7 @@ class TangentField:
     """First-order response of every point position to one sweep target."""
 
     target_index: int
-    target: ScalarTarget
+    target: ScalarCoordinateTarget
     velocities: dict[PointKey, np.ndarray]
 
     def velocity(self, point_id: PointKey) -> np.ndarray:
@@ -40,25 +73,131 @@ class TangentField:
 
 
 @dataclass(frozen=True)
-class TangentSolveInfo:
-    """Numerical health of one state's tangent least-squares solve."""
+class TangentResponseInfo:
+    """Rate consistency of one requested target response.
 
+    Residual tuples preserve the row order supplied to
+    :func:`compute_state_tangents`.  Constraint residuals include any smooth
+    first-order pins added for degenerate norm constraints.  Target residuals
+    are measured against the complete identity-column request: the selected
+    target rate is one and all other target rates are zero.
+    """
+
+    target_index: int
+    constraint_rate_residuals: tuple[float, ...]
+    target_rate_residuals: tuple[float, ...]
+    consistency_tolerance: float
+    full_column_rank: bool
+    finite: bool
+
+    @property
+    def max_constraint_rate_residual(self) -> float:
+        """Maximum absolute permanent-constraint rate error."""
+        return _max_abs(self.constraint_rate_residuals)
+
+    @property
+    def selected_target_rate_residual(self) -> float:
+        """Absolute error from the requested unit rate."""
+        if self.target_index >= len(self.target_rate_residuals):
+            return np.inf
+        return abs(self.target_rate_residuals[self.target_index])
+
+    @property
+    def max_other_target_rate_residual(self) -> float:
+        """Maximum absolute rate error among targets meant to remain fixed."""
+        return _max_abs(
+            residual
+            for index, residual in enumerate(self.target_rate_residuals)
+            if index != self.target_index
+        )
+
+    @property
+    def max_rate_residual(self) -> float:
+        """Maximum absolute constraint or target rate error."""
+        return max(
+            self.max_constraint_rate_residual,
+            _max_abs(self.target_rate_residuals),
+        )
+
+    @property
+    def rate_consistent(self) -> bool:
+        """Whether all requested rates are met within the scaled tolerance."""
+        return self.finite and self.max_rate_residual <= self.consistency_tolerance
+
+    @property
+    def unique(self) -> bool:
+        """Whether this is a finite, consistent, uniquely determined response."""
+        return self.full_column_rank and self.rate_consistent
+
+
+@dataclass(frozen=True)
+class TangentSolveInfo:
+    """Numerical health of one state's common tangent least-squares solve."""
+
+    n_equations: int
     n_variables: int
     rank: int
-    smallest_singular_value: float
+    singular_values: tuple[float, ...]
     condition_number: float
+    responses: tuple[TangentResponseInfo, ...]
+
+    @property
+    def nullity(self) -> int:
+        """Number of solve-variable directions left unconstrained."""
+        return max(self.n_variables - self.rank, 0)
+
+    @property
+    def full_column_rank(self) -> bool:
+        """Whether the system determines every solve variable."""
+        return self.nullity == 0
 
     @property
     def rank_deficient(self) -> bool:
         """Whether the tangent system does not pin every variable."""
-        return self.rank < self.n_variables
+        return not self.full_column_rank
+
+    @property
+    def smallest_singular_value(self) -> float:
+        """Smallest reported singular value, or zero for an empty matrix."""
+        return self.singular_values[-1] if self.singular_values else 0.0
+
+    @property
+    def finite(self) -> bool:
+        """Whether the solved tangents, rates and singular values are finite.
+
+        An infinite condition number is the valid representation of a singular
+        matrix and is reported separately through rank and nullity; it does not
+        by itself mean the computed minimum-norm values contain non-finite data.
+        """
+        return bool(
+            all(np.isfinite(value) for value in self.singular_values)
+            and all(response.finite for response in self.responses)
+        )
+
+    @property
+    def rate_consistent(self) -> bool:
+        """Whether every requested target response is rate-consistent."""
+        return all(response.rate_consistent for response in self.responses)
+
+    def response_for_target(self, target_index: int) -> TangentResponseInfo:
+        """Return diagnostics for a target index without relying on tuple order."""
+        matching = [
+            response
+            for response in self.responses
+            if response.target_index == target_index
+        ]
+        if len(matching) != 1:
+            raise KeyError(
+                f"No unique tangent response for target index {target_index}."
+            )
+        return matching[0]
 
 
 def compute_state_tangents(
     state: SuspensionState,
     constraints: list[Constraint],
     derived_manager: DerivedPointsManager,
-    step_targets: Sequence[ScalarTarget],
+    step_targets: Sequence[ScalarCoordinateTarget],
     post_derived_update: Callable[[dict], float | None] | None = None,
 ) -> tuple[list[TangentField], TangentSolveInfo]:
     """Compute one tangent field per target and report solve health.
@@ -70,10 +209,12 @@ def compute_state_tangents(
     """
     if not step_targets:
         return [], TangentSolveInfo(
+            n_equations=0,
             n_variables=0,
             rank=0,
-            smallest_singular_value=0.0,
+            singular_values=(),
             condition_number=1.0,
+            responses=(),
         )
 
     # ResidualComputer mutates its state buffer, so use a scratch state.
@@ -110,15 +251,45 @@ def compute_state_tangents(
         float(singular_values[-1]) if singular_values.size else 0.0
     )
     largest_singular_value = float(singular_values[0]) if singular_values.size else 0.0
+    full_column_rank = int(rank) == int(jacobian.shape[1])
+    # An already ill-conditioned solve can overflow while reconstructing its
+    # rates. Preserve those infinities in the diagnostic result without
+    # leaking NumPy runtime warnings from an advisory calculation.
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        rate_residuals = jacobian @ tangent_arrays - right_hand_sides
+    constraint_row_indices = [*range(computer.n_constraints)]
+    constraint_row_indices.extend(
+        range(computer.n_residuals, computer.n_residuals + len(pin_rows))
+    )
+    target_slice = slice(
+        computer.n_constraints,
+        computer.n_constraints + n_targets,
+    )
+    responses = tuple(
+        _response_info(
+            target_index=target_index,
+            jacobian=jacobian,
+            tangent=tangent_arrays[:, target_index],
+            right_hand_side=right_hand_sides[:, target_index],
+            constraint_rate_residuals=rate_residuals[
+                constraint_row_indices, target_index
+            ],
+            target_rate_residuals=rate_residuals[target_slice, target_index],
+            full_column_rank=full_column_rank,
+        )
+        for target_index in range(n_targets)
+    )
     solve_info = TangentSolveInfo(
+        n_equations=int(jacobian.shape[0]),
         n_variables=int(jacobian.shape[1]),
         rank=int(rank),
-        smallest_singular_value=smallest_singular_value,
+        singular_values=tuple(float(value) for value in singular_values),
         condition_number=(
             largest_singular_value / smallest_singular_value
             if smallest_singular_value > 0.0
             else np.inf
         ),
+        responses=responses,
     )
 
     fields: list[TangentField] = []
@@ -150,6 +321,56 @@ def compute_state_tangents(
         )
 
     return fields, solve_info
+
+
+def _response_info(
+    *,
+    target_index: int,
+    jacobian: np.ndarray,
+    tangent: np.ndarray,
+    right_hand_side: np.ndarray,
+    constraint_rate_residuals: np.ndarray,
+    target_rate_residuals: np.ndarray,
+    full_column_rank: bool,
+) -> TangentResponseInfo:
+    """Build scale-aware consistency diagnostics for one response column."""
+    jacobian_scale = _infinity_norm(jacobian)
+    tangent_scale = _infinity_norm(tangent)
+    request_scale = _infinity_norm(right_hand_side)
+    consistency_scale = jacobian_scale * tangent_scale + request_scale
+    tolerance = (
+        _RATE_RESIDUAL_ABSOLUTE_TOLERANCE
+        + _RATE_RESIDUAL_RELATIVE_TOLERANCE * consistency_scale
+    )
+    values = np.concatenate(
+        (
+            tangent,
+            constraint_rate_residuals,
+            target_rate_residuals,
+        )
+    )
+    return TangentResponseInfo(
+        target_index=target_index,
+        constraint_rate_residuals=tuple(
+            float(value) for value in constraint_rate_residuals
+        ),
+        target_rate_residuals=tuple(float(value) for value in target_rate_residuals),
+        consistency_tolerance=tolerance,
+        full_column_rank=full_column_rank,
+        finite=bool(np.all(np.isfinite(values)) and np.isfinite(tolerance)),
+    )
+
+
+def _max_abs(values: Iterable[float]) -> float:
+    """Return the largest absolute value, with zero for an empty sequence."""
+    return max((abs(value) for value in values), default=0.0)
+
+
+def _infinity_norm(values: np.ndarray) -> float:
+    """Return an infinity norm that is defined as zero for an empty array."""
+    if values.size == 0:
+        return 0.0
+    return float(np.linalg.norm(values, ord=np.inf))
 
 
 def _degenerate_constraint_pins(

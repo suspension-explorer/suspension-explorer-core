@@ -50,6 +50,7 @@ from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.state import SuspensionState
 from kinematics.core.targeting import (
+    ScalarCoordinateTarget,
     ScalarTarget,
     SweepConfig,
     TargetValueMode,
@@ -224,7 +225,7 @@ class ResidualComputer:
 
     def required_points(
         self,
-        step_targets: Sequence[ScalarTarget],
+        step_targets: Sequence[ScalarCoordinateTarget],
     ) -> frozenset[PointKey]:
         """
         Return every point whose derived chain must be refreshed for an evaluation.
@@ -242,7 +243,9 @@ class ResidualComputer:
             self._required_points_cache[target_ids] = required
         return required
 
-    def validate_target_count(self, step_targets: Sequence[ScalarTarget]) -> None:
+    def validate_target_count(
+        self, step_targets: Sequence[ScalarCoordinateTarget]
+    ) -> None:
         """
         Ensure each evaluation uses the fixed target count configured at init time.
         """
@@ -255,7 +258,7 @@ class ResidualComputer:
     def compute(
         self,
         free_array: np.ndarray,
-        step_targets: Sequence[ScalarTarget],
+        step_targets: Sequence[ScalarCoordinateTarget],
     ) -> np.ndarray:
         """
         Compute residuals for the given free point positions and targets.
@@ -530,7 +533,7 @@ class ResidualComputer:
     def compute_jacobian(
         self,
         free_array: np.ndarray,
-        step_targets: Sequence[ScalarTarget],
+        step_targets: Sequence[ScalarCoordinateTarget],
     ) -> np.ndarray:
         """
         Compute the analytical Jacobian matrix.
@@ -648,9 +651,7 @@ def convert_targets_to_absolute(
                     f"Resolved value for '{target.coordinate_id}' must be finite, "
                     f"got {absolute_value}."
                 )
-            resolved.append(
-                target.with_value(absolute_value, TargetValueMode.ABSOLUTE)
-            )
+            resolved.append(target.with_value(absolute_value, TargetValueMode.ABSOLUTE))
         except KeyError as error:
             missing = getattr(error.args[0], "name", str(error.args[0]))
             raise ValueError(

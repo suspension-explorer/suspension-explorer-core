@@ -83,9 +83,7 @@ def _metric_rows_at(
                     _target(PointID.WHEEL_CENTER, Axis.Z, value)
                     for value in wheel_values
                 ],
-                [
-                    _rack_target(value) for value in trackrod_inboard_y_values
-                ],
+                [_rack_target(value) for value in trackrod_inboard_y_values],
             ]
         ),
     )[0]
