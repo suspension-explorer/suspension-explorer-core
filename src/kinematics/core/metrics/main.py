@@ -150,14 +150,31 @@ def _corner_tangents(
     """Project axle tangents into one corner, including shared actuators."""
     result: list[TangentField] = []
     for tangent in tangents:
-        target_key = tangent.target.point_id
-        local_target = _local_tangent_target(target_key, side, actuator_dofs)
-        if local_target is None:
-            continue
+        selector_point = tangent.target.selector_point
+        if selector_point is not None:
+            local_target = _local_tangent_target(
+                selector_point,
+                side,
+                actuator_dofs,
+            )
+            if local_target is None:
+                continue
+            local_tangent_target = tangent.target.map_points(
+                lambda _point: local_target
+            )
+        else:
+            if not tangent.target.required_points or not all(
+                isinstance(point, PointRef) and point.side is side
+                for point in tangent.target.required_points
+            ):
+                continue
+            local_tangent_target = tangent.target.map_points(
+                lambda point: point.point if isinstance(point, PointRef) else point
+            )
         result.append(
             TangentField(
                 target_index=tangent.target_index,
-                target=tangent.target._replace(point_id=local_target),
+                target=local_tangent_target,
                 velocities={
                     key.point: velocity
                     for key, velocity in tangent.velocities.items()

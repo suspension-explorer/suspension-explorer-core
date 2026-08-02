@@ -128,7 +128,7 @@ def test_front_view_metrics_are_invariant_to_rigid_x_translation(
     suspension = load_geometry(double_wishbone_geometry_file)
     assert isinstance(suspension, DoubleWishboneSuspension)
 
-    sweep_config = load_sweep(test_data_dir / "sweep.yaml")
+    sweep_config = load_sweep(test_data_dir / "sweep.yaml", suspension)
     states, _ = solve_sweep(suspension, sweep_config)
 
     translated = _translate_double_wishbone_x(suspension, 100.0)
@@ -431,7 +431,10 @@ def test_anti_geometry_uses_perpendicular_cg_height_above_the_ground_plane(
     )
     # The design state has side-view-parallel wishbones, so its SVIC is at
     # infinity; take a swept state where the anti formulas are defined.
-    states, _ = solve_sweep(suspension, load_sweep(test_data_dir / "sweep.yaml"))
+    states, _ = solve_sweep(
+        suspension,
+        load_sweep(test_data_dir / "sweep.yaml", suspension),
+    )
     state = next(
         candidate
         for candidate in states
@@ -504,7 +507,10 @@ def test_anti_dive_on_flat_ground_equals_the_chassis_z_formula(
     config = suspension.config.model_copy(
         update={"axle_position": AxlePosition.FRONT, "front_brake_bias": 0.6}
     )
-    states, _ = solve_sweep(suspension, load_sweep(test_data_dir / "sweep.yaml"))
+    states, _ = solve_sweep(
+        suspension,
+        load_sweep(test_data_dir / "sweep.yaml", suspension),
+    )
     state = next(
         candidate
         for candidate in states
@@ -543,7 +549,10 @@ def test_anti_squat_resolves_the_rise_along_a_banked_ground_normal(
             "driven_axle": AxlePosition.REAR,
         }
     )
-    states, _ = solve_sweep(suspension, load_sweep(test_data_dir / "sweep.yaml"))
+    states, _ = solve_sweep(
+        suspension,
+        load_sweep(test_data_dir / "sweep.yaml", suspension),
+    )
     state = next(
         candidate
         for candidate in states
@@ -787,7 +796,7 @@ class TestSignConventionsAndKnownValues:
         sweep step produces a positive angle for the left-side suspension.
         """
         suspension = load_geometry(double_wishbone_geometry_file)
-        sweep_config = load_sweep(test_data_dir / "sweep.yaml")
+        sweep_config = load_sweep(test_data_dir / "sweep.yaml", suspension)
         states, _ = solve_sweep(suspension, sweep_config)
 
         first_metrics = compute_metrics_for_state_from_suspension(states[0], suspension)

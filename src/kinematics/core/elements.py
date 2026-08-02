@@ -39,6 +39,7 @@ class RockerPickupType(StrEnum):
     """
 
     PUSHROD = "pushrod"
+    DAMPER = "damper"
     DROPLINK = "droplink"
     HEAVE_LINK = "heave_link"
 

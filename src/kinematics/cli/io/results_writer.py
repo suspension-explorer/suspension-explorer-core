@@ -98,6 +98,8 @@ class SolutionFrame:
     solver_info: SolverInfo
     metrics: dict[str, float | None] = field(default_factory=dict)
     metric_specs: dict[str, MetricSpec] = field(default_factory=dict)
+    target_coordinates: dict[str, float] = field(default_factory=dict)
+    target_coordinate_units: dict[str, str] = field(default_factory=dict)
 
 
 class BaseResultsWriter(ABC):
@@ -161,6 +163,13 @@ class BaseResultsWriter(ABC):
         row[StandardColumn.SOLVER_CONVERGED.value] = frame.solver_info.converged
         row[StandardColumn.SOLVER_MAX_RESIDUAL.value] = frame.solver_info.max_residual
         row[StandardColumn.SOLVER_NFEV.value] = frame.solver_info.nfev
+
+        # Measured scalar sweep coordinates precede result metrics and positions.
+        for coordinate_name, coordinate_value in frame.target_coordinates.items():
+            row[coordinate_name] = float(coordinate_value)
+            unit = frame.target_coordinate_units.get(coordinate_name)
+            if unit is not None:
+                self._record_column_unit(coordinate_name, unit)
 
         # Metric columns (between solver and position columns).
         for metric_name, metric_value in frame.metrics.items():

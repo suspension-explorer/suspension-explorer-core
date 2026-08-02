@@ -13,6 +13,7 @@ from kinematics.core.metrics.main import AxleMetricRows, MetricRow, flatten_metr
 from kinematics.core.metrics.registry import flat_specs_for_suspension
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.sweep import EvaluatedSweep, solve_evaluated_sweep
+from kinematics.core.targeting import target_export_column_name
 
 
 @dataclass(frozen=True)
@@ -46,8 +47,34 @@ def run_sweep_files(
     """
     suspension = load_geometry(geometry_path)
     sweep_config = load_sweep(sweep_path, suspension)
-    evaluated = solve_evaluated_sweep(suspension, sweep_config)
+    target_columns = [
+        (
+            target_export_column_name(dimension[0]),
+            dimension[0],
+        )
+        for dimension in sweep_config.target_sweeps
+        if dimension
+    ]
+    indices_by_column: dict[str, list[int]] = {}
+    for target_index, (column, _target) in enumerate(target_columns):
+        indices_by_column.setdefault(column, []).append(target_index)
+    duplicate_column = next(
+        (
+            (column, indices)
+            for column, indices in indices_by_column.items()
+            if len(indices) > 1
+        ),
+        None,
+    )
+    if duplicate_column is not None:
+        column, indices = duplicate_column
+        rendered_indices = ", ".join(str(index) for index in indices)
+        raise ValueError(
+            f"Sweep targets {rendered_indices} produce duplicate export column "
+            f"'{column}'. Choose distinct point/axis coordinates or directions."
+        )
 
+    evaluated = solve_evaluated_sweep(suspension, sweep_config)
     writer = create_writer_for_path(
         output_path,
         geometry_path=str(geometry_path),
@@ -69,6 +96,13 @@ def run_sweep_files(
                 solver_info=solver_info,
                 metrics=flatten_metrics_for_export(metric_row),
                 metric_specs=metric_specs,
+                target_coordinates={
+                    column: target.measure(state.positions)
+                    for column, target in target_columns
+                },
+                target_coordinate_units={
+                    column: target.unit for column, target in target_columns
+                },
             ),
         )
     writer.write()

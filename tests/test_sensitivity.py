@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from kinematics.cli.io.loaders import load_geometry
-from kinematics.core.enums import Axis, PointID, TargetPositionMode
+from kinematics.core.enums import Axis, PointID, TargetValueMode
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.geometry import extract_array
 from kinematics.core.sensitivity import (
@@ -23,16 +23,7 @@ def _bump_target(value: float) -> PointTarget:
         point_id=PointID.WHEEL_CENTER,
         direction=PointTargetAxis(axis=Axis.Z),
         value=value,
-        mode=TargetPositionMode.ABSOLUTE,
-    )
-
-
-def _trackrod_inboard_target(value: float) -> PointTarget:
-    return PointTarget(
-        point_id=PointID.TRACKROD_INBOARD,
-        direction=PointTargetAxis(axis=Axis.Y),
-        value=value,
-        mode=TargetPositionMode.ABSOLUTE,
+        mode=TargetValueMode.ABSOLUTE,
     )
 
 
@@ -44,7 +35,17 @@ def test_corner_tangent_matches_finite_difference(
     design_z = float(initial.positions[PointID.WHEEL_CENTER][Axis.Z])
     trackrod_inboard_y = float(initial.positions[PointID.TRACKROD_INBOARD][Axis.Y])
     target_z = design_z + 10.0
-    targets = [_bump_target(target_z), _trackrod_inboard_target(trackrod_inboard_y)]
+    rack_coordinate = next(
+        coordinate
+        for coordinate in corner.drive_coordinates()
+        if coordinate.id == "rack"
+    )
+    rack_target = rack_coordinate.position_target(
+        PointTargetAxis(axis=Axis.Y),
+        trackrod_inboard_y,
+        TargetValueMode.ABSOLUTE,
+    )
+    targets = [_bump_target(target_z), rack_target]
 
     state = solve_sweep(corner, SweepConfig([[targets[0]], [targets[1]]]))[0][0]
     fields, solve_info = compute_state_tangents(
@@ -60,8 +61,8 @@ def test_corner_tangent_matches_finite_difference(
             [
                 [_bump_target(target_z - FD_STEP), _bump_target(target_z + FD_STEP)],
                 [
-                    _trackrod_inboard_target(trackrod_inboard_y),
-                    _trackrod_inboard_target(trackrod_inboard_y),
+                    rack_target,
+                    rack_target,
                 ],
             ]
         ),

@@ -7,6 +7,7 @@ export concern and are not embedded in analysis metric keys.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
@@ -18,7 +19,7 @@ from kinematics.core.diagnostics import (
     DiagnosticIssue,
     DiagnosticSeverity,
 )
-from kinematics.core.enums import TargetPositionMode
+from kinematics.core.enums import TargetValueMode
 from kinematics.core.metrics.main import AxleMetricRows, MetricRow
 from kinematics.core.metrics.metadata import MetricDisplay, metric_display_for_keys
 from kinematics.core.metrics.registry import metric_specs_for_suspension
@@ -33,11 +34,7 @@ from kinematics.core.presentation import (
     wheel_dimensions,
     wheel_references,
 )
-from kinematics.core.primitives.point_ref import (
-    PointRef,
-    Side,
-    point_key_name,
-)
+from kinematics.core.primitives.point_ref import point_key_name
 from kinematics.core.rigid_motion import ScrewAxisStatus, UprightScrewAxisResult
 from kinematics.core.solver import SolverInfo
 from kinematics.core.state import SuspensionState
@@ -49,7 +46,7 @@ from kinematics.core.sweep import (
     solve_evaluated_sweep,
     solve_sweep,
 )
-from kinematics.core.targeting import PointTarget, SweepConfig
+from kinematics.core.targeting import SweepConfig
 
 if TYPE_CHECKING:
     from kinematics.core.suspensions.axle import AxleSuspension
@@ -68,11 +65,31 @@ class SuspensionInfo:
 
 @dataclass(frozen=True)
 class SweepParameter:
-    """One principal-axis sweep dimension usable as a chart axis."""
+    """One measured scalar sweep dimension usable as a chart axis."""
 
-    point: str
-    axis: str
+    type: str
+    coordinate_id: str
+    label: str
+    unit: str
+    values: list[float]
+    point: str | None = None
+    axis: str | None = None
+    actuator: str | None = None
+    element: str | None = None
+    side: str | None = None
+
+
+@dataclass(frozen=True)
+class DriveCoordinateInfo:
+    """Transport-safe metadata for one topology-declared drive coordinate."""
+
+    id: str
+    type: str
+    label: str
+    unit: str
+    scope: str
     side: str | None
+    point_keys: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -126,6 +143,7 @@ class StaticPose:
     wheel: WheelDimensions | None
     elements: list[NamedElementPath]
     wheel_references: list[WheelReferences]
+    drive_coordinates: list[DriveCoordinateInfo]
 
 
 @dataclass(frozen=True)
@@ -160,42 +178,50 @@ def _suspension_info(suspension: Suspension) -> SuspensionInfo:
     )
 
 
-def sweep_parameters(sweep_config: SweepConfig) -> list[SweepParameter]:
-    """Describe every principal-axis dimension in a sweep."""
+def sweep_parameters(
+    sweep_config: SweepConfig,
+    states: Sequence[SuspensionState] | None = None,
+) -> list[SweepParameter]:
+    """Describe every scalar dimension and its authored or measured values."""
     parameters: list[SweepParameter] = []
     for dimension in sweep_config.target_sweeps:
         if not dimension:
             continue
         target = dimension[0]
-        axis = getattr(target.direction, "axis", None)
-        if axis is None:
-            continue
-        key = target.point_id
-        side = None
-        if isinstance(key, PointRef) and key.side is not Side.CENTER:
-            side = key.side.name.lower()
+        values = (
+            [float(target.measure(state.positions)) for state in states]
+            if states is not None
+            else [float(item.value) for item in dimension]
+        )
+        structural_side = target.structural_side
         parameters.append(
-            SweepParameter(point=point_key_name(key), axis=axis.name.lower(), side=side)
+            SweepParameter(
+                type=target.kind.value,
+                coordinate_id=target.coordinate_id,
+                label=target.label,
+                unit=target.unit,
+                values=values,
+                point=target.parameter_point,
+                axis=target.parameter_axis,
+                actuator=target.parameter_actuator,
+                element=target.parameter_element,
+                side=(
+                    structural_side.name.lower()
+                    if structural_side is not None
+                    else None
+                ),
+            )
         )
     return parameters
 
 
 def _hold_sweep_config(sweep_config: SweepConfig) -> SweepConfig | None:
-    hold_dimensions: list[list[PointTarget]] = []
+    hold_dimensions = []
     for dimension in sweep_config.target_sweeps:
         if not dimension:
             continue
         target = dimension[0]
-        hold_dimensions.append(
-            [
-                PointTarget(
-                    point_id=target.point_id,
-                    direction=target.direction,
-                    value=0.0,
-                    mode=TargetPositionMode.RELATIVE,
-                )
-            ]
-        )
+        hold_dimensions.append([target.with_value(0.0, TargetValueMode.RELATIVE)])
     return SweepConfig(hold_dimensions) if hold_dimensions else None
 
 
@@ -386,7 +412,7 @@ def analyze_evaluated_sweep(
             display_keys,
             metric_specs_for_suspension(suspension),
         ),
-        sweep_parameters=sweep_parameters(sweep_config),
+        sweep_parameters=sweep_parameters(sweep_config, evaluated.states),
         references=references,
         wheel=wheel_dimensions(suspension.config),
         elements=named_element_paths(assembly),
@@ -407,4 +433,22 @@ def initial_pose(suspension: Suspension) -> StaticPose:
         wheel=wheel_dimensions(suspension.config),
         elements=named_element_paths(assembly),
         wheel_references=wheel_references(assembly),
+        drive_coordinates=[
+            DriveCoordinateInfo(
+                id=coordinate.id,
+                type=coordinate.kind.value,
+                label=coordinate.label,
+                unit=coordinate.unit,
+                scope=coordinate.scope.value,
+                side=(
+                    coordinate.side.name.lower()
+                    if coordinate.side is not None
+                    else None
+                ),
+                point_keys=tuple(
+                    point_key_name(point) for point in coordinate.point_keys
+                ),
+            )
+            for coordinate in suspension.drive_coordinates()
+        ],
     )

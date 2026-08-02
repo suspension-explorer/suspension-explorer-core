@@ -14,9 +14,10 @@ from kinematics.core.input import (
     parse_sweep_spec,
 )
 from kinematics.core.primitives.point_ref import PointRef, Side
+from kinematics.core.schema.sweep import TargetSpec
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.corner import DoubleWishboneSuspension
-from kinematics.core.targeting import PointTargetAxis
+from kinematics.core.targeting import PointTarget, PointTargetAxis
 
 
 def _read_mapping(path: Path) -> dict[str, Any]:
@@ -54,10 +55,13 @@ def test_core_builds_sweep_from_decoded_mapping(test_data_dir: Path) -> None:
     spec = parse_sweep_spec(data)
     sweep = build_sweep(data, suspension)
 
-    assert spec.targets[0].point is PointID.WHEEL_CENTER
-    assert spec.targets[0].side is Side.LEFT
-    assert spec.targets[0].direction.axis is Axis.Z
+    target_spec = spec.targets[0]
+    assert isinstance(target_spec, TargetSpec)
+    assert target_spec.point is PointID.WHEEL_CENTER
+    assert target_spec.side is Side.LEFT
+    assert target_spec.direction.axis is Axis.Z
     target = sweep.target_sweeps[0][0]
+    assert isinstance(target, PointTarget)
     assert target.point_id == PointRef(Side.LEFT, PointID.WHEEL_CENTER)
     assert isinstance(target.direction, PointTargetAxis)
     assert target.direction.axis is Axis.Z

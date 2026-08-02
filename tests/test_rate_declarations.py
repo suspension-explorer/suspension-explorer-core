@@ -5,13 +5,18 @@ from pathlib import Path
 import pytest
 
 from kinematics.cli.io.loaders import load_geometry
-from kinematics.core.enums import Axis, PointID, TargetPositionMode
+from kinematics.core.enums import Axis, PointID, TargetValueMode
 from kinematics.core.metrics.catalog import get_default_corner_derivative_metrics
 from kinematics.core.metrics.main import compute_metrics_for_state
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.sensitivity import compute_state_tangents
 from kinematics.core.sweep import solve_sweep
-from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
+from kinematics.core.targeting import (
+    ActuatorPositionTarget,
+    PointTarget,
+    PointTargetAxis,
+    SweepConfig,
+)
 
 TEST_DATA = Path(__file__).parent / "data"
 FD_STEP = 0.25
@@ -22,7 +27,17 @@ def _target(point: PointID, axis: Axis, value: float) -> PointTarget:
         point_id=point,
         direction=PointTargetAxis(axis),
         value=value,
-        mode=TargetPositionMode.ABSOLUTE,
+        mode=TargetValueMode.ABSOLUTE,
+    )
+
+
+def _rack_target(value: float) -> ActuatorPositionTarget:
+    return ActuatorPositionTarget(
+        actuator_id="rack",
+        point_id=PointID.TRACKROD_INBOARD,
+        direction=PointTargetAxis(Axis.Y),
+        value=value,
+        mode=TargetValueMode.ABSOLUTE,
     )
 
 
@@ -42,7 +57,7 @@ def _solve_with_tangents(geometry_name: str):
     trackrod_inboard_y = float(initial.get(PointID.TRACKROD_INBOARD)[Axis.Y])
     targets = [
         _target(PointID.WHEEL_CENTER, Axis.Z, wheel_z),
-        _target(PointID.TRACKROD_INBOARD, Axis.Y, trackrod_inboard_y),
+        _rack_target(trackrod_inboard_y),
     ]
     state = solve_sweep(corner, SweepConfig([[targets[0]], [targets[1]]]))[0][0]
     tangents, _ = compute_state_tangents(
@@ -69,8 +84,7 @@ def _metric_rows_at(
                     for value in wheel_values
                 ],
                 [
-                    _target(PointID.TRACKROD_INBOARD, Axis.Y, value)
-                    for value in trackrod_inboard_y_values
+                    _rack_target(value) for value in trackrod_inboard_y_values
                 ],
             ]
         ),
@@ -132,16 +146,8 @@ def test_wheel_center_x_derivative_matches_finite_difference(
                     _target(PointID.WHEEL_CENTER, Axis.Z, wheel_z + FD_STEP),
                 ],
                 [
-                    _target(
-                        PointID.TRACKROD_INBOARD,
-                        Axis.Y,
-                        trackrod_inboard_y,
-                    ),
-                    _target(
-                        PointID.TRACKROD_INBOARD,
-                        Axis.Y,
-                        trackrod_inboard_y,
-                    ),
+                    _rack_target(trackrod_inboard_y),
+                    _rack_target(trackrod_inboard_y),
                 ],
             ]
         ),

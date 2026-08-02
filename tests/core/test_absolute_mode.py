@@ -1,6 +1,6 @@
 import numpy as np
 
-from kinematics.core.enums import Axis, PointID, TargetPositionMode
+from kinematics.core.enums import Axis, PointID, TargetValueMode
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
@@ -23,12 +23,12 @@ def test_resolve_targets_to_absolute():
         PointID.WHEEL_CENTER,
         PointTargetAxis(Axis.Z),
         50.0,
-        TargetPositionMode.RELATIVE,
+        TargetValueMode.RELATIVE,
     )
 
     resolved = convert_targets_to_absolute([relative_target], initial_state)
 
-    assert resolved[0].mode == TargetPositionMode.ABSOLUTE
+    assert resolved[0].mode == TargetValueMode.ABSOLUTE
     assert resolved[0].value == 200.0  # 150 + 50
 
     # Absolute passthrough
@@ -36,18 +36,18 @@ def test_resolve_targets_to_absolute():
         PointID.WHEEL_CENTER,
         PointTargetAxis(Axis.Z),
         400.0,
-        TargetPositionMode.ABSOLUTE,
+        TargetValueMode.ABSOLUTE,
     )
 
     resolved2 = convert_targets_to_absolute([absolute_target], initial_state)
 
-    assert resolved2[0].mode == TargetPositionMode.ABSOLUTE
+    assert resolved2[0].mode == TargetValueMode.ABSOLUTE
     assert resolved2[0].value == 400.0
 
 
 def test_default_relative_mode():
     target = PointTarget(PointID.WHEEL_CENTER, PointTargetAxis(Axis.Z), 50)
-    assert target.mode == TargetPositionMode.RELATIVE
+    assert target.mode == TargetValueMode.RELATIVE
 
 
 def test_absolute_mode_solve():
@@ -66,7 +66,7 @@ def test_absolute_mode_solve():
             PointID.LOWER_WISHBONE_OUTBOARD,
             PointTargetAxis(Axis.X),
             10.0,
-            TargetPositionMode.ABSOLUTE,
+            TargetValueMode.ABSOLUTE,
         )
     ]
     y_sweep = [
@@ -74,7 +74,7 @@ def test_absolute_mode_solve():
             PointID.LOWER_WISHBONE_OUTBOARD,
             PointTargetAxis(Axis.Y),
             -5.0,
-            TargetPositionMode.ABSOLUTE,
+            TargetValueMode.ABSOLUTE,
         )
     ]
     z_sweep = [
@@ -82,7 +82,7 @@ def test_absolute_mode_solve():
             PointID.LOWER_WISHBONE_OUTBOARD,
             PointTargetAxis(Axis.Z),
             100.0,
-            TargetPositionMode.ABSOLUTE,
+            TargetValueMode.ABSOLUTE,
         )
     ]
 

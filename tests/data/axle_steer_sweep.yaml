@@ -4,20 +4,22 @@ targets:
   # Match the app's Axle Steer preset: wheel-centre height is held while the
   # rack moves. This includes the suspension jacking needed to cancel the
   # wheel-centre vertical motion caused by steering around an inclined axis.
-  - point: wheel_center
+  - type: point
+    point: wheel_center
     side: left
     direction: {axis: z}
     mode: relative
     start: 0
     stop: 0
-  - point: wheel_center
+  - type: point
+    point: wheel_center
     side: right
     direction: {axis: z}
     mode: relative
     start: 0
     stop: 0
-  - point: trackrod_inboard
-    side: left
+  - type: actuator_position
+    actuator: rack
     direction: {axis: y}
     mode: relative
     start: -50

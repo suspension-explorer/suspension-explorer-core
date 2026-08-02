@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from kinematics.core.enums import Axis, PointID, TargetPositionMode
+from kinematics.core.enums import Axis, PointID, TargetValueMode
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.rigid_motion import (
@@ -36,7 +36,7 @@ def _tangent(velocities: dict[PointKey, np.ndarray]) -> TangentField:
         point_id=PointID.TRACKROD_INBOARD,
         direction=PointTargetAxis(Axis.X),
         value=0.0,
-        mode=TargetPositionMode.ABSOLUTE,
+        mode=TargetValueMode.ABSOLUTE,
     )
     return TangentField(target_index=0, target=target, velocities=velocities)
 

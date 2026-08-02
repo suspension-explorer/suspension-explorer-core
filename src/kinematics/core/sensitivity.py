@@ -20,7 +20,7 @@ from kinematics.core.primitives.dual import DualVec3, seed_positions_with_tangen
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.solver import ResidualComputer
 from kinematics.core.state import SuspensionState
-from kinematics.core.targeting import PointTarget
+from kinematics.core.targeting import ScalarTarget
 
 
 @dataclass(frozen=True)
@@ -28,7 +28,7 @@ class TangentField:
     """First-order response of every point position to one sweep target."""
 
     target_index: int
-    target: PointTarget
+    target: ScalarTarget
     velocities: dict[PointKey, np.ndarray]
 
     def velocity(self, point_id: PointKey) -> np.ndarray:
@@ -58,7 +58,7 @@ def compute_state_tangents(
     state: SuspensionState,
     constraints: list[Constraint],
     derived_manager: DerivedPointsManager,
-    step_targets: Sequence[PointTarget],
+    step_targets: Sequence[ScalarTarget],
     post_derived_update: Callable[[dict], float | None] | None = None,
 ) -> tuple[list[TangentField], TangentSolveInfo]:
     """Compute one tangent field per target and report solve health.

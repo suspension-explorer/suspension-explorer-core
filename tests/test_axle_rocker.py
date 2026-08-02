@@ -14,7 +14,8 @@ from kinematics.core.elements import (
     TorsionElement,
     VariableLengthLinkElement,
 )
-from kinematics.core.enums import PointID
+from kinematics.core.enums import PointID, Scope
+from kinematics.core.input import build_sweep
 from kinematics.core.metrics.main import AxleMetricRows
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
 from kinematics.core.primitives.point_ref import PointRef, Side
@@ -170,6 +171,53 @@ def test_heave_link_composes_with_u_bar_without_rigid_length_constraint(
         "deriv_heave_link_length_wrt_hub_z_left",
         "deriv_heave_link_length_wrt_hub_z_right",
     } <= derivative_names
+
+
+def test_axle_scoped_heave_link_is_driveable_without_a_side(
+    tmp_path: Path,
+    test_data_dir: Path,
+) -> None:
+    axle = _load_heave_axle(tmp_path, test_data_dir)
+    coordinate = next(
+        item for item in axle.drive_coordinates() if item.id == "heave_link"
+    )
+    assert coordinate.scope is Scope.AXLE
+    assert coordinate.side is None
+
+    sweep = build_sweep(
+        {
+            "targets": [
+                {
+                    "type": "element_length",
+                    "element": "heave_link",
+                    "values": [0.0],
+                },
+                {
+                    "type": "point",
+                    "point": "wheel_center",
+                    "side": "left",
+                    "direction": {"axis": "z"},
+                    "values": [0.0],
+                },
+                {
+                    "type": "actuator_position",
+                    "actuator": "rack",
+                    "direction": {"axis": "y"},
+                    "values": [0.0],
+                },
+            ]
+        },
+        axle,
+    )
+    state = solve_sweep(axle, sweep)[0][0]
+    target = sweep.target_sweeps[0][0]
+    assert target.measure(state.positions) == pytest.approx(
+        target.measure(axle.initial_state().positions),
+        abs=1e-5,
+    )
+
+    with pytest.raises(ValueError, match="does not accept a side"):
+        axle.resolve_drive_coordinate("heave_link", Side.LEFT)
 
 
 def test_heave_link_length_changes_in_same_direction_wheel_travel(

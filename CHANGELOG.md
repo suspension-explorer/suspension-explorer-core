@@ -4,6 +4,83 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Added topology-owned scalar drive coordinates for named actuator positions and
+  true element lengths. Element-length targets support relative displacement or
+  absolute pin-centre length, analytical residuals and Jacobians, analytical
+  tangent fields, structured result metadata, and CSV/Parquet export.
+- Added a geometry-independent sweep-target vocabulary with stable labels,
+  units, featured choices, and corner/shared side ownership. Suspensions remain
+  authoritative for whether a selected coordinate is actually driveable.
+- Added an optional independent linear damper to pushrod-rocker double-wishbone
+  corners. Its chassis and rocker pickups participate in the physical assembly,
+  visualization topology, damper-length metric, and motion-ratio derivatives;
+  axle assemblies publish independently side-qualified dampers.
+- Added a shared rack actuator-position coordinate so steering intent is
+  represented explicitly instead of being inferred from a physical track-rod
+  point target.
+
+### Changed
+
+- Generalized sweep solving around one scalar-target protocol. Point
+  projections, named actuator positions, and element lengths now share value
+  expansion, absolute conversion, measurement, point partials, remapping,
+  presentation metadata, validation, and export machinery.
+- Sweep documents and public target metadata now use the required `type`
+  discriminator with `point`, `actuator_position`, or `element_length` values.
+  The same spelling is used by `SweepParameter`, `DriveCoordinateInfo`, and the
+  public target vocabulary.
+- Side policy and units are owned by the coordinate enums rather than repeated
+  in resolver, export, and presentation tables. Corner-owned targets require an
+  explicit side; shared coordinates are unsided. Standalone corner geometry is
+  canonically left, while right-hand corners exist only within an axle.
+- The CLI writes measured values for every scalar sweep dimension in authored
+  order and rejects ambiguous duplicate export column names instead of silently
+  overwriting one projection.
+- Axle coordinate composition now remaps any number of coordinate points rather
+  than assuming every non-actuator coordinate has exactly two endpoints.
+
+### Fixed
+
+- Absolute or resolved element lengths below the geometric tolerance are
+  rejected before solving with a target-indexed error. Coincident endpoints at
+  an intermediate solver iterate use the finite zero derivative of the soft
+  norm instead of raising from inside SciPy's Jacobian callback.
+- Missing target points, duplicate scalar coordinates, unavailable sides, and
+  structurally undriveable target rows now produce precise, human-readable
+  validation errors with their offending target indices.
+
+### Breaking changes
+
+- Replaced the public sweep-target `kind` field with `type`; there is no legacy
+  input alias. Every target must provide the discriminator explicitly.
+- Removed the `TargetPositionMode` alias. Scalar targets use
+  `TargetValueMode` for both relative and absolute values.
+- A physical `trackrod_inboard` point target no longer satisfies the steering
+  rack actuator requirement; use `type: actuator_position` with
+  `actuator: rack`.
+- Standalone right-corner geometry is rejected. Model a right-hand corner as
+  part of an axle instead.
+
+## [0.5.1] - 2026-07-31
+
+### Added
+
+- Added the `trailing_arm` suspension architecture for standalone corners and
+  mirrored or explicitly authored axles. The rigid wheel carrier rotates about
+  the oblique line through the two fixed arm pivots, producing the expected
+  semi-trailing-arm camber and toe motion.
+- Added coilover and pivot-mounted torsion-bar spring layouts for trailing arms.
+  The torsion-bar layout models arm rotation about its authored transverse axis
+  and includes a separate chassis-to-carrier damper.
+- Added renderer-neutral trailing-arm, carrier, wheel, damper, coilover, and
+  torsion-bar elements together with side/front-view instant centres,
+  `torsion_bar_twist`, damper motion ratio, and torsion motion-ratio metrics.
+- Added schema and physical validation for pivot geometry, spring selection,
+  torsion-axis placement, steering exclusion, and unsupported shared axle
+  mechanisms.
+
 ## [0.5.0] - 2026-07-30
 
 ### Added

@@ -1,20 +1,22 @@
 version: 1
 steps: 5
 targets:
-  - point: wheel_center
+  - type: point
+    point: wheel_center
     side: left
     direction: {axis: z}
     mode: relative
     start: -30
     stop: 30
-  - point: wheel_center
+  - type: point
+    point: wheel_center
     side: right
     direction: {axis: z}
     mode: relative
     start: -30
     stop: 30
-  - point: trackrod_inboard
-    side: left
+  - type: actuator_position
+    actuator: rack
     direction: {axis: y}
     mode: relative
     start: -10

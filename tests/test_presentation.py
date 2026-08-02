@@ -15,6 +15,7 @@ from kinematics.core.elements import (
     ElementType,
     RackElement,
     RockerElement,
+    RockerPickupType,
     TorsionElement,
     WheelElement,
 )
@@ -69,6 +70,40 @@ def test_corner_rocker_paths_include_perpendicular_arm_projection(
     projected = np.asarray(positions[axis_projection_name(projection)])
 
     assert set(named_point_keys(assembly)) == set(positions)
+    assert np.dot(axis_end - axis_start, pickup - projected) == pytest.approx(0.0)
+
+
+def test_independent_damper_adds_projected_rocker_arm(
+    test_data_dir: Path,
+) -> None:
+    suspension = load_geometry(test_data_dir / "corner_rocker_damper_geometry.yaml")
+    assembly = suspension.assembly()
+    positions = resolve_positions(suspension.initial_state().positions, assembly)
+
+    rocker = next(
+        element for element in assembly.elements if isinstance(element, RockerElement)
+    )
+    damper_pickup = next(
+        pickup for pickup in rocker.pickups if pickup.type is RockerPickupType.DAMPER
+    )
+    projection = AxisProjection(damper_pickup.point, rocker.rotation_axis)
+    path = next(
+        path
+        for path in named_element_paths(assembly)
+        if path.label == "Rocker Damper Arm"
+    )
+
+    assert damper_pickup.point is PointID.DAMPER_ROCKER
+    assert path.type is ElementType.ROCKER
+    assert path.points == (
+        "damper_rocker",
+        "damper_rocker_axis_projection_rocker_axis_a_rocker_axis_b",
+    )
+
+    axis_start = np.asarray(positions[point_key_name(projection.rotation_axis[0])])
+    axis_end = np.asarray(positions[point_key_name(projection.rotation_axis[1])])
+    pickup = np.asarray(positions[point_key_name(projection.point)])
+    projected = np.asarray(positions[axis_projection_name(projection)])
     assert np.dot(axis_end - axis_start, pickup - projected) == pytest.approx(0.0)
 
 

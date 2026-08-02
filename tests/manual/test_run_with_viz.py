@@ -5,11 +5,16 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.constraints import DistanceConstraint
-from kinematics.core.enums import Axis, PointID, SuspensionType, TargetPositionMode
+from kinematics.core.enums import Axis, PointID, SuspensionType, TargetValueMode
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.constants import TEST_TOLERANCE
 from kinematics.core.sweep import solve_sweep
-from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
+from kinematics.core.targeting import (
+    ActuatorPositionTarget,
+    PointTarget,
+    PointTargetAxis,
+    SweepConfig,
+)
 
 
 @pytest.fixture
@@ -35,18 +40,19 @@ def sweep_config_fixture(displacements):
             point_id=PointID.WHEEL_CENTER,
             direction=PointTargetAxis(Axis.Z),
             value=x,
-            mode=TargetPositionMode.RELATIVE,
+            mode=TargetValueMode.RELATIVE,
         )
         for x in hub_displacements
     ]
 
     # Create steer sweep.
     steer_targets = [
-        PointTarget(
+        ActuatorPositionTarget(
+            actuator_id="rack",
             point_id=PointID.TRACKROD_INBOARD,
             direction=PointTargetAxis(Axis.Y),
             value=x,
-            mode=TargetPositionMode.RELATIVE,
+            mode=TargetValueMode.RELATIVE,
         )
         for x in steer_displacements
     ]

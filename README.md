@@ -266,13 +266,16 @@ to 40 mm of bump while the rack remains at its design position.
 version: 1
 steps: 41
 targets:
-  - point: wheel_center
+  - type: point
+    point: wheel_center
+    side: left
     direction: { axis: z }
     mode: relative
     start: -40
     stop: 40
 
-  - point: trackrod_inboard
+  - type: actuator_position
+    actuator: rack
     direction: { axis: y }
     mode: relative
     start: 0
@@ -280,9 +283,13 @@ targets:
 ```
 
 Every physical actuator must be controlled exactly once. A rack-steered model
-therefore needs one `trackrod_inboard` target along Y, even when the rack is
-held at zero displacement. `relative` values are measured from the authored
-design condition; `absolute` values are coordinates in chassis space.
+therefore needs one `type: actuator_position`, `actuator: rack` target along Y,
+even when the rack is held at zero displacement. `relative` values are measured
+from the authored design condition; `absolute` values are coordinates in chassis
+space. Every corner-owned target must identify `side: left` or `side: right`.
+A standalone corner exposes only `left`; an axle exposes both sides. Shared
+coordinates such as `rack` remain unsided. A physical `trackrod_inboard` point
+target does not substitute for the named rack actuator coordinate.
 
 All target sequences must have the same number of values. Multiple targets are
 paired by index rather than expanded into a Cartesian product. Use `start`,
@@ -373,26 +380,29 @@ The complete maintained examples are:
 - [Pushrod-rocker axle with T-bar](tests/data/axle_geometry_t_bar.yaml)
 
 Axle sweep targets must identify `side: left` or `side: right` for side-local
-points. A rack has one shared lateral degree of freedom, so target either side's
-`trackrod_inboard` along Y exactly once. For example, a three-step roll sweep is:
+points. A rack has one shared lateral degree of freedom, exposed as the
+side-independent `rack` actuator position. For example, a three-step roll sweep
+is:
 
 ```yaml
 version: 1
 targets:
-  - point: wheel_center
+  - type: point
+    point: wheel_center
     side: left
     direction: { axis: z }
     mode: relative
     values: [-30, 0, 30]
 
-  - point: wheel_center
+  - type: point
+    point: wheel_center
     side: right
     direction: { axis: z }
     mode: relative
     values: [30, 0, -30]
 
-  - point: trackrod_inboard
-    side: left
+  - type: actuator_position
+    actuator: rack
     direction: { axis: y }
     mode: relative
     values: [0, 0, 0]
