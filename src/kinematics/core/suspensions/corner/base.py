@@ -6,6 +6,7 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Sequence
 
+from kinematics.core.coordinates import PhysicalCoordinate
 from kinematics.core.enums import (
     ActuatorPositionCoordinateID,
     PointID,
@@ -18,12 +19,11 @@ from kinematics.core.suspensions.base import Suspension
 from kinematics.core.targeting import (
     ActuatorDOF,
     ChassisAxisSystem,
-    DriveCoordinate,
     TargetKind,
 )
 
 if TYPE_CHECKING:
-    from kinematics.core.isolation_coordinates import HingeAngleCoordinate
+    from kinematics.core.coordinates import ArmAngleCoordinate
     from kinematics.core.metrics.main import MetricRow
     from kinematics.core.rigid_motion import UprightScrewAxisResult
     from kinematics.core.sensitivity import TangentField
@@ -106,14 +106,14 @@ class CornerSuspension(Suspension):
             direction=ChassisAxisSystem.Y,
         )
 
-    def drive_coordinates(self) -> tuple[DriveCoordinate, ...]:
+    def drive_coordinates(self) -> tuple[PhysicalCoordinate, ...]:
         """Expose a named rack position plus installed element coordinates."""
         coordinates = super().drive_coordinates()
         rack_point = self.rack_attachment_point()
         if rack_point is None:
             return coordinates
         return (
-            DriveCoordinate(
+            PhysicalCoordinate(
                 id=ActuatorPositionCoordinateID.RACK,
                 kind=TargetKind.ACTUATOR_POSITION,
                 label=ActuatorPositionCoordinateID.RACK.label,
@@ -124,7 +124,7 @@ class CornerSuspension(Suspension):
             *coordinates,
         )
 
-    def _installed_damper_coordinate(self) -> DriveCoordinate | None:
+    def _installed_damper_coordinate(self) -> PhysicalCoordinate | None:
         """Return the installed true damper/strut length coordinate, if any."""
         from kinematics.core.enums import ElementLengthCoordinateID
 
@@ -138,7 +138,7 @@ class CornerSuspension(Suspension):
             None,
         )
 
-    def _hinge_angle_coordinate(
+    def _arm_angle_coordinate(
         self,
         *,
         coordinate_id: str,
@@ -146,11 +146,11 @@ class CornerSuspension(Suspension):
         hinge_point_a: PointID,
         hinge_point_b: PointID,
         carried_point: PointID,
-    ) -> "HingeAngleCoordinate":
+    ) -> "ArmAngleCoordinate":
         """Build one fixed-axis signed arm angle from the design state."""
-        from kinematics.core.isolation_coordinates import HingeAngleCoordinate
+        from kinematics.core.coordinates import ArmAngleCoordinate
 
-        return HingeAngleCoordinate.from_positions(
+        return ArmAngleCoordinate.from_positions(
             id=coordinate_id,
             label=label,
             hinge_point_a=hinge_point_a,

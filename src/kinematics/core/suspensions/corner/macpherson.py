@@ -38,6 +38,7 @@ from kinematics.core.elements import (
     WheelElement,
 )
 from kinematics.core.enums import Axis, PointID, SteeringType, SuspensionType
+from kinematics.core.holds import CoordinateHold
 from kinematics.core.metrics.derivatives import (
     DerivativeMetricDefinition,
     PointCoordinateResponse,
@@ -72,7 +73,7 @@ from kinematics.core.suspensions.corner.toe_link import ToeLink
 from kinematics.core.suspensions.corner.track_rod import TrackRod
 
 if TYPE_CHECKING:
-    from kinematics.core.steering_response import SteeringProbeCatalogue
+    from kinematics.core.steering_response import SuspensionHoldCatalogue
 
 # How far the authored strut clamp may sit off the design steering axis, in
 # millimetres, before the coincident-axis modelling choice is considered
@@ -229,12 +230,11 @@ class MacPhersonSuspension(CornerSuspension):
         """The strut is the spring/damper: top mount to upright clamp."""
         return (PointID.STRUT_TOP, PointID.STRUT_BOTTOM)
 
-    def steering_probe_catalogue(self) -> "SteeringProbeCatalogue | None":
+    def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
         """Declare strut and lower-arm fixed-travel steering definitions."""
         from kinematics.core.steering_response import (
-            SteeringProbeCatalogue,
-            SteeringProbeOption,
-            SteeringProbeOptionClass,
+            SuspensionHoldCatalogue,
+            SuspensionHoldOption,
         )
 
         if self.steering_actuator_dof() is None:
@@ -242,35 +242,33 @@ class MacPhersonSuspension(CornerSuspension):
         strut = self._installed_damper_coordinate()
         if strut is None:
             return None
-        lower_arm = self._hinge_angle_coordinate(
-            coordinate_id="lower_arm_hinge_angle",
+        lower_arm = self._arm_angle_coordinate(
+            coordinate_id="lower_arm_angle",
             label="Lower arm angle",
             hinge_point_a=PointID.LOWER_WISHBONE_INBOARD_FRONT,
             hinge_point_b=PointID.LOWER_WISHBONE_INBOARD_REAR,
             carried_point=PointID.LOWER_WISHBONE_OUTBOARD,
         )
-        return SteeringProbeCatalogue(
+        return SuspensionHoldCatalogue(
             default_option_id="strut_length",
             options=(
-                SteeringProbeOption(
+                SuspensionHoldOption(
                     id="strut_length",
                     label="Strut length",
                     description=(
                         "Fixes strut compression, the locating travel coordinate "
                         "of the supported ideal MacPherson mechanism."
                     ),
-                    option_class=SteeringProbeOptionClass.CANONICAL,
-                    held_coordinates=(strut,),
+                    hold=CoordinateHold((strut,)),
                 ),
-                SteeringProbeOption(
-                    id="lower_arm_hinge_angle",
-                    label="Lower arm hinge angle",
+                SuspensionHoldOption(
+                    id="lower_arm_angle",
+                    label="Lower arm angle",
                     description=(
-                        "Uses the equivalent lower-control-arm travel coordinate "
-                        "for the supported ideal MacPherson mechanism."
+                        "Fixes suspension travel at the lower control arm for the "
+                        "supported ideal MacPherson mechanism."
                     ),
-                    option_class=SteeringProbeOptionClass.EQUIVALENT,
-                    held_coordinates=(lower_arm,),
+                    hold=CoordinateHold((lower_arm,)),
                 ),
             ),
         )

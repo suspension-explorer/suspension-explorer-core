@@ -16,6 +16,7 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any, ClassVar, Sequence
 
 from kinematics.core.constraints import Constraint, DistanceConstraint
+from kinematics.core.coordinates import PhysicalCoordinate
 from kinematics.core.elements import (
     ElementType,
     RackElement,
@@ -31,6 +32,7 @@ from kinematics.core.enums import (
     Scope,
     SuspensionType,
 )
+from kinematics.core.holds import CoordinateHold
 from kinematics.core.metrics.main import AxleMetricRows, compute_metrics_for_axle_state
 from kinematics.core.points.derived.ground import (
     seed_from_contact_centres,
@@ -64,7 +66,6 @@ from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.targeting import (
     ActuatorDOF,
     ChassisAxisSystem,
-    DriveCoordinate,
     TargetKind,
     resolve_published_target_side,
     sweep_target_side_policy,
@@ -76,7 +77,7 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.registry import MetricSpec
     from kinematics.core.rigid_motion import UprightScrewAxisResult
     from kinematics.core.sensitivity import TangentField
-    from kinematics.core.steering_response import SteeringProbeCatalogue
+    from kinematics.core.steering_response import SuspensionHoldCatalogue
 
 
 class _CornerPositionView(Mapping[PointID, Any]):
@@ -171,13 +172,13 @@ class AxleSuspension(Suspension):
             direction=ChassisAxisSystem.Y,
         )
 
-    def drive_coordinates(self) -> tuple[DriveCoordinate, ...]:
+    def drive_coordinates(self) -> tuple[PhysicalCoordinate, ...]:
         """Compose sided corner dampers and axle-owned variable coordinates."""
-        coordinates: list[DriveCoordinate] = []
+        coordinates: list[PhysicalCoordinate] = []
         rack = self.rack_attachment_points()
         if rack is not None:
             coordinates.append(
-                DriveCoordinate(
+                PhysicalCoordinate(
                     id=ActuatorPositionCoordinateID.RACK,
                     kind=TargetKind.ACTUATOR_POSITION,
                     label=ActuatorPositionCoordinateID.RACK.label,
@@ -194,7 +195,7 @@ class AxleSuspension(Suspension):
                 if coordinate.kind is TargetKind.ACTUATOR_POSITION:
                     continue
                 coordinates.append(
-                    DriveCoordinate(
+                    PhysicalCoordinate(
                         id=coordinate.id,
                         kind=coordinate.kind,
                         label=coordinate.label,
@@ -215,7 +216,7 @@ class AxleSuspension(Suspension):
             ):
                 coordinate_id = ElementLengthCoordinateID.HEAVE_LINK
                 coordinates.append(
-                    DriveCoordinate(
+                    PhysicalCoordinate(
                         id=coordinate_id,
                         kind=TargetKind.ELEMENT_LENGTH,
                         label=coordinate_id.label,
@@ -226,7 +227,7 @@ class AxleSuspension(Suspension):
                 )
         return tuple(coordinates)
 
-    def steering_probe_catalogue(self) -> "SteeringProbeCatalogue | None":
+    def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
         """Compose compatible corner options into one axle-level selection.
 
         Each semantic option remains one user choice but expands to one
@@ -235,13 +236,13 @@ class AxleSuspension(Suspension):
         travel coordinates and is not an additional jounce degree of freedom.
         """
         from kinematics.core.steering_response import (
-            SteeringProbeCatalogue,
-            SteeringProbeOption,
-            SteeringProbeOptionAvailability,
+            SuspensionHoldAvailability,
+            SuspensionHoldCatalogue,
+            SuspensionHoldOption,
         )
 
         catalogues = tuple(
-            self.corners[side].steering_probe_catalogue()
+            self.corners[side].suspension_hold_catalogue()
             for side in (Side.LEFT, Side.RIGHT)
         )
         if any(catalogue is None for catalogue in catalogues):
@@ -250,19 +251,19 @@ class AxleSuspension(Suspension):
         assert left_catalogue is not None and right_catalogue is not None
         if left_catalogue.default_option_id != right_catalogue.default_option_id:
             raise ValueError(
-                "Axle corners declare incompatible steering-probe defaults"
+                "Axle corners declare incompatible suspension-hold defaults"
             )
 
         right_by_id = {option.id: option for option in right_catalogue.options}
-        composed: list[SteeringProbeOption] = []
+        composed: list[SuspensionHoldOption] = []
         for left_option in left_catalogue.options:
             right_option = right_by_id.get(left_option.id)
             if right_option is None:
                 continue
-            if left_option.option_class is not right_option.option_class:
+            if left_option.composition_signature != right_option.composition_signature:
                 raise ValueError(
-                    f"Axle corners classify steering-probe option "
-                    f"'{left_option.id}' differently"
+                    f"Axle corners assign incompatible semantics to suspension "
+                    f"hold '{left_option.id}'"
                 )
             held = tuple(
                 coordinate.map_points(
@@ -275,7 +276,7 @@ class AxleSuspension(Suspension):
                     (Side.LEFT, left_option),
                     (Side.RIGHT, right_option),
                 )
-                for coordinate in option.held_coordinates
+                for coordinate in option.hold.coordinates
             )
             unavailable_reasons = tuple(
                 reason
@@ -293,18 +294,17 @@ class AxleSuspension(Suspension):
             availability = max(
                 (left_option.availability, right_option.availability),
                 key=(
-                    SteeringProbeOptionAvailability.AVAILABLE,
-                    SteeringProbeOptionAvailability.AVAILABLE_WITH_WARNING,
-                    SteeringProbeOptionAvailability.UNAVAILABLE,
+                    SuspensionHoldAvailability.AVAILABLE,
+                    SuspensionHoldAvailability.AVAILABLE_WITH_WARNING,
+                    SuspensionHoldAvailability.UNAVAILABLE,
                 ).index,
             )
             composed.append(
-                SteeringProbeOption(
+                SuspensionHoldOption(
                     id=left_option.id,
                     label=left_option.label,
                     description=left_option.description,
-                    option_class=left_option.option_class,
-                    held_coordinates=held,
+                    hold=CoordinateHold(held),
                     availability=availability,
                     warning=" ".join(dict.fromkeys(warnings)) or None,
                     unavailable_reason=(
@@ -315,7 +315,7 @@ class AxleSuspension(Suspension):
 
         if not composed:
             return None
-        return SteeringProbeCatalogue(
+        return SuspensionHoldCatalogue(
             default_option_id=left_catalogue.default_option_id,
             options=tuple(composed),
         )

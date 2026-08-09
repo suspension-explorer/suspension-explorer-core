@@ -31,6 +31,7 @@ from kinematics.core.enums import (
     SteeringType,
     SuspensionType,
 )
+from kinematics.core.holds import CoordinateHold
 from kinematics.core.points.derived.definitions import build_wheel_derived_spec
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
@@ -70,7 +71,7 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
     from kinematics.core.metrics.main import MetricRow
     from kinematics.core.metrics.registry import MetricSpec
-    from kinematics.core.steering_response import SteeringProbeCatalogue
+    from kinematics.core.steering_response import SuspensionHoldCatalogue
 
 
 @dataclass
@@ -240,52 +241,49 @@ class DoubleWishboneSuspension(CornerSuspension):
         """Return selected linear spring/damper endpoints."""
         return self.damper.damper_points or self.spring.damper_points
 
-    def steering_probe_catalogue(self) -> "SteeringProbeCatalogue | None":
+    def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
         """Declare semantic fixed-travel choices for double-wishbone steering."""
         from kinematics.core.steering_response import (
-            SteeringProbeCatalogue,
-            SteeringProbeOption,
-            SteeringProbeOptionAvailability,
-            SteeringProbeOptionClass,
+            SuspensionHoldAvailability,
+            SuspensionHoldCatalogue,
+            SuspensionHoldOption,
         )
 
         if self.steering_actuator_dof() is None:
             return None
 
-        lower = self._hinge_angle_coordinate(
-            coordinate_id="lower_wishbone_hinge_angle",
+        lower = self._arm_angle_coordinate(
+            coordinate_id="lower_wishbone_angle",
             label="Lower wishbone angle",
             hinge_point_a=PointID.LOWER_WISHBONE_INBOARD_FRONT,
             hinge_point_b=PointID.LOWER_WISHBONE_INBOARD_REAR,
             carried_point=PointID.LOWER_WISHBONE_OUTBOARD,
         )
-        upper = self._hinge_angle_coordinate(
-            coordinate_id="upper_wishbone_hinge_angle",
+        upper = self._arm_angle_coordinate(
+            coordinate_id="upper_wishbone_angle",
             label="Upper wishbone angle",
             hinge_point_a=PointID.UPPER_WISHBONE_INBOARD_FRONT,
             hinge_point_b=PointID.UPPER_WISHBONE_INBOARD_REAR,
             carried_point=PointID.UPPER_WISHBONE_OUTBOARD,
         )
         options = [
-            SteeringProbeOption(
-                id="lower_wishbone_hinge_angle",
-                label="Lower wishbone hinge angle",
+            SuspensionHoldOption(
+                id="lower_wishbone_angle",
+                label="Lower wishbone angle",
                 description=(
                     "Fixes suspension travel at the lower wishbone, independent "
                     "of the installed spring, damper and actuation mechanism."
                 ),
-                option_class=SteeringProbeOptionClass.CANONICAL,
-                held_coordinates=(lower,),
+                hold=CoordinateHold((lower,)),
             ),
-            SteeringProbeOption(
-                id="upper_wishbone_hinge_angle",
-                label="Upper wishbone hinge angle",
+            SuspensionHoldOption(
+                id="upper_wishbone_angle",
+                label="Upper wishbone angle",
                 description=(
-                    "Uses the equivalent upper-wishbone travel coordinate for "
-                    "the ideal rigid double-wishbone mechanism."
+                    "Fixes suspension travel at the upper wishbone for the ideal "
+                    "rigid double-wishbone mechanism."
                 ),
-                option_class=SteeringProbeOptionClass.EQUIVALENT,
-                held_coordinates=(upper,),
+                hold=CoordinateHold((upper,)),
             ),
         ]
 
@@ -300,30 +298,25 @@ class DoubleWishboneSuspension(CornerSuspension):
                 else None
             )
             options.append(
-                SteeringProbeOption(
+                SuspensionHoldOption(
                     id="damper_length",
                     label="Damper length",
                     description=(
                         "Fixes the installed true damper length during the "
                         "counterfactual steering response."
                     ),
-                    option_class=(
-                        SteeringProbeOptionClass.DIAGNOSTIC
-                        if mounted_to_upright
-                        else SteeringProbeOptionClass.EQUIVALENT
-                    ),
-                    held_coordinates=(damper,),
+                    hold=CoordinateHold((damper,)),
                     availability=(
-                        SteeringProbeOptionAvailability.AVAILABLE_WITH_WARNING
+                        SuspensionHoldAvailability.AVAILABLE_WITH_WARNING
                         if warning is not None
-                        else SteeringProbeOptionAvailability.AVAILABLE
+                        else SuspensionHoldAvailability.AVAILABLE
                     ),
                     warning=warning,
                 )
             )
 
-        return SteeringProbeCatalogue(
-            default_option_id="lower_wishbone_hinge_angle",
+        return SuspensionHoldCatalogue(
+            default_option_id="lower_wishbone_angle",
             options=tuple(options),
         )
 

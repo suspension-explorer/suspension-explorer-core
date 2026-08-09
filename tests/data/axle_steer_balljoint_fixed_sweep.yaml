@@ -8,16 +8,12 @@ targets:
     point: lower_wishbone_outboard
     side: left
     direction: {axis: z}
-    mode: relative
-    start: 0
-    stop: 0
+    hold: true
   - type: point
     point: lower_wishbone_outboard
     side: right
     direction: {axis: z}
-    mode: relative
-    start: 0
-    stop: 0
+    hold: true
   - type: actuator_position
     actuator: rack
     direction: {axis: y}

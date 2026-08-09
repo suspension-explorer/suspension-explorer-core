@@ -31,6 +31,7 @@ from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.state import SuspensionState
 
 if TYPE_CHECKING:
+    from kinematics.core.coordinates import PhysicalCoordinate
     from kinematics.core.diagnostics import DiagnosticIssue
     from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
     from kinematics.core.metrics.main import AxleMetricRows, MetricRow
@@ -38,12 +39,12 @@ if TYPE_CHECKING:
     from kinematics.core.rigid_motion import UprightScrewAxisResult
     from kinematics.core.sensitivity import TangentField
     from kinematics.core.steering_response import (
-        SteeringProbeCatalogue,
         SteeringResponseDefinition,
+        SuspensionHoldCatalogue,
     )
     from kinematics.core.targeting import (
         ActuatorDOF,
-        DriveCoordinate,
+        ScalarCoordinateTarget,
         ScalarTarget,
         TargetKind,
     )
@@ -213,16 +214,17 @@ class Suspension(ABC):
         """Return installed spring/damper endpoints, if present."""
         return None
 
-    def drive_coordinates(self) -> "tuple[DriveCoordinate, ...]":
+    def drive_coordinates(self) -> "tuple[PhysicalCoordinate, ...]":
         """Return explicitly driveable scalar coordinates in stable order."""
-        from kinematics.core.targeting import DriveCoordinate, TargetKind
+        from kinematics.core.coordinates import PhysicalCoordinate
+        from kinematics.core.targeting import TargetKind
 
         endpoints = self.damper_points()
         if endpoints is None:
             return ()
         coordinate_id = ElementLengthCoordinateID.DAMPER
         return (
-            DriveCoordinate(
+            PhysicalCoordinate(
                 id=coordinate_id,
                 kind=TargetKind.ELEMENT_LENGTH,
                 label=coordinate_id.label,
@@ -238,7 +240,7 @@ class Suspension(ABC):
         coordinate_id: str,
         side: Side | None,
         kind: "TargetKind | None" = None,
-    ) -> "DriveCoordinate":
+    ) -> "PhysicalCoordinate":
         """Resolve one stable drive-coordinate ID under topology side rules."""
         from kinematics.core.targeting import (
             TargetKind,
@@ -370,9 +372,14 @@ class Suspension(ABC):
                     f"type '{suspension_type}'."
                 )
 
-    def validate_sweep_targets(self, targets: Iterable["ScalarTarget"]) -> None:
+    def validate_sweep_targets(
+        self,
+        targets: Iterable["ScalarTarget"],
+        *,
+        held_targets: Iterable["ScalarCoordinateTarget"] = (),
+    ) -> None:
         """Validate driven points and topology-declared scalar coordinates."""
-        target_list = tuple(targets)
+        target_list = (*targets, *held_targets)
         self.validate_sweep_target_points(
             point for target in target_list for point in target.driven_points
         )
@@ -432,51 +439,48 @@ class Suspension(ABC):
         """Return the steering actuator coordinate, if this suspension has one."""
         return None
 
-    def steering_probe_catalogue(self) -> "SteeringProbeCatalogue | None":
-        """Return topology-owned steering isolation choices, if implemented."""
+    def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
+        """Return topology-owned suspension holds for virtual steering."""
         return None
 
-    def resolve_steering_probe(
+    def resolve_suspension_hold(
         self,
         requested_option_id: str | None = None,
     ) -> "SteeringResponseDefinition | None":
-        """Resolve one explicit option or this topology's canonical default."""
+        """Resolve one explicit suspension hold or the layout default."""
         from kinematics.core.steering_response import (
-            SteeringProbeOptionAvailability,
-            SteeringProbeSelectionSource,
             SteeringResponseDefinition,
+            SuspensionHoldAvailability,
+            SuspensionHoldSelectionSource,
         )
 
         steering = self.steering_actuator_dof()
-        catalogue = self.steering_probe_catalogue()
+        catalogue = self.suspension_hold_catalogue()
         if steering is None or catalogue is None:
             if requested_option_id not in (None, "layout_default"):
                 raise ValueError(
                     f"Suspension type '{self.reported_type_key().value}' does not "
-                    "publish steering-probe isolation options."
+                    "publish suspension-hold options."
                 )
             return None
         uses_default = requested_option_id in (None, "layout_default")
         option_id = catalogue.default_option_id if uses_default else requested_option_id
         assert option_id is not None
         option = catalogue.option(option_id)
-        if option.availability is SteeringProbeOptionAvailability.UNAVAILABLE:
+        if option.availability is SuspensionHoldAvailability.UNAVAILABLE:
             reason = option.unavailable_reason or "The option is unavailable."
-            raise ValueError(
-                f"Steering-probe isolation '{option.id}' is unavailable: {reason}"
-            )
+            raise ValueError(f"Suspension hold '{option.id}' is unavailable: {reason}")
         return SteeringResponseDefinition(
             steering_actuator=steering,
-            held_coordinates=option.held_coordinates,
+            hold=option.hold,
             owner=self.reported_type_key().value,
             definition_id=option.id,
             requested_option_id=requested_option_id,
             selection_source=(
-                SteeringProbeSelectionSource.LAYOUT_DEFAULT
+                SuspensionHoldSelectionSource.LAYOUT_DEFAULT
                 if uses_default
-                else SteeringProbeSelectionSource.USER_OVERRIDE
+                else SuspensionHoldSelectionSource.USER_OVERRIDE
             ),
-            option_class=option.option_class,
             label=option.label,
             description=option.description,
             warning=option.warning,

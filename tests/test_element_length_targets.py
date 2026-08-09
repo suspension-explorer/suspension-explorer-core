@@ -499,6 +499,6 @@ def test_duplicate_scalar_coordinate_is_rejected() -> None:
     )
     with pytest.raises(
         ValueError,
-        match=r"targets 0, 1.*same point coordinate 'wheel_center_z'.*step 0",
+        match=r"controls 0, 1.*same point coordinate 'wheel_center_z'.*step 0",
     ):
         SweepConfig([[target], [target]])

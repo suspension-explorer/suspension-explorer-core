@@ -51,7 +51,6 @@ from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.state import SuspensionState
 from kinematics.core.targeting import (
     ScalarCoordinateTarget,
-    ScalarTarget,
     SweepConfig,
     TargetValueMode,
 )
@@ -619,9 +618,9 @@ class ResidualComputer:
 
 
 def convert_targets_to_absolute(
-    targets: Sequence[ScalarTarget],
+    targets: Sequence[ScalarCoordinateTarget],
     initial_state: SuspensionState,
-) -> list[ScalarTarget]:
+) -> list[ScalarCoordinateTarget]:
     """
     Convert all targets to absolute coordinates.
 
@@ -636,7 +635,7 @@ def convert_targets_to_absolute(
     Returns:
         List of targets with all modes converted to ABSOLUTE.
     """
-    resolved: list[ScalarTarget] = []
+    resolved: list[ScalarCoordinateTarget] = []
 
     for target_index, target in enumerate(targets):
         try:
@@ -677,7 +676,7 @@ def describe_constraint(constraint: Constraint) -> str:
 def describe_worst_residual(
     residuals: np.ndarray,
     constraints: list[Constraint],
-    step_targets: Sequence[ScalarTarget],
+    step_targets: Sequence[ScalarCoordinateTarget],
 ) -> str:
     """Describe the constraint or target owning the largest residual row."""
     worst_index = int(np.argmax(np.abs(residuals)))
@@ -728,11 +727,16 @@ def solve_suspension_sweep(
         ValueError: If the system is underdetermined (more variables than residuals).
         RuntimeError: If the solver fails to converge at any step.
     """
-    # Convert all targets to absolute coordinates once before solving.
+    # Capture path holds once at the sweep reference state, then reuse their
+    # absolute values at every nonlinear solve step.
+    held_targets = list(sweep_config.hold.materialize(initial_state.positions))
     sweep_targets = [
-        convert_targets_to_absolute(
-            [sweep[i] for sweep in sweep_config.target_sweeps], initial_state
-        )
+        [
+            *convert_targets_to_absolute(
+                [sweep[i] for sweep in sweep_config.target_sweeps], initial_state
+            ),
+            *held_targets,
+        ]
         for i in range(sweep_config.n_steps)
     ]
 
@@ -750,7 +754,9 @@ def solve_suspension_sweep(
         constraints=constraints,
         derived_manager=derived_manager,
         state_buffer=working_state,
-        n_target_variables=len(sweep_config.target_sweeps),
+        n_target_variables=(
+            len(sweep_config.target_sweeps) + len(sweep_config.hold.coordinates)
+        ),
     )
 
     # Initial guess built from the working state's free points.

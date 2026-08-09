@@ -10,13 +10,14 @@ from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.sweep_loader import load_sweep
 from kinematics.core.analysis import analyze_evaluated_sweep
 from kinematics.core.enums import PointID
+from kinematics.core.holds import CoordinateHold
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.rigid_motion import ScrewAxisStatus
 from kinematics.core.sensitivity import compute_state_tangents
 from kinematics.core.steering_axis import compute_steering_response_tangent
 from kinematics.core.steering_response import (
     SteeringResponseDefinition,
-    materialize_steering_response_probe,
+    materialize_steering_response_targets,
 )
 from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.sweep import solve_evaluated_sweep
@@ -110,7 +111,7 @@ def test_macpherson_lower_arm_option_is_equivalent_to_strut_length() -> None:
     strut = solve_evaluated_sweep(suspension, sweep)
     lower_arm = solve_evaluated_sweep(
         suspension,
-        replace(sweep, steering_probe_isolation="lower_arm_hinge_angle"),
+        replace(sweep, suspension_hold_id="lower_arm_angle"),
     )
 
     for strut_results, lower_results in zip(
@@ -137,7 +138,7 @@ def test_unsteered_suspension_has_aligned_empty_axis_frames() -> None:
     assert evaluated.steering_response_axes == tuple(() for _ in evaluated.states)
 
 
-def test_incomplete_isolation_basis_is_reported_as_rank_deficient(
+def test_incomplete_suspension_hold_is_reported_as_rank_deficient(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     suspension = load_geometry(DATA_DIR / "geometry.yaml")
@@ -145,13 +146,13 @@ def test_incomplete_isolation_basis_is_reported_as_rank_deficient(
     assert steering is not None
     incomplete = SteeringResponseDefinition(
         steering_actuator=steering,
-        held_coordinates=(),
+        hold=CoordinateHold(),
         owner="test",
         definition_id="missing_jounce_hold",
     )
     monkeypatch.setattr(
         suspension,
-        "resolve_steering_probe",
+        "resolve_suspension_hold",
         lambda _requested=None: incomplete,
     )
 
@@ -162,29 +163,130 @@ def test_incomplete_isolation_basis_is_reported_as_rank_deficient(
 
     assert response.status is ScrewAxisStatus.RANK_DEFICIENT
     assert response.solve_info is not None
+    assert response.solve_info.mobility == 2
+    assert response.solve_info.target_rank == 1
     assert response.solve_info.nullity == 1
     assert response.message is not None
     assert "missing_jounce_hold" in response.message
     assert "nullity 1" in response.message
 
 
-def test_full_rank_inconsistent_probe_is_rejected(
+def test_redundant_consistent_wishbone_holds_are_accepted() -> None:
+    """Two coordinates spanning the same travel mode remain a valid hold."""
+    suspension = load_geometry(DATA_DIR / "geometry.yaml")
+    catalogue = suspension.suspension_hold_catalogue()
+    definition = suspension.resolve_suspension_hold()
+    assert catalogue is not None
+    assert definition is not None
+    lower = catalogue.option("lower_wishbone_angle").hold.coordinates[0]
+    upper = catalogue.option("upper_wishbone_angle").hold.coordinates[0]
+    redundant = replace(
+        definition,
+        hold=CoordinateHold((lower, upper)),
+        definition_id="both_wishbone_angles",
+    )
+    state = suspension.initial_state()
+
+    response = compute_steering_response_tangent(
+        suspension,
+        state,
+        definition=redundant,
+    )
+
+    assert response.status is ScrewAxisStatus.VALID
+    assert response.tangent is not None
+    assert response.solve_info is not None
+    steering_info = response.solve_info.response_for_target(0)
+    assert response.solve_info.mobility == 2
+    assert response.solve_info.target_rank == 2
+    assert response.solve_info.full_column_rank
+    assert steering_info.rate_consistent
+    assert steering_info.unique
+    assert steering_info.max_constraint_rate_residual <= (
+        steering_info.consistency_tolerance
+    )
+    assert steering_info.max_other_target_rate_residual <= (
+        steering_info.consistency_tolerance
+    )
+    for point in (
+        PointID.LOWER_WISHBONE_OUTBOARD,
+        PointID.UPPER_WISHBONE_OUTBOARD,
+    ):
+        assert response.tangent.velocity(point) == pytest.approx(
+            np.zeros(3),
+            abs=2e-10,
+        )
+
+
+def test_conflicting_real_hold_basis_is_rejected_as_inconsistent() -> None:
+    """Fixed wishbone travel cannot also fix a steering-driven damper."""
+    suspension = load_geometry(DATA_DIR / "corner_rocker_damper_geometry.yaml")
+    catalogue = suspension.suspension_hold_catalogue()
+    definition = suspension.resolve_suspension_hold()
+    assert catalogue is not None
+    assert definition is not None
+    lower = catalogue.option("lower_wishbone_angle").hold.coordinates[0]
+    damper = catalogue.option("damper_length").hold.coordinates[0]
+    state = suspension.initial_state()
+
+    canonical = compute_steering_response_tangent(
+        suspension,
+        state,
+        definition=definition,
+    )
+    assert canonical.status is ScrewAxisStatus.VALID
+    assert canonical.tangent is not None
+    damper_rate = sum(
+        float(partial @ canonical.tangent.velocity(point))
+        for point, partial in damper.current_value_target(
+            state.positions
+        ).point_partials(state.positions)
+    )
+    assert abs(damper_rate) > 1e-3
+
+    conflicting = replace(
+        definition,
+        hold=CoordinateHold((lower, damper)),
+        definition_id="wishbone_angle_and_steering_driven_damper",
+    )
+    response = compute_steering_response_tangent(
+        suspension,
+        state,
+        definition=conflicting,
+    )
+
+    assert response.status is ScrewAxisStatus.INCONSISTENT_TANGENT
+    assert response.tangent is None
+    assert response.solve_info is not None
+    steering_info = response.solve_info.response_for_target(0)
+    assert response.solve_info.mobility == 2
+    assert response.solve_info.target_rank == 2
+    assert response.solve_info.full_column_rank
+    assert not steering_info.rate_consistent
+    assert not steering_info.unique
+    assert steering_info.max_rate_residual > steering_info.consistency_tolerance
+    assert response.message is not None
+    assert "rate-inconsistent" in response.message
+    assert "wishbone_angle_and_steering_driven_damper" in response.message
+
+
+def test_full_rank_inconsistent_suspension_hold_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import kinematics.core.steering_axis as steering_axis_module
 
     suspension = load_geometry(DATA_DIR / "macpherson_geometry.yaml")
     state = suspension.initial_state()
-    probe = materialize_steering_response_probe(
-        suspension.resolve_steering_probe(),
+    response_targets = materialize_steering_response_targets(
+        suspension.resolve_suspension_hold(),
         state,
     )
-    assert probe is not None
+    assert response_targets is not None
     fields, solve_info = compute_state_tangents(
         state,
         suspension.constraints(),
         DerivedPointsManager(suspension.derived_spec()),
-        probe.targets,
+        response_targets.targets,
         post_derived_update=suspension.apply_ground_closure,
     )
     steering_info = solve_info.response_for_target(0)
@@ -235,7 +337,7 @@ def test_metrics_and_axes_share_one_tangent_computation(
     assert all(evaluated.steering_response_axes)
 
 
-def test_steering_probe_failure_keeps_explicit_axis_results_without_aborting(
+def test_suspension_hold_failure_keeps_explicit_axis_results_without_aborting(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import kinematics.core.steering_axis as steering_axis_module
@@ -269,15 +371,14 @@ def test_structured_analysis_exposes_axis_and_fit_diagnostics() -> None:
     definition = analysis.steering_response
     assert definition is not None
     assert definition.owner == "double_wishbone"
-    assert definition.definition_id == "lower_wishbone_hinge_angle"
-    assert definition.provenance == "double_wishbone:lower_wishbone_hinge_angle"
+    assert definition.definition_id == "lower_wishbone_angle"
+    assert definition.provenance == "double_wishbone:lower_wishbone_angle"
     assert definition.steering_coordinate_id == "rack"
     assert definition.requested_option_id == "layout_default"
-    assert definition.resolved_option_id == "lower_wishbone_hinge_angle"
+    assert definition.resolved_option_id == "lower_wishbone_angle"
     assert definition.selection_source == "layout_default"
-    assert definition.option_class == "canonical"
     assert [coordinate.id for coordinate in definition.held_coordinates] == [
-        "lower_wishbone_hinge_angle"
+        "lower_wishbone_angle"
     ]
     assert [coordinate.side for coordinate in definition.held_coordinates] == ["left"]
 

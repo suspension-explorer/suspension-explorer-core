@@ -60,7 +60,7 @@ def test_steering_response_axis_is_recomputed_per_frame() -> None:
 
 
 def test_wheel_centre_height_control_does_not_contaminate_virtual_metrics() -> None:
-    """Authored jacking remains real, but the steering probe excludes it."""
+    """Authored jacking remains real, but the suspension hold excludes it."""
     suspension, sweep, evaluated = _solve("axle_steer_sweep.yaml")
     authored_tangents = compute_sweep_tangents(suspension, sweep, evaluated.states)
     midpoint = len(evaluated.states) // 2
@@ -106,7 +106,7 @@ def test_wheel_centre_height_control_does_not_contaminate_virtual_metrics() -> N
 
 
 def test_moving_dampers_recover_physical_axis_at_every_state() -> None:
-    """Probe holds current lengths while the authored path moves those lengths."""
+    """The hold uses current lengths while the authored path moves them."""
     suspension, _sweep, evaluated = _solve("axle_steer_moving_dampers_sweep.yaml")
 
     left_damper_lengths = []
@@ -173,7 +173,7 @@ def test_moving_dampers_recover_physical_axis_at_every_state() -> None:
 
 
 def test_same_state_has_same_axis_under_different_authored_target_bases() -> None:
-    """The design state result depends on the probe, not surrounding sweep inputs."""
+    """The design-state result depends on the hold, not authored sweep inputs."""
     _suspension_a, _sweep_a, wheel_held = _solve("axle_steer_sweep.yaml")
     _suspension_b, _sweep_b, damper_driven = _solve(
         "axle_steer_moving_dampers_sweep.yaml"
@@ -203,7 +203,7 @@ def test_upper_wishbone_option_is_equivalent_to_canonical_fixed_travel() -> None
         suspension,
         replace(
             sweep,
-            steering_probe_isolation="upper_wishbone_hinge_angle",
+            suspension_hold_id="upper_wishbone_angle",
         ),
     )
 
@@ -228,7 +228,7 @@ def test_upright_pushrod_damper_option_is_a_deliberately_different_probe() -> No
     sweep = load_sweep(DATA_DIR / "axle_steer_sweep.yaml", suspension)
     diagnostic = solve_evaluated_sweep(
         suspension,
-        replace(sweep, steering_probe_isolation="damper_length"),
+        replace(sweep, suspension_hold_id="damper_length"),
     )
 
     deltas = []

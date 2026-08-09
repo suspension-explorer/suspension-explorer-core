@@ -64,7 +64,7 @@ class ScrewAxisStatus(StrEnum):
 
     VALID = "valid"
     NO_STEERING_ACTUATOR = "no_steering_actuator"
-    NO_ISOLATION_DEFINITION = "no_isolation_definition"
+    NO_STEERING_RESPONSE_DEFINITION = "no_steering_response_definition"
     TANGENT_UNAVAILABLE = "tangent_unavailable"
     INCONSISTENT_TANGENT = "inconsistent_tangent"
     DEGENERATE_UPRIGHT = "degenerate_upright"

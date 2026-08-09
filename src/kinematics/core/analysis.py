@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 
 from kinematics.core.assembly import SuspensionAssembly
+from kinematics.core.coordinates import PhysicalCoordinate, ScalarCoordinate
 from kinematics.core.diagnostics import (
     DiagnosticCategory,
     DiagnosticIssue,
@@ -46,12 +47,11 @@ from kinematics.core.sweep import (
     solve_evaluated_sweep,
     solve_sweep,
 )
-from kinematics.core.targeting import DriveCoordinate, SweepConfig
+from kinematics.core.targeting import SweepConfig
 
 if TYPE_CHECKING:
     from kinematics.core.steering_response import (
-        IsolationCoordinate,
-        SteeringProbeCatalogue,
+        SuspensionHoldCatalogue,
     )
 
 if TYPE_CHECKING:
@@ -99,8 +99,8 @@ class DriveCoordinateInfo:
 
 
 @dataclass(frozen=True)
-class IsolationCoordinateInfo:
-    """Transport-safe metadata for one steering-probe isolation coordinate."""
+class HeldCoordinateInfo:
+    """Transport-safe metadata for one held suspension coordinate."""
 
     id: str
     type: str
@@ -113,42 +113,40 @@ class IsolationCoordinateInfo:
 
 @dataclass(frozen=True)
 class SteeringResponseDefinitionInfo:
-    """Transport-safe provenance for the topology's steering probe."""
+    """Transport-safe provenance for the steering-response derivative."""
 
     owner: str
     definition_id: str
     provenance: str
     steering_coordinate_id: str
-    held_coordinates: tuple[IsolationCoordinateInfo, ...]
+    held_coordinates: tuple[HeldCoordinateInfo, ...]
     requested_option_id: str | None
     resolved_option_id: str
     selection_source: str
-    option_class: str
     label: str
     description: str
     warning: str | None
 
 
 @dataclass(frozen=True)
-class SteeringProbeOptionInfo:
-    """Transport-safe metadata for one topology steering-probe option."""
+class SuspensionHoldOptionInfo:
+    """Transport-safe metadata for one topology-owned suspension hold."""
 
     id: str
     label: str
     description: str
-    option_class: str
     availability: str
     warning: str | None
     unavailable_reason: str | None
-    held_coordinates: tuple[IsolationCoordinateInfo, ...]
+    held_coordinates: tuple[HeldCoordinateInfo, ...]
 
 
 @dataclass(frozen=True)
-class SteeringProbeCatalogueInfo:
-    """Renderer-neutral steering-probe capability for one suspension."""
+class SuspensionHoldCatalogueInfo:
+    """Renderer-neutral suspension-hold catalogue."""
 
     default_option_id: str
-    options: tuple[SteeringProbeOptionInfo, ...]
+    options: tuple[SuspensionHoldOptionInfo, ...]
 
 
 @dataclass(frozen=True)
@@ -203,7 +201,7 @@ class StaticPose:
     elements: list[NamedElementPath]
     wheel_references: list[WheelReferences]
     drive_coordinates: list[DriveCoordinateInfo]
-    steering_probe: SteeringProbeCatalogueInfo | None
+    suspension_hold_catalogue: SuspensionHoldCatalogueInfo | None
 
 
 @dataclass(frozen=True)
@@ -240,7 +238,7 @@ def _suspension_info(suspension: Suspension) -> SuspensionInfo:
 
 
 def _drive_coordinate_info(
-    coordinate: DriveCoordinate,
+    coordinate: PhysicalCoordinate,
 ) -> DriveCoordinateInfo:
     """Convert one topology coordinate to stable analysis metadata."""
     return DriveCoordinateInfo(
@@ -254,11 +252,11 @@ def _drive_coordinate_info(
     )
 
 
-def _isolation_coordinate_info(
-    coordinate: "IsolationCoordinate",
-) -> IsolationCoordinateInfo:
-    """Convert one internal isolation coordinate to stable metadata."""
-    return IsolationCoordinateInfo(
+def _held_coordinate_info(
+    coordinate: ScalarCoordinate,
+) -> HeldCoordinateInfo:
+    """Convert one internal held coordinate to stable metadata."""
+    return HeldCoordinateInfo(
         id=coordinate.id,
         type=coordinate.kind.value,
         label=coordinate.label,
@@ -273,10 +271,8 @@ def _steering_response_info(
     suspension: Suspension,
     sweep_config: SweepConfig,
 ) -> SteeringResponseDefinitionInfo | None:
-    """Describe the topology-owned steering isolation basis, when available."""
-    definition = suspension.resolve_steering_probe(
-        sweep_config.steering_probe_isolation
-    )
+    """Describe the topology-owned suspension hold, when available."""
+    definition = suspension.resolve_suspension_hold(sweep_config.suspension_hold_id)
     if definition is None:
         return None
     return SteeringResponseDefinitionInfo(
@@ -285,39 +281,37 @@ def _steering_response_info(
         provenance=definition.provenance,
         steering_coordinate_id=definition.steering_coordinate_id,
         held_coordinates=tuple(
-            _isolation_coordinate_info(coordinate)
-            for coordinate in definition.held_coordinates
+            _held_coordinate_info(coordinate)
+            for coordinate in definition.hold.coordinates
         ),
         requested_option_id=definition.requested_option_id,
         resolved_option_id=definition.definition_id,
         selection_source=definition.selection_source.value,
-        option_class=definition.option_class.value,
         label=definition.label,
         description=definition.description,
         warning=definition.warning,
     )
 
 
-def _steering_probe_catalogue_info(
-    catalogue: "SteeringProbeCatalogue | None",
-) -> SteeringProbeCatalogueInfo | None:
+def _suspension_hold_catalogue_info(
+    catalogue: "SuspensionHoldCatalogue | None",
+) -> SuspensionHoldCatalogueInfo | None:
     """Convert topology capability metadata without adding UI policy."""
     if catalogue is None:
         return None
-    return SteeringProbeCatalogueInfo(
+    return SuspensionHoldCatalogueInfo(
         default_option_id=catalogue.default_option_id,
         options=tuple(
-            SteeringProbeOptionInfo(
+            SuspensionHoldOptionInfo(
                 id=option.id,
                 label=option.label,
                 description=option.description,
-                option_class=option.option_class.value,
                 availability=option.availability.value,
                 warning=option.warning,
                 unavailable_reason=option.unavailable_reason,
                 held_coordinates=tuple(
-                    _isolation_coordinate_info(coordinate)
-                    for coordinate in option.held_coordinates
+                    _held_coordinate_info(coordinate)
+                    for coordinate in option.hold.coordinates
                 ),
             )
             for option in catalogue.options
@@ -369,7 +363,13 @@ def _hold_sweep_config(sweep_config: SweepConfig) -> SweepConfig | None:
             continue
         target = dimension[0]
         hold_dimensions.append([target.with_value(0.0, TargetValueMode.RELATIVE)])
-    return SweepConfig(hold_dimensions) if hold_dimensions else None
+    if not hold_dimensions:
+        return None
+    return SweepConfig(
+        hold_dimensions,
+        hold=sweep_config.hold,
+        suspension_hold_id=sweep_config.suspension_hold_id,
+    )
 
 
 def _split_metric_rows(
@@ -585,7 +585,7 @@ def initial_pose(suspension: Suspension) -> StaticPose:
             _drive_coordinate_info(coordinate)
             for coordinate in suspension.drive_coordinates()
         ],
-        steering_probe=_steering_probe_catalogue_info(
-            suspension.steering_probe_catalogue()
+        suspension_hold_catalogue=_suspension_hold_catalogue_info(
+            suspension.suspension_hold_catalogue()
         ),
     )

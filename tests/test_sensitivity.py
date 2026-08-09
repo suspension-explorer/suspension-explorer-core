@@ -10,7 +10,7 @@ from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
 )
-from kinematics.core.primitives.geometry import Point3, extract_array
+from kinematics.core.primitives.geometry import Direction3, Point3, extract_array
 from kinematics.core.sensitivity import (
     TangentField,
     combine_tangents,
@@ -18,7 +18,12 @@ from kinematics.core.sensitivity import (
 )
 from kinematics.core.state import SuspensionState
 from kinematics.core.sweep import solve_sweep
-from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
+from kinematics.core.targeting import (
+    PointTarget,
+    PointTargetAxis,
+    PointTargetVector,
+    SweepConfig,
+)
 
 FD_STEP = 0.25
 
@@ -124,9 +129,13 @@ def test_full_rank_inconsistent_tangent_is_not_reported_as_unique() -> None:
     response = info.response_for_target(0)
     assert info.full_column_rank
     assert info.nullity == 0
+    assert info.mobility == 0
+    assert info.target_rank == 0
     assert not info.rate_consistent
-    assert response.max_constraint_rate_residual == pytest.approx(0.5)
-    assert response.selected_target_rate_residual == pytest.approx(0.5)
+    # The reduced solve never compromises permanent constraints to partially
+    # satisfy an impossible target request.
+    assert response.max_constraint_rate_residual == pytest.approx(0.0)
+    assert response.selected_target_rate_residual == pytest.approx(1.0)
     assert response.max_other_target_rate_residual == 0.0
     assert response.max_rate_residual > response.consistency_tolerance
     assert not response.rate_consistent
@@ -159,6 +168,71 @@ def test_consistent_but_underconstrained_tangent_is_not_unique() -> None:
     assert not info.full_column_rank
     assert info.rank_deficient
     assert response.rate_consistent
+    assert not response.unique
+
+
+def test_one_dof_mechanism_needs_no_hold_beyond_its_driver() -> None:
+    point = PointID.WHEEL_CENTER
+    state = SuspensionState(
+        positions={point: Point3([1.0, 2.0, 3.0])},
+        free_points={point},
+    )
+    constraints: list[Constraint] = [
+        FixedAxisConstraint(point, Axis.Y, 2.0),
+        FixedAxisConstraint(point, Axis.Z, 3.0),
+    ]
+    target = PointTarget(
+        point_id=point,
+        direction=PointTargetAxis(axis=Axis.X),
+        value=1.0,
+        mode=TargetValueMode.ABSOLUTE,
+    )
+
+    fields, info = compute_state_tangents(
+        state,
+        constraints,
+        DerivedPointsManager(DerivedPointsSpec({}, {})),
+        [target],
+    )
+
+    assert info.constraint_rank == 2
+    assert info.mobility == 1
+    assert info.target_rank == 1
+    assert info.nullity == 0
+    assert info.response_for_target(0).unique
+    assert fields[0].velocity(point) == pytest.approx([1.0, 0.0, 0.0])
+
+
+def test_ill_conditioning_cannot_hide_an_inconsistent_target_basis() -> None:
+    point = PointID.WHEEL_CENTER
+    state = SuspensionState(
+        positions={point: Point3([1.0, 2.0, 3.0])},
+        free_points={point},
+    )
+    constraints: list[Constraint] = [FixedAxisConstraint(point, Axis.Z, 3.0)]
+    targets = [
+        PointTarget(
+            point_id=point,
+            direction=PointTargetVector(Direction3([1.0, y_component, 0.0])),
+            value=1.0,
+            mode=TargetValueMode.ABSOLUTE,
+        )
+        for y_component in (0.0, 1e-12, 2e-12)
+    ]
+
+    _fields, info = compute_state_tangents(
+        state,
+        constraints,
+        DerivedPointsManager(DerivedPointsSpec({}, {})),
+        targets,
+    )
+
+    response = info.response_for_target(0)
+    assert info.full_column_rank
+    assert info.condition_number > 1e11
+    assert response.max_rate_residual > 0.3
+    assert response.max_rate_residual > response.consistency_tolerance
+    assert not response.rate_consistent
     assert not response.unique
 
 

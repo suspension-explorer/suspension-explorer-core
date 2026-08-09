@@ -133,12 +133,12 @@ def test_authored_tangent_failure_does_not_disable_virtual_metrics(
         assert set(PHYSICAL_STEERING_KEYS).issubset(row)
 
 
-def test_missing_isolation_definition_keeps_virtual_columns_null(
+def test_missing_suspension_hold_keeps_virtual_columns_null(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     suspension = load_geometry(DATA_DIR / "geometry.yaml")
     sweep = load_sweep(DATA_DIR / "sweep.yaml", suspension)
-    monkeypatch.setattr(suspension, "steering_probe_catalogue", lambda: None)
+    monkeypatch.setattr(suspension, "suspension_hold_catalogue", lambda: None)
     evaluated = solve_evaluated_sweep(suspension, sweep)
     analysis = analyze_evaluated_sweep(suspension, sweep, evaluated)
 
@@ -147,7 +147,7 @@ def test_missing_isolation_definition_keeps_virtual_columns_null(
         assert set(VIRTUAL_KEYS).issubset(row)
         assert all(row[key] is None for key in VIRTUAL_KEYS)
     assert any(
-        result.status.value == "no_isolation_definition"
+        result.status.value == "no_steering_response_definition"
         for frame in analysis.frames
         for result in frame.steering_response_axes
     )

@@ -277,24 +277,26 @@ targets:
   - type: actuator_position
     actuator: rack
     direction: { axis: y }
-    mode: relative
-    start: 0
-    stop: 0
+    hold: true
 ```
 
 Every physical actuator must be controlled exactly once. A rack-steered model
-therefore needs one `type: actuator_position`, `actuator: rack` target along Y,
-even when the rack is held at zero displacement. `relative` values are measured
-from the authored design condition; `absolute` values are coordinates in chassis
-space. Every corner-owned target must identify `side: left` or `side: right`.
+therefore needs one `type: actuator_position`, `actuator: rack` control along Y.
+`hold: true` captures that coordinate at the sweep reference state and enforces
+the captured value at every step; it can likewise hold a point coordinate or an
+element length. Held controls have no `mode`, `start`, `stop`, or `values`.
+Swept `relative` values are measured from the authored design condition;
+`absolute` values are coordinates in chassis space. Every corner-owned target
+must identify `side: left` or `side: right`.
 A standalone corner exposes only `left`; an axle exposes both sides. Shared
 coordinates such as `rack` remain unsided. A physical `trackrod_inboard` point
 target does not substitute for the named rack actuator coordinate.
 
-All target sequences must have the same number of values. Multiple targets are
+All swept target sequences must have the same number of values. Multiple targets are
 paired by index rather than expanded into a Cartesian product. Use `start`,
 `stop`, and the file-level `steps`, or give every target an equal-length
-`values` list.
+`values` list. A profile must contain at least one swept target in addition to
+any held controls.
 
 ### 3. Check the design condition
 
@@ -438,28 +440,27 @@ The CLI is a thin adapter around this core API for YAML input and file output.
 > current solved configuration while topology-declared suspension-travel
 > coordinates are held at their current values.
 
-The response is a separate analytical probe through each already-solved state;
+The response is a separate analytical derivative at each already-solved state;
 it does not inherit the targets that authored the surrounding sweep. A double
-wishbone canonically holds its lower-wishbone hinge angle, while the supported
-MacPherson model holds strut length. An axle composes independent left and right
-holds with its shared rack. If a topology cannot declare a complete isolation
-basis, the response is unavailable rather than selected from an
+wishbone defaults to its lower-wishbone angle, while the supported
+MacPherson model defaults to strut length. An axle composes independent left and
+right holds with its shared rack. If a topology cannot declare a sufficient
+suspension hold, the response is unavailable rather than selected from an
 underconstrained motion family.
 
-Each topology also publishes its valid alternatives. The sweep may leave the
-canonical choice implicit or select one by stable ID:
+Each topology also publishes its available hold choices. The sweep may leave the
+default choice implicit or select one by stable ID:
 
 ```yaml
 analysis:
-  steering_probe:
-    isolation: upper_wishbone_hinge_angle
+  virtual_steering:
+    suspension_hold: upper_wishbone_angle
 ```
 
 This block changes analysis only; it never adds a target to the state solve.
-Equivalent options answer the same fixed-travel question in another coordinate
-basis. Diagnostic options deliberately answer a different counterfactual—for
-example fixed damper length with an upright-mounted pushrod—and retain that
-classification and warning in structured analysis output.
+Each option names the local counterfactual it represents. Availability warnings,
+such as fixed damper length with an upright-mounted pushrod, remain in structured
+analysis output.
 
 One result is calculated for every upright at every rack-steered sweep step and
 exposed as `frame.steering_response_axes`. It carries the axis point and
@@ -469,9 +470,9 @@ in every view of CLI animations without contributing to automatic plot bounds.
 
 This is an instantaneous kinematic axis, not necessarily a physical kingpin or
 ball-joint line. A spatial linkage or a real steering-to-spring coupling may
-produce nonzero screw pitch. An incomplete or inconsistent isolation basis,
+produce nonzero screw pitch. An incomplete or inconsistent suspension hold,
 near-pure translation, degenerate upright geometry, or a poor rigid-body fit
-leaves the axis unavailable for that frame and reports a diagnostic. The probe
+leaves the axis unavailable for that frame and reports a diagnostic. The response
 uses an analytical tangent at that state; it does not finite-difference adjacent
 sweep frames, perturb and re-solve the rack, or modify the authored sweep.
 
@@ -484,7 +485,7 @@ its physical counterpart and displayed with labels such as `Caster, Virtual`.
 Here **virtual steering axis** means the isolated steering-response screw-axis
 line above. The values use the same chassis, tyre, road-plane, and sign
 conventions as their physical-axis counterparts. They are `None` when that
-frame has no valid finite axis; selecting another published probe changes only
+frame has no valid finite axis; selecting another published hold changes only
 the virtual family and never the original physical metrics. Screw pitch and
 angular rate remain separate axis properties
 rather than being folded into these five line-based geometry values.
@@ -492,9 +493,9 @@ rather than being folded into these five line-based geometry values.
 Holding wheel-centre height during the authored sweep is not the same as fixing
 the wishbones: it adds the jounce needed to cancel vertical motion from steering
 around an inclined axis. That remains the correct solved path, but it no longer
-changes the virtual steering definition. At each of those states, the isolated
-probe holds current suspension travel and recovers the steering-only response.
-For the ideal double-wishbone fixture, the canonical fitted virtual line
+changes the virtual steering definition. At each of those states, the selected
+suspension hold fixes current suspension travel and recovers the steering-only response.
+For the ideal double-wishbone fixture, the default fitted virtual line
 therefore agrees with the ball-joint line even while the authored internals move
 between frames.
 

@@ -6,11 +6,17 @@ ordinary derivative metrics.  A partial derivative holds every other
 coordinate in that authored basis at zero rate, so it necessarily inherits the
 sweep's boundary conditions.
 
+An authored ``hold: true`` control uses the same scalar-coordinate machinery
+but captures its value once from the sweep reference state.  Its absolute
+target is then appended to every nonlinear solve and every authored tangent
+basis.  This is distinct from the steering-response hold below, which captures
+the selected suspension coordinate afresh at each already-solved state.
+
 The motion-derived steering axis is intentionally calculated through a second,
 semantically separate derivative product.  At every accepted state the
 suspension topology provides a steering actuator and an independent set of
 suspension-travel holds.  The steering-response module solves that analytical
-probe at the current state and fits each upright's screw axis.  This keeps
+derivative at the current state and fits each upright's screw axis.  This keeps
 virtual steering metrics independent of wheel-centre, damper, heave, or roll
 targets used to reach the state while still avoiding nonlinear perturbation or
 finite differences.
@@ -72,7 +78,14 @@ def solve_sweep(
         solver information for each step in the sweep.
     """
     suspension.validate_sweep_targets(
-        target for target_sweep in sweep_config.target_sweeps for target in target_sweep
+        (
+            target
+            for target_sweep in sweep_config.target_sweeps
+            for target in target_sweep
+        ),
+        held_targets=sweep_config.hold.materialize(
+            suspension.initial_state().positions
+        ),
     )
     validate_sweep_controls(sweep_config, suspension.actuator_dofs())
     derived_spec = suspension.derived_spec()
@@ -177,6 +190,7 @@ def compute_sweep_tangents(
     derived_manager = DerivedPointsManager(suspension.derived_spec())
     constraints = suspension.constraints()
     initial_state = suspension.initial_state()
+    held_targets = list(sweep_config.hold.materialize(initial_state.positions))
     tangents_per_step: list[list[TangentField]] = []
     solve_infos: list[TangentSolveInfo] = []
 
@@ -185,6 +199,7 @@ def compute_sweep_tangents(
             [target_sweep[step_index] for target_sweep in sweep_config.target_sweeps],
             initial_state,
         )
+        step_targets.extend(held_targets)
         fields, solve_info = compute_state_tangents(
             state,
             constraints,
@@ -233,7 +248,7 @@ def _compute_steering_axes(
     return compute_steering_response_axes_for_states(
         suspension,
         states,
-        requested_option_id=sweep_config.steering_probe_isolation,
+        requested_option_id=sweep_config.suspension_hold_id,
     )
 
 

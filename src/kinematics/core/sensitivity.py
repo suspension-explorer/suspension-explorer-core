@@ -17,20 +17,33 @@ held at zero rate and can therefore produce a different partial derivative at
 the same solved position.  The basis is part of the question being asked, not
 just a numerical implementation detail.
 
-The least-squares solve acts on free points.  Their velocities are then
-propagated through the derived-point dependency graph with dual numbers, and
-an optional post-derived closure applies the same implicit closure used by the
-state solver.  Thus derived and closure-owned outputs participate in the
-reported velocity field without becoming independent solve variables.
+The calculation first obtains an orthonormal basis ``N`` for the local
+mechanism tangent space ``ker(C_q)`` using an SVD of the permanent-constraint
+Jacobian.  Its column count is the mechanism's local mobility.  Target
+gradients are then restricted to that space and the small system
 
-:class:`TangentSolveInfo` reports column rank, remaining nullity, singular
-values and conditioning for the common tangent matrix.  Each requested
-response also records permanent-constraint and full target-basis rate
-residuals.  Rate consistency uses an absolute floor plus a relative term
-scaled by ``||J||_inf ||dq||_inf + ||b||_inf``.  This is essential for an
-overdetermined system: full column rank can make a least-squares answer unique
-while still making it an inconsistent compromise that satisfies neither the
-constraints nor the requested target rates.
+``(g_q N) alpha_j = e_j`` and ``dq/dt_j = N alpha_j``
+
+is solved for every requested coordinate.  This separation makes the number of
+remaining mechanism modes explicit, prevents target rows from compromising
+permanent-constraint rates, and permits a well-posed zero-hold response when
+the mechanism already has only one local degree of freedom.
+
+Rows are normalised only for the reduced solve and conditioning diagnostics;
+the physical derivatives are unchanged because the corresponding right-hand
+side rows receive the same scaling.  A scale-independent projection ratio
+``||g_i N|| / ||g_i||`` additionally reports when a coordinate is losing
+coupling to the mechanism tangent space.  Raw constraint and target rates are
+still checked afterwards with scale-aware tolerances.  This remains essential
+for redundant or conflicting target bases: extra rows may be consistent, while
+an incompatible overdetermined request must not become a least-squares
+compromise.
+
+Free-point velocities are propagated through the derived-point dependency
+graph with dual numbers, and an optional post-derived closure applies the same
+implicit closure used by the state solver.  Thus derived and closure-owned
+outputs participate in the reported velocity field without becoming
+independent solve variables.
 
 This module deliberately assigns no physical meaning such as steering, bump,
 roll, or sweep-path motion to a field.  Callers establish that meaning by
@@ -54,6 +67,7 @@ from kinematics.core.targeting import ScalarCoordinateTarget
 
 _RATE_RESIDUAL_ABSOLUTE_TOLERANCE = 1e-12
 _RATE_RESIDUAL_RELATIVE_TOLERANCE = 1e-10
+_RANK_RELATIVE_TOLERANCE = np.finfo(np.float64).eps
 
 
 @dataclass(frozen=True)
@@ -132,18 +146,23 @@ class TangentResponseInfo:
 
 @dataclass(frozen=True)
 class TangentSolveInfo:
-    """Numerical health of one state's common tangent least-squares solve."""
+    """Numerical health of one state's reduced coordinate-response solve."""
 
     n_equations: int
     n_variables: int
     rank: int
     singular_values: tuple[float, ...]
     condition_number: float
+    constraint_rank: int
+    constraint_singular_values: tuple[float, ...]
+    mobility: int
+    target_rank: int
+    target_projection_ratios: tuple[float, ...]
     responses: tuple[TangentResponseInfo, ...]
 
     @property
     def nullity(self) -> int:
-        """Number of solve-variable directions left unconstrained."""
+        """Number of local mechanism directions left by the target basis."""
         return max(self.n_variables - self.rank, 0)
 
     @property
@@ -158,8 +177,15 @@ class TangentSolveInfo:
 
     @property
     def smallest_singular_value(self) -> float:
-        """Smallest reported singular value, or zero for an empty matrix."""
+        """Smallest normalised target-space singular value, or zero if deficient."""
+        if self.target_rank < self.mobility:
+            return 0.0
         return self.singular_values[-1] if self.singular_values else 0.0
+
+    @property
+    def minimum_target_projection_ratio(self) -> float:
+        """Smallest scale-independent target coupling to mechanism motion."""
+        return min(self.target_projection_ratios, default=1.0)
 
     @property
     def finite(self) -> bool:
@@ -171,6 +197,8 @@ class TangentSolveInfo:
         """
         return bool(
             all(np.isfinite(value) for value in self.singular_values)
+            and all(np.isfinite(value) for value in self.constraint_singular_values)
+            and all(np.isfinite(value) for value in self.target_projection_ratios)
             and all(response.finite for response in self.responses)
         )
 
@@ -193,6 +221,20 @@ class TangentSolveInfo:
         return matching[0]
 
 
+@dataclass(frozen=True)
+class _ConstraintTangentSpace:
+    """Orthonormal local-motion basis obtained from permanent constraints."""
+
+    basis: np.ndarray
+    rank: int
+    singular_values: tuple[float, ...]
+
+    @property
+    def mobility(self) -> int:
+        """Dimension of the permanent-constraint null space."""
+        return int(self.basis.shape[1])
+
+
 def compute_state_tangents(
     state: SuspensionState,
     constraints: list[Constraint],
@@ -207,16 +249,6 @@ def compute_state_tangents(
     closure outputs (the coupled wheel contact centres) carry their implicit
     derivatives into the tangent field instead of the zero seed.
     """
-    if not step_targets:
-        return [], TangentSolveInfo(
-            n_equations=0,
-            n_variables=0,
-            rank=0,
-            singular_values=(),
-            condition_number=1.0,
-            responses=(),
-        )
-
     # ResidualComputer mutates its state buffer, so use a scratch state.
     scratch = state.copy()
     computer = ResidualComputer(
@@ -227,67 +259,80 @@ def compute_state_tangents(
     )
     free_array = scratch.get_free_array()
     jacobian = computer.compute_jacobian(free_array, list(step_targets))
+    constraint_jacobian = jacobian[: computer.n_constraints]
+    target_jacobian = jacobian[
+        computer.n_constraints : computer.n_constraints + len(step_targets)
+    ]
 
     # Norm residuals such as point-on-line have a zero row at the solution.
     # Add equivalent smooth first-order pins so the tangent retains them.
     pin_rows = _degenerate_constraint_pins(constraints, computer)
     if pin_rows:
-        jacobian = np.vstack([jacobian, np.asarray(pin_rows)])
+        constraint_jacobian = np.vstack([constraint_jacobian, np.asarray(pin_rows)])
 
     n_targets = len(step_targets)
-    right_hand_sides = np.zeros(
-        (jacobian.shape[0], n_targets),
-        dtype=np.float64,
+    constraint_space = _constraint_tangent_space(
+        constraint_jacobian,
+        computer.n_vars,
     )
-    for target_index in range(n_targets):
-        right_hand_sides[computer.n_constraints + target_index, target_index] = 1.0
+    restricted_targets = target_jacobian @ constraint_space.basis
+    normalised_targets, row_scales = _normalise_rows(restricted_targets)
+    target_right_hand_sides = np.eye(n_targets, dtype=np.float64)
+    normalised_right_hand_sides = row_scales[:, None] * target_right_hand_sides
+    reduced_tangents, target_rank, target_singular_values = _solve_reduced_responses(
+        normalised_targets,
+        normalised_right_hand_sides,
+        constraint_space.mobility,
+        n_targets,
+    )
+    tangent_arrays = constraint_space.basis @ reduced_tangents
+    combined_rank = constraint_space.rank + target_rank
+    full_column_rank = combined_rank == computer.n_vars
 
-    tangent_arrays, _residuals, rank, singular_values = np.linalg.lstsq(
-        jacobian,
-        right_hand_sides,
-        rcond=None,
-    )
-    smallest_singular_value = (
-        float(singular_values[-1]) if singular_values.size else 0.0
-    )
-    largest_singular_value = float(singular_values[0]) if singular_values.size else 0.0
-    full_column_rank = int(rank) == int(jacobian.shape[1])
     # An already ill-conditioned solve can overflow while reconstructing its
     # rates. Preserve those infinities in the diagnostic result without
     # leaking NumPy runtime warnings from an advisory calculation.
     with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-        rate_residuals = jacobian @ tangent_arrays - right_hand_sides
-    constraint_row_indices = [*range(computer.n_constraints)]
-    constraint_row_indices.extend(
-        range(computer.n_residuals, computer.n_residuals + len(pin_rows))
-    )
-    target_slice = slice(
-        computer.n_constraints,
-        computer.n_constraints + n_targets,
-    )
+        constraint_rate_residuals = constraint_jacobian @ tangent_arrays
+        target_rate_residuals = (
+            target_jacobian @ tangent_arrays - target_right_hand_sides
+        )
+    complete_jacobian = np.vstack([constraint_jacobian, target_jacobian])
     responses = tuple(
         _response_info(
             target_index=target_index,
-            jacobian=jacobian,
+            jacobian=complete_jacobian,
             tangent=tangent_arrays[:, target_index],
-            right_hand_side=right_hand_sides[:, target_index],
-            constraint_rate_residuals=rate_residuals[
-                constraint_row_indices, target_index
-            ],
-            target_rate_residuals=rate_residuals[target_slice, target_index],
+            right_hand_side=np.concatenate(
+                (
+                    np.zeros(constraint_jacobian.shape[0], dtype=np.float64),
+                    target_right_hand_sides[:, target_index],
+                )
+            ),
+            constraint_rate_residuals=constraint_rate_residuals[:, target_index],
+            target_rate_residuals=target_rate_residuals[:, target_index],
             full_column_rank=full_column_rank,
         )
         for target_index in range(n_targets)
     )
+    target_singular_tuple = tuple(float(value) for value in target_singular_values)
     solve_info = TangentSolveInfo(
-        n_equations=int(jacobian.shape[0]),
-        n_variables=int(jacobian.shape[1]),
-        rank=int(rank),
-        singular_values=tuple(float(value) for value in singular_values),
-        condition_number=(
-            largest_singular_value / smallest_singular_value
-            if smallest_singular_value > 0.0
-            else np.inf
+        n_equations=int(complete_jacobian.shape[0]),
+        n_variables=computer.n_vars,
+        rank=combined_rank,
+        singular_values=target_singular_tuple,
+        condition_number=_target_condition_number(
+            target_singular_values,
+            target_rank,
+            constraint_space.mobility,
+        ),
+        constraint_rank=constraint_space.rank,
+        constraint_singular_values=constraint_space.singular_values,
+        mobility=constraint_space.mobility,
+        target_rank=target_rank,
+        target_projection_ratios=_target_projection_ratios(
+            target_jacobian,
+            restricted_targets,
         ),
         responses=responses,
     )
@@ -323,6 +368,128 @@ def compute_state_tangents(
     return fields, solve_info
 
 
+def _constraint_tangent_space(
+    constraint_jacobian: np.ndarray,
+    n_variables: int,
+) -> _ConstraintTangentSpace:
+    """Return an orthonormal basis for the permanent-constraint null space."""
+    if constraint_jacobian.shape != (constraint_jacobian.shape[0], n_variables):
+        raise ValueError("Constraint Jacobian has an unexpected variable count")
+
+    normalised, _row_scales = _normalise_rows(constraint_jacobian)
+    if n_variables == 0:
+        return _ConstraintTangentSpace(
+            basis=np.empty((0, 0), dtype=np.float64),
+            rank=0,
+            singular_values=(),
+        )
+    if normalised.shape[0] == 0:
+        return _ConstraintTangentSpace(
+            basis=np.eye(n_variables, dtype=np.float64),
+            rank=0,
+            singular_values=(),
+        )
+
+    _left, singular_values, right_transpose = np.linalg.svd(
+        normalised,
+        full_matrices=True,
+    )
+    rank = _singular_value_rank(singular_values, normalised.shape)
+    return _ConstraintTangentSpace(
+        basis=right_transpose[rank:].T.copy(),
+        rank=rank,
+        singular_values=tuple(float(value) for value in singular_values),
+    )
+
+
+def _solve_reduced_responses(
+    normalised_targets: np.ndarray,
+    normalised_right_hand_sides: np.ndarray,
+    mobility: int,
+    n_targets: int,
+) -> tuple[np.ndarray, int, np.ndarray]:
+    """Solve target responses within the permanent-constraint tangent space."""
+    if mobility == 0:
+        return (
+            np.empty((0, n_targets), dtype=np.float64),
+            0,
+            np.empty(0, dtype=np.float64),
+        )
+    if n_targets == 0:
+        return (
+            np.empty((mobility, 0), dtype=np.float64),
+            0,
+            np.empty(0, dtype=np.float64),
+        )
+
+    responses, _residuals, rank, singular_values = np.linalg.lstsq(
+        normalised_targets,
+        normalised_right_hand_sides,
+        rcond=None,
+    )
+    return responses, int(rank), singular_values
+
+
+def _normalise_rows(matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Return unit-norm meaningful rows and the applied inverse row scales.
+
+    Jacobians can contain rows whose analytical gradient is zero at the solved
+    configuration but whose floating-point evaluation leaves machine-scale
+    noise.  Amplifying such a row to unit length invents a constraint and
+    reduces the reported mobility.  Use the same dimension-scaled relative
+    threshold as the SVD rank test before applying any row scaling.
+    """
+    if matrix.shape[0] == 0:
+        return matrix.copy(), np.empty(0, dtype=np.float64)
+    row_norms = np.linalg.norm(matrix, axis=1)
+    scales = np.ones(matrix.shape[0], dtype=np.float64)
+    largest_norm = float(np.max(row_norms, initial=0.0))
+    threshold = max(matrix.shape) * _RANK_RELATIVE_TOLERANCE * largest_norm
+    meaningful = row_norms > threshold
+    scales[meaningful] = 1.0 / row_norms[meaningful]
+    normalised = matrix * scales[:, None]
+    normalised[~meaningful] = 0.0
+    return normalised, scales
+
+
+def _singular_value_rank(
+    singular_values: np.ndarray,
+    matrix_shape: tuple[int, int],
+) -> int:
+    """Apply NumPy's conventional dimension-scaled relative rank threshold."""
+    if singular_values.size == 0:
+        return 0
+    tolerance = max(matrix_shape) * _RANK_RELATIVE_TOLERANCE * float(singular_values[0])
+    return int(np.count_nonzero(singular_values > tolerance))
+
+
+def _target_condition_number(
+    singular_values: np.ndarray,
+    target_rank: int,
+    mobility: int,
+) -> float:
+    """Return normalised hold transversality conditioning."""
+    if mobility == 0:
+        return 1.0
+    if target_rank < mobility or singular_values.size == 0:
+        return np.inf
+    smallest = float(singular_values[-1])
+    return float(singular_values[0]) / smallest if smallest > 0.0 else np.inf
+
+
+def _target_projection_ratios(
+    target_jacobian: np.ndarray,
+    restricted_targets: np.ndarray,
+) -> tuple[float, ...]:
+    """Return scale-independent coupling of each target to mechanism motion."""
+    full_norms = np.linalg.norm(target_jacobian, axis=1)
+    restricted_norms = np.linalg.norm(restricted_targets, axis=1)
+    ratios = np.zeros(target_jacobian.shape[0], dtype=np.float64)
+    nonzero = full_norms > 0.0
+    ratios[nonzero] = restricted_norms[nonzero] / full_norms[nonzero]
+    return tuple(float(min(max(value, 0.0), 1.0)) for value in ratios)
+
+
 def _response_info(
     *,
     target_index: int,
@@ -333,11 +500,18 @@ def _response_info(
     target_rate_residuals: np.ndarray,
     full_column_rank: bool,
 ) -> TangentResponseInfo:
-    """Build scale-aware consistency diagnostics for one response column."""
-    jacobian_scale = _infinity_norm(jacobian)
-    tangent_scale = _infinity_norm(tangent)
+    """Build forward rate-space consistency diagnostics for one response.
+
+    Scaling by ``||J|| ||dq||`` is inappropriate here: an ill-conditioned
+    basis can make ``dq`` enormous and thereby excuse an order-one failure to
+    meet the requested rates.  Judge the result in the output space instead,
+    relative to the rates actually produced and requested.
+    """
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        actual_rates = jacobian @ tangent
+    actual_rate_scale = _infinity_norm(actual_rates)
     request_scale = _infinity_norm(right_hand_side)
-    consistency_scale = jacobian_scale * tangent_scale + request_scale
+    consistency_scale = actual_rate_scale + request_scale
     tolerance = (
         _RATE_RESIDUAL_ABSOLUTE_TOLERANCE
         + _RATE_RESIDUAL_RELATIVE_TOLERANCE * consistency_scale

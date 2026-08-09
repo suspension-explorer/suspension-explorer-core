@@ -368,6 +368,16 @@ def test_sweep_spec_reports_expanded_step_count() -> None:
                 }
             ],
         },
+        {
+            "targets": [
+                {
+                    "type": "point",
+                    "point": PointID.TRACKROD_INBOARD,
+                    "direction": {"axis": Axis.Y},
+                    "hold": True,
+                }
+            ]
+        },
     ],
 )
 def test_sweep_spec_requires_targets_and_positive_steps(
@@ -377,15 +387,33 @@ def test_sweep_spec_requires_targets_and_positive_steps(
         SweepSpec.model_validate(raw)
 
 
-def test_hold_is_a_frontend_convenience_not_a_core_sweep_field() -> None:
-    """Core callers express a held actuator as an ordinary relative zero target."""
-    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+def test_target_spec_accepts_reference_state_hold_without_a_schedule() -> None:
+    target = TargetSpec.model_validate(
+        {
+            "type": "point",
+            "point": PointID.TRACKROD_INBOARD,
+            "direction": {"axis": Axis.Y},
+            "hold": True,
+        }
+    )
+
+    assert target.hold is True
+    assert not target.model_fields_set.intersection({"mode", "start", "stop", "values"})
+    dumped = target.model_dump(mode="json")
+    assert not dumped.keys() & {"mode", "start", "stop", "values"}
+    assert TargetSpec.model_validate(dumped) == target
+
+
+def test_target_spec_rejects_a_value_schedule_for_a_hold() -> None:
+    with pytest.raises(ValueError, match="Held coordinate 'trackrod_inboard'"):
         TargetSpec.model_validate(
             {
                 "type": "point",
                 "point": PointID.TRACKROD_INBOARD,
                 "direction": {"axis": Axis.Y},
                 "hold": True,
+                "start": 0.0,
+                "stop": 0.0,
             }
         )
 

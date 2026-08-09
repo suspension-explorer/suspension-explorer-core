@@ -18,6 +18,4 @@ targets:
   - type: actuator_position
     actuator: rack
     direction: {axis: y}
-    mode: relative
-    start: 0
-    stop: 0
+    hold: true
