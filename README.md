@@ -38,11 +38,12 @@ tool.
 
 | Area                      | Supported                                                                                 | Important limits                                                                                                   |
 | ------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Locating architectures    | Double wishbone and MacPherson strut                                                      | Each may be built as one corner or a composed two-corner axle.                                                     |
+| Locating architectures    | Double wishbone, MacPherson strut, multi-link (five-rod), and semi-trailing arm           | Each may be built as one corner or a composed two-corner axle.                                                     |
 | Axle geometry             | Mirrored or explicitly authored left and right corners                                    | If `hardpoints.right` is omitted, the complete left geometry and side-local setup are mirrored through `Y = 0`.    |
 | Wheel-heading control     | Translating steering rack or fixed toe link                                               | Select `steering.type: rack` or `steering.type: none`; front/rear position does not select steering automatically. |
 | Double-wishbone actuation | Direct or pushrod-rocker, mounted to the lower wishbone or upright                        | Direct actuation cannot be combined with a torsion bar.                                                            |
 | Double-wishbone springs   | None, coilover, or torsion bar                                                            | A torsion bar requires pushrod-rocker actuation.                                                                   |
+| Multi-link corners        | Four independent locating rods plus track rod or toe link; actuation on the upright or a direct spring on a lower link's centreline | No physical kingpin exists; steering geometry reports through the virtual (screw-axis) metric family only.        |
 | Axle mechanisms           | U-bar or T-bar anti-roll mechanism and rocker-to-rocker heave link                        | These mechanisms require a double-wishbone axle with pushrod-rocker actuation.                                     |
 | Setup changes             | Outboard camber shims on double-wishbone corners                                          | Explicit asymmetric axle hardpoints require corresponding side-local setup when a shim is used.                    |
 | Outputs                   | Solved point positions, solver statistics, diagnostics, metrics, in either CSV or Parquet | Plotting and animation require the optional visualization dependencies.                                            |
@@ -63,7 +64,8 @@ Jacobian rather than by finite differencing adjacent sweep steps.
 - Multibody dynamics, inertia, damping, applied loads, and transient behavior.
 - Bushing, chassis, tire, or component compliance.
 - Stress, fatigue, strength, and packaging or interference checks.
-- Suspension architectures other than double wishbone and MacPherson strut.
+- Suspension architectures other than double wishbone, MacPherson strut,
+  multi-link, and semi-trailing arm.
 - Offset-axis MacPherson struts. The model requires the authored strut clamp to
   lie on the lower-ball-joint-to-top-mount steering axis within 1 mm.
 - Arbitrary mechanism combinations. Geometry is rejected when the selected

@@ -69,12 +69,15 @@ class CornerSuspension(Suspension):
         return (PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD)
 
     @abstractmethod
-    def steering_axis_points(self) -> tuple[PointID, PointID]:
+    def steering_axis_points(self) -> tuple[PointID, PointID] | None:
         """
-        Steering (kingpin) axis pivots as (lower, upper).
+        Physical steering (kingpin) axis pivots as (lower, upper).
 
         The lower-to-upper direction convention is load-bearing for caster
-        and KPI signs.
+        and KPI signs. Return None for an architecture whose steering axis is
+        purely motion-derived (e.g. a multi-link with separated ball joints);
+        the physical steering metric family is then omitted and only the
+        virtual screw-axis family reports.
         """
         ...
 

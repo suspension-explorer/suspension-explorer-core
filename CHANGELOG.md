@@ -6,6 +6,26 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Added the multi-link locating architecture (`type: multi_link`) at corner and
+  axle scope: four independent two-joint locating rods (upper front/rear, lower
+  front/rear), each with its own outboard ball joint on the rigid wheel
+  carrier, plus the configured track rod or toe link. Direct-coilover and
+  pushrod-rocker actuation mount on the upright, and a direct spring pickup
+  may alternatively ride a lower link's centreline as a derived point (a
+  damper fork clamped around the two-force rod), so no rigid off-axis pickup
+  is ever asked of a two-joint member. The corner publishes a locked-internals
+  (damper length)
+  suspension hold, and its steering geometry reports exclusively through the
+  virtual screw-axis metric family because no two ball joints define a physical
+  kingpin.
+- Made the physical steering axis optional on corner architectures.
+  `steering_axis_points()` may now return `None`, in which case the physical
+  caster/KPI/scrub/trail/offset columns and their hub-travel derivatives are
+  omitted from metric rows and metadata while the `*_virtual` family still
+  reports. Plane-intersection instant centres may likewise be undefined for a
+  multi-link carrier; the dependent swing-arm and anti-geometry metrics degrade
+  to null values.
+
 - Added topology-owned scalar drive coordinates for named actuator positions and
   true element lengths. Element-length targets support relative displacement or
   absolute pin-centre length, analytical residuals and Jacobians, analytical

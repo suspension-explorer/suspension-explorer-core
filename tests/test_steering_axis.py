@@ -49,7 +49,9 @@ def test_corner_bump_sweep_has_valid_steering_response_axis_at_every_step(
     axis = evaluated.steering_response_axes[midpoint][0].axis
     assert axis is not None
     assert isinstance(suspension, CornerSuspension)
-    lower_key, upper_key = suspension.steering_axis_points()
+    axis_points = suspension.steering_axis_points()
+    assert axis_points is not None
+    lower_key, upper_key = axis_points
     lower = state.get(lower_key).data
     physical_direction = state.get(upper_key).data - lower
     physical_direction /= np.linalg.norm(physical_direction)

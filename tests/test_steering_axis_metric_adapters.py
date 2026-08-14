@@ -52,22 +52,24 @@ def _context(*, steering_axis: SteeringAxis | None = None) -> MetricContext:
 
 
 def _common_outputs(ctx: MetricContext) -> tuple[float, ...]:
-    caster = calculate_caster(ctx.steering_axis)
-    kpi = calculate_kpi(ctx.steering_axis, ctx.side_sign)
+    axis = ctx.steering_axis
+    assert axis is not None
+    caster = calculate_caster(axis)
+    kpi = calculate_kpi(axis, ctx.side_sign)
     offset = calculate_steering_axis_offset_at_ground(
-        ctx.steering_axis,
+        axis,
         ctx.road,
         ctx.wheel_contact_centre,
         ctx.wheel_axis,
         ctx.side_sign,
     )
     scrub = calculate_scrub_radius(
-        ctx.steering_axis,
+        axis,
         ctx.road,
         ctx.wheel_contact_centre,
     )
     trail = calculate_mechanical_trail(
-        ctx.steering_axis,
+        axis,
         ctx.road,
         ctx.wheel_contact_centre,
         ctx.wheel_axis,
@@ -83,15 +85,19 @@ def _common_outputs(ctx: MetricContext) -> tuple[float, ...]:
 
 def test_metric_context_establishes_physical_axis_by_default() -> None:
     ctx = _context()
-    lower_id, upper_id = ctx.suspension.steering_axis_points()
+    axis_points = ctx.suspension.steering_axis_points()
+    assert axis_points is not None
+    lower_id, upper_id = axis_points
     lower = ctx.state.get(lower_id)
     upper = ctx.state.get(upper_id)
 
     axis = ctx.steering_axis
+    assert axis is not None
     assert axis.point.data == pytest.approx(lower.data)
     assert axis.direction.data == pytest.approx((upper - lower).normalize().data)
 
     pivots = ctx.steering_axis_pivots
+    assert pivots is not None
     assert pivots[0].data == pytest.approx(lower.data)
     assert pivots[1].data == pytest.approx(upper.data)
     expected_intersection = axis.intersect_road(ctx.road)
@@ -104,6 +110,7 @@ def test_metric_context_establishes_physical_axis_by_default() -> None:
 def test_same_metric_definitions_accept_physical_or_virtual_axis_context() -> None:
     physical_ctx = _context()
     physical_axis = physical_ctx.steering_axis
+    assert physical_axis is not None
     equivalent_point = physical_axis.point + physical_axis.direction.vector() * 125.0
     virtual_axis = SteeringAxis.from_unoriented_line(
         equivalent_point,

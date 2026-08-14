@@ -176,7 +176,8 @@ class SuspensionVisualizer:
                 [],
                 [],
                 [],
-                color="deeppink",
+                # Matches the app viewer's light-theme steering-axis orange.
+                color="#EA580C",
                 linewidth=2.0,
                 linestyle="-.",
                 marker=None,

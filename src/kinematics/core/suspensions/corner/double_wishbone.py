@@ -271,8 +271,9 @@ class DoubleWishboneSuspension(CornerSuspension):
                 id="lower_wishbone_angle",
                 label="Lower wishbone angle",
                 description=(
-                    "Fixes suspension travel at the lower wishbone, independent "
-                    "of the installed spring, damper and actuation mechanism."
+                    "Fixes suspension travel at the lower wishbone, isolating "
+                    "steering from jounce independently of the internal "
+                    "suspension mechanism."
                 ),
                 hold=CoordinateHold((lower,)),
             ),
@@ -280,8 +281,9 @@ class DoubleWishboneSuspension(CornerSuspension):
                 id="upper_wishbone_angle",
                 label="Upper wishbone angle",
                 description=(
-                    "Fixes suspension travel at the upper wishbone for the ideal "
-                    "rigid double-wishbone mechanism."
+                    "Fixes suspension travel at the upper wishbone, isolating "
+                    "steering from jounce in the ideal rigid double-wishbone "
+                    "mechanism."
                 ),
                 hold=CoordinateHold((upper,)),
             ),
@@ -291,9 +293,10 @@ class DoubleWishboneSuspension(CornerSuspension):
         if damper is not None:
             mounted_to_upright = self.actuation.moving_pickup_body == self.UPRIGHT_BODY
             warning = (
-                "Damper length changes during fixed-travel steering because the "
-                "actuation pickup is mounted on the upright. This option holds "
-                "damper length instead and may introduce wishbone travel."
+                "Locks the internal suspension at its current damper length. "
+                "Because the actuation pickup is mounted on the upright, the "
+                "wishbones and hub may move in response to steering and the "
+                "response axis may differ from the physical kingpin axis."
                 if mounted_to_upright
                 else None
             )
@@ -302,8 +305,8 @@ class DoubleWishboneSuspension(CornerSuspension):
                     id="damper_length",
                     label="Damper length",
                     description=(
-                        "Fixes the installed true damper length during the "
-                        "counterfactual steering response."
+                        "Locks the internal suspension at the current installed "
+                        "true damper length during the steering response."
                     ),
                     hold=CoordinateHold((damper,)),
                     availability=(

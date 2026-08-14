@@ -8,6 +8,7 @@ from kinematics.core.suspensions.corner.macpherson import MacPhersonSuspension
 from kinematics.core.suspensions.corner.mechanisms import (
     Actuation,
     ActuationDirect,
+    ActuationDirectOnLink,
     ActuationPushrodRocker,
     CornerDamper,
     CornerDamperLinear,
@@ -17,6 +18,7 @@ from kinematics.core.suspensions.corner.mechanisms import (
     CornerSpringNone,
     CornerSpringTorsionBar,
 )
+from kinematics.core.suspensions.corner.multi_link import MultiLinkSuspension
 from kinematics.core.suspensions.corner.toe_link import ToeLink
 from kinematics.core.suspensions.corner.track_rod import TrackRod
 from kinematics.core.suspensions.corner.trailing_arm import TrailingArmSuspension

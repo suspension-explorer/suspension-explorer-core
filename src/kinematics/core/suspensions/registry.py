@@ -11,6 +11,8 @@ from kinematics.core.schema.geometry import (
     GeometrySpecBase,
     MacPhersonAxleGeometrySpec,
     MacPhersonGeometrySpec,
+    MultiLinkAxleGeometrySpec,
+    MultiLinkGeometrySpec,
     TrailingArmAxleGeometrySpec,
     TrailingArmGeometrySpec,
 )
@@ -21,12 +23,15 @@ from kinematics.core.suspensions.build import (
     build_double_wishbone_axle,
     build_macpherson,
     build_macpherson_axle,
+    build_multi_link,
+    build_multi_link_axle,
     build_trailing_arm,
     build_trailing_arm_axle,
 )
 from kinematics.core.suspensions.corner import (
     DoubleWishboneSuspension,
     MacPhersonSuspension,
+    MultiLinkSuspension,
     TrailingArmSuspension,
 )
 
@@ -72,6 +77,20 @@ SUSPENSION_DEFINITIONS = (
         Scope.AXLE,
         MacPhersonAxleGeometrySpec,
         build_macpherson_axle,
+        AxleSuspension,
+    ),
+    SuspensionDefinition(
+        SuspensionType.MULTI_LINK,
+        Scope.CORNER,
+        MultiLinkGeometrySpec,
+        build_multi_link,
+        MultiLinkSuspension,
+    ),
+    SuspensionDefinition(
+        SuspensionType.MULTI_LINK,
+        Scope.AXLE,
+        MultiLinkAxleGeometrySpec,
+        build_multi_link_axle,
         AxleSuspension,
     ),
     SuspensionDefinition(

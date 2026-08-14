@@ -339,11 +339,15 @@ def test_metric_context_resolves_steering_axis_through_role_hooks():
         config=corner.config,
     )
 
-    lower, upper = ctx.steering_axis_pivots
+    pivots = ctx.steering_axis_pivots
+    assert pivots is not None
+    lower, upper = pivots
     # The stub declares KNUCKLE as the lower pivot and CHASSIS_FRONT as the
     # upper pivot.
     initial = corner.initial_state()
     assert (lower - initial.get(KNUCKLE)).norm() == pytest.approx(0.0)
     assert (upper - initial.get(CHASSIS_FRONT)).norm() == pytest.approx(0.0)
     expected_direction = (upper - lower).normalize()
-    assert ctx.steering_axis.direction.data == pytest.approx(expected_direction.data)
+    axis = ctx.steering_axis
+    assert axis is not None
+    assert axis.direction.data == pytest.approx(expected_direction.data)

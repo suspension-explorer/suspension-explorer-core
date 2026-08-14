@@ -112,17 +112,30 @@ class MetricContext:
         return (axle_out - axle_in).normalize()
 
     @cached_property
-    def steering_axis_pivots(self) -> tuple[Point3, Point3]:
-        """Return lower and upper steering pivots in chassis coordinates."""
-        lower_id, upper_id = self.suspension.steering_axis_points()
+    def steering_axis_pivots(self) -> tuple[Point3, Point3] | None:
+        """Return lower and upper steering pivots in chassis coordinates.
+
+        None when the architecture declares no physical steering axis.
+        """
+        axis_points = self.suspension.steering_axis_points()
+        if axis_points is None:
+            return None
+        lower_id, upper_id = axis_points
         return (self.state.get(lower_id), self.state.get(upper_id))
 
     @cached_property
-    def steering_axis(self) -> SteeringAxis:
-        """Return the physical or motion-derived axis selected for this context."""
+    def steering_axis(self) -> SteeringAxis | None:
+        """Return the physical or motion-derived axis selected for this context.
+
+        None when no motion-derived axis was injected and the architecture
+        has no physical steering axis to fall back on.
+        """
         if self._steering_axis is not None:
             return self._steering_axis
-        lower, upper = self.steering_axis_pivots
+        pivots = self.steering_axis_pivots
+        if pivots is None:
+            return None
+        lower, upper = pivots
         return SteeringAxis.from_pivots(lower, upper)
 
     @cached_property
@@ -134,8 +147,10 @@ class MetricContext:
         pivot and solves ``n · (lower + t * direction) + c = 0`` against the
         ISO-style road datum, all expressed in chassis coordinates. This does
         not require world space or inferred chassis pitch. Returns None if the
-        steering axis is parallel to the road plane.
+        steering axis is undefined or parallel to the road plane.
         """
+        if self.steering_axis is None:
+            return None
         return self.steering_axis.intersect_road(self.road)
 
     @cached_property

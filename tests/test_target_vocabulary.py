@@ -60,6 +60,14 @@ EXPECTED_POINT_IDS = (
     "torsion_bar_axis_b",
     "damper_chassis",
     "damper_rocker",
+    "upper_front_link_inboard",
+    "upper_front_link_outboard",
+    "upper_rear_link_inboard",
+    "upper_rear_link_outboard",
+    "lower_front_link_inboard",
+    "lower_front_link_outboard",
+    "lower_rear_link_inboard",
+    "lower_rear_link_outboard",
 )
 
 

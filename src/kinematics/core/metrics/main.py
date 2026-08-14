@@ -22,6 +22,7 @@ from kinematics.core.metrics.catalog import (
     get_default_corner_derivative_metrics,
     get_default_corner_metrics,
     get_virtual_steering_metrics,
+    physical_steering_metric_keys,
 )
 from kinematics.core.metrics.context import MetricContext
 from kinematics.core.metrics.derivatives import evaluate_derivative_metrics
@@ -276,9 +277,18 @@ def compute_metrics_for_state(
             steering_axis=virtual_axis,
         )
     )
+    # An architecture without a physical steering axis omits the physical
+    # steering columns entirely; its steering geometry reports only through
+    # the motion-derived ``*_virtual`` family.
+    omitted_physical_keys = (
+        physical_steering_metric_keys()
+        if suspension.steering_axis_points() is None
+        else frozenset()
+    )
     row: MetricRow = OrderedDict()
     for metric in catalog:
-        row[metric.column_name] = metric.compute(ctx)
+        if metric.column_name not in omitted_physical_keys:
+            row[metric.column_name] = metric.compute(ctx)
         virtual_metric = virtual_by_physical_key.get(metric.column_name)
         if virtual_metric is not None:
             row[virtual_metric.column_name] = (

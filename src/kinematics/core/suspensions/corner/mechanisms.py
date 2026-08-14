@@ -162,6 +162,128 @@ class ActuationDirect:
         return ()
 
 
+# How far an authored on-link pickup may sit off the rod centreline, in
+# millimetres, before the coincident-with-the-link modelling choice is
+# considered violated rather than an authoring rounding error.
+LINK_PICKUP_ALIGNMENT_TOLERANCE_MM = 1.0
+
+
+@dataclass(frozen=True)
+class ActuationDirectOnLink:
+    """
+    Direct spring connection carried on a two-joint locating rod.
+
+    A rod with ball joints at both ends is a two-force member: its spin about
+    its own centreline is undetermined, so it cannot rigidly carry an
+    off-axis pickup. It can carry an on-axis one. The moving pickup is a
+    derived point at a fixed axial position along the rod (a damper fork
+    clamped around the link), so it follows the link exactly and contributes
+    no solver constraint of its own. The owning corner derives the pickup in
+    its derived-points specification.
+    """
+
+    link_inboard: PointID
+    link_outboard: PointID
+
+    @property
+    def moving_pickup_point(self) -> PointID:
+        """Return the spring pickup carried on the link centreline."""
+        return PointID.STRUT_BOTTOM
+
+    @property
+    def moving_pickup_body(self) -> tuple[PointID, ...]:
+        """Return the two-joint rod that carries the spring pickup."""
+        return (self.link_inboard, self.link_outboard)
+
+    @property
+    def required_points(self) -> frozenset[PointID]:
+        """Return points owned by on-link direct actuation itself."""
+        return frozenset()
+
+    @property
+    def free_points(self) -> tuple[PointID, ...]:
+        """Return moving points owned by on-link direct actuation itself."""
+        return ()
+
+    @property
+    def output_points(self) -> tuple[PointID, ...]:
+        """Return output points owned by on-link direct actuation itself."""
+        return ()
+
+    @property
+    def torsion_axis(self) -> tuple[PointID, PointID] | None:
+        """On-link direct torsion geometry is not defined."""
+        return None
+
+    def validate(self, hardpoints: Mapping[PointKey, Point3]) -> None:
+        """Require an authored pickup on the rod centreline, between joints."""
+        inboard = hardpoints[self.link_inboard]
+        outboard = hardpoints[self.link_outboard]
+        rod_length = compute_point_point_distance(inboard, outboard)
+        if rod_length <= EPS_GEOMETRIC:
+            raise ValueError("On-link actuation requires distinct link joint positions")
+        pickup = hardpoints.get(PointID.STRUT_BOTTOM)
+        if pickup is None:
+            return
+        off_axis = compute_point_to_line_distance(
+            pickup,
+            inboard,
+            (outboard - inboard).normalize(),
+        )
+        if off_axis > LINK_PICKUP_ALIGNMENT_TOLERANCE_MM:
+            raise ValueError(
+                f"STRUT_BOTTOM sits {off_axis:.3f} mm off the line from "
+                f"{self.link_inboard.name} to {self.link_outboard.name}. A "
+                "two-joint rod carries a pickup only on its own centreline."
+            )
+        axial = self.pickup_axial_offset(hardpoints)
+        if axial <= EPS_GEOMETRIC or axial >= rod_length - EPS_GEOMETRIC:
+            raise ValueError(
+                f"STRUT_BOTTOM must lie between {self.link_inboard.name} and "
+                f"{self.link_outboard.name} along the link"
+            )
+
+    def pickup_axial_offset(self, hardpoints: Mapping[PointKey, Point3]) -> float:
+        """Return the authored inboard-joint-to-pickup distance along the rod."""
+        inboard = hardpoints[self.link_inboard]
+        rod_axis = (hardpoints[self.link_outboard] - inboard).normalize()
+        pickup_vector = hardpoints[PointID.STRUT_BOTTOM] - inboard
+        return float(pickup_vector.data.dot(rod_axis.data))
+
+    def constraints(self, initial: SuspensionState) -> list[Constraint]:
+        """On-link actuation adds no constraint without a selected spring."""
+        return []
+
+    def linear_link_constraints(self, initial: SuspensionState) -> list[Constraint]:
+        """The derived on-link pickup follows the rod; nothing to constrain."""
+        return []
+
+    def derivative_metric_definitions(
+        self,
+        initial: SuspensionState,
+        side: Side,
+    ) -> tuple[DerivativeMetricDefinition, ...]:
+        """On-link direct actuation adds no derivative metrics itself."""
+        return ()
+
+    def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
+        """Declare no on-link direct-actuation state metrics."""
+        return ()
+
+    def topology_metric_values(
+        self,
+        state: SuspensionState,
+        initial: SuspensionState,
+        side: Side,
+    ) -> "MetricRow":
+        """On-link direct actuation adds no state metrics itself."""
+        return OrderedDict()
+
+    def elements(self) -> tuple[SuspensionElement, ...]:
+        """On-link direct actuation adds no physical element itself."""
+        return ()
+
+
 @dataclass(frozen=True)
 class ActuationPushrodRocker:
     """
@@ -439,7 +561,7 @@ class ActuationPushrodRocker:
         )
 
 
-type Actuation = ActuationDirect | ActuationPushrodRocker
+type Actuation = ActuationDirect | ActuationDirectOnLink | ActuationPushrodRocker
 
 
 @dataclass(frozen=True)
