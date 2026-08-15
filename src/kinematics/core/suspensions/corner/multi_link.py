@@ -510,6 +510,11 @@ class MultiLinkSuspension(CornerSuspension):
             )
             for label, inboard, outboard in self.LINKS
         )
+        upright_actuation_pickup = (
+            (self.actuation.moving_pickup_point,)
+            if self.actuation.moving_pickup_body == self.UPRIGHT_BODY
+            else ()
+        )
         base_elements: tuple[SuspensionElement, ...] = (
             *link_elements,
             UprightElement(
@@ -520,6 +525,7 @@ class MultiLinkSuspension(CornerSuspension):
                     PointID.LOWER_REAR_LINK_OUTBOARD,
                     PointID.LOWER_FRONT_LINK_OUTBOARD,
                     heading_link_outboard,
+                    *upright_actuation_pickup,
                 ),
                 attachments=(PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD),
                 segments=(

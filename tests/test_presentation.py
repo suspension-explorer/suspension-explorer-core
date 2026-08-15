@@ -139,6 +139,34 @@ def test_axle_geometry_includes_shared_arb_and_side_keyed_rockers(
             assert axis_projection_name(projection) in positions
 
 
+def test_upright_spokes_include_upright_mounted_actuation_pickup(
+    test_data_dir: Path,
+) -> None:
+    suspension = load_geometry(test_data_dir / "corner_strut_rocker_geometry.yaml")
+    spokes = [
+        path
+        for path in named_element_paths(suspension.assembly())
+        if path.type is ElementType.UPRIGHT
+    ]
+
+    hub = "axle_inboard_axle_outboard_midpoint"
+    assert all(path.points[0] == hub and len(path.points) == 2 for path in spokes)
+    assert "pushrod_outboard" in {path.points[1] for path in spokes}
+
+
+def test_upright_spokes_exclude_pickup_mounted_on_another_body(
+    test_data_dir: Path,
+) -> None:
+    suspension = load_geometry(test_data_dir / "geometry.yaml")
+    spoke_targets = {
+        path.points[1]
+        for path in named_element_paths(suspension.assembly())
+        if path.type is ElementType.UPRIGHT
+    }
+
+    assert "strut_bottom" not in spoke_targets
+
+
 def test_t_bar_crossbar_midpoint_is_resolved_as_presentation_geometry(
     test_data_dir: Path,
 ) -> None:

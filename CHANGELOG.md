@@ -43,6 +43,12 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Upright presentation geometry is now a spoke set: one rendered path from
+  the synthetic axle midpoint to each carried joint (e.g. axle midpoint to
+  UBJ, LBJ, and track-rod end on a double wishbone), replacing the authored
+  outline segments. An upright-mounted actuation pickup (pushrod outboard or
+  direct spring pickup) receives its own spoke. The midpoint is a
+  presentation-only point and draws no hardpoint marker.
 - Generalized sweep solving around one scalar-target protocol. Point
   projections, named actuator positions, and element lengths now share value
   expansion, absolute conversion, measurement, point partials, remapping,

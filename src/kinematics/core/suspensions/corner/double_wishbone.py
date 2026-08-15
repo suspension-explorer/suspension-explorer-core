@@ -547,6 +547,11 @@ class DoubleWishboneSuspension(CornerSuspension):
             if isinstance(self.actuation, ActuationPushrodRocker)
             else self.actuation.elements()
         )
+        upright_actuation_pickup = (
+            (self.actuation.moving_pickup_point,)
+            if self.actuation.moving_pickup_body == self.UPRIGHT_BODY
+            else ()
+        )
         base_elements: tuple[SuspensionElement, ...] = (
             RigidLinkElement(
                 label="Upper Wishbone Front Leg",
@@ -578,6 +583,7 @@ class DoubleWishboneSuspension(CornerSuspension):
                     PointID.UPPER_WISHBONE_OUTBOARD,
                     PointID.LOWER_WISHBONE_OUTBOARD,
                     heading_link_outboard,
+                    *upright_actuation_pickup,
                 ),
                 attachments=(PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD),
                 segments=(
