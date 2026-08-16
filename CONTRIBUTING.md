@@ -25,6 +25,15 @@ in the pull request template, you:
    sublicensed, and relicensed as part of Suspension Explorer Core, including
    under AGPL-3.0-only and under separate commercial license terms.
 
+### Patent rights
+
+To the extent that you control patent claims that are necessarily infringed by
+your contribution, you grant **Nick McCleery**, and any successor owner of the
+Suspension Explorer Core project copyrights, a perpetual, worldwide,
+non-exclusive, royalty-free, irrevocable licence under those claims to make,
+have made, use, sell, offer for sale, import, distribute, sublicense, and
+otherwise use your contribution as part of Suspension Explorer Core.
+
 Accepted contributions will remain available as part of the open-source
 Suspension Explorer Core project under **AGPL-3.0-only**. Commercial
 relicensing does not remove the contribution from the open-source project.
@@ -53,7 +62,9 @@ When submitting a pull request:
 - Include tests for new behaviour or bug fixes.
 - Update documentation where behaviour or public APIs change.
 - Make sure the relevant development checks pass.
-- Accept the contributor terms shown in the pull request template.
+- Personally accept the contributor terms by checking the acknowledgement in
+  the pull request template. A maintainer or other person cannot accept the
+  terms on your behalf.
 
 Pull requests cannot be merged unless the contributor terms have been
 explicitly accepted.
