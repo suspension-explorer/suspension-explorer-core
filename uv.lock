@@ -204,7 +204,7 @@ wheels = [
 
 [[package]]
 name = "kinematics"
-version = "0.4.1"
+version = "0.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },

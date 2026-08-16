@@ -1,8 +1,10 @@
 [project]
 name = "kinematics"
-version = "0.4.1"
+version = "0.6.0"
 description = "Kinematics solver for suspension systems."
 readme = "README.md"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = ["numpy>=2.2.0", "pydantic>=2.0", "scipy>=1.14.1"]
 

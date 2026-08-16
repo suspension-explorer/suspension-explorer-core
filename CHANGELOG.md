@@ -89,6 +89,15 @@ All notable changes to this project will be documented in this file.
 - Standalone right-corner geometry is rejected. Model a right-hand corner as
   part of an axle instead.
 
+## [0.6.0] - 2026-08-16
+
+### Changed
+
+- Relicensed from Apache-2.0 to AGPL-3.0-only with a separate commercial
+  licensing option. Releases up to and including v0.5.1 remain available under
+  Apache-2.0. External contributions now require acceptance of the contributor
+  terms and copyright assignment described in CONTRIBUTING.md.
+
 ## [0.5.1] - 2026-07-31
 
 ### Added
