@@ -39,10 +39,10 @@ for redundant or conflicting target bases: extra rows may be consistent, while
 an incompatible overdetermined request must not become a least-squares
 compromise.
 
-Free-point velocities are propagated through the derived-point dependency
+Free-point rates are propagated through the derived-point dependency
 graph with dual numbers, and an optional post-derived closure applies the same
 implicit closure used by the state solver.  Thus derived and closure-owned
-outputs participate in the reported velocity field without becoming
+outputs participate in the reported tangent field without becoming
 independent solve variables.
 
 This module deliberately assigns no physical meaning such as steering, bump,
@@ -72,18 +72,23 @@ _RANK_RELATIVE_TOLERANCE = np.finfo(np.float64).eps
 
 @dataclass(frozen=True)
 class TangentField:
-    """First-order response of every point position to one sweep target."""
+    """First-order response of every point position to one scalar target.
+
+    ``rates[key]`` is ``d(position[key]) / d(target)``.  It is a derivative
+    with respect to the selected target coordinate, not velocity with respect
+    to time.
+    """
 
     target_index: int
     target: ScalarCoordinateTarget
-    velocities: dict[PointKey, np.ndarray]
+    rates: dict[PointKey, np.ndarray]
 
-    def velocity(self, point_id: PointKey) -> np.ndarray:
-        """Return a point velocity, or zeros when the point is unknown."""
-        velocity = self.velocities.get(point_id)
-        if velocity is None:
+    def rate(self, point_id: PointKey) -> np.ndarray:
+        """Return a point rate with respect to the selected target coordinate."""
+        rate = self.rates.get(point_id)
+        if rate is None:
             return np.zeros(3, dtype=np.float64)
-        return velocity
+        return rate
 
 
 @dataclass(frozen=True)
@@ -339,21 +344,21 @@ def compute_state_tangents(
 
     fields: list[TangentField] = []
     for target_index, target in enumerate(step_targets):
-        free_velocities: dict[PointKey, np.ndarray] = {}
+        free_rates: dict[PointKey, np.ndarray] = {}
         for point_id, offset in computer.point_var_offsets.items():
-            free_velocities[point_id] = tangent_arrays[
+            free_rates[point_id] = tangent_arrays[
                 offset : offset + 3,
                 target_index,
             ].copy()
 
         dual_positions = seed_positions_with_tangent(
             scratch.positions,
-            free_velocities,
+            free_rates,
         )
         derived_manager.update_in_place(dual_positions)
         if post_derived_update is not None:
             post_derived_update(dual_positions)
-        velocities = {
+        rates = {
             point_id: dual_position.deriv.copy()
             for point_id, dual_position in dual_positions.items()
         }
@@ -361,7 +366,7 @@ def compute_state_tangents(
             TangentField(
                 target_index=target_index,
                 target=target,
-                velocities=velocities,
+                rates=rates,
             )
         )
 
@@ -582,7 +587,7 @@ def combine_tangents(
     fields: Sequence[TangentField],
     coefficients: Sequence[float],
 ) -> dict[PointKey, np.ndarray]:
-    """Linearly combine tangent fields into one velocity field."""
+    """Linearly combine tangent fields into one point-rate field."""
     if len(fields) != len(coefficients):
         raise ValueError(
             f"Field/coefficient count mismatch: {len(fields)} fields, "
@@ -591,18 +596,18 @@ def combine_tangents(
 
     combined: dict[PointKey, np.ndarray] = {}
     for field, coefficient in zip(fields, coefficients):
-        for point_id, velocity in field.velocities.items():
+        for point_id, rate in field.rates.items():
             accumulated = combined.get(point_id)
             if accumulated is None:
-                combined[point_id] = coefficient * velocity
+                combined[point_id] = coefficient * rate
             else:
-                accumulated += coefficient * velocity
+                accumulated += coefficient * rate
     return combined
 
 
 def tangent_positions(
     state: SuspensionState,
-    velocities: Mapping[PointKey, np.ndarray],
+    rates: Mapping[PointKey, np.ndarray],
 ) -> dict[PointKey, DualVec3]:
-    """Seed a state's positions with a velocity field for dual evaluation."""
-    return seed_positions_with_tangent(state.positions, velocities)
+    """Seed a state's positions with a point-rate field for dual evaluation."""
+    return seed_positions_with_tangent(state.positions, rates)

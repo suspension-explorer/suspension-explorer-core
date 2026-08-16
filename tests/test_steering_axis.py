@@ -12,7 +12,7 @@ from kinematics.core.analysis import analyze_evaluated_sweep
 from kinematics.core.enums import PointID
 from kinematics.core.holds import CoordinateHold
 from kinematics.core.points.derived.manager import DerivedPointsManager
-from kinematics.core.rigid_motion import ScrewAxisStatus
+from kinematics.core.screw_axis import ScrewAxisStatus
 from kinematics.core.sensitivity import compute_state_tangents
 from kinematics.core.steering_axis import compute_steering_response_tangent
 from kinematics.core.steering_response import (
@@ -214,7 +214,7 @@ def test_redundant_consistent_wishbone_holds_are_accepted() -> None:
         PointID.LOWER_WISHBONE_OUTBOARD,
         PointID.UPPER_WISHBONE_OUTBOARD,
     ):
-        assert response.tangent.velocity(point) == pytest.approx(
+        assert response.tangent.rate(point) == pytest.approx(
             np.zeros(3),
             abs=2e-10,
         )
@@ -239,7 +239,7 @@ def test_conflicting_real_hold_basis_is_rejected_as_inconsistent() -> None:
     assert canonical.status is ScrewAxisStatus.VALID
     assert canonical.tangent is not None
     damper_rate = sum(
-        float(partial @ canonical.tangent.velocity(point))
+        float(partial @ canonical.tangent.rate(point))
         for point, partial in damper.current_value_target(
             state.positions
         ).point_partials(state.positions)

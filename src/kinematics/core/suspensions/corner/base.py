@@ -22,7 +22,7 @@ from kinematics.core.targeting import PointTargetAxis, TargetKind
 if TYPE_CHECKING:
     from kinematics.core.coordinates import ArmAngleCoordinate
     from kinematics.core.metrics.main import MetricRow
-    from kinematics.core.rigid_motion import UprightScrewAxisResult
+    from kinematics.core.screw_axis import UprightScrewAxisResult
     from kinematics.core.sensitivity import TangentField
 
 

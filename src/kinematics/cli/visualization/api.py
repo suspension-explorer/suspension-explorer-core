@@ -13,7 +13,7 @@ from kinematics.core.primitives.geometry import Point3
 from kinematics.core.road import RoadPlane
 
 if TYPE_CHECKING:
-    from kinematics.core.rigid_motion import UprightScrewAxisResult
+    from kinematics.core.screw_axis import UprightScrewAxisResult
     from kinematics.core.state import SuspensionState
     from kinematics.core.suspensions.base import Suspension
 

@@ -41,7 +41,7 @@ def _state_and_tangent() -> tuple[SuspensionState, TangentField]:
     tangent = TangentField(
         target_index=0,
         target=target,
-        velocities={
+        rates={
             point_a: np.array([2.0, 1.0, 0.0]),
             point_b: np.array([0.5, 0.0, 0.0]),
         },
@@ -203,7 +203,7 @@ def test_multi_tangent_selection_prefers_strongest_driver_rate() -> None:
     weaker = TangentField(
         target_index=1,
         target=tangent.target,
-        velocities={PointID.AXLE_INBOARD: np.array([0.5, 10.0, 0.0])},
+        rates={PointID.AXLE_INBOARD: np.array([0.5, 10.0, 0.0])},
     )
     unrelated = TangentField(
         target_index=2,
@@ -213,7 +213,7 @@ def test_multi_tangent_selection_prefers_strongest_driver_rate() -> None:
             value=0.0,
             mode=TargetValueMode.ABSOLUTE,
         ),
-        velocities={PointID.AXLE_INBOARD: np.array([100.0, 100.0, 0.0])},
+        rates={PointID.AXLE_INBOARD: np.array([100.0, 100.0, 0.0])},
     )
     definition = DerivativeMetricDefinition(
         scale=2.0,
@@ -270,7 +270,7 @@ def test_equal_strength_matching_tangents_are_rejected() -> None:
     tied = TangentField(
         target_index=1,
         target=tangent.target,
-        velocities={PointID.AXLE_INBOARD: np.array([-2.0, 3.0, 0.0])},
+        rates={PointID.AXLE_INBOARD: np.array([-2.0, 3.0, 0.0])},
     )
     definition = DerivativeMetricDefinition(
         response=PointCoordinateResponse.from_chassis_axis(

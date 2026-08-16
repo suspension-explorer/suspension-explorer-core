@@ -1,6 +1,6 @@
 """Topology-owned suspension holds for steering-response derivatives.
 
-The virtual steering axis is the screw axis of a *particular* velocity field;
+The virtual steering axis is the screw axis of a *particular* tangent field;
 the screw-axis fitter cannot decide which field is steering.  At a solved state
 ``q_k``, a topology declares one steering actuator ``s`` and any
 suspension-travel coordinates ``l`` that it wants held.  The analytical

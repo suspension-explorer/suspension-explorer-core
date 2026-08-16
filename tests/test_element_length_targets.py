@@ -347,7 +347,7 @@ def test_mixed_targets_produce_one_analytical_tangent_field_each() -> None:
     assert not info.rank_deficient
     element_field = fields[0]
     length_rate = sum(
-        float(partial @ element_field.velocity(point))
+        float(partial @ element_field.rate(point))
         for point, partial in element_field.target.point_partials(state.positions)
     )
     assert length_rate == pytest.approx(1.0)

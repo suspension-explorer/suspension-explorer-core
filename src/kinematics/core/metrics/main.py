@@ -36,7 +36,7 @@ from kinematics.core.state import SuspensionState
 
 if TYPE_CHECKING:
     from kinematics.core.coordinates import PhysicalCoordinate
-    from kinematics.core.rigid_motion import UprightScrewAxisResult
+    from kinematics.core.screw_axis import UprightScrewAxisResult
     from kinematics.core.suspensions.axle import AxleSuspension
     from kinematics.core.suspensions.base import Suspension
     from kinematics.core.suspensions.corner.base import CornerSuspension
@@ -183,9 +183,9 @@ def _corner_tangents(
             TangentField(
                 target_index=tangent.target_index,
                 target=local_tangent_target,
-                velocities={
-                    key.point: velocity
-                    for key, velocity in tangent.velocities.items()
+                rates={
+                    key.point: rate
+                    for key, rate in tangent.rates.items()
                     if isinstance(key, PointRef) and key.side is side
                 },
             )

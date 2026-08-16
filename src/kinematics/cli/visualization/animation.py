@@ -19,7 +19,7 @@ from kinematics.cli.visualization.plots import (
     configure_3d_axis,
     create_four_view_axes,
 )
-from kinematics.core.rigid_motion import UprightScrewAxisResult
+from kinematics.core.screw_axis import UprightScrewAxisResult
 
 
 @dataclass(frozen=True)

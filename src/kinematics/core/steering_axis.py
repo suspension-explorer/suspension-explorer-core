@@ -3,7 +3,7 @@
 A physical steering axis is established directly from mechanism geometry, for
 example the line through a double wishbone's lower and upper outer ball joints.
 A virtual steering axis is instead inferred from the instantaneous rigid-body
-motion of the upright.  That inference is meaningful only after the velocity
+motion of the upright.  That inference is meaningful only after the tangent
 field has been given an explicit steering boundary condition: generic
 screw-axis mathematics cannot separate steering from bump, roll, or heave.
 
@@ -31,7 +31,7 @@ jacking, but not an isolated steering axis.  Replacing the authored target
 basis with the topology-owned suspension hold removes that accidental dependency.
 
 For an ideal double wishbone whose declared wishbone angle fixes travel,
-the response makes both outer ball-joint velocities zero to first order.
+the response makes both outer ball-joint rates zero to first order.
 The fitted upright line should consequently recover the physical kingpin axis
 at every bumped or rolled state.  More complex topologies may define a
 different hold basis.  The sensitivity solver obtains mechanism mobility from
@@ -55,7 +55,7 @@ from kinematics.core.constraints import Constraint
 from kinematics.core.coordinates import actuator_coordinate_matches
 from kinematics.core.elements import UprightElement
 from kinematics.core.points.derived.manager import DerivedPointsManager
-from kinematics.core.rigid_motion import (
+from kinematics.core.screw_axis import (
     ScrewAxisStatus,
     UprightScrewAxisResult,
     compute_upright_screw_axis,

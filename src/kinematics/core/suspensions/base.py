@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
     from kinematics.core.metrics.main import AxleMetricRows, MetricRow
     from kinematics.core.metrics.registry import MetricSpec
-    from kinematics.core.rigid_motion import UprightScrewAxisResult
+    from kinematics.core.screw_axis import UprightScrewAxisResult
     from kinematics.core.sensitivity import TangentField
     from kinematics.core.steering_response import (
         SteeringResponseDefinition,

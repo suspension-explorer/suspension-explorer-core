@@ -4,7 +4,7 @@ import pytest
 from kinematics.core.enums import Axis, PointID, TargetValueMode
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointKey
-from kinematics.core.rigid_motion import (
+from kinematics.core.screw_axis import (
     ScrewAxisStatus,
     compute_upright_screw_axis,
     extract_screw_axis,
@@ -31,14 +31,14 @@ POINTS = np.array(
 )
 
 
-def _tangent(velocities: dict[PointKey, np.ndarray]) -> TangentField:
+def _tangent(rates: dict[PointKey, np.ndarray]) -> TangentField:
     target = PointTarget(
         point_id=PointID.TRACKROD_INBOARD,
         direction=PointTargetAxis(Axis.X),
         value=0.0,
         mode=TargetValueMode.ABSOLUTE,
     )
-    return TangentField(target_index=0, target=target, velocities=velocities)
+    return TangentField(target_index=0, target=target, rates=rates)
 
 
 def _motion(
@@ -49,12 +49,13 @@ def _motion(
     pitch: float,
 ) -> tuple[dict[PointKey, Point3], TangentField]:
     direction = axis_direction / np.linalg.norm(axis_direction)
-    angular_velocity = angular_rate * direction
-    velocities = (
-        np.cross(angular_velocity, points - axis_point) + pitch * angular_velocity
+    rotation_rate_vector = angular_rate * direction
+    rates = (
+        np.cross(rotation_rate_vector, points - axis_point)
+        + pitch * rotation_rate_vector
     )
     positions = {key: Point3(point) for key, point in zip(POINT_KEYS, points)}
-    tangent = _tangent({key: velocity for key, velocity in zip(POINT_KEYS, velocities)})
+    tangent = _tangent({key: rate for key, rate in zip(POINT_KEYS, rates)})
     return positions, tangent
 
 
@@ -136,7 +137,7 @@ def test_axis_is_invariant_to_tangent_derivative_scale() -> None:
     direction = np.array([2.0, -3.0, 5.0])
     positions, tangent = _motion(POINTS, axis_point, direction, 0.35, 1.25)
     scaled_tangent = _tangent(
-        {key: 17.0 * velocity for key, velocity in tangent.velocities.items()}
+        {key: 17.0 * rate for key, rate in tangent.rates.items()}
     )
 
     axis, status, _message = extract_screw_axis(
@@ -156,7 +157,7 @@ def test_axis_is_invariant_to_tangent_derivative_scale() -> None:
     assert scaled_axis.angular_rate == pytest.approx(17.0 * axis.angular_rate)
 
 
-def test_fit_accepts_a_combined_velocity_mapping() -> None:
+def test_fit_accepts_a_combined_rate_mapping() -> None:
     positions, tangent = _motion(
         POINTS,
         np.array([4.0, -1.5, 8.0]),
@@ -166,14 +167,14 @@ def test_fit_accepts_a_combined_velocity_mapping() -> None:
     )
 
     axis, status, _message = extract_screw_axis(
-        fit_rigid_body_twist(positions, tangent.velocities, POINT_KEYS)
+        fit_rigid_body_twist(positions, tangent.rates, POINT_KEYS)
     )
 
     assert status is ScrewAxisStatus.VALID
     assert axis is not None
 
 
-def test_twist_reconstructs_selected_point_velocities() -> None:
+def test_twist_reconstructs_selected_point_rates() -> None:
     axis_point = np.array([4.0, -1.5, 8.0])
     positions, tangent = _motion(
         POINTS,
@@ -186,15 +187,15 @@ def test_twist_reconstructs_selected_point_velocities() -> None:
 
     assert twist.valid
     assert twist.reference_point is not None
-    assert twist.reference_velocity is not None
-    assert twist.angular_velocity is not None
+    assert twist.reference_point_rate is not None
+    assert twist.rotation_rate_vector is not None
     for key in POINT_KEYS:
         offset = positions[key].data - twist.reference_point.data
-        recovered = twist.reference_velocity.data + np.cross(
-            twist.angular_velocity.data,
+        recovered = twist.reference_point_rate.data + np.cross(
+            twist.rotation_rate_vector.data,
             offset,
         )
-        assert recovered == pytest.approx(tangent.velocities[key], abs=1e-12)
+        assert recovered == pytest.approx(tangent.rates[key], abs=1e-12)
 
 
 def test_overdetermined_fit_reports_small_injected_noise() -> None:
@@ -205,11 +206,11 @@ def test_overdetermined_fit_reports_small_injected_noise() -> None:
         0.35,
         0.0,
     )
-    noisy_velocities = {
-        key: velocity.copy() for key, velocity in tangent.velocities.items()
+    noisy_rates = {
+        key: rate.copy() for key, rate in tangent.rates.items()
     }
-    noisy_velocities[POINT_KEYS[-1]] += np.array([1e-4, -2e-4, 3e-4])
-    noisy_tangent = _tangent(noisy_velocities)
+    noisy_rates[POINT_KEYS[-1]] += np.array([1e-4, -2e-4, 3e-4])
+    noisy_tangent = _tangent(noisy_rates)
 
     twist = fit_rigid_body_twist(positions, noisy_tangent, POINT_KEYS)
     axis, status, _message = extract_screw_axis(twist)

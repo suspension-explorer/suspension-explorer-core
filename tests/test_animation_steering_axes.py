@@ -16,7 +16,7 @@ from kinematics.cli.visualization.clipping import Bounds3D  # noqa: E402
 from kinematics.cli.visualization.main import SuspensionVisualizer  # noqa: E402
 from kinematics.core.enums import PointID  # noqa: E402
 from kinematics.core.primitives.geometry import Point3, Vector3  # noqa: E402
-from kinematics.core.rigid_motion import (  # noqa: E402
+from kinematics.core.screw_axis import (  # noqa: E402
     InstantaneousScrewAxis,
     ScrewAxisStatus,
     UprightScrewAxisResult,

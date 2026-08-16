@@ -352,7 +352,7 @@ def _dual_positions(
     """Seed a state along one tangent field."""
     from kinematics.core.primitives.dual import seed_positions_with_tangent
 
-    return seed_positions_with_tangent(state.positions, tangent.velocities)
+    return seed_positions_with_tangent(state.positions, tangent.rates)
 
 
 def evaluate_derivative_metrics(
@@ -362,7 +362,7 @@ def evaluate_derivative_metrics(
 ) -> DerivativeMetricRow:
     """Evaluate declarations without changing their reference systems.
 
-    Tangent velocities and solved points are expressed in chassis coordinates.
+    Tangent rates and solved points are expressed in chassis coordinates.
     Each response and driver decides whether it further resolves geometry into
     wheel or local road axes; this dispatcher never introduces world space.
     """

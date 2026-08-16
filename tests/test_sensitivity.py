@@ -84,7 +84,7 @@ def test_corner_tangent_matches_finite_difference(
             - extract_array(states[0].positions[point_id])
         ) / (2.0 * FD_STEP)
         np.testing.assert_allclose(
-            field.velocity(point_id),
+            field.rate(point_id),
             finite_difference,
             rtol=1e-3,
             atol=1e-5,
@@ -99,7 +99,7 @@ def test_corner_tangent_matches_finite_difference(
     assert solve_info.rate_consistent
     assert solve_info.response_for_target(0).unique
     assert solve_info.response_for_target(1).unique
-    assert field.velocity(PointID.WHEEL_CENTER)[Axis.Z] == pytest.approx(1.0)
+    assert field.rate(PointID.WHEEL_CENTER)[Axis.Z] == pytest.approx(1.0)
 
 
 def test_full_rank_inconsistent_tangent_is_not_reported_as_unique() -> None:
@@ -200,7 +200,7 @@ def test_one_dof_mechanism_needs_no_hold_beyond_its_driver() -> None:
     assert info.target_rank == 1
     assert info.nullity == 0
     assert info.response_for_target(0).unique
-    assert fields[0].velocity(point) == pytest.approx([1.0, 0.0, 0.0])
+    assert fields[0].rate(point) == pytest.approx([1.0, 0.0, 0.0])
 
 
 def test_ill_conditioning_cannot_hide_an_inconsistent_target_basis() -> None:
@@ -275,12 +275,12 @@ def test_combine_tangents_is_linear() -> None:
     field_a = TangentField(
         target_index=0,
         target=target,
-        velocities={PointID.WHEEL_CENTER: np.array([1.0, 0.0, 0.0])},
+        rates={PointID.WHEEL_CENTER: np.array([1.0, 0.0, 0.0])},
     )
     field_b = TangentField(
         target_index=1,
         target=target,
-        velocities={PointID.WHEEL_CENTER: np.array([0.0, 2.0, 0.0])},
+        rates={PointID.WHEEL_CENTER: np.array([0.0, 2.0, 0.0])},
     )
 
     combined = combine_tangents([field_a, field_b], [2.0, -1.0])

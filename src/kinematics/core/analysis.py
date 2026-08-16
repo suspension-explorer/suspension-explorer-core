@@ -36,7 +36,7 @@ from kinematics.core.presentation import (
     wheel_references,
 )
 from kinematics.core.primitives.point_ref import point_key_name
-from kinematics.core.rigid_motion import ScrewAxisStatus, UprightScrewAxisResult
+from kinematics.core.screw_axis import ScrewAxisStatus, UprightScrewAxisResult
 from kinematics.core.solver import SolverInfo
 from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.base import Suspension

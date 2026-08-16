@@ -42,7 +42,7 @@ from kinematics.core.diagnostics import (
 from kinematics.core.metrics.main import AxleMetricRows, MetricRow
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.point_ref import PointKey
-from kinematics.core.rigid_motion import ScrewAxisStatus, UprightScrewAxisResult
+from kinematics.core.screw_axis import ScrewAxisStatus, UprightScrewAxisResult
 from kinematics.core.sensitivity import (
     TangentField,
     TangentSolveInfo,

@@ -13,7 +13,7 @@ from kinematics.core.coordinates import actuator_coordinate_matches
 from kinematics.core.enums import PointID
 from kinematics.core.metrics.main import AxleMetricRows
 from kinematics.core.primitives.point_ref import PointRef, Side
-from kinematics.core.rigid_motion import InstantaneousScrewAxis, ScrewAxisStatus
+from kinematics.core.screw_axis import InstantaneousScrewAxis, ScrewAxisStatus
 from kinematics.core.steering_axis import compute_steering_response_tangent
 from kinematics.core.sweep import compute_sweep_tangents, solve_evaluated_sweep
 
@@ -76,13 +76,13 @@ def test_wheel_centre_height_control_does_not_contaminate_virtual_metrics() -> N
     lower_key = PointRef(Side.LEFT, PointID.LOWER_WISHBONE_OUTBOARD)
     upper_key = PointRef(Side.LEFT, PointID.UPPER_WISHBONE_OUTBOARD)
     wheel_centre_key = PointRef(Side.LEFT, PointID.WHEEL_CENTER)
-    lower_velocity = authored_rack_tangent.velocity(lower_key)
-    upper_velocity = authored_rack_tangent.velocity(upper_key)
+    lower_rate = authored_rack_tangent.rate(lower_key)
+    upper_rate = authored_rack_tangent.rate(upper_key)
 
-    assert np.linalg.norm(lower_velocity) > 0.05
-    assert lower_velocity == pytest.approx(upper_velocity, abs=2e-5)
-    assert lower_velocity[:2] == pytest.approx(np.zeros(2), abs=2e-8)
-    assert authored_rack_tangent.velocity(wheel_centre_key)[2] == pytest.approx(
+    assert np.linalg.norm(lower_rate) > 0.05
+    assert lower_rate == pytest.approx(upper_rate, abs=2e-5)
+    assert lower_rate[:2] == pytest.approx(np.zeros(2), abs=2e-8)
+    assert authored_rack_tangent.rate(wheel_centre_key)[2] == pytest.approx(
         0.0,
         abs=2e-10,
     )
@@ -93,8 +93,8 @@ def test_wheel_centre_height_control_does_not_contaminate_virtual_metrics() -> N
     )
     assert isolated.status is ScrewAxisStatus.VALID
     assert isolated.tangent is not None
-    assert isolated.tangent.velocity(lower_key) == pytest.approx(np.zeros(3), abs=2e-10)
-    assert isolated.tangent.velocity(upper_key) == pytest.approx(np.zeros(3), abs=2e-10)
+    assert isolated.tangent.rate(lower_key) == pytest.approx(np.zeros(3), abs=2e-10)
+    assert isolated.tangent.rate(upper_key) == pytest.approx(np.zeros(3), abs=2e-10)
 
     row = evaluated.metrics.rows[midpoint]
     assert isinstance(row, AxleMetricRows)
@@ -153,10 +153,10 @@ def test_moving_dampers_recover_physical_axis_at_every_state() -> None:
                 < 1e-8
             )
             assert axis.pitch == pytest.approx(0.0, abs=1e-8)
-            assert isolated.tangent.velocity(lower_key) == pytest.approx(
+            assert isolated.tangent.rate(lower_key) == pytest.approx(
                 np.zeros(3), abs=2e-10
             )
-            assert isolated.tangent.velocity(upper_key) == pytest.approx(
+            assert isolated.tangent.rate(upper_key) == pytest.approx(
                 np.zeros(3), abs=2e-10
             )
 

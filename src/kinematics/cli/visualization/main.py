@@ -20,7 +20,7 @@ from kinematics.core.presentation import (
 from kinematics.core.state import SuspensionState
 
 if TYPE_CHECKING:
-    from kinematics.core.rigid_motion import UprightScrewAxisResult
+    from kinematics.core.screw_axis import UprightScrewAxisResult
     from kinematics.core.suspensions.base import Suspension
 
 
