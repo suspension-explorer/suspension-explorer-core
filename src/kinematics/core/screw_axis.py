@@ -280,8 +280,10 @@ def extract_screw_axis(
     absolute_fit_tolerance = (
         _FIT_ABSOLUTE_TOLERANCE if fit_tolerance is None else fit_tolerance
     )
+
     if absolute_fit_tolerance < 0.0:
         raise ValueError("fit_tolerance must be non-negative")
+
     effective_fit_tolerance = max(
         absolute_fit_tolerance,
         _FIT_RELATIVE_TOLERANCE * max(twist.rate_scale, 0.0),
@@ -298,8 +300,10 @@ def extract_screw_axis(
     angular_rate = float(np.linalg.norm(rotation_rate_vector))
     scale_rate = twist.rate_scale / max(twist.geometry_scale, 1e-15)
     absolute_angular_tolerance = 0.0 if angular_tolerance is None else angular_tolerance
+
     if absolute_angular_tolerance < 0.0:
         raise ValueError("angular_tolerance must be non-negative")
+
     effective_angular_tolerance = max(
         absolute_angular_tolerance,
         _ANGULAR_RATE_RELATIVE_TOLERANCE * scale_rate,
@@ -440,9 +444,7 @@ def _select_points(
                 status=ScrewAxisStatus.NON_FINITE,
                 message=f"Point '{key}' has a position or rate outside shape (3,).",
             )
-        if not (
-            np.isfinite(position_array).all() and np.isfinite(rate_array).all()
-        ):
+        if not (np.isfinite(position_array).all() and np.isfinite(rate_array).all()):
             return _SelectedPoints(
                 keys=tuple(usable_keys),
                 positions=np.empty((0, 3)),

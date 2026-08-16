@@ -136,9 +136,7 @@ def test_axis_is_invariant_to_tangent_derivative_scale() -> None:
     axis_point = np.array([4.0, -1.5, 8.0])
     direction = np.array([2.0, -3.0, 5.0])
     positions, tangent = _motion(POINTS, axis_point, direction, 0.35, 1.25)
-    scaled_tangent = _tangent(
-        {key: 17.0 * rate for key, rate in tangent.rates.items()}
-    )
+    scaled_tangent = _tangent({key: 17.0 * rate for key, rate in tangent.rates.items()})
 
     axis, status, _message = extract_screw_axis(
         fit_rigid_body_twist(positions, tangent, POINT_KEYS)
@@ -206,9 +204,7 @@ def test_overdetermined_fit_reports_small_injected_noise() -> None:
         0.35,
         0.0,
     )
-    noisy_rates = {
-        key: rate.copy() for key, rate in tangent.rates.items()
-    }
+    noisy_rates = {key: rate.copy() for key, rate in tangent.rates.items()}
     noisy_rates[POINT_KEYS[-1]] += np.array([1e-4, -2e-4, 3e-4])
     noisy_tangent = _tangent(noisy_rates)
 

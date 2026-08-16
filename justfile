@@ -69,8 +69,13 @@ type-check:
 lint:
     uv run ruff check .
 
-# Lint and type check.
+# Verify that source matches the formatter without modifying it.
+format-check:
+    uv run ruff format --check .
+
+# Format check, lint, and type check.
 check:
+    just format-check
     just lint
     just type-check
 
