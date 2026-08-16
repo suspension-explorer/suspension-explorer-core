@@ -52,6 +52,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from kinematics.core.constraints import Constraint
+from kinematics.core.coordinates import actuator_coordinate_matches
 from kinematics.core.elements import UprightElement
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.rigid_motion import (
@@ -105,7 +106,7 @@ def compute_steering_response_tangent(
     reuse immutable topology work across frames.  Failures are returned as
     local diagnostic results so one bad configuration does not abort a sweep.
     """
-    steering_actuator = suspension.steering_actuator_dof()
+    steering_actuator = suspension.steering_actuator_coordinate()
     if steering_actuator is None:
         return SteeringResponseTangent(
             targets=None,
@@ -171,8 +172,9 @@ def compute_steering_response_tangent(
         )
 
     steering_tangent = tangents[0]
-    if not response_targets.definition.steering_actuator.matches(
-        steering_tangent.target
+    if not actuator_coordinate_matches(
+        response_targets.definition.steering_actuator,
+        steering_tangent.target,
     ):
         return SteeringResponseTangent(
             targets=response_targets,

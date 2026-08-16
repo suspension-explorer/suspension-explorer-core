@@ -264,14 +264,6 @@ class PointTarget(NamedTuple):
         return None
 
     @property
-    def actuator_coordinate_id(self) -> None:
-        return None
-
-    @property
-    def actuator_direction(self) -> None:
-        return None
-
-    @property
     def export_coordinate_id(self) -> str:
         return self.coordinate_id
 
@@ -447,14 +439,6 @@ class ActuatorPositionTarget(NamedTuple):
         self,
     ) -> tuple[TargetKind, str, tuple[PointKey, ...] | None, None]:
         return (self.kind, self.actuator_id, None, None)
-
-    @property
-    def actuator_coordinate_id(self) -> str:
-        return self.actuator_id
-
-    @property
-    def actuator_direction(self) -> Direction3:
-        return resolve_target(self.direction)
 
     @property
     def export_coordinate_id(self) -> str:
@@ -720,14 +704,6 @@ class ElementLengthTarget:
         return (self.kind, self.element_id, self.required_points, self.side)
 
     @property
-    def actuator_coordinate_id(self) -> None:
-        return None
-
-    @property
-    def actuator_direction(self) -> None:
-        return None
-
-    @property
     def export_coordinate_id(self) -> str:
         return (
             self.coordinate_id
@@ -813,12 +789,6 @@ class ScalarCoordinateTarget(Protocol):
     def coordinate_description(self) -> str: ...
 
     @property
-    def actuator_coordinate_id(self) -> str | None: ...
-
-    @property
-    def actuator_direction(self) -> Direction3 | None: ...
-
-    @property
     def driven_points(self) -> tuple[PointKey, ...]: ...
 
     @property
@@ -836,16 +806,6 @@ class ScalarCoordinateTarget(Protocol):
     def with_value(self, value: float, mode: TargetValueMode) -> Self: ...
 
     def map_points(self, mapping: Callable[[PointKey], PointKey]) -> Self: ...
-
-
-class ActuatorCoordinateLike(Protocol):
-    """Minimal actuator identity shared by coordinate declarations and targets."""
-
-    @property
-    def actuator_coordinate_id(self) -> str | None: ...
-
-    @property
-    def actuator_direction(self) -> Direction3 | None: ...
 
 
 def target_side(target: ScalarTarget) -> Side | None:
@@ -876,60 +836,3 @@ def resolve_target(target: PointTargetDirection) -> Direction3:
         return target.vector
 
     raise TypeError(f"Unsupported target type: {type(target)!r}")
-
-
-@dataclass(frozen=True)
-class ActuatorDOF:
-    """One physical actuator coordinate that a sweep must control."""
-
-    id: str
-    name: str
-    point_keys: tuple[PointKey, ...]
-    direction: Direction3
-
-    def matches(self, target: ActuatorCoordinateLike) -> bool:
-        """Whether a target controls this actuator coordinate."""
-        if target.actuator_coordinate_id != self.id:
-            return False
-        target_direction = target.actuator_direction
-        if target_direction is None:
-            return False
-        alignment = abs(float(np.dot(target_direction.data, self.direction.data)))
-        return alignment >= 1.0 - EPS_GEOMETRIC
-
-    def current_value_target(
-        self,
-        positions: Mapping[PointKey, Point3],
-    ) -> ActuatorPositionTarget:
-        """Build this actuator's absolute target measured at ``positions``."""
-        target = ActuatorPositionTarget(
-            actuator_id=self.id,
-            point_id=self.point_keys[0],
-            direction=PointTargetVector(self.direction),
-            value=0.0,
-            mode=TargetValueMode.RELATIVE,
-            label=self.name,
-        )
-        return target.with_value(target.measure(positions), TargetValueMode.ABSOLUTE)
-
-
-def validate_sweep_controls(
-    sweep_config: SweepConfig,
-    actuator_dofs: tuple[ActuatorDOF, ...],
-) -> None:
-    """Require exactly one target for every physical actuator coordinate."""
-    for step_index in range(sweep_config.n_steps):
-        step_targets = [
-            *(target_sweep[step_index] for target_sweep in sweep_config.target_sweeps),
-            *sweep_config.hold.coordinates,
-        ]
-        for actuator in actuator_dofs:
-            matching_targets = [
-                target for target in step_targets if actuator.matches(target)
-            ]
-            if len(matching_targets) != 1:
-                raise ValueError(
-                    f"Sweep requires exactly one target for actuator "
-                    f"'{actuator.name}' along its motion axis; found "
-                    f"{len(matching_targets)} at step {step_index}."
-                )

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 
 from kinematics.core.assembly import SuspensionAssembly
-from kinematics.core.coordinates import PhysicalCoordinate, ScalarCoordinate
+from kinematics.core.coordinates import ScalarCoordinate
 from kinematics.core.diagnostics import (
     DiagnosticCategory,
     DiagnosticIssue,
@@ -86,21 +86,8 @@ class SweepParameter:
 
 
 @dataclass(frozen=True)
-class DriveCoordinateInfo:
-    """Transport-safe metadata for one topology-declared drive coordinate."""
-
-    id: str
-    type: str
-    label: str
-    unit: str
-    scope: str
-    side: str | None
-    point_keys: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class HeldCoordinateInfo:
-    """Transport-safe metadata for one held suspension coordinate."""
+class CoordinateInfo:
+    """Transport-safe metadata for one suspension coordinate."""
 
     id: str
     type: str
@@ -119,7 +106,7 @@ class SteeringResponseDefinitionInfo:
     definition_id: str
     provenance: str
     steering_coordinate_id: str
-    held_coordinates: tuple[HeldCoordinateInfo, ...]
+    held_coordinates: tuple[CoordinateInfo, ...]
     requested_option_id: str | None
     resolved_option_id: str
     selection_source: str
@@ -138,7 +125,7 @@ class SuspensionHoldOptionInfo:
     availability: str
     warning: str | None
     unavailable_reason: str | None
-    held_coordinates: tuple[HeldCoordinateInfo, ...]
+    held_coordinates: tuple[CoordinateInfo, ...]
 
 
 @dataclass(frozen=True)
@@ -200,7 +187,7 @@ class StaticPose:
     wheel: WheelDimensions | None
     elements: list[NamedElementPath]
     wheel_references: list[WheelReferences]
-    drive_coordinates: list[DriveCoordinateInfo]
+    drive_coordinates: list[CoordinateInfo]
     suspension_hold_catalogue: SuspensionHoldCatalogueInfo | None
 
 
@@ -237,26 +224,11 @@ def _suspension_info(suspension: Suspension) -> SuspensionInfo:
     )
 
 
-def _drive_coordinate_info(
-    coordinate: PhysicalCoordinate,
-) -> DriveCoordinateInfo:
-    """Convert one topology coordinate to stable analysis metadata."""
-    return DriveCoordinateInfo(
-        id=coordinate.id,
-        type=coordinate.kind.value,
-        label=coordinate.label,
-        unit=coordinate.unit,
-        scope=coordinate.scope.value,
-        side=(coordinate.side.name.lower() if coordinate.side is not None else None),
-        point_keys=tuple(point_key_name(point) for point in coordinate.point_keys),
-    )
-
-
-def _held_coordinate_info(
+def _coordinate_info(
     coordinate: ScalarCoordinate,
-) -> HeldCoordinateInfo:
-    """Convert one internal held coordinate to stable metadata."""
-    return HeldCoordinateInfo(
+) -> CoordinateInfo:
+    """Convert one suspension coordinate to stable analysis metadata."""
+    return CoordinateInfo(
         id=coordinate.id,
         type=coordinate.kind.value,
         label=coordinate.label,
@@ -281,8 +253,7 @@ def _steering_response_info(
         provenance=definition.provenance,
         steering_coordinate_id=definition.steering_coordinate_id,
         held_coordinates=tuple(
-            _held_coordinate_info(coordinate)
-            for coordinate in definition.hold.coordinates
+            _coordinate_info(coordinate) for coordinate in definition.hold.coordinates
         ),
         requested_option_id=definition.requested_option_id,
         resolved_option_id=definition.definition_id,
@@ -310,7 +281,7 @@ def _suspension_hold_catalogue_info(
                 warning=option.warning,
                 unavailable_reason=option.unavailable_reason,
                 held_coordinates=tuple(
-                    _held_coordinate_info(coordinate)
+                    _coordinate_info(coordinate)
                     for coordinate in option.hold.coordinates
                 ),
             )
@@ -582,7 +553,7 @@ def initial_pose(suspension: Suspension) -> StaticPose:
         elements=named_element_paths(assembly),
         wheel_references=wheel_references(assembly),
         drive_coordinates=[
-            _drive_coordinate_info(coordinate)
+            _coordinate_info(coordinate)
             for coordinate in suspension.drive_coordinates()
         ],
         suspension_hold_catalogue=_suspension_hold_catalogue_info(

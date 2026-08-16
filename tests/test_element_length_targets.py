@@ -266,7 +266,9 @@ def test_supported_corner_damper_topologies_solve_length_sweeps(
     geometry_file: str,
 ) -> None:
     suspension = load_geometry(DATA_DIR / geometry_file)
-    rack_values = [0.0, 0.0, 0.0] if suspension.actuator_dofs() else None
+    rack_values = (
+        [0.0, 0.0, 0.0] if suspension.required_actuator_coordinates() else None
+    )
     sweep = _element_sweep(
         suspension,
         [0.0, 1.0, -1.0],

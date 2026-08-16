@@ -8,7 +8,6 @@ from kinematics.core.suspensions.corner.macpherson import MacPhersonSuspension
 from kinematics.core.suspensions.corner.mechanisms import (
     Actuation,
     ActuationDirect,
-    ActuationDirectOnLink,
     ActuationPushrodRocker,
     CornerDamper,
     CornerDamperLinear,

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, ClassVar, Sequence
 from kinematics.core.coordinates import PhysicalCoordinate
 from kinematics.core.enums import (
     ActuatorPositionCoordinateID,
+    Axis,
     PointID,
     Scope,
     SuspensionType,
@@ -16,11 +17,7 @@ from kinematics.core.enums import (
 from kinematics.core.metrics.main import compute_metrics_for_state
 from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.base import Suspension
-from kinematics.core.targeting import (
-    ActuatorDOF,
-    ChassisAxisSystem,
-    TargetKind,
-)
+from kinematics.core.targeting import PointTargetAxis, TargetKind
 
 if TYPE_CHECKING:
     from kinematics.core.coordinates import ArmAngleCoordinate
@@ -92,21 +89,21 @@ class CornerSuspension(Suspension):
         """
         ...
 
-    def actuator_dofs(self) -> tuple[ActuatorDOF, ...]:
+    def required_actuator_coordinates(self) -> tuple[PhysicalCoordinate, ...]:
         """Require the rack translation coordinate for a steered corner."""
-        steering = self.steering_actuator_dof()
+        steering = self.steering_actuator_coordinate()
         return (steering,) if steering is not None else ()
 
-    def steering_actuator_dof(self) -> ActuatorDOF | None:
+    def steering_actuator_coordinate(self) -> PhysicalCoordinate | None:
         """Return the rack translation coordinate for a steered corner."""
-        rack_point = self.rack_attachment_point()
-        if rack_point is None:
-            return None
-        return ActuatorDOF(
-            id=ActuatorPositionCoordinateID.RACK,
-            name="steering rack",
-            point_keys=(rack_point,),
-            direction=ChassisAxisSystem.Y,
+        return next(
+            (
+                coordinate
+                for coordinate in self.drive_coordinates()
+                if coordinate.kind is TargetKind.ACTUATOR_POSITION
+                and coordinate.id == ActuatorPositionCoordinateID.RACK
+            ),
+            None,
         )
 
     def drive_coordinates(self) -> tuple[PhysicalCoordinate, ...]:
@@ -123,6 +120,7 @@ class CornerSuspension(Suspension):
                 unit=ActuatorPositionCoordinateID.RACK.unit,
                 point_keys=(rack_point,),
                 scope=Scope.CORNER,
+                direction=PointTargetAxis(Axis.Y),
             ),
             *coordinates,
         )
@@ -173,10 +171,13 @@ class CornerSuspension(Suspension):
         """Compute one corner metric row, including derivatives when tangents exist."""
         if self.config is None:
             raise ValueError("Suspension has no configuration")
+        axis_results = tuple(steering_response_axes or ())
         return compute_metrics_for_state(
             state,
             self,
             self.config,
             tangents,
-            steering_response_axes=steering_response_axes,
+            steering_response_axis=(
+                axis_results[0] if len(axis_results) == 1 else None
+            ),
         )

@@ -15,7 +15,7 @@ from pydantic import (
     model_validator,
 )
 
-from kinematics.core.coordinates import PhysicalCoordinate
+from kinematics.core.coordinates import PhysicalCoordinate, validate_sweep_controls
 from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode, Units
 from kinematics.core.holds import CoordinateHold
 from kinematics.core.primitives.geometry import Direction3, extract_array
@@ -36,7 +36,6 @@ from kinematics.core.targeting import (
     ScalarTarget,
     SweepConfig,
     TargetKind,
-    validate_sweep_controls,
 )
 
 if TYPE_CHECKING:
@@ -288,13 +287,21 @@ class SweepSpec(BaseModel):
     @property
     def n_steps(self) -> int:
         """Return the validated number of values in each target dimension."""
-        swept = [target for target in self.targets if not target.hold]
-        lengths = {len(target.expand_values(self.steps)) for target in swept}
-        if len(lengths) > 1:
-            raise ValueError(
-                f"All targets must have the same length, got: {sorted(lengths)}"
-            )
-        return next(iter(lengths), 0)
+        sequences = _expanded_swept_values(self)
+        return len(sequences[0]) if sequences else 0
+
+
+def _expanded_swept_values(spec: SweepSpec) -> list[list[float]]:
+    """Expand swept targets once and validate their common length."""
+    sequences = [
+        target.expand_values(spec.steps) for target in spec.targets if not target.hold
+    ]
+    lengths = {len(sequence) for sequence in sequences}
+    if len(lengths) > 1:
+        raise ValueError(
+            f"All targets must have the same length, got: {sorted(lengths)}"
+        )
+    return sequences
 
 
 def build_sweep_config(
@@ -302,16 +309,9 @@ def build_sweep_config(
     suspension: "Suspension | None" = None,
 ) -> SweepConfig:
     """Expand a validated sweep and resolve optional side-qualified targets."""
-    target_sequences = [
-        target.expand_values(spec.steps) for target in spec.targets if not target.hold
-    ]
+    target_sequences = _expanded_swept_values(spec)
     if not target_sequences:
         raise ValueError("A sweep requires at least one non-held target.")
-    lengths = {len(sequence) for sequence in target_sequences}
-    if len(lengths) > 1:
-        raise ValueError(
-            f"All targets must have the same length, got: {sorted(lengths)}"
-        )
 
     dimensions: list[list[ScalarTarget]] = []
     held_coordinates = []
@@ -421,7 +421,10 @@ def build_sweep_config(
                 suspension.initial_state().positions
             ),
         )
-        validate_sweep_controls(sweep_config, suspension.actuator_dofs())
+        validate_sweep_controls(
+            sweep_config,
+            suspension.required_actuator_coordinates(),
+        )
         # Selection is analysis-only: validate it after the state-driving
         # target basis is built, without adding a residual to the sweep solve.
         suspension.resolve_suspension_hold(sweep_config.suspension_hold_id)

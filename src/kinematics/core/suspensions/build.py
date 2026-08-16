@@ -54,7 +54,6 @@ from kinematics.core.suspensions.corner import (
 from kinematics.core.suspensions.corner.mechanisms import (
     Actuation,
     ActuationDirect,
-    ActuationDirectOnLink,
     ActuationPushrodRocker,
     CornerDamper,
     CornerDamperLinear,
@@ -338,12 +337,10 @@ def build_actuation(
             raise ValueError("Direct actuation does not accept rocker pickups")
         # A two-joint rod carries the pickup on its centreline as a derived
         # point; a three-point-plus body carries it rigidly anywhere.
-        if len(mount_body) == 2:
-            return ActuationDirectOnLink(
-                link_inboard=mount_body[0],
-                link_outboard=mount_body[1],
-            )
-        return ActuationDirect(spring_pickup_body=mount_body)
+        return ActuationDirect(
+            spring_pickup_body=mount_body,
+            derive_pickup_on_link=len(mount_body) == 2,
+        )
     if spec.type is ActuationType.PUSHROD_ROCKER:
         if len(mount_body) == 2:
             raise ValueError(

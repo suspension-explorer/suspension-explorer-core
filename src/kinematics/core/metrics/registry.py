@@ -161,7 +161,7 @@ def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpe
     if not _physical_steering_axis_available(suspension):
         omitted = physical_steering_metric_keys()
         state_specs = [spec for spec in state_specs if spec.key not in omitted]
-    if suspension.steering_actuator_dof() is not None:
+    if suspension.steering_actuator_coordinate() is not None:
         state_specs.extend(
             MetricSpec(
                 metric.column_name,

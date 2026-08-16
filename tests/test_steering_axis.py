@@ -144,7 +144,7 @@ def test_incomplete_suspension_hold_is_reported_as_rank_deficient(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     suspension = load_geometry(DATA_DIR / "geometry.yaml")
-    steering = suspension.steering_actuator_dof()
+    steering = suspension.steering_actuator_coordinate()
     assert steering is not None
     incomplete = SteeringResponseDefinition(
         steering_actuator=steering,

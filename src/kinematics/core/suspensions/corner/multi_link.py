@@ -18,9 +18,7 @@ derived point (a damper fork clamped around the link).
 
 from __future__ import annotations
 
-from collections import OrderedDict
 from dataclasses import dataclass, field
-from functools import partial
 from typing import TYPE_CHECKING, ClassVar, Sequence
 
 from kinematics.core.constraints import Constraint, DistanceConstraint
@@ -39,10 +37,7 @@ from kinematics.core.enums import (
     SuspensionType,
 )
 from kinematics.core.holds import CoordinateHold
-from kinematics.core.points.derived.definitions import (
-    build_wheel_derived_spec,
-    get_point_along_line,
-)
+from kinematics.core.points.derived.definitions import build_wheel_derived_spec
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
@@ -61,12 +56,17 @@ from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.suspensions.corner.mechanisms import (
     Actuation,
     ActuationDirect,
-    ActuationDirectOnLink,
-    ActuationPushrodRocker,
     CornerDamper,
     CornerDamperNone,
     CornerSpring,
     CornerSpringNone,
+    composed_derivative_metric_definitions,
+    composed_mechanism_elements,
+    composed_mechanism_free_points,
+    composed_output_points,
+    composed_topology_metric_values,
+    composed_upright_attachments,
+    validate_composed_mechanisms,
 )
 from kinematics.core.suspensions.corner.toe_link import ToeLink
 from kinematics.core.suspensions.corner.track_rod import TrackRod
@@ -239,16 +239,12 @@ class MultiLinkSuspension(CornerSuspension):
             "Multi-link upright",
         )
         self.wheel_heading_link.validate(self.hardpoints)
-        self.actuation.validate(self.hardpoints)
-        self.spring.validate(self.actuation)
-        if (
-            self.spring.damper_points is not None
-            and self.damper.damper_points is not None
-        ):
-            raise ValueError(
-                "A separate linear damper cannot be combined with a coilover"
-            )
-        self.damper.validate(self.actuation, self.hardpoints)
+        validate_composed_mechanisms(
+            self.hardpoints,
+            self.actuation,
+            self.spring,
+            self.damper,
+        )
 
     def free_points(self) -> Sequence[PointID]:
         """Return base and selected mechanism moving points.
@@ -256,36 +252,27 @@ class MultiLinkSuspension(CornerSuspension):
         An on-link spring pickup is a derived point on the rod centreline,
         so it is excluded from the spring's declared moving points.
         """
-        derived_pickups = (
-            {self.actuation.moving_pickup_point}
-            if isinstance(self.actuation, ActuationDirectOnLink)
-            else set()
-        )
         return (
             *self.FREE_POINTS,
             *self.wheel_heading_link.free_points,
-            *self.actuation.free_points,
-            *(
-                point
-                for point in self.spring.free_points
-                if point not in derived_pickups
+            *composed_mechanism_free_points(
+                self.actuation,
+                self.spring,
+                self.damper,
             ),
-            *self.damper.free_points,
         )
 
     def output_points(self) -> tuple[PointKey, ...]:
         """Return base and selected mechanism output points."""
-        return tuple(
-            dict.fromkeys(
-                (
-                    *self.LOCATING_OUTPUT_POINTS,
-                    *self.wheel_heading_link.OUTPUT_POINTS,
-                    *self.WHEEL_OUTPUT_POINTS,
-                    *self.actuation.output_points,
-                    *self.spring.output_points,
-                    *self.damper.output_points,
-                )
-            )
+        return composed_output_points(
+            (
+                *self.LOCATING_OUTPUT_POINTS,
+                *self.wheel_heading_link.OUTPUT_POINTS,
+                *self.WHEEL_OUTPUT_POINTS,
+            ),
+            self.actuation,
+            self.spring,
+            self.damper,
         )
 
     def damper_points(self) -> tuple[PointKey, PointKey] | None:
@@ -306,7 +293,7 @@ class MultiLinkSuspension(CornerSuspension):
             SuspensionHoldOption,
         )
 
-        if self.steering_actuator_dof() is None:
+        if self.steering_actuator_coordinate() is None:
             return None
         damper = self._installed_damper_coordinate()
         if damper is None:
@@ -405,34 +392,23 @@ class MultiLinkSuspension(CornerSuspension):
     ) -> tuple[DerivativeMetricDefinition, ...]:
         """Compose derivative declarations from actuation and spring mechanisms."""
         initial = self.initial_state()
-        return (
-            *self.actuation.derivative_metric_definitions(initial, self.side),
-            *self.spring.derivative_metric_definitions(
-                initial,
-                self.actuation,
-                self.side,
-            ),
-            *self.damper.derivative_metric_definitions(
-                initial,
-                self.actuation,
-                self.side,
-            ),
+        return composed_derivative_metric_definitions(
+            initial,
+            self.side,
+            self.actuation,
+            self.spring,
+            self.damper,
         )
 
     def topology_metric_values(self, state: SuspensionState) -> MetricRow:
         """Compose state metrics from actuation and spring mechanisms."""
-        initial = self.initial_state()
-        row: MetricRow = OrderedDict()
-        row.update(self.actuation.topology_metric_values(state, initial, self.side))
-        row.update(
-            self.spring.topology_metric_values(
-                state,
-                initial,
-                self.actuation,
-                self.side,
-            )
+        return composed_topology_metric_values(
+            state,
+            self.initial_state(),
+            self.side,
+            self.actuation,
+            self.spring,
         )
-        return row
 
     def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
         """Compose state metric metadata from installed corner mechanisms."""
@@ -450,27 +426,12 @@ class MultiLinkSuspension(CornerSuspension):
         """
         if self.config is None:
             raise ValueError("Cannot compute derived spec without config")
+        actuation_spec = self.actuation.derived_spec(self.hardpoints)
         wheel_spec = build_wheel_derived_spec(self.config.wheel)
-        if not isinstance(self.actuation, ActuationDirectOnLink):
-            return wheel_spec
-        actuation = self.actuation
-        functions = {
-            actuation.moving_pickup_point: partial(
-                get_point_along_line,
-                start_point=actuation.link_inboard,
-                end_point=actuation.link_outboard,
-                distance_from_start=actuation.pickup_axial_offset(self.hardpoints),
-            ),
-            **wheel_spec.functions,
-        }
-        dependencies = {
-            actuation.moving_pickup_point: {
-                actuation.link_inboard,
-                actuation.link_outboard,
-            },
-            **wheel_spec.dependencies,
-        }
-        return DerivedPointsSpec(functions, dependencies)
+        return DerivedPointsSpec(
+            {**actuation_spec.functions, **wheel_spec.functions},
+            {**actuation_spec.dependencies, **wheel_spec.dependencies},
+        )
 
     def compute_side_view_instant_center(self, state: SuspensionState) -> Point3 | None:
         """
@@ -496,11 +457,6 @@ class MultiLinkSuspension(CornerSuspension):
     def elements(self) -> tuple[SuspensionElement, ...]:
         """Return the physical elements in this corner."""
         heading_link_outboard = self.wheel_heading_link.outboard_point
-        actuation_elements = (
-            self.actuation.elements(self.damper.rocker_pickups)
-            if isinstance(self.actuation, ActuationPushrodRocker)
-            else self.actuation.elements()
-        )
         link_elements = tuple(
             RigidLinkElement(
                 label=label,
@@ -568,17 +524,17 @@ class MultiLinkSuspension(CornerSuspension):
         return (
             *base_elements,
             *self.wheel_heading_link.elements(),
-            *actuation_elements,
-            *self.spring.elements(self.actuation),
-            *self.damper.elements(self.actuation),
+            *composed_mechanism_elements(
+                self.actuation,
+                self.spring,
+                self.damper,
+            ),
         )
 
     def upright_attachment_points(self) -> tuple[PointID, ...]:
         """Return points carried by the upright body."""
-        base_attachments = (
-            *self.UPRIGHT_ATTACHMENTS,
-            self.wheel_heading_link.outboard_point,
+        return composed_upright_attachments(
+            (*self.UPRIGHT_ATTACHMENTS, self.wheel_heading_link.outboard_point),
+            self.actuation,
+            self.UPRIGHT_BODY,
         )
-        if self.actuation.moving_pickup_body == self.UPRIGHT_BODY:
-            return (*base_attachments, self.actuation.moving_pickup_point)
-        return base_attachments

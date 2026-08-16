@@ -237,7 +237,7 @@ class MacPhersonSuspension(CornerSuspension):
             SuspensionHoldOption,
         )
 
-        if self.steering_actuator_dof() is None:
+        if self.steering_actuator_coordinate() is None:
             return None
         strut = self._installed_damper_coordinate()
         if strut is None:

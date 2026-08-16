@@ -29,14 +29,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from kinematics.core.coordinates import (
+    PhysicalCoordinate,
+    actuator_coordinate_matches,
+)
 from kinematics.core.enums import TargetValueMode
 from kinematics.core.holds import CoordinateHold
 from kinematics.core.primitives.point_ref import Side
 from kinematics.core.state import SuspensionState
-from kinematics.core.targeting import (
-    ActuatorDOF,
-    ScalarCoordinateTarget,
-)
+from kinematics.core.targeting import ScalarCoordinateTarget
 
 
 class SuspensionHoldAvailability(StrEnum):
@@ -145,7 +146,7 @@ class SteeringResponseDefinition:
     hard-coded hold-count rule.
     """
 
-    steering_actuator: ActuatorDOF
+    steering_actuator: PhysicalCoordinate
     hold: CoordinateHold
     owner: str
     definition_id: str
@@ -199,7 +200,10 @@ class SteeringResponseTargets:
             raise ValueError(
                 "Steering-response target count does not match its definition"
             )
-        if not self.definition.steering_actuator.matches(self.targets[0]):
+        if not actuator_coordinate_matches(
+            self.definition.steering_actuator,
+            self.targets[0],
+        ):
             raise ValueError("Steering-response targets must begin with the actuator")
         if any(target.mode is not TargetValueMode.ABSOLUTE for target in self.targets):
             raise ValueError("Steering-response targets must be absolute")

@@ -43,7 +43,6 @@ if TYPE_CHECKING:
         SuspensionHoldCatalogue,
     )
     from kinematics.core.targeting import (
-        ActuatorDOF,
         ScalarCoordinateTarget,
         ScalarTarget,
         TargetKind,
@@ -431,11 +430,11 @@ class Suspension(ABC):
         )
         return point
 
-    def actuator_dofs(self) -> "tuple[ActuatorDOF, ...]":
+    def required_actuator_coordinates(self) -> "tuple[PhysicalCoordinate, ...]":
         """Return physical actuator coordinates that every sweep must control."""
         return ()
 
-    def steering_actuator_dof(self) -> "ActuatorDOF | None":
+    def steering_actuator_coordinate(self) -> "PhysicalCoordinate | None":
         """Return the steering actuator coordinate, if this suspension has one."""
         return None
 
@@ -454,7 +453,7 @@ class Suspension(ABC):
             SuspensionHoldSelectionSource,
         )
 
-        steering = self.steering_actuator_dof()
+        steering = self.steering_actuator_coordinate()
         catalogue = self.suspension_hold_catalogue()
         if steering is None or catalogue is None:
             if requested_option_id not in (None, "layout_default"):

@@ -64,8 +64,7 @@ from kinematics.core.suspensions.axle.mechanisms import (
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.targeting import (
-    ActuatorDOF,
-    ChassisAxisSystem,
+    PointTargetAxis,
     TargetKind,
     resolve_published_target_side,
     sweep_target_side_policy,
@@ -152,24 +151,21 @@ class AxleSuspension(Suspension):
             return None
         return (left, right)
 
-    def actuator_dofs(self) -> tuple[ActuatorDOF, ...]:
+    def required_actuator_coordinates(self) -> tuple[PhysicalCoordinate, ...]:
         """Require one shared rack coordinate for a steered axle."""
-        steering = self.steering_actuator_dof()
+        steering = self.steering_actuator_coordinate()
         return (steering,) if steering is not None else ()
 
-    def steering_actuator_dof(self) -> ActuatorDOF | None:
+    def steering_actuator_coordinate(self) -> PhysicalCoordinate | None:
         """Return the shared rack coordinate for a steered axle."""
-        rack = self.rack_attachment_points()
-        if rack is None:
-            return None
-        return ActuatorDOF(
-            id=ActuatorPositionCoordinateID.RACK,
-            name="steering rack",
-            point_keys=(
-                PointRef(Side.LEFT, rack[0]),
-                PointRef(Side.RIGHT, rack[1]),
+        return next(
+            (
+                coordinate
+                for coordinate in self.drive_coordinates()
+                if coordinate.kind is TargetKind.ACTUATOR_POSITION
+                and coordinate.id == ActuatorPositionCoordinateID.RACK
             ),
-            direction=ChassisAxisSystem.Y,
+            None,
         )
 
     def drive_coordinates(self) -> tuple[PhysicalCoordinate, ...]:
@@ -188,6 +184,7 @@ class AxleSuspension(Suspension):
                         PointRef(Side.RIGHT, rack[1]),
                     ),
                     scope=Scope.AXLE,
+                    direction=PointTargetAxis(Axis.Y),
                 )
             )
         for side in (Side.LEFT, Side.RIGHT):
@@ -195,16 +192,10 @@ class AxleSuspension(Suspension):
                 if coordinate.kind is TargetKind.ACTUATOR_POSITION:
                     continue
                 coordinates.append(
-                    PhysicalCoordinate(
-                        id=coordinate.id,
-                        kind=coordinate.kind,
-                        label=coordinate.label,
-                        unit=coordinate.unit,
-                        point_keys=tuple(
-                            side_qualified(side, point)
-                            for point in coordinate.point_keys
+                    coordinate.map_points(
+                        lambda point, selected_side=side: side_qualified(
+                            selected_side, point
                         ),
-                        scope=Scope.CORNER,
                         side=side,
                     )
                 )

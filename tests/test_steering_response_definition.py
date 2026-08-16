@@ -8,7 +8,10 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.sweep_loader import load_sweep
-from kinematics.core.coordinates import ArmAngleCoordinate
+from kinematics.core.coordinates import (
+    ArmAngleCoordinate,
+    actuator_coordinate_matches,
+)
 from kinematics.core.enums import TargetValueMode
 from kinematics.core.holds import CoordinateHold
 from kinematics.core.primitives.geometry import Point3
@@ -112,7 +115,7 @@ def test_macpherson_hold_uses_bumped_current_strut_length_without_mutation() -> 
         TargetValueMode.ABSOLUTE,
         TargetValueMode.ABSOLUTE,
     )
-    assert definition.steering_actuator.matches(targets[0])
+    assert actuator_coordinate_matches(definition.steering_actuator, targets[0])
     assert targets[0].value == pytest.approx(targets[0].measure(state.positions))
     assert targets[1].value == pytest.approx(targets[1].measure(state.positions))
 

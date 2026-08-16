@@ -43,6 +43,7 @@ from kinematics.core.targeting import (
     PointTargetDirection,
     ScalarCoordinateTarget,
     ScalarTarget,
+    SweepConfig,
     TargetKind,
     resolve_target,
 )
@@ -61,10 +62,11 @@ def _frozen_vector(values: np.ndarray) -> np.ndarray:
 class PhysicalCoordinate:
     """One measurable point, actuator, or element-length coordinate.
 
-    Projected coordinates carry their direction once it is resolved.  A
-    topology may publish an actuator descriptor without a direction for the
-    geometry-independent sweep catalogue, but it must be bound with
-    :meth:`with_direction` before becoming a target or hold.
+    Projected coordinates carry their direction once it is resolved. Topology
+    actuator declarations bind the physical motion direction so the same
+    object can describe both a driveable coordinate and a required control.
+    An authored target may replace that direction with :meth:`with_direction`;
+    control validation then checks alignment with the physical declaration.
     """
 
     id: str
@@ -107,18 +109,6 @@ class PhysicalCoordinate:
             raise ValueError(f"Projected coordinate '{self.id}' requires a direction")
         prototype = self.target(0.0, TargetValueMode.RELATIVE)
         return prototype.coordinate_identity
-
-    @property
-    def actuator_coordinate_id(self) -> str | None:
-        """Return the actuator identity when this is an actuator coordinate."""
-        return self.id if self.kind is TargetKind.ACTUATOR_POSITION else None
-
-    @property
-    def actuator_direction(self):
-        """Return the resolved actuator direction when applicable."""
-        if self.kind is not TargetKind.ACTUATOR_POSITION or self.direction is None:
-            return None
-        return resolve_target(self.direction)
 
     @property
     def coordinate_description(self) -> str:
@@ -192,7 +182,7 @@ class PhysicalCoordinate:
     def current_value_target(
         self,
         positions: Mapping[PointKey, Point3],
-    ) -> ScalarCoordinateTarget:
+    ) -> ScalarTarget:
         """Build an absolute target fixed at the supplied state."""
         target = self.target(0.0)
         return target.with_value(target.measure(positions), TargetValueMode.ABSOLUTE)
@@ -247,14 +237,6 @@ class ArmAngleTarget:
     @property
     def coordinate_description(self) -> str:
         return f"arm-angle coordinate '{self.coordinate.id}'"
-
-    @property
-    def actuator_coordinate_id(self) -> None:
-        return None
-
-    @property
-    def actuator_direction(self) -> None:
-        return None
 
     @property
     def driven_points(self) -> tuple[()]:
@@ -370,14 +352,6 @@ class ArmAngleCoordinate:
     def coordinate_description(self) -> str:
         return f"arm-angle coordinate '{self.id}'"
 
-    @property
-    def actuator_coordinate_id(self) -> None:
-        return None
-
-    @property
-    def actuator_direction(self) -> None:
-        return None
-
     def _radial(self, positions: Mapping[PointKey, Point3]) -> np.ndarray:
         offset = positions[self.carried_point].data - self.axis_origin
         return offset - self.axis_direction * float(np.dot(self.axis_direction, offset))
@@ -437,3 +411,71 @@ class ArmAngleCoordinate:
 
 
 type ScalarCoordinate = PhysicalCoordinate | ArmAngleCoordinate
+
+
+def actuator_coordinate_matches(
+    required: PhysicalCoordinate,
+    candidate: ScalarCoordinateTarget | ScalarCoordinate,
+) -> bool:
+    """Whether a target or hold controls one required actuator coordinate."""
+    if required.kind is not TargetKind.ACTUATOR_POSITION:
+        raise ValueError(
+            f"Required actuator coordinate '{required.id}' has kind "
+            f"'{required.kind.value}'."
+        )
+    if required.direction is None:
+        raise ValueError(
+            f"Required actuator coordinate '{required.id}' has no motion direction."
+        )
+
+    if isinstance(candidate, ActuatorPositionTarget):
+        candidate_id = candidate.actuator_id
+        candidate_direction = candidate.direction
+    elif (
+        isinstance(candidate, PhysicalCoordinate)
+        and candidate.kind is TargetKind.ACTUATOR_POSITION
+        and candidate.direction is not None
+    ):
+        candidate_id = candidate.id
+        candidate_direction = candidate.direction
+    else:
+        return False
+
+    if candidate_id != required.id:
+        return False
+    alignment = abs(
+        float(
+            np.dot(
+                resolve_target(candidate_direction).data,
+                resolve_target(required.direction).data,
+            )
+        )
+    )
+    return alignment >= 1.0 - EPS_GEOMETRIC
+
+
+def validate_sweep_controls(
+    sweep_config: SweepConfig,
+    actuator_coordinates: tuple[PhysicalCoordinate, ...],
+) -> None:
+    """Require exactly one target for every required actuator coordinate."""
+    for step_index in range(sweep_config.n_steps):
+        step_targets = [
+            *(target_sweep[step_index] for target_sweep in sweep_config.target_sweeps),
+            *sweep_config.hold.coordinates,
+        ]
+        for actuator in actuator_coordinates:
+            matching_targets = [
+                target
+                for target in step_targets
+                if actuator_coordinate_matches(actuator, target)
+            ]
+            if len(matching_targets) != 1:
+                actuator_name = (
+                    "steering rack" if actuator.id == "rack" else actuator.label.lower()
+                )
+                raise ValueError(
+                    f"Sweep requires exactly one target for actuator "
+                    f"'{actuator_name}' along its motion axis; found "
+                    f"{len(matching_targets)} at step {step_index}."
+                )

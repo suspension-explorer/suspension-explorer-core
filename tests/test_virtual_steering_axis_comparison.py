@@ -9,6 +9,7 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.sweep_loader import load_sweep
+from kinematics.core.coordinates import actuator_coordinate_matches
 from kinematics.core.enums import PointID
 from kinematics.core.metrics.main import AxleMetricRows
 from kinematics.core.primitives.point_ref import PointRef, Side
@@ -64,12 +65,12 @@ def test_wheel_centre_height_control_does_not_contaminate_virtual_metrics() -> N
     suspension, sweep, evaluated = _solve("axle_steer_sweep.yaml")
     authored_tangents = compute_sweep_tangents(suspension, sweep, evaluated.states)
     midpoint = len(evaluated.states) // 2
-    steering_dof = suspension.steering_actuator_dof()
-    assert steering_dof is not None
+    steering_coordinate = suspension.steering_actuator_coordinate()
+    assert steering_coordinate is not None
     authored_rack_tangent = next(
         field
         for field in authored_tangents.per_step[midpoint]
-        if steering_dof.matches(field.target)
+        if actuator_coordinate_matches(steering_coordinate, field.target)
     )
 
     lower_key = PointRef(Side.LEFT, PointID.LOWER_WISHBONE_OUTBOARD)

@@ -32,6 +32,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Callable, List
 
+from kinematics.core.coordinates import validate_sweep_controls
 from kinematics.core.diagnostics import (
     DiagnosticCategory,
     DiagnosticIssue,
@@ -55,7 +56,7 @@ from kinematics.core.solver import (
 from kinematics.core.state import SuspensionState
 from kinematics.core.steering_axis import compute_steering_response_axes_for_states
 from kinematics.core.suspensions.base import Suspension
-from kinematics.core.targeting import SweepConfig, validate_sweep_controls
+from kinematics.core.targeting import SweepConfig
 
 
 def solve_sweep(
@@ -87,7 +88,10 @@ def solve_sweep(
             suspension.initial_state().positions
         ),
     )
-    validate_sweep_controls(sweep_config, suspension.actuator_dofs())
+    validate_sweep_controls(
+        sweep_config,
+        suspension.required_actuator_coordinates(),
+    )
     derived_spec = suspension.derived_spec()
     derived_manager = DerivedPointsManager(derived_spec)
 

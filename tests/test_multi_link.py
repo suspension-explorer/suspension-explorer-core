@@ -220,5 +220,5 @@ def test_unsteered_corner_installs_toe_link():
     suspension = build_suspension(data)
     assert isinstance(suspension, MultiLinkSuspension)
     assert suspension.rack_attachment_point() is None
-    assert suspension.steering_actuator_dof() is None
+    assert suspension.steering_actuator_coordinate() is None
     assert suspension.suspension_hold_catalogue() is None
