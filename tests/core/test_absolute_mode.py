@@ -1,13 +1,14 @@
 import numpy as np
 
-from kinematics.core.enums import Axis, PointID, TargetValueMode
+from kinematics.core.coordinates import CoordinateAxis, PointCoordinate
+from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
 )
 from kinematics.core.solver import convert_targets_to_absolute, solve_suspension_sweep
 from kinematics.core.state import SuspensionState
-from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
+from kinematics.core.targeting import SweepConfig
 
 
 def test_resolve_targets_to_absolute():
@@ -19,12 +20,9 @@ def test_resolve_targets_to_absolute():
     initial_state = SuspensionState(positions=initial_positions, free_points=set())
 
     # Relative conversion -> absolute
-    relative_target = PointTarget(
-        PointID.WHEEL_CENTER,
-        PointTargetAxis(Axis.Z),
-        50.0,
-        TargetValueMode.RELATIVE,
-    )
+    relative_target = PointCoordinate(
+        PointID.WHEEL_CENTER, CoordinateAxis(Axis.Z), scope=Scope.CORNER
+    ).target(50.0, TargetValueMode.RELATIVE)
 
     resolved = convert_targets_to_absolute([relative_target], initial_state)
 
@@ -32,12 +30,9 @@ def test_resolve_targets_to_absolute():
     assert resolved[0].value == 200.0  # 150 + 50
 
     # Absolute passthrough
-    absolute_target = PointTarget(
-        PointID.WHEEL_CENTER,
-        PointTargetAxis(Axis.Z),
-        400.0,
-        TargetValueMode.ABSOLUTE,
-    )
+    absolute_target = PointCoordinate(
+        PointID.WHEEL_CENTER, CoordinateAxis(Axis.Z), scope=Scope.CORNER
+    ).target(400.0, TargetValueMode.ABSOLUTE)
 
     resolved2 = convert_targets_to_absolute([absolute_target], initial_state)
 
@@ -46,7 +41,9 @@ def test_resolve_targets_to_absolute():
 
 
 def test_default_relative_mode():
-    target = PointTarget(PointID.WHEEL_CENTER, PointTargetAxis(Axis.Z), 50)
+    target = PointCoordinate(
+        PointID.WHEEL_CENTER, CoordinateAxis(Axis.Z), scope=Scope.CORNER
+    ).target(50)
     assert target.mode == TargetValueMode.RELATIVE
 
 
@@ -62,28 +59,19 @@ def test_absolute_mode_solve():
 
     # Fully determined with 3 absolute targets (X, Y, Z) applied simultaneously.
     x_sweep = [
-        PointTarget(
-            PointID.LOWER_WISHBONE_OUTBOARD,
-            PointTargetAxis(Axis.X),
-            10.0,
-            TargetValueMode.ABSOLUTE,
-        )
+        PointCoordinate(
+            PointID.LOWER_WISHBONE_OUTBOARD, CoordinateAxis(Axis.X), scope=Scope.CORNER
+        ).target(10.0, TargetValueMode.ABSOLUTE)
     ]
     y_sweep = [
-        PointTarget(
-            PointID.LOWER_WISHBONE_OUTBOARD,
-            PointTargetAxis(Axis.Y),
-            -5.0,
-            TargetValueMode.ABSOLUTE,
-        )
+        PointCoordinate(
+            PointID.LOWER_WISHBONE_OUTBOARD, CoordinateAxis(Axis.Y), scope=Scope.CORNER
+        ).target(-5.0, TargetValueMode.ABSOLUTE)
     ]
     z_sweep = [
-        PointTarget(
-            PointID.LOWER_WISHBONE_OUTBOARD,
-            PointTargetAxis(Axis.Z),
-            100.0,
-            TargetValueMode.ABSOLUTE,
-        )
+        PointCoordinate(
+            PointID.LOWER_WISHBONE_OUTBOARD, CoordinateAxis(Axis.Z), scope=Scope.CORNER
+        ).target(100.0, TargetValueMode.ABSOLUTE)
     ]
 
     states, solver_stats = solve_suspension_sweep(

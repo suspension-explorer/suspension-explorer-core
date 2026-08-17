@@ -516,66 +516,6 @@ class FixedAxisConstraint(Constraint):
         return float(point_coord - self.value)
 
 
-class PointOnLineConstraint(Constraint):
-    """
-    Constrains a point to lie on an arbitrary line.
-
-    This constraint enforces that a point remains on a specified infinite line defined
-    by a point and direction vector. Useful for guiding points along linear paths or
-    maintaining alignment in suspension mechanisms.
-    """
-
-    _POINT_ATTRS: ClassVar[tuple[str, ...]] = ("point_id",)
-
-    def __init__(
-        self,
-        point_id: PointKey,
-        line_point: Point3,
-        line_direction: Direction3,
-    ):
-        """
-        Initialize the point-on-line constraint.
-
-        Args:
-            point_id: The point that must lie on the line.
-            line_point: A point on the line.
-            line_direction: The direction of the line (unit vector).
-
-        Raises:
-            ValueError: If line_direction has zero length.
-        """
-        if not isinstance(line_point, Point3):
-            raise TypeError("line_point must be a Point3")
-        if not isinstance(line_direction, Direction3):
-            raise TypeError("line_direction must be a Direction3")
-
-        self.point_id = point_id
-        self.line_point = line_point.copy()
-        self.line_direction = line_direction
-
-    @property
-    def involved_points(self) -> Set[PointKey]:
-        return {self.point_id}
-
-    def residual(self, positions: dict[PointKey, Point3]) -> float:
-        """
-        Compute the point-to-line distance residual.
-
-        Returns softnorm(|cross(p - line_point, line_direction)|^2), matching
-        the analytical Jacobian. Zero indicates the point lies exactly on the
-        line.
-        """
-        w = positions[self.point_id] - self.line_point
-        ld = self.line_direction
-
-        # Cross product components: w x line_direction.
-        cx = w[1] * ld[2] - w[2] * ld[1]
-        cy = w[2] * ld[0] - w[0] * ld[2]
-        cz = w[0] * ld[1] - w[1] * ld[0]
-
-        return float(softnorm(cx * cx + cy * cy + cz * cz))
-
-
 class PointOnPlaneConstraint(Constraint):
     """
     Constrains a point to lie on a plane.
@@ -625,6 +565,34 @@ class PointOnPlaneConstraint(Constraint):
             self.plane_point,
             self.plane_normal,
         )
+
+
+def point_on_line_constraints(
+    point_id: PointKey,
+    line_point: Point3,
+    line_direction: Direction3,
+) -> tuple[PointOnPlaneConstraint, PointOnPlaneConstraint]:
+    """Constrain a point to an infinite line with two transverse planes.
+
+    A line in 3D is the intersection of two planes whose normals span its
+    perpendicular plane. Representing the guide this way keeps both the
+    nonlinear solve and every tangent solve smooth at the authored position.
+    """
+    if not isinstance(line_point, Point3):
+        raise TypeError("line_point must be a Point3")
+    if not isinstance(line_direction, Direction3):
+        raise TypeError("line_direction must be a Direction3")
+
+    direction = line_direction.data
+    reference_axis = np.zeros(3)
+    reference_axis[int(np.argmin(np.abs(direction)))] = 1.0
+    normal_a = Direction3(np.cross(direction, reference_axis))
+    normal_b = Direction3(np.cross(direction, normal_a.data))
+
+    return (
+        PointOnPlaneConstraint(point_id, line_point, normal_a),
+        PointOnPlaneConstraint(point_id, line_point, normal_b),
+    )
 
 
 class MidpointOnPlaneConstraint(Constraint):

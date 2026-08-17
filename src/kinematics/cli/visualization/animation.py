@@ -19,7 +19,7 @@ from kinematics.cli.visualization.plots import (
     configure_3d_axis,
     create_four_view_axes,
 )
-from kinematics.core.screw_axis import UprightScrewAxisResult
+from kinematics.core.steering_axis import SteeringResponseAxisResult
 
 
 @dataclass(frozen=True)
@@ -27,12 +27,13 @@ class AnimationFrame:
     """Position and steering-axis data that must remain frame-aligned."""
 
     positions: dict[str, tuple[float, float, float]]
-    steering_response_axes: tuple[UprightScrewAxisResult, ...] = ()
+    steering_response_axes: tuple[SteeringResponseAxisResult, ...] = ()
 
 
 def aligned_animation_frames(
     position_states: Sequence[dict[str, tuple[float, float, float]]],
-    steering_response_axes: Sequence[Sequence[UprightScrewAxisResult]] | None = None,
+    steering_response_axes: Sequence[Sequence[SteeringResponseAxisResult]]
+    | None = None,
 ) -> list[AnimationFrame]:
     """Bundle positions and axes before any animation sequencing is applied."""
     axis_frames = (
@@ -66,7 +67,8 @@ def create_animation(
     codec: str = "libx264",
     dpi: int = 200,
     show_live: bool = True,
-    steering_response_axes: Sequence[Sequence[UprightScrewAxisResult]] | None = None,
+    steering_response_axes: Sequence[Sequence[SteeringResponseAxisResult]]
+    | None = None,
 ) -> None:
     """
     Create an animation showing suspension movement through multiple states.

@@ -211,8 +211,8 @@ def test_axle_scoped_heave_link_is_driveable_without_a_side(
     )
     state = solve_sweep(axle, sweep)[0][0]
     target = sweep.target_sweeps[0][0]
-    assert target.measure(state.positions) == pytest.approx(
-        target.measure(axle.initial_state().positions),
+    assert target.coordinate.measure(state.positions) == pytest.approx(
+        target.coordinate.measure(axle.initial_state().positions),
         abs=1e-5,
     )
 

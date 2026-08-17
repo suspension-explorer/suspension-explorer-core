@@ -14,12 +14,19 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from kinematics.core.coordinates import (
+    ActuatorCoordinate,
+    CoordinateAxis,
+    PointCoordinate,
+)
 from kinematics.core.enums import (
     ActuationType,
     Axis,
     MountBody,
     PointID,
+    Scope,
     TargetValueMode,
+    Units,
 )
 from kinematics.core.input import build_suspension, parse_geometry_spec
 from kinematics.core.primitives.constants import TEST_TOLERANCE
@@ -36,12 +43,7 @@ from kinematics.core.suspensions.corner.mechanisms import (
     ActuationPushrodRocker,
 )
 from kinematics.core.sweep import solve_sweep
-from kinematics.core.targeting import (
-    ActuatorPositionTarget,
-    PointTarget,
-    PointTargetAxis,
-    SweepConfig,
-)
+from kinematics.core.targeting import SweepConfig
 
 DATA_DIR = Path(__file__).parent / "data"
 STRUT_GEOMETRY = DATA_DIR / "corner_strut_geometry.yaml"
@@ -83,22 +85,20 @@ def _heave_sweep(displacements: tuple[float, ...]) -> SweepConfig:
     non-unique.
     """
     heave_targets = [
-        PointTarget(
-            point_id=PointID.WHEEL_CENTER,
-            direction=PointTargetAxis(Axis.Z),
-            value=displacement,
-            mode=TargetValueMode.RELATIVE,
-        )
+        PointCoordinate(
+            PointID.WHEEL_CENTER, CoordinateAxis(Axis.Z), Scope.CORNER
+        ).target(displacement, TargetValueMode.RELATIVE)
         for displacement in displacements
     ]
     steer_hold_targets = [
-        ActuatorPositionTarget(
-            actuator_id="rack",
-            point_id=PointID.TRACKROD_INBOARD,
-            direction=PointTargetAxis(Axis.Y),
-            value=0.0,
-            mode=TargetValueMode.RELATIVE,
-        )
+        ActuatorCoordinate(
+            id="rack",
+            label="Rack",
+            unit=Units.MILLIMETERS.symbol,
+            point_keys=(PointID.TRACKROD_INBOARD,),
+            direction=CoordinateAxis(Axis.Y),
+            scope=Scope.CORNER,
+        ).target(0.0, TargetValueMode.RELATIVE)
         for _ in displacements
     ]
     return SweepConfig([heave_targets, steer_hold_targets])

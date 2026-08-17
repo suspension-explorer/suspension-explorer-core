@@ -35,8 +35,8 @@ from kinematics.core.sensitivity import TangentField
 from kinematics.core.state import SuspensionState
 
 if TYPE_CHECKING:
-    from kinematics.core.coordinates import PhysicalCoordinate
-    from kinematics.core.screw_axis import UprightScrewAxisResult
+    from kinematics.core.coordinates import ActuatorCoordinate
+    from kinematics.core.steering_axis import SteeringResponseAxisResult
     from kinematics.core.suspensions.axle import AxleSuspension
     from kinematics.core.suspensions.base import Suspension
     from kinematics.core.suspensions.corner.base import CornerSuspension
@@ -75,7 +75,7 @@ def compute_metrics_for_axle_state(
     axle: AxleSuspension,
     config: SuspensionConfig,
     tangents: "Sequence[TangentField] | None" = None,
-    steering_response_axes: "Sequence[UprightScrewAxisResult] | None" = None,
+    steering_response_axes: "Sequence[SteeringResponseAxisResult] | None" = None,
 ) -> AxleMetricRows:
     """Compute corner and axle metrics against one axle-local road plane.
 
@@ -135,10 +135,10 @@ def compute_metrics_for_axle_state(
 
 
 def _steering_axes_by_side(
-    results: "Sequence[UprightScrewAxisResult] | None",
-) -> dict[Side, UprightScrewAxisResult | None]:
+    results: "Sequence[SteeringResponseAxisResult] | None",
+) -> dict[Side, SteeringResponseAxisResult | None]:
     """Map axle upright results structurally through side-qualified point keys."""
-    grouped: dict[Side, list[UprightScrewAxisResult]] = {}
+    grouped: dict[Side, list[SteeringResponseAxisResult]] = {}
     for result in results or ():
         sides = {key.side for key in result.point_keys if isinstance(key, PointRef)}
         if len(sides) == 1:
@@ -153,12 +153,12 @@ def _steering_axes_by_side(
 def _corner_tangents(
     tangents: "Sequence[TangentField]",
     side: Side,
-    required_actuator_coordinates: "Sequence[PhysicalCoordinate]",
+    required_actuator_coordinates: "Sequence[ActuatorCoordinate]",
 ) -> list["TangentField"]:
     """Project axle tangents into one corner, including shared actuators."""
     result: list[TangentField] = []
     for tangent in tangents:
-        selector_point = tangent.target.selector_point
+        selector_point = tangent.target.coordinate.selector_point
         if selector_point is not None:
             local_target = _local_tangent_target(
                 selector_point,
@@ -171,9 +171,9 @@ def _corner_tangents(
                 lambda _point: local_target
             )
         else:
-            if not tangent.target.required_points or not all(
+            if not tangent.target.coordinate.required_points or not all(
                 isinstance(point, PointRef) and point.side is side
-                for point in tangent.target.required_points
+                for point in tangent.target.coordinate.required_points
             ):
                 continue
             local_tangent_target = tangent.target.map_points(
@@ -196,7 +196,7 @@ def _corner_tangents(
 def _local_tangent_target(
     target_key: PointKey,
     side: Side,
-    required_actuator_coordinates: "Sequence[PhysicalCoordinate]",
+    required_actuator_coordinates: "Sequence[ActuatorCoordinate]",
 ) -> PointID | None:
     """Resolve a side-local target or its equivalent shared actuator point."""
     if isinstance(target_key, PointRef) and target_key.side is side:
@@ -217,7 +217,7 @@ def compute_metrics_for_state(
     tangents: "Sequence[TangentField] | None" = None,
     *,
     road: RoadPlane | None = None,
-    steering_response_axis: "UprightScrewAxisResult | None" = None,
+    steering_response_axis: "SteeringResponseAxisResult | None" = None,
 ) -> MetricRow:
     """
     Compute all corner-level metrics for a single solved state.

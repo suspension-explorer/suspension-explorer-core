@@ -6,6 +6,7 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.sweep_loader import load_sweep
+from kinematics.core.coordinates import ActuatorCoordinate, PointCoordinate
 from kinematics.core.enums import AxlePosition, PointID
 from kinematics.core.metrics.anti_geometry import (
     calculate_anti_dive_pct,
@@ -23,7 +24,7 @@ from kinematics.core.road import RoadPlane
 from kinematics.core.schema.config import SuspensionConfig
 from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
-from kinematics.core.targeting import ActuatorPositionTarget, PointTarget, SweepConfig
+from kinematics.core.targeting import SweepConfig
 
 TEST_DATA = Path(__file__).parent / "data"
 
@@ -135,19 +136,25 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     bump_target = next(
         target
         for target in midpoint_targets
-        if isinstance(target, PointTarget) and target.point_id == PointID.WHEEL_CENTER
+        if isinstance(target.coordinate, PointCoordinate)
+        and target.coordinate.point == PointID.WHEEL_CENTER
     )
     rack_target = next(
         target
         for target in midpoint_targets
-        if isinstance(target, ActuatorPositionTarget) and target.actuator_id == "rack"
+        if isinstance(target.coordinate, ActuatorCoordinate)
+        and target.coordinate.id == "rack"
     )
     finite_difference_step = 0.25
     finite_difference_sweep = SweepConfig(
         target_sweeps=[
             [
-                bump_target._replace(value=bump_target.value - finite_difference_step),
-                bump_target._replace(value=bump_target.value + finite_difference_step),
+                bump_target.with_value(
+                    bump_target.value - finite_difference_step, bump_target.mode
+                ),
+                bump_target.with_value(
+                    bump_target.value + finite_difference_step, bump_target.mode
+                ),
             ],
             [rack_target, rack_target],
         ]

@@ -13,8 +13,11 @@ from kinematics.core.coordinates import actuator_coordinate_matches
 from kinematics.core.enums import PointID
 from kinematics.core.metrics.main import AxleMetricRows
 from kinematics.core.primitives.point_ref import PointRef, Side
-from kinematics.core.screw_axis import InstantaneousScrewAxis, ScrewAxisStatus
-from kinematics.core.steering_axis import compute_steering_response_tangent
+from kinematics.core.screw_axis import InstantaneousScrewAxis
+from kinematics.core.steering_axis import (
+    SteeringResponseStatus,
+    compute_steering_response_tangent,
+)
 from kinematics.core.sweep import compute_sweep_tangents, solve_evaluated_sweep
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -49,7 +52,7 @@ def test_steering_response_axis_is_recomputed_per_frame() -> None:
     _suspension, _sweep, evaluated = _solve("axle_steer_moving_dampers_sweep.yaml")
 
     left_results = [frame[0] for frame in evaluated.steering_response_axes]
-    assert all(result.status is ScrewAxisStatus.VALID for result in left_results)
+    assert all(result.status is SteeringResponseStatus.VALID for result in left_results)
     assert all(result.axis is not None for result in left_results)
 
     axes = [cast(InstantaneousScrewAxis, result.axis) for result in left_results]
@@ -91,7 +94,7 @@ def test_wheel_centre_height_control_does_not_contaminate_virtual_metrics() -> N
         suspension,
         evaluated.states[midpoint],
     )
-    assert isolated.status is ScrewAxisStatus.VALID
+    assert isolated.status is SteeringResponseStatus.VALID
     assert isolated.tangent is not None
     assert isolated.tangent.rate(lower_key) == pytest.approx(np.zeros(3), abs=2e-10)
     assert isolated.tangent.rate(upper_key) == pytest.approx(np.zeros(3), abs=2e-10)
@@ -119,11 +122,11 @@ def test_moving_dampers_recover_physical_axis_at_every_state() -> None:
     ):
         assert isinstance(raw_row, AxleMetricRows)
         isolated = compute_steering_response_tangent(suspension, state)
-        assert isolated.status is ScrewAxisStatus.VALID
+        assert isolated.status is SteeringResponseStatus.VALID
         assert isolated.tangent is not None
 
         for side, result in zip((Side.LEFT, Side.RIGHT), frame_axes, strict=True):
-            assert result.status is ScrewAxisStatus.VALID
+            assert result.status is SteeringResponseStatus.VALID
             assert result.axis is not None
             axis = result.axis
             lower_key = PointRef(side, PointID.LOWER_WISHBONE_OUTBOARD)

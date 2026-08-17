@@ -7,14 +7,14 @@ from kinematics.core.constraints import (
     DistanceConstraint,
     EqualDistanceConstraint,
     FixedAxisConstraint,
-    PointOnLineConstraint,
     PointOnPlaneConstraint,
     SphericalJointConstraint,
     ThreePointAngleConstraint,
     VectorsParallelConstraint,
     VectorsPerpendicularConstraint,
 )
-from kinematics.core.enums import Axis, PointID, TargetValueMode
+from kinematics.core.coordinates import CoordinateAxis, PointCoordinate
+from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
@@ -28,7 +28,7 @@ from kinematics.core.primitives.point_ref import (
 )
 from kinematics.core.solver import ResidualComputer, solve_least_squares_problem
 from kinematics.core.state import SuspensionState
-from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
+from kinematics.core.targeting import SweepConfig
 
 # ----------------------------------------------------------------------------
 # Side / PointRef basics
@@ -130,8 +130,6 @@ def _positions_for(points, keyfn=lambda p: p):
 # Each entry: (constructor callable, point-attr names, non-point-attr names).
 def _build_constraints():
     p = list(PointID)[1:]  # skip NOT_ASSIGNED (index 0)
-    line_point = Point3([1.0, 2.0, 3.0])
-    line_dir = Direction3([1.0, 0.0, 0.0])
     plane_point = Point3([0.0, 0.0, 1.0])
     plane_normal = Direction3([0.0, 0.0, 1.0])
 
@@ -175,11 +173,6 @@ def _build_constraints():
             FixedAxisConstraint(p[0], Axis.Y, 4.0),
             ("point_id",),
             {"axis": Axis.Y, "value": 4.0},
-        ),
-        (
-            PointOnLineConstraint(p[0], line_point, line_dir),
-            ("point_id",),
-            {"line_point": line_point, "line_direction": line_dir},
         ),
         (
             PointOnPlaneConstraint(p[0], plane_point, plane_normal),
@@ -227,19 +220,6 @@ def test_remap_round_trip(constraint, point_attrs, nonpoint_attrs):
     assert set(constraint.involved_points) == original_involved
 
 
-def test_remap_shares_line_point_with_original():
-    # Documented behavior: remapped copy shares the (immutable) line_point.
-    c = PointOnLineConstraint(
-        PointID.TRACKROD_INBOARD,
-        Point3([1.0, 2.0, 3.0]),
-        Direction3([0.0, 1.0, 0.0]),
-    )
-    remapped = c.remap(_left)
-    assert isinstance(remapped, PointOnLineConstraint)
-    assert remapped.line_point is c.line_point
-    assert remapped.line_direction is c.line_direction
-
-
 @pytest.mark.parametrize(
     "constraint, point_attrs",
     [
@@ -258,14 +238,6 @@ def test_remap_shares_line_point_with_original():
                 0.5,
             ),
             ("v1_start", "v1_end", "v2_start", "v2_end"),
-        ),
-        (
-            PointOnLineConstraint(
-                PointID.TRACKROD_INBOARD,
-                Point3([0.0, 0.0, 0.0]),
-                Direction3([0.0, 1.0, 0.0]),
-            ),
-            ("point_id",),
         ),
     ],
 )
@@ -324,13 +296,13 @@ def test_solve_with_point_ref_keys():
     # Pin all coordinates so the system is well-determined: 6 vars.
     # 1 distance constraint + 5 targets = 6 residuals.
     targets = [
-        PointTarget(a, PointTargetAxis(Axis.X), 0.0),
-        PointTarget(a, PointTargetAxis(Axis.Y), 0.0),
-        PointTarget(a, PointTargetAxis(Axis.Z), 0.0),
-        PointTarget(b, PointTargetAxis(Axis.Y), 0.0),
-        PointTarget(b, PointTargetAxis(Axis.Z), 0.0),
+        PointCoordinate(a, CoordinateAxis(Axis.X), Scope.CORNER).target(0.0),
+        PointCoordinate(a, CoordinateAxis(Axis.Y), Scope.CORNER).target(0.0),
+        PointCoordinate(a, CoordinateAxis(Axis.Z), Scope.CORNER).target(0.0),
+        PointCoordinate(b, CoordinateAxis(Axis.Y), Scope.CORNER).target(0.0),
+        PointCoordinate(b, CoordinateAxis(Axis.Z), Scope.CORNER).target(0.0),
     ]
-    targets = [t._replace(mode=TargetValueMode.ABSOLUTE) for t in targets]
+    targets = [t.with_value(t.value, TargetValueMode.ABSOLUTE) for t in targets]
 
     computer = ResidualComputer(
         constraints=[constraint],

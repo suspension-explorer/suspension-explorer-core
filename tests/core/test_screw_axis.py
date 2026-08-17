@@ -1,17 +1,17 @@
 import numpy as np
 import pytest
 
-from kinematics.core.enums import Axis, PointID, TargetValueMode
+from kinematics.core.coordinates import CoordinateAxis, PointCoordinate
+from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.screw_axis import (
     ScrewAxisStatus,
-    compute_upright_screw_axis,
+    compute_screw_axis,
     extract_screw_axis,
     fit_rigid_body_twist,
 )
 from kinematics.core.sensitivity import TangentField
-from kinematics.core.targeting import PointTarget, PointTargetAxis
 
 POINT_KEYS: tuple[PointKey, ...] = (
     PointID.LOWER_WISHBONE_OUTBOARD,
@@ -31,13 +31,22 @@ POINTS = np.array(
 )
 
 
+def test_generic_status_vocabulary_contains_only_fit_and_extraction_outcomes() -> None:
+    assert {status.value for status in ScrewAxisStatus} == {
+        "valid",
+        "insufficient_points",
+        "degenerate_geometry",
+        "rank_deficient",
+        "near_pure_translation",
+        "excessive_fit_error",
+        "non_finite",
+    }
+
+
 def _tangent(rates: dict[PointKey, np.ndarray]) -> TangentField:
-    target = PointTarget(
-        point_id=PointID.TRACKROD_INBOARD,
-        direction=PointTargetAxis(Axis.X),
-        value=0.0,
-        mode=TargetValueMode.ABSOLUTE,
-    )
+    target = PointCoordinate(
+        PointID.TRACKROD_INBOARD, CoordinateAxis(Axis.X), Scope.CORNER
+    ).target(0.0, TargetValueMode.ABSOLUTE)
     return TangentField(target_index=0, target=target, rates=rates)
 
 
@@ -218,7 +227,7 @@ def test_overdetermined_fit_reports_small_injected_noise() -> None:
     assert axis is None
 
 
-def test_collinear_points_return_degenerate_upright_status() -> None:
+def test_collinear_points_return_degenerate_geometry_status() -> None:
     collinear_points = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [4.0, 0.0, 0.0]])
     keys = POINT_KEYS[:3]
     positions, tangent = _motion(
@@ -229,10 +238,10 @@ def test_collinear_points_return_degenerate_upright_status() -> None:
         0.0,
     )
 
-    result = compute_upright_screw_axis("upright", positions, tangent, keys)
+    result = compute_screw_axis(positions, tangent, keys)
 
     assert result.axis is None
-    assert result.status is ScrewAxisStatus.DEGENERATE_UPRIGHT
+    assert result.status is ScrewAxisStatus.DEGENERATE_GEOMETRY
     assert result.point_count == 3
 
 
@@ -240,7 +249,7 @@ def test_pure_translation_returns_no_finite_axis() -> None:
     positions = {key: Point3(point) for key, point in zip(POINT_KEYS, POINTS)}
     tangent = _tangent({key: np.array([2.0, -1.0, 3.0]) for key in POINT_KEYS})
 
-    result = compute_upright_screw_axis("upright", positions, tangent, POINT_KEYS)
+    result = compute_screw_axis(positions, tangent, POINT_KEYS)
 
     assert result.axis is None
     assert result.status is ScrewAxisStatus.NEAR_PURE_TRANSLATION

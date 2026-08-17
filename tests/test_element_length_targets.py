@@ -7,7 +7,13 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.analysis import initial_pose, sweep_parameters
-from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode
+from kinematics.core.coordinates import (
+    CoordinateAxis,
+    CoordinateType,
+    ElementLengthCoordinate,
+    PointCoordinate,
+)
+from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode, Units
 from kinematics.core.input import build_sweep, parse_sweep_spec
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
@@ -20,14 +26,7 @@ from kinematics.core.sensitivity import compute_state_tangents
 from kinematics.core.solver import ResidualComputer, convert_targets_to_absolute
 from kinematics.core.state import SuspensionState
 from kinematics.core.sweep import compute_sweep_tangents, solve_sweep
-from kinematics.core.targeting import (
-    ActuatorPositionTarget,
-    ElementLengthTarget,
-    PointTarget,
-    PointTargetAxis,
-    SweepConfig,
-    TargetKind,
-)
+from kinematics.core.targeting import SweepConfig
 
 DATA_DIR = Path(__file__).parent / "data"
 FD_STEP = 1.0e-5
@@ -67,7 +66,7 @@ def test_element_target_modes_resolve_once_against_setup_length() -> None:
         item for item in suspension.drive_coordinates() if item.id == "damper"
     )
     state = suspension.initial_state()
-    setup_length = coordinate.target(0.0).measure(state.positions)
+    setup_length = coordinate.measure(state.positions)
 
     relative = coordinate.target(12.5, TargetValueMode.RELATIVE)
     absolute = coordinate.target(321.0, TargetValueMode.ABSOLUTE)
@@ -94,16 +93,17 @@ def test_element_target_modes_resolve_once_against_setup_length() -> None:
 
 
 def test_coincident_intermediate_element_endpoints_have_finite_zero_partials() -> None:
-    target = ElementLengthTarget(
-        element_id="damper",
+    target = ElementLengthCoordinate(
+        id="damper",
+        label="Damper",
+        unit=Units.MILLIMETERS.symbol,
         point_a=PointID.STRUT_TOP,
         point_b=PointID.STRUT_BOTTOM,
-        value=1.0,
-        mode=TargetValueMode.ABSOLUTE,
-    )
+        scope=Scope.CORNER,
+    ).target(1.0, TargetValueMode.ABSOLUTE)
     coincident = Point3([1.0, 2.0, 3.0])
 
-    partials = target.point_partials(
+    partials = target.coordinate.point_partials(
         {
             PointID.STRUT_TOP: coincident,
             PointID.STRUT_BOTTOM: coincident,
@@ -127,13 +127,14 @@ def test_structurally_driven_zero_target_jacobian_is_not_misclassified() -> None
         },
         free_points={PointID.STRUT_TOP, PointID.STRUT_BOTTOM},
     )
-    target = ElementLengthTarget(
-        element_id="damper",
+    target = ElementLengthCoordinate(
+        id="damper",
+        label="Damper",
+        unit=Units.MILLIMETERS.symbol,
         point_a=PointID.STRUT_TOP,
         point_b=PointID.STRUT_BOTTOM,
-        value=1.0,
-        mode=TargetValueMode.ABSOLUTE,
-    )
+        scope=Scope.CORNER,
+    ).target(1.0, TargetValueMode.ABSOLUTE)
     computer = ResidualComputer(
         constraints=[],
         derived_manager=DerivedPointsManager(DerivedPointsSpec({}, {})),
@@ -154,13 +155,14 @@ def test_target_without_free_or_derived_dependency_fails_actionably() -> None:
         },
         free_points=set(),
     )
-    target = ElementLengthTarget(
-        element_id="damper",
+    target = ElementLengthCoordinate(
+        id="damper",
+        label="Damper",
+        unit=Units.MILLIMETERS.symbol,
         point_a=PointID.STRUT_TOP,
         point_b=PointID.STRUT_BOTTOM,
-        value=1.0,
-        mode=TargetValueMode.ABSOLUTE,
-    )
+        scope=Scope.CORNER,
+    ).target(1.0, TargetValueMode.ABSOLUTE)
     computer = ResidualComputer(
         constraints=[],
         derived_manager=DerivedPointsManager(DerivedPointsSpec({}, {})),
@@ -174,12 +176,14 @@ def test_target_without_free_or_derived_dependency_fails_actionably() -> None:
 
 def test_missing_target_endpoint_is_reported_with_target_index() -> None:
     suspension = load_geometry(DATA_DIR / "corner_strut_geometry.yaml")
-    target = ElementLengthTarget(
-        element_id="damper",
+    target = ElementLengthCoordinate(
+        id="damper",
+        label="Damper",
+        unit=Units.MILLIMETERS.symbol,
         point_a=PointID.STRUT_TOP,
         point_b=PointID.DAMPER_ROCKER,
-        value=0.0,
-    )
+        scope=Scope.CORNER,
+    ).target(0.0)
 
     with pytest.raises(
         ValueError,
@@ -217,8 +221,8 @@ def test_canonical_mixed_yaml_specs_remain_typed_and_round_trip() -> None:
 
     suspension = load_geometry(DATA_DIR / "corner_strut_geometry.yaml")
     sweep = build_sweep(raw, suspension)
-    assert isinstance(sweep.target_sweeps[0][0], ActuatorPositionTarget)
-    assert isinstance(sweep.target_sweeps[1][0], ElementLengthTarget)
+    assert sweep.target_sweeps[0][0].coordinate.type is CoordinateType.ACTUATOR_POSITION
+    assert sweep.target_sweeps[1][0].coordinate.type is CoordinateType.ELEMENT_LENGTH
 
     invalid = {
         "targets": [
@@ -282,7 +286,9 @@ def test_supported_corner_damper_topologies_solve_length_sweeps(
 
     assert all(info.converged for info in infos)
     for state, expected, target in zip(states, absolute, sweep.target_sweeps[0]):
-        assert target.measure(state.positions) == pytest.approx(expected, abs=1e-5)
+        assert target.coordinate.measure(state.positions) == pytest.approx(
+            expected, abs=1e-5
+        )
 
 
 @pytest.mark.parametrize(
@@ -340,15 +346,17 @@ def test_mixed_targets_produce_one_analytical_tangent_field_each() -> None:
     )
 
     assert len(fields) == 2
-    assert [field.target.kind for field in fields] == [
-        TargetKind.ELEMENT_LENGTH,
-        TargetKind.ACTUATOR_POSITION,
+    assert [field.target.coordinate.type for field in fields] == [
+        CoordinateType.ELEMENT_LENGTH,
+        CoordinateType.ACTUATOR_POSITION,
     ]
     assert not info.rank_deficient
     element_field = fields[0]
     length_rate = sum(
         float(partial @ element_field.rate(point))
-        for point, partial in element_field.target.point_partials(state.positions)
+        for point, partial in element_field.target.coordinate.point_partials(
+            state.positions
+        )
     )
     assert length_rate == pytest.approx(1.0)
 
@@ -362,7 +370,7 @@ def test_damper_locked_rack_sweep_allows_wheel_center_motion() -> None:
     )
     states, _ = solve_sweep(suspension, sweep)
     damper = sweep.target_sweeps[0][0]
-    lengths = [damper.measure(state.positions) for state in states]
+    lengths = [damper.coordinate.measure(state.positions) for state in states]
     wheel_centres = [state.get(PointID.WHEEL_CENTER).data for state in states]
 
     assert max(lengths) - min(lengths) < 1e-5
@@ -403,7 +411,7 @@ def test_axle_dampers_locked_during_shared_rack_steer() -> None:
     assert all(info.converged for info in infos)
     for dimension in sweep.target_sweeps[:2]:
         coordinate = dimension[0]
-        lengths = [coordinate.measure(state.positions) for state in states]
+        lengths = [coordinate.coordinate.measure(state.positions) for state in states]
         assert max(lengths) - min(lengths) < 1e-5
     for side in (Side.LEFT, Side.RIGHT):
         point = PointRef(side, PointID.WHEEL_CENTER)
@@ -487,18 +495,16 @@ def test_axle_solves_independent_sided_damper_targets_and_reports_series() -> No
     for dimension, parameter in zip(sweep.target_sweeps, parameters):
         assert parameter.values == pytest.approx(
             [
-                target.measure(state.positions)
+                target.coordinate.measure(state.positions)
                 for target, state in zip(dimension, states)
             ]
         )
 
 
 def test_duplicate_scalar_coordinate_is_rejected() -> None:
-    target = PointTarget(
-        PointID.WHEEL_CENTER,
-        PointTargetAxis(Axis.Z),
-        0.0,
-    )
+    target = PointCoordinate(
+        PointID.WHEEL_CENTER, CoordinateAxis(Axis.Z), Scope.CORNER
+    ).target(0.0)
     with pytest.raises(
         ValueError,
         match=r"controls 0, 1.*same point coordinate 'wheel_center_z'.*step 0",

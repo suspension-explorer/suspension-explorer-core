@@ -36,9 +36,13 @@ from kinematics.core.presentation import (
     wheel_references,
 )
 from kinematics.core.primitives.point_ref import point_key_name
-from kinematics.core.screw_axis import ScrewAxisStatus, UprightScrewAxisResult
+from kinematics.core.screw_axis import ScrewAxisStatus
 from kinematics.core.solver import SolverInfo
 from kinematics.core.state import SuspensionState
+from kinematics.core.steering_axis import (
+    SteeringResponseAxisResult,
+    SteeringResponseStatus,
+)
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.sweep import (
     EvaluatedSweep,
@@ -142,7 +146,8 @@ class AnalyzedSteeringResponseAxis:
 
     upright_label: str
     point_keys: tuple[str, ...]
-    status: ScrewAxisStatus
+    status: SteeringResponseStatus
+    screw_axis_status: ScrewAxisStatus | None
     point: tuple[float, float, float] | None
     direction: tuple[float, float, float] | None
     pitch: float | None
@@ -230,7 +235,7 @@ def _coordinate_info(
     """Convert one suspension coordinate to stable analysis metadata."""
     return CoordinateInfo(
         id=coordinate.id,
-        type=coordinate.kind.value,
+        type=coordinate.type.value,
         label=coordinate.label,
         unit=coordinate.unit,
         scope=coordinate.scope.value,
@@ -301,25 +306,25 @@ def sweep_parameters(
             continue
         target = dimension[0]
         values = (
-            [float(target.measure(state.positions)) for state in states]
+            [float(target.coordinate.measure(state.positions)) for state in states]
             if states is not None
             else [float(item.value) for item in dimension]
         )
-        structural_side = target.structural_side
+        coordinate = target.coordinate
         parameters.append(
             SweepParameter(
-                type=target.kind.value,
-                coordinate_id=target.coordinate_id,
-                label=target.label,
-                unit=target.unit,
+                type=coordinate.type.value,
+                coordinate_id=coordinate.id,
+                label=coordinate.label,
+                unit=coordinate.unit,
                 values=values,
-                point=target.parameter_point,
-                axis=target.parameter_axis,
-                actuator=target.parameter_actuator,
-                element=target.parameter_element,
+                point=coordinate.parameter_point,
+                axis=coordinate.parameter_axis,
+                actuator=coordinate.parameter_actuator,
+                element=coordinate.parameter_element,
                 side=(
-                    structural_side.name.lower()
-                    if structural_side is not None
+                    coordinate.side.name.lower()
+                    if coordinate.side is not None
                     else None
                 ),
             )
@@ -363,7 +368,7 @@ def _vector_tuple(values: np.ndarray) -> tuple[float, float, float]:
 
 
 def _analyzed_steering_response_axis(
-    result: UprightScrewAxisResult,
+    result: SteeringResponseAxisResult,
 ) -> AnalyzedSteeringResponseAxis:
     """Convert one core result to primitive structured analysis values."""
     axis = result.axis
@@ -374,6 +379,7 @@ def _analyzed_steering_response_axis(
         upright_label=result.upright_label,
         point_keys=tuple(point_key_name(key) for key in result.point_keys),
         status=result.status,
+        screw_axis_status=result.screw_axis_status,
         point=_vector_tuple(axis.point.data) if axis else None,
         direction=_vector_tuple(axis.direction.data) if axis else None,
         pitch=float(axis.pitch) if axis else None,

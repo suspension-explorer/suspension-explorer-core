@@ -13,8 +13,8 @@ from kinematics.core.primitives.geometry import Point3
 from kinematics.core.road import RoadPlane
 
 if TYPE_CHECKING:
-    from kinematics.core.screw_axis import UprightScrewAxisResult
     from kinematics.core.state import SuspensionState
+    from kinematics.core.steering_axis import SteeringResponseAxisResult
     from kinematics.core.suspensions.base import Suspension
 
 
@@ -28,7 +28,9 @@ def create_animation(
     codec: str = "libx264",
     dpi: int = 200,
     show_live: bool = True,
-    steering_response_axes: Sequence[Sequence["UprightScrewAxisResult"]] | None = None,
+    steering_response_axes: (
+        Sequence[Sequence["SteeringResponseAxisResult"]] | None
+    ) = None,
 ) -> None:
     """Load the optional animation renderer only when animation is requested."""
     from kinematics.cli.visualization.animation import create_animation as render
@@ -108,7 +110,9 @@ def visualize_suspension_sweep(
     output_path: Path,
     fps: int = 20,
     show_live: bool = False,
-    steering_response_axes: Sequence[Sequence["UprightScrewAxisResult"]] | None = None,
+    steering_response_axes: (
+        Sequence[Sequence["SteeringResponseAxisResult"]] | None
+    ) = None,
 ) -> None:
     """
     Create an animation of a suspension sweep.

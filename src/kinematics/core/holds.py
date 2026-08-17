@@ -20,10 +20,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from kinematics.core.coordinates import ScalarCoordinate
+from kinematics.core.coordinates import CoordinateTarget, ScalarCoordinate
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointKey
-from kinematics.core.targeting import ScalarCoordinateTarget
 
 
 @dataclass(frozen=True)
@@ -42,7 +41,7 @@ class CoordinateHold:
     def materialize(
         self,
         positions: Mapping[PointKey, Point3],
-    ) -> tuple[ScalarCoordinateTarget, ...]:
+    ) -> tuple[CoordinateTarget, ...]:
         """Capture every coordinate as an absolute target at ``positions``."""
         return tuple(
             coordinate.current_value_target(positions)

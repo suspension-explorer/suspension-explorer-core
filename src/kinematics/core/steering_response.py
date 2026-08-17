@@ -30,14 +30,14 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from kinematics.core.coordinates import (
-    PhysicalCoordinate,
+    ActuatorCoordinate,
+    CoordinateTarget,
     actuator_coordinate_matches,
 )
 from kinematics.core.enums import TargetValueMode
 from kinematics.core.holds import CoordinateHold
 from kinematics.core.primitives.point_ref import Side
 from kinematics.core.state import SuspensionState
-from kinematics.core.targeting import ScalarCoordinateTarget
 
 
 class SuspensionHoldAvailability(StrEnum):
@@ -94,7 +94,7 @@ class SuspensionHoldOption:
             tuple(
                 (
                     coordinate.id,
-                    coordinate.kind.value,
+                    coordinate.type.value,
                     coordinate.unit,
                     coordinate.scope.value,
                 )
@@ -146,7 +146,7 @@ class SteeringResponseDefinition:
     hard-coded hold-count rule.
     """
 
-    steering_actuator: PhysicalCoordinate
+    steering_actuator: ActuatorCoordinate
     hold: CoordinateHold
     owner: str
     definition_id: str
@@ -191,7 +191,7 @@ class SteeringResponseTargets:
     """Materialized steering-response targets at one already-solved state."""
 
     definition: SteeringResponseDefinition
-    targets: tuple[ScalarCoordinateTarget, ...]
+    targets: tuple[CoordinateTarget, ...]
 
     def __post_init__(self) -> None:
         """Require the steering target first and one target for every hold."""
@@ -208,7 +208,7 @@ class SteeringResponseTargets:
         if any(target.mode is not TargetValueMode.ABSOLUTE for target in self.targets):
             raise ValueError("Steering-response targets must be absolute")
         if any(
-            target.coordinate_identity != coordinate.coordinate_identity
+            target.coordinate.coordinate_identity != coordinate.coordinate_identity
             for target, coordinate in zip(
                 self.targets[1:], self.definition.hold.coordinates, strict=True
             )
@@ -218,12 +218,12 @@ class SteeringResponseTargets:
             )
 
     @property
-    def steering_target(self) -> ScalarCoordinateTarget:
+    def steering_target(self) -> CoordinateTarget:
         """Return the unit-response coordinate, always at index zero."""
         return self.targets[0]
 
     @property
-    def held_targets(self) -> tuple[ScalarCoordinateTarget, ...]:
+    def held_targets(self) -> tuple[CoordinateTarget, ...]:
         """Return declared suspension-hold targets in topology order."""
         return self.targets[1:]
 

@@ -42,7 +42,7 @@ from kinematics.core.diagnostics import (
 from kinematics.core.metrics.main import AxleMetricRows, MetricRow
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.point_ref import PointKey
-from kinematics.core.screw_axis import ScrewAxisStatus, UprightScrewAxisResult
+from kinematics.core.screw_axis import ScrewAxisStatus
 from kinematics.core.sensitivity import (
     TangentField,
     TangentSolveInfo,
@@ -54,7 +54,11 @@ from kinematics.core.solver import (
     solve_suspension_sweep,
 )
 from kinematics.core.state import SuspensionState
-from kinematics.core.steering_axis import compute_steering_response_axes_for_states
+from kinematics.core.steering_axis import (
+    SteeringResponseAxisResult,
+    SteeringResponseStatus,
+    compute_steering_response_axes_for_states,
+)
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.targeting import SweepConfig
 
@@ -156,7 +160,7 @@ class EvaluatedSweep:
     solver_stats: list[SolverInfo]
     metrics: SweepMetricsResult
     diagnostics: list[DiagnosticIssue]
-    steering_response_axes: tuple[tuple[UprightScrewAxisResult, ...], ...] = ()
+    steering_response_axes: tuple[tuple[SteeringResponseAxisResult, ...], ...] = ()
 
     def __post_init__(self) -> None:
         """
@@ -247,7 +251,7 @@ def _compute_steering_axes(
     suspension: Suspension,
     sweep_config: SweepConfig,
     states: list[SuspensionState],
-) -> tuple[tuple[UprightScrewAxisResult, ...], ...]:
+) -> tuple[tuple[SteeringResponseAxisResult, ...], ...]:
     """Compute topology-isolated response axes independently of sweep tangents."""
     return compute_steering_response_axes_for_states(
         suspension,
@@ -273,7 +277,7 @@ def _compute_sweep_metrics_from_tangents(
     states: list[SuspensionState],
     tangents: SweepTangents | None,
     derivative_error: str | None,
-    steering_response_axes: tuple[tuple[UprightScrewAxisResult, ...], ...]
+    steering_response_axes: tuple[tuple[SteeringResponseAxisResult, ...], ...]
     | None = None,
 ) -> SweepMetricsResult:
     """Evaluate metrics from an already-computed tangent bundle."""
@@ -346,24 +350,28 @@ def _derivative_issues(result: SweepMetricsResult) -> list[DiagnosticIssue]:
 
 
 def _steering_axis_issues(
-    per_frame: tuple[tuple[UprightScrewAxisResult, ...], ...],
+    per_frame: tuple[tuple[SteeringResponseAxisResult, ...], ...],
 ) -> list[DiagnosticIssue]:
     """Summarize unavailable instantaneous axes without flooding diagnostics."""
     grouped: dict[
-        ScrewAxisStatus,
-        list[tuple[int, UprightScrewAxisResult]],
+        tuple[SteeringResponseStatus, ScrewAxisStatus | None],
+        list[tuple[int, SteeringResponseAxisResult]],
     ] = {}
     for step, results in enumerate(per_frame):
         for result in results:
-            if result.status is ScrewAxisStatus.VALID:
+            if result.status is SteeringResponseStatus.VALID:
                 continue
-            grouped.setdefault(result.status, []).append((step, result))
+            key = (result.status, result.screw_axis_status)
+            grouped.setdefault(key, []).append((step, result))
 
     issues: list[DiagnosticIssue] = []
-    for status, occurrences in grouped.items():
+    for (status, screw_axis_status), occurrences in grouped.items():
         first_step, first_result = occurrences[0]
+        status_description = status.value
+        if screw_axis_status is not None:
+            status_description += f" ({screw_axis_status.value})"
         message = (
-            f"Steering-response axis status '{status.value}' occurred for "
+            f"Steering-response axis status '{status_description}' occurred for "
             f"{len(occurrences)} upright frame(s); first at step {first_step} "
             f"for '{first_result.upright_label}'."
         )
@@ -378,7 +386,8 @@ def _steering_axis_issues(
                 value=(
                     first_result.twist.fit_max
                     if first_result.twist is not None
-                    and first_result.status is ScrewAxisStatus.EXCESSIVE_FIT_ERROR
+                    and first_result.screw_axis_status
+                    is ScrewAxisStatus.EXCESSIVE_FIT_ERROR
                     else None
                 ),
             )

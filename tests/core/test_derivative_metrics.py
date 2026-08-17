@@ -5,7 +5,8 @@ from typing import cast
 import numpy as np
 import pytest
 
-from kinematics.core.enums import Axis, PointID, TargetValueMode
+from kinematics.core.coordinates import CoordinateAxis, PointCoordinate
+from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode
 from kinematics.core.metrics.derivatives import (
     CallableScalarResponse,
     DerivativeMetricDefinition,
@@ -19,7 +20,6 @@ from kinematics.core.primitives.dual import DualScalar, dot
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.sensitivity import TangentField
 from kinematics.core.state import SuspensionState
-from kinematics.core.targeting import PointTarget, PointTargetAxis
 
 
 def _state_and_tangent() -> tuple[SuspensionState, TangentField]:
@@ -32,11 +32,8 @@ def _state_and_tangent() -> tuple[SuspensionState, TangentField]:
         },
         free_points={point_a, point_b},
     )
-    target = PointTarget(
-        point_id=point_a,
-        direction=PointTargetAxis(Axis.X),
-        value=3.0,
-        mode=TargetValueMode.ABSOLUTE,
+    target = PointCoordinate(point_a, CoordinateAxis(Axis.X), Scope.CORNER).target(
+        3.0, TargetValueMode.ABSOLUTE
     )
     tangent = TangentField(
         target_index=0,
@@ -207,12 +204,9 @@ def test_multi_tangent_selection_prefers_strongest_driver_rate() -> None:
     )
     unrelated = TangentField(
         target_index=2,
-        target=PointTarget(
-            point_id=PointID.AXLE_OUTBOARD,
-            direction=PointTargetAxis(Axis.X),
-            value=0.0,
-            mode=TargetValueMode.ABSOLUTE,
-        ),
+        target=PointCoordinate(
+            PointID.AXLE_OUTBOARD, CoordinateAxis(Axis.X), Scope.CORNER
+        ).target(0.0, TargetValueMode.ABSOLUTE),
         rates={PointID.AXLE_INBOARD: np.array([100.0, 100.0, 0.0])},
     )
     definition = DerivativeMetricDefinition(

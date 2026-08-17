@@ -12,9 +12,11 @@ from kinematics.core.analysis import analyze_evaluated_sweep
 from kinematics.core.enums import PointID
 from kinematics.core.holds import CoordinateHold
 from kinematics.core.points.derived.manager import DerivedPointsManager
-from kinematics.core.screw_axis import ScrewAxisStatus
 from kinematics.core.sensitivity import compute_state_tangents
-from kinematics.core.steering_axis import compute_steering_response_tangent
+from kinematics.core.steering_axis import (
+    SteeringResponseStatus,
+    compute_steering_response_tangent,
+)
 from kinematics.core.steering_response import (
     SteeringResponseDefinition,
     materialize_steering_response_targets,
@@ -41,7 +43,7 @@ def test_corner_bump_sweep_has_valid_steering_response_axis_at_every_step(
     assert len(evaluated.steering_response_axes) == len(evaluated.states)
     for frame_results in evaluated.steering_response_axes:
         assert len(frame_results) == 1
-        assert frame_results[0].status is ScrewAxisStatus.VALID
+        assert frame_results[0].status is SteeringResponseStatus.VALID
         assert frame_results[0].axis is not None
 
     midpoint = len(evaluated.states) // 2
@@ -69,7 +71,9 @@ def test_shared_rack_returns_one_axis_per_upright_with_expected_symmetry() -> No
             "Left Upright",
             "Right Upright",
         ]
-        assert all(result.status is ScrewAxisStatus.VALID for result in frame_results)
+        assert all(
+            result.status is SteeringResponseStatus.VALID for result in frame_results
+        )
     left, right = evaluated.steering_response_axes[len(evaluated.states) // 2]
     assert left.axis is not None
     assert right.axis is not None
@@ -91,7 +95,7 @@ def test_macpherson_response_recovers_balljoint_to_strut_top_line() -> None:
         strict=True,
     ):
         result = frame_results[0]
-        assert result.status is ScrewAxisStatus.VALID
+        assert result.status is SteeringResponseStatus.VALID
         assert result.axis is not None
         lower = state.get(PointID.LOWER_WISHBONE_OUTBOARD).data
         upper = state.get(PointID.STRUT_TOP).data
@@ -163,7 +167,7 @@ def test_incomplete_suspension_hold_is_reported_as_rank_deficient(
         suspension.initial_state(),
     )
 
-    assert response.status is ScrewAxisStatus.RANK_DEFICIENT
+    assert response.status is SteeringResponseStatus.RANK_DEFICIENT
     assert response.solve_info is not None
     assert response.solve_info.mobility == 2
     assert response.solve_info.target_rank == 1
@@ -195,7 +199,7 @@ def test_redundant_consistent_wishbone_holds_are_accepted() -> None:
         definition=redundant,
     )
 
-    assert response.status is ScrewAxisStatus.VALID
+    assert response.status is SteeringResponseStatus.VALID
     assert response.tangent is not None
     assert response.solve_info is not None
     steering_info = response.solve_info.response_for_target(0)
@@ -236,13 +240,11 @@ def test_conflicting_real_hold_basis_is_rejected_as_inconsistent() -> None:
         state,
         definition=definition,
     )
-    assert canonical.status is ScrewAxisStatus.VALID
+    assert canonical.status is SteeringResponseStatus.VALID
     assert canonical.tangent is not None
     damper_rate = sum(
         float(partial @ canonical.tangent.rate(point))
-        for point, partial in damper.current_value_target(
-            state.positions
-        ).point_partials(state.positions)
+        for point, partial in damper.point_partials(state.positions)
     )
     assert abs(damper_rate) > 1e-3
 
@@ -257,7 +259,7 @@ def test_conflicting_real_hold_basis_is_rejected_as_inconsistent() -> None:
         definition=conflicting,
     )
 
-    assert response.status is ScrewAxisStatus.INCONSISTENT_TANGENT
+    assert response.status is SteeringResponseStatus.INCONSISTENT_TANGENT
     assert response.tangent is None
     assert response.solve_info is not None
     steering_info = response.solve_info.response_for_target(0)
@@ -308,7 +310,7 @@ def test_full_rank_inconsistent_suspension_hold_is_rejected(
 
     response = compute_steering_response_tangent(suspension, state)
 
-    assert response.status is ScrewAxisStatus.INCONSISTENT_TANGENT
+    assert response.status is SteeringResponseStatus.INCONSISTENT_TANGENT
     assert response.tangent is None
     assert response.message is not None
     assert "rate-inconsistent" in response.message
@@ -356,7 +358,11 @@ def test_suspension_hold_failure_keeps_explicit_axis_results_without_aborting(
 
     assert all(evaluated.metrics.rows)
     assert all(
-        results[0].status is ScrewAxisStatus.TANGENT_UNAVAILABLE
+        results[0].status is SteeringResponseStatus.TANGENT_UNAVAILABLE
+        for results in evaluated.steering_response_axes
+    )
+    assert all(
+        results[0].screw_axis_status is None
         for results in evaluated.steering_response_axes
     )
     categories = {issue.category for issue in evaluated.diagnostics}
@@ -385,7 +391,9 @@ def test_structured_analysis_exposes_axis_and_fit_diagnostics() -> None:
     assert [coordinate.side for coordinate in definition.held_coordinates] == ["left"]
 
     result = analysis.frames[len(analysis.frames) // 2].steering_response_axes[0]
-    assert result.status is ScrewAxisStatus.VALID
+    assert result.status is SteeringResponseStatus.VALID
+    assert result.screw_axis_status is not None
+    assert result.screw_axis_status.value == "valid"
     assert result.point is not None
     assert result.direction is not None
     assert result.pitch is not None

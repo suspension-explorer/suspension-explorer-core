@@ -57,13 +57,13 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from kinematics.core.constraints import Constraint, PointOnLineConstraint
+from kinematics.core.constraints import Constraint
+from kinematics.core.coordinates import CoordinateTarget
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.dual import DualVec3, seed_positions_with_tangent
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.solver import ResidualComputer
 from kinematics.core.state import SuspensionState
-from kinematics.core.targeting import ScalarCoordinateTarget
 
 _RATE_RESIDUAL_ABSOLUTE_TOLERANCE = 1e-12
 _RATE_RESIDUAL_RELATIVE_TOLERANCE = 1e-10
@@ -80,7 +80,7 @@ class TangentField:
     """
 
     target_index: int
-    target: ScalarCoordinateTarget
+    target: CoordinateTarget
     rates: dict[PointKey, np.ndarray]
 
     def rate(self, point_id: PointKey) -> np.ndarray:
@@ -96,10 +96,9 @@ class TangentResponseInfo:
     """Rate consistency of one requested target response.
 
     Residual tuples preserve the row order supplied to
-    :func:`compute_state_tangents`.  Constraint residuals include any smooth
-    first-order pins added for degenerate norm constraints.  Target residuals
-    are measured against the complete identity-column request: the selected
-    target rate is one and all other target rates are zero.
+    :func:`compute_state_tangents`. Target residuals are measured against the
+    complete identity-column request: the selected target rate is one and all
+    other target rates are zero.
     """
 
     target_index: int
@@ -244,7 +243,7 @@ def compute_state_tangents(
     state: SuspensionState,
     constraints: list[Constraint],
     derived_manager: DerivedPointsManager,
-    step_targets: Sequence[ScalarCoordinateTarget],
+    step_targets: Sequence[CoordinateTarget],
     post_derived_update: Callable[[dict], float | None] | None = None,
 ) -> tuple[list[TangentField], TangentSolveInfo]:
     """Compute one tangent field per target and report solve health.
@@ -268,12 +267,6 @@ def compute_state_tangents(
     target_jacobian = jacobian[
         computer.n_constraints : computer.n_constraints + len(step_targets)
     ]
-
-    # Norm residuals such as point-on-line have a zero row at the solution.
-    # Add equivalent smooth first-order pins so the tangent retains them.
-    pin_rows = _degenerate_constraint_pins(constraints, computer)
-    if pin_rows:
-        constraint_jacobian = np.vstack([constraint_jacobian, np.asarray(pin_rows)])
 
     n_targets = len(step_targets)
     constraint_space = _constraint_tangent_space(
@@ -550,37 +543,6 @@ def _infinity_norm(values: np.ndarray) -> float:
     if values.size == 0:
         return 0.0
     return float(np.linalg.norm(values, ord=np.inf))
-
-
-def _degenerate_constraint_pins(
-    constraints: list[Constraint],
-    computer: ResidualComputer,
-) -> list[np.ndarray]:
-    """Build smooth first-order rows for zero-gradient norm constraints."""
-    rows: list[np.ndarray] = []
-    for constraint in constraints:
-        if not isinstance(constraint, PointOnLineConstraint):
-            continue
-        offset = computer.point_var_offsets.get(constraint.point_id)
-        if offset is None:
-            continue
-
-        direction = constraint.line_direction.data
-        direction = direction / np.linalg.norm(direction)
-
-        # Cross with the least-aligned chassis axis to obtain a stable basis of
-        # the plane perpendicular to the line.
-        least_aligned = np.zeros(3)
-        least_aligned[int(np.argmin(np.abs(direction)))] = 1.0
-        normal_1 = np.cross(direction, least_aligned)
-        normal_1 /= np.linalg.norm(normal_1)
-        normal_2 = np.cross(direction, normal_1)
-
-        for normal in (normal_1, normal_2):
-            row = np.zeros(computer.n_vars, dtype=np.float64)
-            row[offset : offset + 3] = normal
-            rows.append(row)
-    return rows
 
 
 def combine_tangents(

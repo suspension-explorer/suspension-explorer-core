@@ -50,16 +50,19 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 
 from kinematics.core.constraints import Constraint
 from kinematics.core.coordinates import actuator_coordinate_matches
 from kinematics.core.elements import UprightElement
 from kinematics.core.points.derived.manager import DerivedPointsManager
+from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.screw_axis import (
+    InstantaneousScrewAxis,
+    RigidBodyTwist,
+    ScrewAxisResult,
     ScrewAxisStatus,
-    UprightScrewAxisResult,
-    compute_upright_screw_axis,
-    unavailable_upright_screw_axis,
+    compute_screw_axis,
 )
 from kinematics.core.sensitivity import (
     TangentField,
@@ -75,6 +78,50 @@ from kinematics.core.steering_response import (
 from kinematics.core.suspensions.base import Suspension
 
 
+class SteeringResponseStatus(StrEnum):
+    """Outcome of steering-response orchestration and axis extraction."""
+
+    VALID = "valid"
+    NO_STEERING_ACTUATOR = "no_steering_actuator"
+    NO_STEERING_RESPONSE_DEFINITION = "no_steering_response_definition"
+    TANGENT_UNAVAILABLE = "tangent_unavailable"
+    INCONSISTENT_TANGENT = "inconsistent_tangent"
+    SCREW_AXIS_UNAVAILABLE = "screw_axis_unavailable"
+    RANK_DEFICIENT = "rank_deficient"
+    NON_FINITE = "non_finite"
+
+
+@dataclass(frozen=True)
+class SteeringResponseAxisResult:
+    """Steering-owned result for one upright at one solved state."""
+
+    upright_label: str
+    point_keys: tuple[PointKey, ...]
+    status: SteeringResponseStatus
+    screw_axis: ScrewAxisResult | None = None
+    message: str | None = None
+
+    @property
+    def axis(self) -> InstantaneousScrewAxis | None:
+        """Return the extracted generic axis, if fitting succeeded."""
+        return self.screw_axis.axis if self.screw_axis is not None else None
+
+    @property
+    def twist(self) -> RigidBodyTwist | None:
+        """Return generic fit diagnostics, when fitting was attempted."""
+        return self.screw_axis.twist if self.screw_axis is not None else None
+
+    @property
+    def point_count(self) -> int:
+        """Return the number of points that participated in the generic fit."""
+        return self.screw_axis.point_count if self.screw_axis is not None else 0
+
+    @property
+    def screw_axis_status(self) -> ScrewAxisStatus | None:
+        """Return the generic fit/extraction outcome, when fitting was attempted."""
+        return self.screw_axis.status if self.screw_axis is not None else None
+
+
 @dataclass(frozen=True)
 class SteeringResponseTangent:
     """One state's isolated steering tangent and its analytical diagnostics."""
@@ -82,13 +129,13 @@ class SteeringResponseTangent:
     targets: SteeringResponseTargets | None
     tangent: TangentField | None
     solve_info: TangentSolveInfo | None
-    status: ScrewAxisStatus
+    status: SteeringResponseStatus
     message: str | None = None
 
     @property
     def valid(self) -> bool:
         """Whether the hold established one unique, consistent tangent."""
-        return self.status is ScrewAxisStatus.VALID and self.tangent is not None
+        return self.status is SteeringResponseStatus.VALID and self.tangent is not None
 
 
 def compute_steering_response_tangent(
@@ -112,7 +159,7 @@ def compute_steering_response_tangent(
             targets=None,
             tangent=None,
             solve_info=None,
-            status=ScrewAxisStatus.NO_STEERING_ACTUATOR,
+            status=SteeringResponseStatus.NO_STEERING_ACTUATOR,
             message="The suspension topology has no steering actuator.",
         )
 
@@ -123,7 +170,7 @@ def compute_steering_response_tangent(
             targets=None,
             tangent=None,
             solve_info=None,
-            status=ScrewAxisStatus.NO_STEERING_RESPONSE_DEFINITION,
+            status=SteeringResponseStatus.NO_STEERING_RESPONSE_DEFINITION,
             message=(
                 "The steered suspension topology does not define a virtual "
                 "steering response."
@@ -151,7 +198,7 @@ def compute_steering_response_tangent(
             targets=response_targets,
             tangent=None,
             solve_info=None,
-            status=ScrewAxisStatus.TANGENT_UNAVAILABLE,
+            status=SteeringResponseStatus.TANGENT_UNAVAILABLE,
             message=(
                 f"Suspension hold '{response_targets.definition.provenance}' failed: "
                 f"{type(error).__name__}: {error}."
@@ -163,7 +210,7 @@ def compute_steering_response_tangent(
             targets=response_targets,
             tangent=None,
             solve_info=solve_info,
-            status=ScrewAxisStatus.TANGENT_UNAVAILABLE,
+            status=SteeringResponseStatus.TANGENT_UNAVAILABLE,
             message=(
                 f"Suspension hold '{response_targets.definition.provenance}' returned "
                 f"{len(tangents)} tangent fields for "
@@ -180,7 +227,7 @@ def compute_steering_response_tangent(
             targets=response_targets,
             tangent=None,
             solve_info=solve_info,
-            status=ScrewAxisStatus.TANGENT_UNAVAILABLE,
+            status=SteeringResponseStatus.TANGENT_UNAVAILABLE,
             message=(
                 f"Suspension hold '{response_targets.definition.provenance}' did not "
                 "return "
@@ -195,7 +242,7 @@ def compute_steering_response_tangent(
             targets=response_targets,
             tangent=None,
             solve_info=solve_info,
-            status=ScrewAxisStatus.TANGENT_UNAVAILABLE,
+            status=SteeringResponseStatus.TANGENT_UNAVAILABLE,
             message=f"Steering response diagnostics are unavailable: {error}",
         )
 
@@ -205,7 +252,7 @@ def compute_steering_response_tangent(
             targets=response_targets,
             tangent=None,
             solve_info=solve_info,
-            status=ScrewAxisStatus.RANK_DEFICIENT,
+            status=SteeringResponseStatus.RANK_DEFICIENT,
             message=(
                 f"{diagnostic_prefix} is underconstrained: rank "
                 f"{solve_info.rank}/{solve_info.n_variables}, nullity "
@@ -223,7 +270,7 @@ def compute_steering_response_tangent(
             targets=response_targets,
             tangent=None,
             solve_info=solve_info,
-            status=ScrewAxisStatus.NON_FINITE,
+            status=SteeringResponseStatus.NON_FINITE,
             message=f"{diagnostic_prefix} produced non-finite tangent values.",
         )
     if not response_info.rate_consistent:
@@ -231,7 +278,7 @@ def compute_steering_response_tangent(
             targets=response_targets,
             tangent=None,
             solve_info=solve_info,
-            status=ScrewAxisStatus.INCONSISTENT_TANGENT,
+            status=SteeringResponseStatus.INCONSISTENT_TANGENT,
             message=(
                 f"{diagnostic_prefix} is rate-inconsistent: maximum constraint "
                 f"residual {response_info.max_constraint_rate_residual:.6g}, "
@@ -252,7 +299,7 @@ def compute_steering_response_tangent(
         targets=response_targets,
         tangent=steering_tangent,
         solve_info=solve_info,
-        status=ScrewAxisStatus.VALID,
+        status=SteeringResponseStatus.VALID,
     )
 
 
@@ -264,7 +311,7 @@ def compute_steering_response_axes(
     derived_manager: DerivedPointsManager | None = None,
     definition: SteeringResponseDefinition | None = None,
     requested_option_id: str | None = None,
-) -> tuple[UprightScrewAxisResult, ...]:
+) -> tuple[SteeringResponseAxisResult, ...]:
     """Return one isolated steering-response axis result per upright."""
     uprights = tuple(
         element
@@ -279,26 +326,30 @@ def compute_steering_response_axes(
         definition=definition,
         requested_option_id=requested_option_id,
     )
-    if response.status is ScrewAxisStatus.NO_STEERING_ACTUATOR:
+    if response.status is SteeringResponseStatus.NO_STEERING_ACTUATOR:
         return ()
     if not response.valid:
         message = response.message or "The isolated steering response is unavailable."
         return tuple(
-            unavailable_upright_screw_axis(
-                upright.label,
-                upright.point_keys,
-                response.status,
-                message,
+            SteeringResponseAxisResult(
+                upright_label=upright.label,
+                point_keys=tuple(dict.fromkeys(upright.point_keys)),
+                status=response.status,
+                message=message,
             )
             for upright in uprights
         )
 
+    tangent = response.tangent
+    assert tangent is not None
     return tuple(
-        compute_upright_screw_axis(
-            upright_label=upright.label,
-            positions=state.positions,
-            tangent=response.tangent,
-            point_keys=upright.point_keys,
+        _steering_axis_result(
+            upright.label,
+            compute_screw_axis(
+                positions=state.positions,
+                tangent=tangent,
+                point_keys=upright.point_keys,
+            ),
         )
         for upright in uprights
     )
@@ -309,7 +360,7 @@ def compute_steering_response_axes_for_states(
     states: Sequence[SuspensionState],
     *,
     requested_option_id: str | None = None,
-) -> tuple[tuple[UprightScrewAxisResult, ...], ...]:
+) -> tuple[tuple[SteeringResponseAxisResult, ...], ...]:
     """Calculate aligned per-frame response axes with shared topology helpers."""
     constraints = suspension.constraints()
     derived_manager = DerivedPointsManager(suspension.derived_spec())
@@ -323,6 +374,24 @@ def compute_steering_response_axes_for_states(
             definition=definition,
         )
         for state in states
+    )
+
+
+def _steering_axis_result(
+    upright_label: str,
+    screw_axis: ScrewAxisResult,
+) -> SteeringResponseAxisResult:
+    """Wrap one generic fit result in the steering-owned result boundary."""
+    return SteeringResponseAxisResult(
+        upright_label=upright_label,
+        point_keys=screw_axis.point_keys,
+        status=(
+            SteeringResponseStatus.VALID
+            if screw_axis.status is ScrewAxisStatus.VALID
+            else SteeringResponseStatus.SCREW_AXIS_UNAVAILABLE
+        ),
+        screw_axis=screw_axis,
+        message=screw_axis.message,
     )
 
 

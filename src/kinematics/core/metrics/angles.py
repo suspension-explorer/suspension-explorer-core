@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from kinematics.core.coordinates import ChassisAxisSystem
 from kinematics.core.enums import Axis
-from kinematics.core.targeting import ChassisAxisSystem
 
 if TYPE_CHECKING:
     from kinematics.core.metrics.context import MetricContext

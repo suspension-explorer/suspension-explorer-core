@@ -96,8 +96,8 @@ def test_asymmetric_axle_damper_coordinates_resolve_side_local_endpoints(
         PointRef(Side.RIGHT, PointID.STRUT_BOTTOM),
     )
     state = axle.initial_state()
-    left_length = damper_coordinates[Side.LEFT].target(0.0).measure(state.positions)
-    right_length = damper_coordinates[Side.RIGHT].target(0.0).measure(state.positions)
+    left_length = damper_coordinates[Side.LEFT].measure(state.positions)
+    right_length = damper_coordinates[Side.RIGHT].measure(state.positions)
     assert left_length != pytest.approx(right_length)
 
 

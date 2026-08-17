@@ -15,8 +15,18 @@ from pydantic import (
     model_validator,
 )
 
-from kinematics.core.coordinates import PhysicalCoordinate, validate_sweep_controls
-from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode, Units
+from kinematics.core.coordinates import (
+    ActuatorCoordinate,
+    ChassisAxisSystem,
+    CoordinateAxis,
+    CoordinateDirection,
+    CoordinateTarget,
+    CoordinateType,
+    CoordinateVector,
+    PointCoordinate,
+    validate_sweep_controls,
+)
+from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode
 from kinematics.core.holds import CoordinateHold
 from kinematics.core.primitives.geometry import Direction3, extract_array
 from kinematics.core.primitives.point_ref import Side
@@ -29,13 +39,7 @@ from kinematics.core.schema.decoding import (
 from kinematics.core.targeting import (
     ACTUATOR_POSITION_TARGET_IDS,
     ELEMENT_LENGTH_TARGET_IDS,
-    ChassisAxisSystem,
-    PointTarget,
-    PointTargetAxis,
-    PointTargetVector,
-    ScalarTarget,
     SweepConfig,
-    TargetKind,
 )
 
 if TYPE_CHECKING:
@@ -313,7 +317,7 @@ def build_sweep_config(
     if not target_sequences:
         raise ValueError("A sweep requires at least one non-held target.")
 
-    dimensions: list[list[ScalarTarget]] = []
+    dimensions: list[list[CoordinateTarget]] = []
     held_coordinates = []
     swept_values = iter(target_sequences)
     for target_index, target_spec in enumerate(spec.targets):
@@ -328,7 +332,7 @@ def build_sweep_config(
                 coordinate = suspension.resolve_drive_coordinate(
                     target_spec.element,
                     target_spec.side,
-                    TargetKind.ELEMENT_LENGTH,
+                    CoordinateType.ELEMENT_LENGTH,
                 )
                 if target_spec.hold:
                     held_coordinates.append(coordinate)
@@ -340,11 +344,11 @@ def build_sweep_config(
 
             unit_vector = target_spec.direction.to_unit_vector()
             axis = vector_to_axis(unit_vector)
-            direction: PointTargetAxis | PointTargetVector
+            direction: CoordinateDirection
             if axis is not None:
-                direction = PointTargetAxis(axis)
+                direction = CoordinateAxis(axis)
             else:
-                direction = PointTargetVector(Direction3(unit_vector))
+                direction = CoordinateVector(Direction3(unit_vector))
 
             if isinstance(target_spec, ActuatorPositionTargetSpec):
                 if suspension is None:
@@ -355,8 +359,10 @@ def build_sweep_config(
                 coordinate = suspension.resolve_drive_coordinate(
                     target_spec.actuator,
                     target_spec.side,
-                    TargetKind.ACTUATOR_POSITION,
+                    CoordinateType.ACTUATOR_POSITION,
                 )
+                if not isinstance(coordinate, ActuatorCoordinate):
+                    raise TypeError("Resolved actuator coordinate has the wrong type")
                 coordinate = coordinate.with_direction(direction)
                 if target_spec.hold:
                     held_coordinates.append(coordinate)
@@ -378,34 +384,22 @@ def build_sweep_config(
                     )
                 point_key = target_spec.point
 
-            point_target = PointTarget(
-                point_id=point_key,
+            point_coordinate = PointCoordinate(
+                point=point_key,
                 direction=direction,
-                value=0.0,
-                mode=target_spec.mode,
+                scope=(
+                    Scope.AXLE
+                    if suspension is not None
+                    and suspension.is_axle
+                    and target_spec.side is None
+                    else Scope.CORNER
+                ),
             )
             if target_spec.hold:
-                held_coordinates.append(
-                    PhysicalCoordinate(
-                        id=point_target.coordinate_id,
-                        kind=TargetKind.POINT,
-                        label=point_target.label,
-                        unit=Units.MILLIMETERS.symbol,
-                        point_keys=(point_key,),
-                        scope=(
-                            Scope.AXLE
-                            if suspension is not None
-                            and suspension.is_axle
-                            and target_spec.side is None
-                            else Scope.CORNER
-                        ),
-                        side=target_spec.side,
-                        direction=direction,
-                    )
-                )
+                held_coordinates.append(point_coordinate)
                 continue
             dimensions.append(
-                [point_target.with_value(value, target_spec.mode) for value in values]
+                [point_coordinate.target(value, target_spec.mode) for value in values]
             )
         except ValueError as error:
             raise ValueError(f"Sweep target {target_index}: {error}") from error

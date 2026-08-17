@@ -160,20 +160,6 @@ def gen_equal_distance() -> None:
     print_snippet("jac_equal_distance", list(syms), d1 - d2)
 
 
-def gen_point_on_line() -> None:
-    """PointOnLineConstraint."""
-    px, py, pz = real_symbols("px py pz")
-    lpx, lpy, lpz = real_symbols("lpx lpy lpz")
-    ldx, ldy, ldz = real_symbols("ldx ldy ldz")
-
-    wx, wy, wz = px - lpx, py - lpy, pz - lpz
-    cx = wy * ldz - wz * ldy
-    cy = wz * ldx - wx * ldz
-    cz = wx * ldy - wy * ldx
-
-    print_snippet("jac_point_on_line", [px, py, pz], softnorm(cx**2 + cy**2 + cz**2))
-
-
 def gen_point_on_plane() -> None:
     """PointOnPlaneConstraint."""
     px, py, pz = real_symbols("px py pz")
@@ -210,7 +196,6 @@ def main() -> None:
         ("VectorsParallelConstraint", gen_vectors_parallel),
         ("VectorsPerpendicularConstraint", gen_vectors_perpendicular),
         ("EqualDistanceConstraint", gen_equal_distance),
-        ("PointOnLineConstraint", gen_point_on_line),
         ("PointOnPlaneConstraint", gen_point_on_plane),
         ("CoplanarPointsConstraint", gen_coplanar),
     ]

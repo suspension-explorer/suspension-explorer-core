@@ -116,8 +116,12 @@ def test_macpherson_hold_uses_bumped_current_strut_length_without_mutation() -> 
         TargetValueMode.ABSOLUTE,
     )
     assert actuator_coordinate_matches(definition.steering_actuator, targets[0])
-    assert targets[0].value == pytest.approx(targets[0].measure(state.positions))
-    assert targets[1].value == pytest.approx(targets[1].measure(state.positions))
+    assert targets[0].value == pytest.approx(
+        targets[0].coordinate.measure(state.positions)
+    )
+    assert targets[1].value == pytest.approx(
+        targets[1].coordinate.measure(state.positions)
+    )
 
     initial_hold = definition.hold.coordinates[0].current_value_target(
         suspension.initial_state().positions
@@ -163,7 +167,15 @@ def test_axle_catalogue_composes_one_semantic_option_into_two_corner_holds() -> 
     assert all(
         target.mode is TargetValueMode.ABSOLUTE for target in response_targets.targets
     )
-    assert len({target.coordinate_identity for target in response_targets.targets}) == 3
+    assert (
+        len(
+            {
+                target.coordinate.coordinate_identity
+                for target in response_targets.targets
+            }
+        )
+        == 3
+    )
     for point, position in state.positions.items():
         np.testing.assert_array_equal(position.data, before[point])
 

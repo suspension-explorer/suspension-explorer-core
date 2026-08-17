@@ -5,7 +5,14 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.constraints import Constraint, FixedAxisConstraint
-from kinematics.core.enums import Axis, PointID, TargetValueMode
+from kinematics.core.coordinates import (
+    ActuatorCoordinate,
+    CoordinateAxis,
+    CoordinateTarget,
+    CoordinateVector,
+    PointCoordinate,
+)
+from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
@@ -18,23 +25,15 @@ from kinematics.core.sensitivity import (
 )
 from kinematics.core.state import SuspensionState
 from kinematics.core.sweep import solve_sweep
-from kinematics.core.targeting import (
-    PointTarget,
-    PointTargetAxis,
-    PointTargetVector,
-    SweepConfig,
-)
+from kinematics.core.targeting import SweepConfig
 
 FD_STEP = 0.25
 
 
-def _bump_target(value: float) -> PointTarget:
-    return PointTarget(
-        point_id=PointID.WHEEL_CENTER,
-        direction=PointTargetAxis(axis=Axis.Z),
-        value=value,
-        mode=TargetValueMode.ABSOLUTE,
-    )
+def _bump_target(value: float) -> CoordinateTarget:
+    return PointCoordinate(
+        PointID.WHEEL_CENTER, CoordinateAxis(Axis.Z), Scope.CORNER
+    ).target(value, TargetValueMode.ABSOLUTE)
 
 
 def test_corner_tangent_matches_finite_difference(
@@ -50,10 +49,9 @@ def test_corner_tangent_matches_finite_difference(
         for coordinate in corner.drive_coordinates()
         if coordinate.id == "rack"
     )
-    rack_target = rack_coordinate.position_target(
-        PointTargetAxis(axis=Axis.Y),
-        trackrod_inboard_y,
-        TargetValueMode.ABSOLUTE,
+    assert isinstance(rack_coordinate, ActuatorCoordinate)
+    rack_target = rack_coordinate.with_direction(CoordinateAxis(Axis.Y)).target(
+        trackrod_inboard_y, TargetValueMode.ABSOLUTE
     )
     targets = [_bump_target(target_z), rack_target]
 
@@ -112,11 +110,8 @@ def test_full_rank_inconsistent_tangent_is_not_reported_as_unique() -> None:
         FixedAxisConstraint(point, axis, float(state.positions[point][axis]))
         for axis in Axis
     ]
-    target = PointTarget(
-        point_id=point,
-        direction=PointTargetAxis(axis=Axis.X),
-        value=1.0,
-        mode=TargetValueMode.ABSOLUTE,
+    target = PointCoordinate(point, CoordinateAxis(Axis.X), Scope.CORNER).target(
+        1.0, TargetValueMode.ABSOLUTE
     )
 
     _fields, info = compute_state_tangents(
@@ -148,11 +143,8 @@ def test_consistent_but_underconstrained_tangent_is_not_unique() -> None:
         positions={point: Point3([1.0, 2.0, 3.0])},
         free_points={point},
     )
-    target = PointTarget(
-        point_id=point,
-        direction=PointTargetAxis(axis=Axis.X),
-        value=1.0,
-        mode=TargetValueMode.ABSOLUTE,
+    target = PointCoordinate(point, CoordinateAxis(Axis.X), Scope.CORNER).target(
+        1.0, TargetValueMode.ABSOLUTE
     )
 
     _fields, info = compute_state_tangents(
@@ -181,11 +173,8 @@ def test_one_dof_mechanism_needs_no_hold_beyond_its_driver() -> None:
         FixedAxisConstraint(point, Axis.Y, 2.0),
         FixedAxisConstraint(point, Axis.Z, 3.0),
     ]
-    target = PointTarget(
-        point_id=point,
-        direction=PointTargetAxis(axis=Axis.X),
-        value=1.0,
-        mode=TargetValueMode.ABSOLUTE,
+    target = PointCoordinate(point, CoordinateAxis(Axis.X), Scope.CORNER).target(
+        1.0, TargetValueMode.ABSOLUTE
     )
 
     fields, info = compute_state_tangents(
@@ -211,12 +200,11 @@ def test_ill_conditioning_cannot_hide_an_inconsistent_target_basis() -> None:
     )
     constraints: list[Constraint] = [FixedAxisConstraint(point, Axis.Z, 3.0)]
     targets = [
-        PointTarget(
-            point_id=point,
-            direction=PointTargetVector(Direction3([1.0, y_component, 0.0])),
-            value=1.0,
-            mode=TargetValueMode.ABSOLUTE,
-        )
+        PointCoordinate(
+            point,
+            CoordinateVector(Direction3([1.0, y_component, 0.0])),
+            Scope.CORNER,
+        ).target(1.0, TargetValueMode.ABSOLUTE)
         for y_component in (0.0, 1e-12, 2e-12)
     ]
 
@@ -243,11 +231,8 @@ def test_target_rate_diagnostics_cover_selected_and_held_targets() -> None:
         free_points={point},
     )
     targets = [
-        PointTarget(
-            point_id=point,
-            direction=PointTargetAxis(axis=axis),
-            value=float(state.positions[point][axis]),
-            mode=TargetValueMode.ABSOLUTE,
+        PointCoordinate(point, CoordinateAxis(axis), Scope.CORNER).target(
+            float(state.positions[point][axis]), TargetValueMode.ABSOLUTE
         )
         for axis in Axis
     ]

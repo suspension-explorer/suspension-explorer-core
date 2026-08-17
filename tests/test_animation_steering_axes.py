@@ -18,8 +18,12 @@ from kinematics.core.enums import PointID  # noqa: E402
 from kinematics.core.primitives.geometry import Point3, Vector3  # noqa: E402
 from kinematics.core.screw_axis import (  # noqa: E402
     InstantaneousScrewAxis,
+    ScrewAxisResult,
     ScrewAxisStatus,
-    UprightScrewAxisResult,
+)
+from kinematics.core.steering_axis import (  # noqa: E402
+    SteeringResponseAxisResult,
+    SteeringResponseStatus,
 )
 
 
@@ -28,9 +32,8 @@ def _axis_result(
     *,
     point: tuple[float, float, float] = (5.0, 5.0, 5.0),
     direction: tuple[float, float, float] = (0.0, 0.0, 1.0),
-) -> UprightScrewAxisResult:
-    return UprightScrewAxisResult(
-        upright_label=label,
+) -> SteeringResponseAxisResult:
+    screw_axis = ScrewAxisResult(
         point_keys=(PointID.WHEEL_CENTER,),
         axis=InstantaneousScrewAxis(
             point=Point3(point),
@@ -42,14 +45,19 @@ def _axis_result(
         ),
         status=ScrewAxisStatus.VALID,
     )
-
-
-def _unavailable_result(label: str) -> UprightScrewAxisResult:
-    return UprightScrewAxisResult(
+    return SteeringResponseAxisResult(
         upright_label=label,
         point_keys=(PointID.WHEEL_CENTER,),
-        axis=None,
-        status=ScrewAxisStatus.TANGENT_UNAVAILABLE,
+        screw_axis=screw_axis,
+        status=SteeringResponseStatus.VALID,
+    )
+
+
+def _unavailable_result(label: str) -> SteeringResponseAxisResult:
+    return SteeringResponseAxisResult(
+        upright_label=label,
+        point_keys=(PointID.WHEEL_CENTER,),
+        status=SteeringResponseStatus.TANGENT_UNAVAILABLE,
     )
 
 
@@ -78,10 +86,10 @@ def test_pingpong_keeps_valid_unavailable_valid_axes_with_their_positions() -> N
 
     assert [frame.positions["p"][0] for frame in pingpong] == [0.0, 1.0, 2.0, 1.0]
     assert [frame.steering_response_axes[0].status for frame in pingpong] == [
-        ScrewAxisStatus.VALID,
-        ScrewAxisStatus.TANGENT_UNAVAILABLE,
-        ScrewAxisStatus.VALID,
-        ScrewAxisStatus.TANGENT_UNAVAILABLE,
+        SteeringResponseStatus.VALID,
+        SteeringResponseStatus.TANGENT_UNAVAILABLE,
+        SteeringResponseStatus.VALID,
+        SteeringResponseStatus.TANGENT_UNAVAILABLE,
     ]
 
 

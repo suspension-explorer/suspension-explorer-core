@@ -50,7 +50,7 @@ def test_csv_exports_measured_element_coordinate_and_unit(tmp_path: Path) -> Non
     assert units[TARGET_COLUMN] == "mm"
     coordinate = run.suspension.drive_coordinates()[0].target(0.0)
     assert [float(row[TARGET_COLUMN]) for row in rows] == pytest.approx(
-        [coordinate.measure(state.positions) for state in expected]
+        [coordinate.coordinate.measure(state.positions) for state in expected]
     )
 
 
@@ -70,7 +70,10 @@ def test_parquet_exports_measured_element_coordinate_and_unit(tmp_path: Path) ->
 
     assert field.metadata == {b"unit": b"mm"}
     assert table[TARGET_COLUMN].to_pylist() == pytest.approx(
-        [coordinate.measure(state.positions) for state in run.evaluated.states]
+        [
+            coordinate.coordinate.measure(state.positions)
+            for state in run.evaluated.states
+        ]
     )
 
 

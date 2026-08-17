@@ -6,7 +6,12 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Sequence
 
-from kinematics.core.coordinates import PhysicalCoordinate
+from kinematics.core.coordinates import (
+    ActuatorCoordinate,
+    CoordinateAxis,
+    ElementLengthCoordinate,
+    ScalarCoordinate,
+)
 from kinematics.core.enums import (
     ActuatorPositionCoordinateID,
     Axis,
@@ -17,13 +22,12 @@ from kinematics.core.enums import (
 from kinematics.core.metrics.main import compute_metrics_for_state
 from kinematics.core.state import SuspensionState
 from kinematics.core.suspensions.base import Suspension
-from kinematics.core.targeting import PointTargetAxis, TargetKind
 
 if TYPE_CHECKING:
     from kinematics.core.coordinates import ArmAngleCoordinate
     from kinematics.core.metrics.main import MetricRow
-    from kinematics.core.screw_axis import UprightScrewAxisResult
     from kinematics.core.sensitivity import TangentField
+    from kinematics.core.steering_axis import SteeringResponseAxisResult
 
 
 @dataclass
@@ -89,43 +93,42 @@ class CornerSuspension(Suspension):
         """
         ...
 
-    def required_actuator_coordinates(self) -> tuple[PhysicalCoordinate, ...]:
+    def required_actuator_coordinates(self) -> tuple[ActuatorCoordinate, ...]:
         """Require the rack translation coordinate for a steered corner."""
         steering = self.steering_actuator_coordinate()
         return (steering,) if steering is not None else ()
 
-    def steering_actuator_coordinate(self) -> PhysicalCoordinate | None:
+    def steering_actuator_coordinate(self) -> ActuatorCoordinate | None:
         """Return the rack translation coordinate for a steered corner."""
         return next(
             (
                 coordinate
                 for coordinate in self.drive_coordinates()
-                if coordinate.kind is TargetKind.ACTUATOR_POSITION
-                and coordinate.id == ActuatorPositionCoordinateID.RACK
+                if isinstance(coordinate, ActuatorCoordinate)
+                and coordinate.id == ActuatorPositionCoordinateID.RACK.value
             ),
             None,
         )
 
-    def drive_coordinates(self) -> tuple[PhysicalCoordinate, ...]:
+    def drive_coordinates(self) -> tuple[ScalarCoordinate, ...]:
         """Expose a named rack position plus installed element coordinates."""
         coordinates = super().drive_coordinates()
         rack_point = self.rack_attachment_point()
         if rack_point is None:
             return coordinates
         return (
-            PhysicalCoordinate(
-                id=ActuatorPositionCoordinateID.RACK,
-                kind=TargetKind.ACTUATOR_POSITION,
+            ActuatorCoordinate(
+                id=ActuatorPositionCoordinateID.RACK.value,
                 label=ActuatorPositionCoordinateID.RACK.label,
                 unit=ActuatorPositionCoordinateID.RACK.unit,
                 point_keys=(rack_point,),
                 scope=Scope.CORNER,
-                direction=PointTargetAxis(Axis.Y),
+                direction=CoordinateAxis(Axis.Y),
             ),
             *coordinates,
         )
 
-    def _installed_damper_coordinate(self) -> PhysicalCoordinate | None:
+    def _installed_damper_coordinate(self) -> ElementLengthCoordinate | None:
         """Return the installed true damper/strut length coordinate, if any."""
         from kinematics.core.enums import ElementLengthCoordinateID
 
@@ -133,8 +136,8 @@ class CornerSuspension(Suspension):
             (
                 coordinate
                 for coordinate in self.drive_coordinates()
-                if coordinate.kind is TargetKind.ELEMENT_LENGTH
-                and coordinate.id == ElementLengthCoordinateID.DAMPER
+                if isinstance(coordinate, ElementLengthCoordinate)
+                and coordinate.id == ElementLengthCoordinateID.DAMPER.value
             ),
             None,
         )
@@ -166,7 +169,7 @@ class CornerSuspension(Suspension):
         self,
         state: SuspensionState,
         tangents: "Sequence[TangentField] | None" = None,
-        steering_response_axes: "Sequence[UprightScrewAxisResult] | None" = None,
+        steering_response_axes: "Sequence[SteeringResponseAxisResult] | None" = None,
     ) -> "MetricRow":
         """Compute one corner metric row, including derivatives when tangents exist."""
         if self.config is None:

@@ -308,7 +308,7 @@ class DerivativeMetricDefinition:
         strongest_rate = 0.0
         tied = False
         for tangent in tangents:
-            if tangent.target.selector_point != selector_point:
+            if tangent.target.coordinate.selector_point != selector_point:
                 continue
             positions = _dual_positions(state, tangent)
             driver_rate = abs(self.driver.evaluate(positions).deriv)

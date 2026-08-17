@@ -8,12 +8,12 @@ from pathlib import Path
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.io.results_writer import SolutionFrame, create_writer_for_path
 from kinematics.cli.io.sweep_loader import load_sweep
+from kinematics.core.coordinates import target_export_column_name
 from kinematics.core.export import flatten_positions
 from kinematics.core.metrics.main import AxleMetricRows, MetricRow, flatten_metric_rows
 from kinematics.core.metrics.registry import flat_specs_for_suspension
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.sweep import EvaluatedSweep, solve_evaluated_sweep
-from kinematics.core.targeting import target_export_column_name
 
 
 @dataclass(frozen=True)
@@ -97,11 +97,11 @@ def run_sweep_files(
                 metrics=flatten_metrics_for_export(metric_row),
                 metric_specs=metric_specs,
                 target_coordinates={
-                    column: target.measure(state.positions)
+                    column: target.coordinate.measure(state.positions)
                     for column, target in target_columns
                 },
                 target_coordinate_units={
-                    column: target.unit for column, target in target_columns
+                    column: target.coordinate.unit for column, target in target_columns
                 },
             ),
         )

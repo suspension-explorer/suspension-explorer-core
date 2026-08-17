@@ -17,6 +17,7 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.constraints import Constraint, DistanceConstraint
+from kinematics.core.coordinates import CoordinateAxis, PointCoordinate
 from kinematics.core.diagnostics import (
     DiagnosticCategory,
     DiagnosticIssue,
@@ -32,6 +33,7 @@ from kinematics.core.enums import (
     Axis,
     AxlePosition,
     PointID,
+    Scope,
     SteeringType,
     SuspensionType,
 )
@@ -49,7 +51,7 @@ from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.corner import DoubleWishboneSuspension
 from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
-from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
+from kinematics.core.targeting import SweepConfig
 
 TEST_DATA = Path(__file__).parent / "data"
 
@@ -265,11 +267,11 @@ def test_stub_axle_solves_and_reports_metrics_through_role_hooks():
     sweep = SweepConfig(
         target_sweeps=[
             [
-                PointTarget(
+                PointCoordinate(
                     PointRef(side, PointID.WHEEL_CENTER),
-                    PointTargetAxis(Axis.Z),
-                    value,
-                )
+                    CoordinateAxis(Axis.Z),
+                    Scope.CORNER,
+                ).target(value)
                 for value in bump_values
             ]
             for side in (Side.LEFT, Side.RIGHT)

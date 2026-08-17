@@ -20,7 +20,7 @@ from kinematics.core.presentation import (
 from kinematics.core.state import SuspensionState
 
 if TYPE_CHECKING:
-    from kinematics.core.screw_axis import UprightScrewAxisResult
+    from kinematics.core.steering_axis import SteeringResponseAxisResult
     from kinematics.core.suspensions.base import Suspension
 
 
@@ -190,7 +190,7 @@ class SuspensionVisualizer:
     def update_steering_response_axes(
         artists: Sequence,
         upright_labels: Sequence[str],
-        results: Sequence["UprightScrewAxisResult"],
+        results: Sequence["SteeringResponseAxisResult"],
         bounds: Bounds3D,
     ) -> None:
         """Update or hide persistent steering-axis artists for one frame."""

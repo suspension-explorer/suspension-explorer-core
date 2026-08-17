@@ -155,7 +155,7 @@ def test_coilover_topology_adds_moving_pickup_and_attachment_constraints() -> No
     assert PointID.STRUT_TOP in suspension.output_points()
     assert PointID.STRUT_BOTTOM in suspension.output_points()
     constraints = suspension.constraints()
-    assert len(constraints) == 21
+    assert len(constraints) == 22
     assert (
         sum(
             isinstance(constraint, ScalarTripleProductConstraint)

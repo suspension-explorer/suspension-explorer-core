@@ -73,14 +73,11 @@ RateField = TangentField | Mapping[PointKey, np.ndarray]
 
 
 class ScrewAxisStatus(StrEnum):
-    """Validity status for a fitted upright screw axis."""
+    """Validity status for generic rigid-body fitting and axis extraction."""
 
     VALID = "valid"
-    NO_STEERING_ACTUATOR = "no_steering_actuator"
-    NO_STEERING_RESPONSE_DEFINITION = "no_steering_response_definition"
-    TANGENT_UNAVAILABLE = "tangent_unavailable"
-    INCONSISTENT_TANGENT = "inconsistent_tangent"
-    DEGENERATE_UPRIGHT = "degenerate_upright"
+    INSUFFICIENT_POINTS = "insufficient_points"
+    DEGENERATE_GEOMETRY = "degenerate_geometry"
     RANK_DEFICIENT = "rank_deficient"
     NEAR_PURE_TRANSLATION = "near_pure_translation"
     EXCESSIVE_FIT_ERROR = "excessive_fit_error"
@@ -134,10 +131,9 @@ class InstantaneousScrewAxis:
 
 
 @dataclass(frozen=True)
-class UprightScrewAxisResult:
-    """Axis result and diagnostics for one upright at one solved state."""
+class ScrewAxisResult:
+    """Generic axis result and diagnostics for one rigid body."""
 
-    upright_label: str
     point_keys: tuple[PointKey, ...]
     axis: InstantaneousScrewAxis | None
     status: ScrewAxisStatus
@@ -342,73 +338,32 @@ def extract_screw_axis(
     )
 
 
-def compute_upright_screw_axis(
-    upright_label: str,
+def compute_screw_axis(
     positions: Mapping[PointKey, Point3],
-    tangent: RateField | None,
+    tangent: RateField,
     point_keys: Sequence[PointKey],
     *,
-    tangent_rank_deficient: bool = False,
     angular_tolerance: float | None = None,
     fit_tolerance: float | None = None,
-) -> UprightScrewAxisResult:
-    """Return a diagnostic screw-axis result for one upright.
+) -> ScrewAxisResult:
+    """Return a diagnostic screw-axis result for one rigid body.
 
-    This small adapter keeps generic fitting independent of suspension and
-    rendering code while giving callers one result shape for every outcome.
+    Callers establish the rate field and decide what motion it represents.
+    Missing or inconsistent orchestration inputs therefore belong to the
+    caller rather than this generic fit/extraction boundary.
     """
     stable_keys = tuple(dict.fromkeys(point_keys))
-    if tangent is None:
-        return unavailable_upright_screw_axis(
-            upright_label,
-            stable_keys,
-            ScrewAxisStatus.TANGENT_UNAVAILABLE,
-            "No steering tangent field is available for this state.",
-        )
-    if tangent_rank_deficient:
-        return unavailable_upright_screw_axis(
-            upright_label,
-            stable_keys,
-            ScrewAxisStatus.RANK_DEFICIENT,
-            "The analytical tangent solve is rank-deficient.",
-        )
-
     twist = fit_rigid_body_twist(positions, tangent, stable_keys)
     axis, status, message = extract_screw_axis(
         twist,
         angular_tolerance=angular_tolerance,
         fit_tolerance=fit_tolerance,
     )
-    return UprightScrewAxisResult(
-        upright_label=upright_label,
+    return ScrewAxisResult(
         point_keys=stable_keys,
         axis=axis,
         status=status,
         twist=twist,
-        message=message,
-    )
-
-
-def unavailable_upright_screw_axis(
-    upright_label: str,
-    point_keys: Sequence[PointKey],
-    status: ScrewAxisStatus,
-    message: str,
-) -> UprightScrewAxisResult:
-    """Return one explicit unavailable result without inventing a twist.
-
-    Callers use this when the rate field itself cannot be established, for
-    example because its boundary conditions are incomplete or inconsistent.
-    Rigid-body fitting failures continue to carry their diagnostic
-    :class:`RigidBodyTwist` through :func:`compute_upright_screw_axis`.
-    """
-    if status is ScrewAxisStatus.VALID:
-        raise ValueError("An unavailable screw-axis result cannot have valid status")
-    return UprightScrewAxisResult(
-        upright_label=upright_label,
-        point_keys=tuple(dict.fromkeys(point_keys)),
-        axis=None,
-        status=status,
         message=message,
     )
 
@@ -457,19 +412,19 @@ def _select_points(
         point_rates.append(rate_array)
 
     if len(usable_keys) < 3:
-        status = (
-            ScrewAxisStatus.TANGENT_UNAVAILABLE
-            if missing_tangent
-            else ScrewAxisStatus.DEGENERATE_UPRIGHT
-        )
         return _SelectedPoints(
             keys=tuple(usable_keys),
             positions=np.empty((0, 3)),
             rates=np.empty((0, 3)),
-            status=status,
+            status=ScrewAxisStatus.INSUFFICIENT_POINTS,
             message=(
                 f"Only {len(usable_keys)} usable rigid points were available; "
                 "at least three non-collinear points are required."
+                + (
+                    f" Missing rates for {len(missing_tangent)} selected point(s)."
+                    if missing_tangent
+                    else ""
+                )
             ),
         )
 
@@ -489,8 +444,8 @@ def _select_points(
             keys=tuple(usable_keys),
             positions=selected_positions,
             rates=selected_rates,
-            status=ScrewAxisStatus.DEGENERATE_UPRIGHT,
-            message="Upright points are coincident or collinear.",
+            status=ScrewAxisStatus.DEGENERATE_GEOMETRY,
+            message="Rigid-body points are coincident or collinear.",
         )
 
     return _SelectedPoints(
