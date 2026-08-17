@@ -445,7 +445,7 @@ class TestFullJacobianAssembly:
         from kinematics.core.targeting import (
             PointTarget,
             PointTargetAxis,
-            TargetPositionMode,
+            TargetValueMode,
         )
 
         positions = {
@@ -470,7 +470,7 @@ class TestFullJacobianAssembly:
                 point_id=P1,
                 direction=PointTargetAxis(axis=Axis.X),
                 value=0.0,
-                mode=TargetPositionMode.ABSOLUTE,
+                mode=TargetValueMode.ABSOLUTE,
             ),
         ]
 
@@ -515,7 +515,7 @@ class TestFullJacobianAssembly:
         from kinematics.core.targeting import (
             PointTarget,
             PointTargetAxis,
-            TargetPositionMode,
+            TargetValueMode,
         )
 
         positions = {
@@ -542,13 +542,13 @@ class TestFullJacobianAssembly:
                 point_id=P1,
                 direction=PointTargetAxis(axis=Axis.X),
                 value=0.0,
-                mode=TargetPositionMode.ABSOLUTE,
+                mode=TargetValueMode.ABSOLUTE,
             ),
             PointTarget(
                 point_id=P2,
                 direction=PointTargetAxis(axis=Axis.Y),
                 value=0.0,
-                mode=TargetPositionMode.ABSOLUTE,
+                mode=TargetValueMode.ABSOLUTE,
             ),
         ]
 

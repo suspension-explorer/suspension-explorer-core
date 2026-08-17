@@ -58,6 +58,8 @@ from kinematics.core.suspensions.corner.mechanisms import (
     Actuation,
     ActuationDirect,
     ActuationPushrodRocker,
+    CornerDamper,
+    CornerDamperNone,
     CornerSpring,
     CornerSpringNone,
 )
@@ -163,6 +165,7 @@ class DoubleWishboneSuspension(CornerSuspension):
         kw_only=True,
     )
     spring: CornerSpring = field(default_factory=CornerSpringNone, kw_only=True)
+    damper: CornerDamper = field(default_factory=CornerDamperNone, kw_only=True)
 
     def __post_init__(self) -> None:
         """Install a track rod or fixed toe link for wheel-heading control."""
@@ -189,6 +192,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             | self.wheel_heading_link.REQUIRED_POINTS
             | self.actuation.required_points
             | self.spring.required_points
+            | self.damper.required_points
         )
 
     def validate_hardpoints(self) -> None:
@@ -197,6 +201,14 @@ class DoubleWishboneSuspension(CornerSuspension):
         self.wheel_heading_link.validate(self.hardpoints)
         self.actuation.validate(self.hardpoints)
         self.spring.validate(self.actuation)
+        if (
+            self.spring.damper_points is not None
+            and self.damper.damper_points is not None
+        ):
+            raise ValueError(
+                "A separate linear damper cannot be combined with a coilover"
+            )
+        self.damper.validate(self.actuation, self.hardpoints)
 
     def free_points(self) -> Sequence[PointID]:
         """Return base and selected mechanism moving points."""
@@ -205,6 +217,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             *self.wheel_heading_link.free_points,
             *self.actuation.free_points,
             *self.spring.free_points,
+            *self.damper.free_points,
         )
 
     def output_points(self) -> tuple[PointKey, ...]:
@@ -217,13 +230,14 @@ class DoubleWishboneSuspension(CornerSuspension):
                     *self.WHEEL_OUTPUT_POINTS,
                     *self.actuation.output_points,
                     *self.spring.output_points,
+                    *self.damper.output_points,
                 )
             )
         )
 
     def damper_points(self) -> tuple[PointKey, PointKey] | None:
         """Return selected linear spring/damper endpoints."""
-        return self.spring.damper_points
+        return self.damper.damper_points or self.spring.damper_points
 
     def steering_axis_points(self) -> tuple[PointID, PointID]:
         """The steering axis runs between the two outboard ball joints."""
@@ -310,6 +324,7 @@ class DoubleWishboneSuspension(CornerSuspension):
         constraints.extend(self.wheel_heading_link.constraints(initial_state))
         constraints.extend(self.actuation.constraints(initial_state))
         constraints.extend(self.spring.constraints(initial_state, self.actuation))
+        constraints.extend(self.damper.constraints(initial_state, self.actuation))
         return constraints
 
     def derivative_metric_definitions(
@@ -320,6 +335,11 @@ class DoubleWishboneSuspension(CornerSuspension):
         return (
             *self.actuation.derivative_metric_definitions(initial, self.side),
             *self.spring.derivative_metric_definitions(
+                initial,
+                self.actuation,
+                self.side,
+            ),
+            *self.damper.derivative_metric_definitions(
                 initial,
                 self.actuation,
                 self.side,
@@ -438,6 +458,11 @@ class DoubleWishboneSuspension(CornerSuspension):
     def elements(self) -> tuple[SuspensionElement, ...]:
         """Return the physical elements in this corner."""
         heading_link_outboard = self.wheel_heading_link.outboard_point
+        actuation_elements = (
+            self.actuation.elements(self.damper.rocker_pickups)
+            if isinstance(self.actuation, ActuationPushrodRocker)
+            else self.actuation.elements()
+        )
         base_elements: tuple[SuspensionElement, ...] = (
             RigidLinkElement(
                 label="Upper Wishbone Front Leg",
@@ -499,8 +524,9 @@ class DoubleWishboneSuspension(CornerSuspension):
         return (
             *base_elements,
             *self.wheel_heading_link.elements(),
-            *self.actuation.elements(),
+            *actuation_elements,
             *self.spring.elements(self.actuation),
+            *self.damper.elements(self.actuation),
         )
 
     def apply_camber_shim(self, positions: dict[PointKey, Point3]) -> None:
@@ -572,7 +598,10 @@ class DoubleWishboneSuspension(CornerSuspension):
             rocker_actuation.rotate_rocker_group(
                 positions,
                 assembly_solution.rocker_angle_rad,
-                self.spring.rocker_mounted_points,
+                (
+                    *self.spring.rocker_mounted_points,
+                    *self.damper.rocker_mounted_points,
+                ),
             )
 
     def upright_attachment_points(self) -> tuple[PointID, ...]:

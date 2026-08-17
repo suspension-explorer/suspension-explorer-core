@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from kinematics.core.enums import (
     ActuationType,
     ArbType,
+    CornerDamperType,
     CornerSpringType,
     HeaveLinkType,
     MountBody,
@@ -83,11 +84,27 @@ class CornerSpringSpec(MechanismSpecBase):
     type: CornerSpringType
 
 
+class CornerDamperSpec(MechanismSpecBase):
+    """Optional independent linear damper mechanism."""
+
+    type: CornerDamperType = CornerDamperType.NONE
+
+
 def check_double_wishbone_mechanism_combination(
     actuation: ActuationSpec,
     spring: CornerSpringSpec,
+    damper: CornerDamperSpec,
 ) -> None:
     """Reject combinations whose physical connection is not implemented."""
+    if damper.type is CornerDamperType.LINEAR:
+        if actuation.type is not ActuationType.PUSHROD_ROCKER:
+            raise ValueError(
+                "A linear inboard damper requires pushrod-rocker actuation"
+            )
+        if spring.type is CornerSpringType.COILOVER:
+            raise ValueError(
+                "A separate linear damper cannot be combined with a coilover"
+            )
     if (
         actuation.type is ActuationType.DIRECT
         and spring.type is CornerSpringType.TORSION_BAR
@@ -101,12 +118,17 @@ class DoubleWishboneGeometrySpec(CornerGeometrySpecBase):
     type: Literal[SuspensionType.DOUBLE_WISHBONE] = SuspensionType.DOUBLE_WISHBONE
     actuation: ActuationSpec
     spring: CornerSpringSpec
+    damper: CornerDamperSpec = Field(default_factory=CornerDamperSpec)
     hardpoints: HardpointMap
 
     @model_validator(mode="after")
     def check_mechanisms(self) -> "DoubleWishboneGeometrySpec":
         """Validate the selected corner mechanism combination."""
-        check_double_wishbone_mechanism_combination(self.actuation, self.spring)
+        check_double_wishbone_mechanism_combination(
+            self.actuation,
+            self.spring,
+            self.damper,
+        )
         return self
 
 
@@ -147,13 +169,18 @@ class DoubleWishboneAxleConfig(AxleConfig):
 
     actuation: ActuationSpec
     spring: CornerSpringSpec
+    damper: CornerDamperSpec = Field(default_factory=CornerDamperSpec)
     left_setup: CornerConfig = Field(default_factory=CornerConfig)
     right_setup: CornerConfig | None = None
 
     @model_validator(mode="after")
     def check_mechanisms(self) -> "DoubleWishboneAxleConfig":
         """Validate the symmetric corner mechanisms and shared hardware."""
-        check_double_wishbone_mechanism_combination(self.actuation, self.spring)
+        check_double_wishbone_mechanism_combination(
+            self.actuation,
+            self.spring,
+            self.damper,
+        )
         has_rocker = self.actuation.type is ActuationType.PUSHROD_ROCKER
         if self.anti_roll.type in (ArbType.U_BAR, ArbType.T_BAR) and not has_rocker:
             raise ValueError(

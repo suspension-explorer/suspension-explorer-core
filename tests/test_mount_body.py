@@ -19,7 +19,7 @@ from kinematics.core.enums import (
     Axis,
     MountBody,
     PointID,
-    TargetPositionMode,
+    TargetValueMode,
 )
 from kinematics.core.input import build_suspension, parse_geometry_spec
 from kinematics.core.primitives.constants import TEST_TOLERANCE
@@ -36,7 +36,12 @@ from kinematics.core.suspensions.corner.mechanisms import (
     ActuationPushrodRocker,
 )
 from kinematics.core.sweep import solve_sweep
-from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
+from kinematics.core.targeting import (
+    ActuatorPositionTarget,
+    PointTarget,
+    PointTargetAxis,
+    SweepConfig,
+)
 
 DATA_DIR = Path(__file__).parent / "data"
 STRUT_GEOMETRY = DATA_DIR / "corner_strut_geometry.yaml"
@@ -82,16 +87,17 @@ def _heave_sweep(displacements: tuple[float, ...]) -> SweepConfig:
             point_id=PointID.WHEEL_CENTER,
             direction=PointTargetAxis(Axis.Z),
             value=displacement,
-            mode=TargetPositionMode.RELATIVE,
+            mode=TargetValueMode.RELATIVE,
         )
         for displacement in displacements
     ]
     steer_hold_targets = [
-        PointTarget(
+        ActuatorPositionTarget(
+            actuator_id="rack",
             point_id=PointID.TRACKROD_INBOARD,
             direction=PointTargetAxis(Axis.Y),
             value=0.0,
-            mode=TargetPositionMode.RELATIVE,
+            mode=TargetValueMode.RELATIVE,
         )
         for _ in displacements
     ]

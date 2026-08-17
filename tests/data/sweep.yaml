@@ -1,13 +1,16 @@
 version: 1
 steps: 41
 targets:
-  - point: trackrod_inboard
+  - type: actuator_position
+    actuator: rack
     direction:
       axis: y
     mode: relative
     start: -40
     stop: 40
-  - point: wheel_center
+  - type: point
+    point: wheel_center
+    side: left
     direction:
       axis: z
     start: -40

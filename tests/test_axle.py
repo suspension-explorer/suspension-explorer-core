@@ -63,6 +63,44 @@ def test_explicit_axle_uses_shared_mechanism_and_authored_right_geometry(
     assert right.hardpoints[PointID.AXLE_OUTBOARD][Axis.X] == pytest.approx(-30.0)
 
 
+def test_asymmetric_axle_damper_coordinates_resolve_side_local_endpoints(
+    tmp_path: Path,
+    test_data_dir: Path,
+) -> None:
+    data = yaml.safe_load(
+        (test_data_dir / "macpherson_axle_geometry.yaml").read_text(encoding="utf-8")
+    )
+    left_points = data["hardpoints"]["left"]
+    data["hardpoints"]["right"] = {
+        name: {"x": point["x"], "y": -point["y"], "z": point["z"]}
+        for name, point in left_points.items()
+    }
+    data["hardpoints"]["right"]["strut_top"]["x"] = -80.0
+    data["hardpoints"]["right"]["strut_bottom"]["x"] = -28.0
+    path = tmp_path / "asymmetric-macpherson-axle.yaml"
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+
+    axle = load_geometry(path)
+    damper_coordinates = {
+        coordinate.side: coordinate
+        for coordinate in axle.drive_coordinates()
+        if coordinate.id == "damper"
+    }
+
+    assert damper_coordinates[Side.LEFT].point_keys == (
+        PointRef(Side.LEFT, PointID.STRUT_TOP),
+        PointRef(Side.LEFT, PointID.STRUT_BOTTOM),
+    )
+    assert damper_coordinates[Side.RIGHT].point_keys == (
+        PointRef(Side.RIGHT, PointID.STRUT_TOP),
+        PointRef(Side.RIGHT, PointID.STRUT_BOTTOM),
+    )
+    state = axle.initial_state()
+    left_length = damper_coordinates[Side.LEFT].target(0.0).measure(state.positions)
+    right_length = damper_coordinates[Side.RIGHT].target(0.0).measure(state.positions)
+    assert left_length != pytest.approx(right_length)
+
+
 def _camber_shim_data(*, side: Side, setup_thickness: float) -> dict[str, object]:
     lateral_sign = side.lateral_sign
     return {

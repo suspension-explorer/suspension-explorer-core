@@ -17,7 +17,7 @@ from kinematics.core.enums import (
     Scope,
     SteeringType,
     SuspensionType,
-    TargetPositionMode,
+    TargetValueMode,
 )
 from kinematics.core.input import build_suspension, parse_geometry_spec
 from kinematics.core.primitives.point_ref import Side
@@ -28,7 +28,7 @@ from kinematics.core.schema.geometry import (
     DoubleWishboneGeometrySpec,
 )
 from kinematics.core.schema.sweep import SweepSpec, TargetSpec, build_sweep_config
-from kinematics.core.targeting import PointTargetAxis
+from kinematics.core.targeting import PointTarget, PointTargetAxis
 
 
 def _read_yaml_mapping(path: Path, kind: str) -> dict[str, Any]:
@@ -147,10 +147,11 @@ def test_rocker_to_rocker_heave_link_selector_round_trips() -> None:
 def test_core_schema_accepts_enum_objects() -> None:
     spec = TargetSpec.model_validate(
         {
+            "type": "point",
             "point": PointID.WHEEL_CENTER,
             "direction": {"axis": Axis.Z},
             "side": Side.LEFT,
-            "mode": TargetPositionMode.ABSOLUTE,
+            "mode": TargetValueMode.ABSOLUTE,
             "values": [0.0],
         }
     )
@@ -158,7 +159,7 @@ def test_core_schema_accepts_enum_objects() -> None:
     assert spec.point is PointID.WHEEL_CENTER
     assert spec.direction.axis is Axis.Z
     assert spec.side is Side.LEFT
-    assert spec.mode is TargetPositionMode.ABSOLUTE
+    assert spec.mode is TargetValueMode.ABSOLUTE
 
 
 def test_core_enum_parser_is_case_sensitive() -> None:
@@ -172,6 +173,7 @@ def test_core_enum_parser_is_case_sensitive() -> None:
 def test_core_schema_parses_serialized_enum_names() -> None:
     spec = TargetSpec.model_validate(
         {
+            "type": "point",
             "point": "wheel_center",
             "side": "left",
             "mode": "absolute",
@@ -182,7 +184,7 @@ def test_core_schema_parses_serialized_enum_names() -> None:
 
     assert spec.point is PointID.WHEEL_CENTER
     assert spec.side is Side.LEFT
-    assert spec.mode is TargetPositionMode.ABSOLUTE
+    assert spec.mode is TargetValueMode.ABSOLUTE
     assert spec.direction.axis is Axis.Z
 
 
@@ -295,6 +297,7 @@ def test_side_target_requires_suspension_context() -> None:
             "version": 1,
             "targets": [
                 {
+                    "type": "point",
                     "point": PointID.WHEEL_CENTER,
                     "side": Side.LEFT,
                     "direction": {"axis": Axis.Z},
@@ -313,6 +316,7 @@ def test_x_axis_remains_an_axis_target() -> None:
         {
             "targets": [
                 {
+                    "type": "point",
                     "point": PointID.WHEEL_CENTER,
                     "direction": {"axis": Axis.X},
                     "values": [0.0],
@@ -323,6 +327,7 @@ def test_x_axis_remains_an_axis_target() -> None:
 
     config = build_sweep_config(spec)
     target = config.target_sweeps[0][0]
+    assert isinstance(target, PointTarget)
     assert target.point_id is PointID.WHEEL_CENTER
     assert isinstance(target.direction, PointTargetAxis)
     assert target.direction.axis is Axis.X
@@ -334,6 +339,7 @@ def test_sweep_spec_reports_expanded_step_count() -> None:
             "steps": 7,
             "targets": [
                 {
+                    "type": "point",
                     "point": PointID.WHEEL_CENTER,
                     "direction": {"axis": Axis.Z},
                     "start": -10.0,
@@ -346,11 +352,37 @@ def test_sweep_spec_reports_expanded_step_count() -> None:
     assert spec.n_steps == 7
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        {"targets": []},
+        {
+            "steps": 0,
+            "targets": [
+                {
+                    "type": "point",
+                    "point": PointID.WHEEL_CENTER,
+                    "direction": {"axis": Axis.Z},
+                    "start": -10.0,
+                    "stop": 10.0,
+                }
+            ],
+        },
+    ],
+)
+def test_sweep_spec_requires_targets_and_positive_steps(
+    raw: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError):
+        SweepSpec.model_validate(raw)
+
+
 def test_hold_is_a_frontend_convenience_not_a_core_sweep_field() -> None:
     """Core callers express a held actuator as an ordinary relative zero target."""
     with pytest.raises(ValueError, match="Extra inputs are not permitted"):
         TargetSpec.model_validate(
             {
+                "type": "point",
                 "point": PointID.TRACKROD_INBOARD,
                 "direction": {"axis": Axis.Y},
                 "hold": True,
@@ -363,11 +395,13 @@ def test_sweep_spec_step_count_validates_target_lengths() -> None:
         {
             "targets": [
                 {
+                    "type": "point",
                     "point": PointID.WHEEL_CENTER,
                     "direction": {"axis": Axis.Z},
                     "values": [-10.0, 0.0, 10.0],
                 },
                 {
+                    "type": "point",
                     "point": PointID.TRACKROD_INBOARD,
                     "direction": {"axis": Axis.Y},
                     "values": [0.0, 1.0],

@@ -63,7 +63,6 @@ def test_type_selection_is_case_sensitive(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("declared_side", "axle_outboard_y", "expected_message"),
     [
-        ("right", 950.0, "Side 'right' requires AXLE_OUTBOARD Y < 0"),
         ("left", -950.0, "Side 'left' requires AXLE_OUTBOARD Y > 0"),
     ],
 )
@@ -84,7 +83,7 @@ def test_corner_rejects_declared_side_that_conflicts_with_hardpoints(
 
 
 @pytest.mark.parametrize("fixture", ["geometry.yaml", "corner_strut_geometry.yaml"])
-def test_corner_accepts_hardpoints_matching_each_declared_side(
+def test_corner_accepts_left_hardpoints_and_rejects_standalone_right(
     tmp_path: Path, fixture: str
 ) -> None:
     left_data = _read_geometry(fixture)
@@ -94,8 +93,8 @@ def test_corner_accepts_hardpoints_matching_each_declared_side(
     right_data = _read_geometry(fixture)
     right_data["side"] = "right"
     _mirror_hardpoint_y(right_data)
-    right_suspension = load_geometry(_write_geometry(tmp_path, right_data))
-    assert right_suspension.side.name == "RIGHT"
+    with pytest.raises(ValueError, match="Standalone corner geometry must use side"):
+        load_geometry(_write_geometry(tmp_path, right_data))
 
 
 @pytest.mark.parametrize("missing", ["strut_top", "strut_bottom"])

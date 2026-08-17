@@ -5,7 +5,7 @@ from typing import cast
 import numpy as np
 import pytest
 
-from kinematics.core.enums import Axis, PointID, TargetPositionMode
+from kinematics.core.enums import Axis, PointID, TargetValueMode
 from kinematics.core.metrics.derivatives import (
     CallableScalarResponse,
     DerivativeMetricDefinition,
@@ -36,7 +36,7 @@ def _state_and_tangent() -> tuple[SuspensionState, TangentField]:
         point_id=point_a,
         direction=PointTargetAxis(Axis.X),
         value=3.0,
-        mode=TargetPositionMode.ABSOLUTE,
+        mode=TargetValueMode.ABSOLUTE,
     )
     tangent = TangentField(
         target_index=0,
@@ -211,7 +211,7 @@ def test_multi_tangent_selection_prefers_strongest_driver_rate() -> None:
             point_id=PointID.AXLE_OUTBOARD,
             direction=PointTargetAxis(Axis.X),
             value=0.0,
-            mode=TargetPositionMode.ABSOLUTE,
+            mode=TargetValueMode.ABSOLUTE,
         ),
         velocities={PointID.AXLE_INBOARD: np.array([100.0, 100.0, 0.0])},
     )

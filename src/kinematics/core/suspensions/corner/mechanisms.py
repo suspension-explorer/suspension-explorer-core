@@ -1,4 +1,4 @@
-"""Typed actuation and spring mechanisms for suspension corners."""
+"""Typed actuation, spring, and damper mechanisms for suspension corners."""
 
 from __future__ import annotations
 
@@ -55,6 +55,7 @@ PUSHROD_POINTS = frozenset({PointID.PUSHROD_OUTBOARD, PointID.PUSHROD_INBOARD})
 # A -> B defines the axis direction; neither datum implies vehicle orientation.
 ROCKER_AXIS_POINTS = frozenset({PointID.ROCKER_AXIS_A, PointID.ROCKER_AXIS_B})
 COIL_SPRING_POINTS = frozenset({PointID.STRUT_TOP, PointID.STRUT_BOTTOM})
+LINEAR_DAMPER_POINTS = frozenset({PointID.DAMPER_CHASSIS, PointID.DAMPER_ROCKER})
 
 ROCKER_ANGLE_SPEC = MetricSpec(
     "rocker_angle",
@@ -127,8 +128,8 @@ class ActuationDirect:
         """Direct actuation adds no constraint without a selected spring."""
         return []
 
-    def spring_constraints(self, initial: SuspensionState) -> list[Constraint]:
-        """Attach a moving coil-spring pickup rigidly to the supplied body."""
+    def linear_link_constraints(self, initial: SuspensionState) -> list[Constraint]:
+        """Attach a moving linear-link pickup rigidly to the supplied body."""
         return anchored_rigid_point_constraints(
             initial,
             PointID.STRUT_BOTTOM,
@@ -301,11 +302,15 @@ class ActuationPushrodRocker:
             )
         return constraints
 
-    def spring_constraints(self, initial: SuspensionState) -> list[Constraint]:
-        """Attach a moving coil-spring pickup rigidly to the rocker."""
+    def linear_link_constraints(
+        self,
+        initial: SuspensionState,
+        moving_point: PointID = PointID.STRUT_BOTTOM,
+    ) -> list[Constraint]:
+        """Attach a moving linear-link pickup rigidly to the rocker."""
         return chiral_rigid_point_constraints(
             initial,
-            PointID.STRUT_BOTTOM,
+            moving_point,
             (
                 PointID.ROCKER_AXIS_A,
                 PointID.ROCKER_AXIS_B,
@@ -406,8 +411,11 @@ class ActuationPushrodRocker:
         """Return rocker rotation from the design state."""
         return OrderedDict([("rocker_angle", self.rocker_angle(state, initial, side))])
 
-    def elements(self) -> tuple[SuspensionElement, ...]:
-        """Return the pushrod and rocker declarations."""
+    def elements(
+        self,
+        additional_pickups: tuple[RockerPickup, ...] = (),
+    ) -> tuple[SuspensionElement, ...]:
+        """Return the pushrod and rocker declarations with composed pickups."""
         rotation_axis: tuple[PointKey, PointKey] = self.torsion_axis
         return (
             RigidLinkElement(
@@ -425,6 +433,7 @@ class ActuationPushrodRocker:
                         RockerPickupType.PUSHROD,
                     ),
                     *self.external_pickups,
+                    *additional_pickups,
                 ),
             ),
         )
@@ -507,7 +516,7 @@ class CornerSpringCoilover:
         actuation: Actuation,
     ) -> list[Constraint]:
         """Attach the moving spring pickup to the selected actuation."""
-        return actuation.spring_constraints(initial)
+        return actuation.linear_link_constraints(initial)
 
     def derivative_metric_definitions(
         self,
@@ -640,3 +649,134 @@ class CornerSpringTorsionBar:
 
 
 type CornerSpring = CornerSpringNone | CornerSpringCoilover | CornerSpringTorsionBar
+
+
+@dataclass(frozen=True)
+class CornerDamperNone:
+    """Explicit absence of an independent corner damper."""
+
+    required_points: frozenset[PointID] = frozenset()
+    free_points: tuple[PointID, ...] = ()
+    output_points: tuple[PointID, ...] = ()
+    rocker_mounted_points: tuple[PointID, ...] = ()
+    rocker_pickups: tuple[RockerPickup, ...] = ()
+    damper_points: tuple[PointID, PointID] | None = None
+
+    def validate(
+        self,
+        actuation: Actuation,
+        hardpoints: Mapping[PointKey, Point3],
+    ) -> None:
+        """Accept either actuation when no independent damper is fitted."""
+
+    def constraints(
+        self,
+        initial: SuspensionState,
+        actuation: Actuation,
+    ) -> list[Constraint]:
+        """Add no independent damper constraints."""
+        return []
+
+    def derivative_metric_definitions(
+        self,
+        initial: SuspensionState,
+        actuation: Actuation,
+        side: Side,
+    ) -> tuple[DerivativeMetricDefinition, ...]:
+        """Add no independent damper derivative metrics."""
+        return ()
+
+    def elements(self, actuation: Actuation) -> tuple[SuspensionElement, ...]:
+        """Add no independent damper element."""
+        return ()
+
+
+@dataclass(frozen=True)
+class CornerDamperLinear:
+    """Independent chassis-to-rocker linear damper."""
+
+    required_points: frozenset[PointID] = LINEAR_DAMPER_POINTS
+    free_points: tuple[PointID, ...] = (PointID.DAMPER_ROCKER,)
+    output_points: tuple[PointID, ...] = (
+        PointID.DAMPER_CHASSIS,
+        PointID.DAMPER_ROCKER,
+    )
+    rocker_mounted_points: tuple[PointID, ...] = (PointID.DAMPER_ROCKER,)
+    rocker_pickups: tuple[RockerPickup, ...] = (
+        RockerPickup(PointID.DAMPER_ROCKER, RockerPickupType.DAMPER),
+    )
+    damper_points: tuple[PointID, PointID] = (
+        PointID.DAMPER_CHASSIS,
+        PointID.DAMPER_ROCKER,
+    )
+
+    def validate(
+        self,
+        actuation: Actuation,
+        hardpoints: Mapping[PointKey, Point3],
+    ) -> None:
+        """Require a distinct damper whose moving pickup lies off the rocker axis."""
+        if not isinstance(actuation, ActuationPushrodRocker):
+            raise ValueError(
+                "A linear inboard damper requires pushrod-rocker actuation"
+            )
+        chassis = hardpoints[PointID.DAMPER_CHASSIS]
+        rocker = hardpoints[PointID.DAMPER_ROCKER]
+        if compute_point_point_distance(chassis, rocker) <= EPS_GEOMETRIC:
+            raise ValueError("Independent damper endpoints must be distinct")
+        axis_a = hardpoints[PointID.ROCKER_AXIS_A]
+        axis = (hardpoints[PointID.ROCKER_AXIS_B] - axis_a).normalize()
+        if compute_point_to_line_distance(rocker, axis_a, axis) <= EPS_GEOMETRIC:
+            raise ValueError("DAMPER_ROCKER must not lie on the rocker axis")
+
+    def constraints(
+        self,
+        initial: SuspensionState,
+        actuation: Actuation,
+    ) -> list[Constraint]:
+        """Attach the moving damper pickup rigidly to the rocker."""
+        if not isinstance(actuation, ActuationPushrodRocker):
+            raise ValueError(
+                "A linear inboard damper requires pushrod-rocker actuation"
+            )
+        return actuation.linear_link_constraints(initial, PointID.DAMPER_ROCKER)
+
+    def derivative_metric_definitions(
+        self,
+        initial: SuspensionState,
+        actuation: Actuation,
+        side: Side,
+    ) -> tuple[DerivativeMetricDefinition, ...]:
+        """Declare independent damper length relative to hub travel."""
+        return (
+            DerivativeMetricDefinition(
+                response=PointDistanceResponse(
+                    PointID.DAMPER_CHASSIS,
+                    PointID.DAMPER_ROCKER,
+                    name="damper_length",
+                    unit=MetricUnit.MM,
+                    label="Damper Length",
+                ),
+                driver=PointCoordinateResponse.from_chassis_axis(
+                    PointID.WHEEL_CENTER,
+                    Axis.Z,
+                    name="hub_z",
+                    unit=MetricUnit.MM,
+                    label="Hub Z",
+                ),
+            ),
+        )
+
+    def elements(self, actuation: Actuation) -> tuple[SuspensionElement, ...]:
+        """Return the physical independent damper link."""
+        return (
+            VariableLengthLinkElement(
+                label="Damper",
+                type=ElementType.DAMPER,
+                point_a=PointID.DAMPER_CHASSIS,
+                point_b=PointID.DAMPER_ROCKER,
+            ),
+        )
+
+
+type CornerDamper = CornerDamperNone | CornerDamperLinear

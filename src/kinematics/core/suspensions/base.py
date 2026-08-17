@@ -16,7 +16,14 @@ from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Sequence
 from kinematics.core.assembly import SuspensionAssembly
 from kinematics.core.constraints import Constraint
 from kinematics.core.elements import SuspensionElement
-from kinematics.core.enums import PointID, ShimType, SuspensionType, Units
+from kinematics.core.enums import (
+    ElementLengthCoordinateID,
+    PointID,
+    Scope,
+    ShimType,
+    SuspensionType,
+    Units,
+)
 from kinematics.core.points.derived.manager import DerivedPointsSpec
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
@@ -29,7 +36,12 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.main import AxleMetricRows, MetricRow
     from kinematics.core.metrics.registry import MetricSpec
     from kinematics.core.sensitivity import TangentField
-    from kinematics.core.targeting import ActuatorDOF
+    from kinematics.core.targeting import (
+        ActuatorDOF,
+        DriveCoordinate,
+        ScalarTarget,
+        TargetKind,
+    )
 
 
 @dataclass
@@ -196,6 +208,66 @@ class Suspension(ABC):
         """Return installed spring/damper endpoints, if present."""
         return None
 
+    def drive_coordinates(self) -> "tuple[DriveCoordinate, ...]":
+        """Return explicitly driveable scalar coordinates in stable order."""
+        from kinematics.core.targeting import DriveCoordinate, TargetKind
+
+        endpoints = self.damper_points()
+        if endpoints is None:
+            return ()
+        coordinate_id = ElementLengthCoordinateID.DAMPER
+        return (
+            DriveCoordinate(
+                id=coordinate_id,
+                kind=TargetKind.ELEMENT_LENGTH,
+                label=coordinate_id.label,
+                unit=coordinate_id.unit,
+                point_keys=endpoints,
+                scope=Scope.CORNER,
+                side=Side.LEFT,
+            ),
+        )
+
+    def resolve_drive_coordinate(
+        self,
+        coordinate_id: str,
+        side: Side | None,
+        kind: "TargetKind | None" = None,
+    ) -> "DriveCoordinate":
+        """Resolve one stable drive-coordinate ID under topology side rules."""
+        from kinematics.core.targeting import (
+            TargetKind,
+            resolve_published_target_side,
+        )
+
+        available = self.drive_coordinates()
+        candidates = [
+            item
+            for item in available
+            if item.id == coordinate_id and (kind is None or item.kind is kind)
+        ]
+        available_ids = sorted(
+            {item.id for item in available if kind is None or item.kind is kind}
+        )
+        available_text = ", ".join(available_ids) if available_ids else "none"
+        coordinate_kind = {
+            TargetKind.ELEMENT_LENGTH: "element-length target",
+            TargetKind.ACTUATOR_POSITION: "actuator-position target",
+        }.get(kind, "drive coordinate")
+        if not candidates:
+            raise ValueError(
+                f"Driveable {coordinate_kind} '{coordinate_id}' is unavailable for "
+                f"suspension type '{self.reported_type_key()}'. Available "
+                f"driveable {coordinate_kind} IDs: {available_text}."
+            )
+
+        selected_side = resolve_published_target_side(
+            f"{coordinate_kind.capitalize()} '{coordinate_id}'",
+            tuple(item.side for item in candidates),
+            side,
+        )
+        return next(item for item in candidates if item.side is selected_side)
+
     @property
     def is_axle(self) -> bool:
         """Whether this topology composes multiple corner suspensions."""
@@ -292,15 +364,60 @@ class Suspension(ABC):
                     f"type '{suspension_type}'."
                 )
 
+    def validate_sweep_targets(self, targets: Iterable["ScalarTarget"]) -> None:
+        """Validate driven points and topology-declared scalar coordinates."""
+        target_list = tuple(targets)
+        self.validate_sweep_target_points(
+            point
+            for target in target_list
+            for point in target.driven_points
+        )
+        available = self.drive_coordinates()
+        for target in target_list:
+            target_key = target.drive_coordinate_key
+            if target_key is None:
+                continue
+            target_kind, target_id, target_points, target_side = target_key
+            if not any(
+                coordinate.kind is target_kind
+                and coordinate.id == target_id
+                and (target_points is None or coordinate.point_keys == target_points)
+                and coordinate.side is target_side
+                for coordinate in available
+            ):
+                available_ids = (
+                    ", ".join(
+                        sorted(
+                            {
+                                coordinate.id
+                                for coordinate in available
+                                if coordinate.kind is target_kind
+                            }
+                        )
+                    )
+                    or "none"
+                )
+                raise ValueError(
+                    f"{target.coordinate_description.capitalize()} is not declared "
+                    f"driveable for this suspension. Available driveable "
+                    f"{target_kind.value} IDs: {available_ids}."
+                )
+
     def resolve_target_key(self, point: PointID, side: Side | None) -> PointKey:
         """Resolve a sweep target for a single-corner suspension."""
-        if side is not None:
-            raise ValueError(
-                f"Sweep target for '{point.name}' specifies side "
-                f"'{side.name.lower()}', but suspension type "
-                f"'{self.reported_type_key()}' "
-                "is a single corner and does not accept a side."
-            )
+        from kinematics.core.targeting import (
+            TargetKind,
+            resolve_published_target_side,
+            sweep_target_side_policy,
+        )
+
+        side_policy = sweep_target_side_policy(TargetKind.POINT, point.name.lower())
+        candidate_sides = (None,) if side_policy == "shared" else (Side.LEFT,)
+        resolve_published_target_side(
+            f"Sweep target for '{point.name}'",
+            candidate_sides,
+            side,
+        )
         return point
 
     def actuator_dofs(self) -> "tuple[ActuatorDOF, ...]":

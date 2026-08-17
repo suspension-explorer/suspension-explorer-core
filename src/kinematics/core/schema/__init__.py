@@ -16,6 +16,7 @@ from kinematics.core.schema.geometry import (
     ActuationSpec,
     AxleGeometrySpecBase,
     AxleHardpointsSpec,
+    CornerDamperSpec,
     CornerSpringSpec,
     DoubleWishboneAxleConfig,
     DoubleWishboneAxleGeometrySpec,
@@ -29,8 +30,11 @@ from kinematics.core.schema.geometry import (
     TrailingArmGeometrySpec,
 )
 from kinematics.core.schema.sweep import (
+    ActuatorPositionTargetSpec,
     DirectionSpec,
+    ElementLengthTargetSpec,
     SweepSpec,
+    SweepTargetSpec,
     TargetSpec,
     build_sweep_config,
 )
