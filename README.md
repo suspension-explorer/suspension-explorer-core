@@ -518,3 +518,84 @@ Generated analytical Jacobians live in `src/kinematics/core/jacobians.py`. Edit
 their symbolic definitions in `tools/generate_jacobians.py` and regenerate them
 with `just generate-jacobians` rather than manually changing generated
 expressions.
+
+## License
+
+From version 0.6.0 onward, Suspension Explorer Core is licensed under the
+**GNU Affero General Public License v3.0 only (AGPL-3.0-only)**. Alternative
+commercial licensing is available by separate agreement.
+
+| Versions | License                                                        |
+| -------- | -------------------------------------------------------------- |
+| ≤ 0.5.1  | Apache License 2.0                                             |
+| ≥ 0.6.0  | AGPL-3.0-only, with alternative commercial licensing available |
+
+Releases up to and including v0.5.1 were published under Apache-2.0. That
+license grant remains in force for those releases.
+
+The AGPL version is free to use, including for commercial engineering,
+research, education, motorsport, and hobby projects, provided that you comply
+with its terms.
+
+Alternative commercial licensing is intended for organisations that want to
+incorporate Suspension Explorer Core into proprietary or closed-source
+software or services where complying with the AGPL is not suitable.
+
+For commercial licensing, contact
+[contact@nickmccleery.com](mailto:contact@nickmccleery.com).
+
+### Can I use it for confidential or commercial engineering work?
+
+Yes.
+
+The AGPL applies to the software, not simply to data processed by the
+software. Using Suspension Explorer Core to analyse a commercial race car,
+confidential vehicle programme, Formula Student car, or other proprietary
+design does not by itself require you to disclose:
+
+- hardpoint coordinates;
+- vehicle geometry;
+- simulation inputs;
+- analysis results;
+- setup data; or
+- other confidential engineering information.
+
+You can therefore use the solver internally for commercial or confidential
+engineering work under the AGPL.
+
+Additional obligations may arise if you modify Suspension Explorer Core,
+distribute it or a work based on it, combine or incorporate it into other
+software, or make a modified version available for users to interact with
+over a network.
+
+If you want to incorporate the solver into a proprietary application or
+service without complying with the applicable AGPL obligations, contact us
+about a commercial license.
+
+This section is an informal summary intended to explain the project's
+licensing model. The applicable license terms govern.
+
+### Contributions
+
+Contributions are welcome.
+
+Because Suspension Explorer Core remains available under the AGPL while also
+being offered under separate commercial terms, the project needs sufficient
+rights to include accepted contributions under both licensing models.
+
+Before contributing, please read [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Pull requests include the following contributor acknowledgement:
+
+> - [ ] I have read and agree to the contributor terms in
+>       `CONTRIBUTING.md`. I confirm that I own this contribution or have
+>       authority to submit it, and I assign the copyright in my contribution
+>       to Nick McCleery, as maintainer of Suspension Explorer Core, on the
+>       terms stated there. By checking this box and submitting this pull
+>       request, I intend this acknowledgement to constitute my electronic
+>       signature and acceptance of those terms.
+
+Accepted contributions remain available as part of the open-source project
+under **AGPL-3.0-only**. The copyright assignment also allows those
+contributions to be included in separately licensed commercial versions of
+Suspension Explorer Core.

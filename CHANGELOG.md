@@ -23,6 +23,11 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Relicensed from Apache-2.0 to AGPL-3.0-only with a separate commercial
+  licensing option, effective from 0.6.0. Releases up to and including
+  v0.5.1 remain available under Apache-2.0. External contributions now
+  require acceptance of the contributor terms and copyright assignment
+  described in CONTRIBUTING.md.
 - Generalized sweep solving around one scalar-target protocol. Point
   projections, named actuator positions, and element lengths now share value
   expansion, absolute conversion, measurement, point partials, remapping,
