@@ -466,23 +466,23 @@ class MultiLinkSuspension(CornerSuspension):
             )
             for label, inboard, outboard in self.LINKS
         )
-        upright_actuation_pickup = (
-            (self.actuation.moving_pickup_point,)
-            if self.actuation.moving_pickup_body == self.UPRIGHT_BODY
-            else ()
+        upright_hardpoints = composed_upright_attachments(
+            (
+                PointID.UPPER_FRONT_LINK_OUTBOARD,
+                PointID.UPPER_REAR_LINK_OUTBOARD,
+                PointID.LOWER_REAR_LINK_OUTBOARD,
+                PointID.LOWER_FRONT_LINK_OUTBOARD,
+                heading_link_outboard,
+            ),
+            self.actuation,
+            self.UPRIGHT_BODY,
+            self.hardpoints,
         )
         base_elements: tuple[SuspensionElement, ...] = (
             *link_elements,
             UprightElement(
                 label="Upright",
-                hardpoints=(
-                    PointID.UPPER_FRONT_LINK_OUTBOARD,
-                    PointID.UPPER_REAR_LINK_OUTBOARD,
-                    PointID.LOWER_REAR_LINK_OUTBOARD,
-                    PointID.LOWER_FRONT_LINK_OUTBOARD,
-                    heading_link_outboard,
-                    *upright_actuation_pickup,
-                ),
+                hardpoints=upright_hardpoints,
                 attachments=(PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD),
                 segments=(
                     (
@@ -537,4 +537,5 @@ class MultiLinkSuspension(CornerSuspension):
             (*self.UPRIGHT_ATTACHMENTS, self.wheel_heading_link.outboard_point),
             self.actuation,
             self.UPRIGHT_BODY,
+            self.hardpoints,
         )

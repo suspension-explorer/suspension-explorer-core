@@ -538,10 +538,15 @@ class DoubleWishboneSuspension(CornerSuspension):
     def elements(self) -> tuple[SuspensionElement, ...]:
         """Return the physical elements in this corner."""
         heading_link_outboard = self.wheel_heading_link.outboard_point
-        upright_actuation_pickup = (
-            (self.actuation.moving_pickup_point,)
-            if self.actuation.moving_pickup_body == self.UPRIGHT_BODY
-            else ()
+        upright_hardpoints = composed_upright_attachments(
+            (
+                PointID.UPPER_WISHBONE_OUTBOARD,
+                PointID.LOWER_WISHBONE_OUTBOARD,
+                heading_link_outboard,
+            ),
+            self.actuation,
+            self.UPRIGHT_BODY,
+            self.hardpoints,
         )
         base_elements: tuple[SuspensionElement, ...] = (
             RigidLinkElement(
@@ -570,12 +575,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             ),
             UprightElement(
                 label="Upright",
-                hardpoints=(
-                    PointID.UPPER_WISHBONE_OUTBOARD,
-                    PointID.LOWER_WISHBONE_OUTBOARD,
-                    heading_link_outboard,
-                    *upright_actuation_pickup,
-                ),
+                hardpoints=upright_hardpoints,
                 attachments=(PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD),
                 segments=(
                     (heading_link_outboard, PointID.UPPER_WISHBONE_OUTBOARD),
@@ -693,4 +693,5 @@ class DoubleWishboneSuspension(CornerSuspension):
             (*self.UPRIGHT_ATTACHMENTS, self.wheel_heading_link.outboard_point),
             self.actuation,
             self.UPRIGHT_BODY,
+            self.hardpoints,
         )

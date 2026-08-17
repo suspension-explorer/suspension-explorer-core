@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import yaml
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.cli.visualization.main import (
@@ -20,6 +21,7 @@ from kinematics.core.elements import (
     WheelElement,
 )
 from kinematics.core.enums import Axis, PointID
+from kinematics.core.input import build_suspension
 from kinematics.core.presentation import (
     AxisProjection,
     PointMidpoint,
@@ -164,6 +166,25 @@ def test_upright_spokes_exclude_pickup_mounted_on_another_body(
         if path.type is ElementType.UPRIGHT
     }
 
+    assert "strut_bottom" not in spoke_targets
+
+
+def test_upright_spokes_exclude_uninstalled_actuation_pickup(
+    test_data_dir: Path,
+) -> None:
+    with (test_data_dir / "geometry.yaml").open() as handle:
+        data = yaml.safe_load(handle)
+    data["actuation"]["mount"] = "upright"
+    suspension = build_suspension(data)
+
+    assembly = suspension.assembly()
+    spoke_targets = {
+        path.points[1]
+        for path in named_element_paths(assembly)
+        if path.type is ElementType.UPRIGHT
+    }
+
+    assert PointID.STRUT_BOTTOM not in assembly.points.all
     assert "strut_bottom" not in spoke_targets
 
 

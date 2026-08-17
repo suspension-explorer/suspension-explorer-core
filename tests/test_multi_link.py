@@ -165,6 +165,27 @@ def test_link_mounted_pickup_is_derived_and_rides_the_link(multi_link):
         assert along == pytest.approx(inboard_offset, abs=1e-6)
 
 
+@pytest.mark.parametrize("mount", ["lower_rear_link", "upright"])
+def test_springless_direct_actuation_omits_uninstalled_pickup(mount):
+    import yaml
+
+    from kinematics.core.input import build_suspension
+
+    with (TEST_DATA / "multi_link_geometry.yaml").open() as handle:
+        data = yaml.safe_load(handle)
+    data["actuation"] = {"type": "direct", "mount": mount}
+    data["spring"] = {"type": "none"}
+    del data["hardpoints"]["strut_top"]
+    del data["hardpoints"]["strut_bottom"]
+
+    suspension = build_suspension(data)
+
+    assert isinstance(suspension, MultiLinkSuspension)
+    assert PointID.STRUT_BOTTOM not in suspension.derived_spec().functions
+    assert PointID.STRUT_BOTTOM not in suspension.initial_state().positions
+    assert PointID.STRUT_BOTTOM not in suspension.assembly().points.all
+
+
 def test_off_centreline_link_pickup_is_rejected():
     import yaml
 

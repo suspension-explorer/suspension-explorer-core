@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from functools import partial
 from math import degrees
@@ -204,7 +204,7 @@ class ActuationDirect:
         hardpoints: Mapping[PointKey, Point3],
     ) -> DerivedPointsSpec[PointID]:
         """Return the optional centreline pickup contribution."""
-        if not self.derive_pickup_on_link:
+        if not self.derive_pickup_on_link or self.moving_pickup_point not in hardpoints:
             return DerivedPointsSpec({}, {})
         if len(self.spring_pickup_body) != 2:
             raise ValueError(
@@ -987,8 +987,12 @@ def composed_upright_attachments(
     base_attachments: tuple[PointID, ...],
     actuation: Actuation,
     upright_body: tuple[PointID, ...],
+    installed_points: Collection[PointKey],
 ) -> tuple[PointID, ...]:
     """Return upright-carried points, including an upright-mounted pickup."""
-    if actuation.moving_pickup_body == upright_body:
+    if (
+        actuation.moving_pickup_body == upright_body
+        and actuation.moving_pickup_point in installed_points
+    ):
         return (*base_attachments, actuation.moving_pickup_point)
     return base_attachments
