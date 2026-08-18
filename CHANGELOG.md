@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-18
+
 ### Added
 
 - Added the multi-link locating architecture (`type: multi_link`) at corner and
