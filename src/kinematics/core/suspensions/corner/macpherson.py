@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import partial
-from typing import ClassVar, Sequence
+from typing import TYPE_CHECKING, ClassVar, Sequence
 
 from kinematics.core.constraints import (
     Constraint,
@@ -38,6 +38,7 @@ from kinematics.core.elements import (
     WheelElement,
 )
 from kinematics.core.enums import Axis, PointID, SteeringType, SuspensionType
+from kinematics.core.holds import CoordinateHold
 from kinematics.core.metrics.derivatives import (
     DerivativeMetricDefinition,
     PointCoordinateResponse,
@@ -70,6 +71,9 @@ from kinematics.core.suspensions.corner.attachments import (
 from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.suspensions.corner.toe_link import ToeLink
 from kinematics.core.suspensions.corner.track_rod import TrackRod
+
+if TYPE_CHECKING:
+    from kinematics.core.steering_response import SuspensionHoldCatalogue
 
 # How far the authored strut clamp may sit off the design steering axis, in
 # millimetres, before the coincident-axis modelling choice is considered
@@ -225,6 +229,49 @@ class MacPhersonSuspension(CornerSuspension):
     def damper_points(self) -> tuple[PointKey, PointKey] | None:
         """The strut is the spring/damper: top mount to upright clamp."""
         return (PointID.STRUT_TOP, PointID.STRUT_BOTTOM)
+
+    def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
+        """Declare strut and lower-arm fixed-travel steering definitions."""
+        from kinematics.core.steering_response import (
+            SuspensionHoldCatalogue,
+            SuspensionHoldOption,
+        )
+
+        if self.steering_actuator_coordinate() is None:
+            return None
+        strut = self._installed_damper_coordinate()
+        if strut is None:
+            return None
+        lower_arm = self._arm_angle_coordinate(
+            coordinate_id="lower_arm_angle",
+            label="Lower arm angle",
+            hinge_point_a=PointID.LOWER_WISHBONE_INBOARD_FRONT,
+            hinge_point_b=PointID.LOWER_WISHBONE_INBOARD_REAR,
+            carried_point=PointID.LOWER_WISHBONE_OUTBOARD,
+        )
+        return SuspensionHoldCatalogue(
+            default_option_id="strut_length",
+            options=(
+                SuspensionHoldOption(
+                    id="strut_length",
+                    label="Strut length",
+                    description=(
+                        "Fixes strut compression, the locating travel coordinate "
+                        "of the supported ideal MacPherson mechanism."
+                    ),
+                    hold=CoordinateHold((strut,)),
+                ),
+                SuspensionHoldOption(
+                    id="lower_arm_angle",
+                    label="Lower arm angle",
+                    description=(
+                        "Fixes suspension travel at the lower control arm for the "
+                        "supported ideal MacPherson mechanism."
+                    ),
+                    hold=CoordinateHold((lower_arm,)),
+                ),
+            ),
+        )
 
     def derivative_metric_definitions(
         self,

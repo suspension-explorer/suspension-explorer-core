@@ -28,6 +28,8 @@ from kinematics.core.schema.geometry import (
     GeometrySpecBase,
     MacPhersonAxleGeometrySpec,
     MacPhersonGeometrySpec,
+    MultiLinkAxleGeometrySpec,
+    MultiLinkGeometrySpec,
     TrailingArmAxleGeometrySpec,
     TrailingArmGeometrySpec,
 )
@@ -46,6 +48,7 @@ from kinematics.core.suspensions.corner import (
     CornerSuspension,
     DoubleWishboneSuspension,
     MacPhersonSuspension,
+    MultiLinkSuspension,
     TrailingArmSuspension,
 )
 from kinematics.core.suspensions.corner.mechanisms import (
@@ -97,6 +100,41 @@ def build_macpherson(spec: GeometrySpecBase) -> Suspension:
             point: position.copy() for point, position in typed.hardpoints.items()
         },
         config=typed.config,
+    )
+
+
+def build_multi_link(spec: GeometrySpecBase) -> Suspension:
+    """Build one multi-link corner with composed mechanisms."""
+    typed = cast(MultiLinkGeometrySpec, spec)
+    return _build_multi_link_corner(typed)
+
+
+def _build_multi_link_corner(
+    spec: MultiLinkGeometrySpec,
+    external_pickups: tuple[RockerPickup, ...] = (),
+) -> MultiLinkSuspension:
+    """Build one multi-link corner with optional axle attachments."""
+    actuation = build_actuation(
+        spec.actuation,
+        mount_bodies=MultiLinkSuspension.MOUNT_BODIES,
+        external_pickups=external_pickups,
+    )
+    spring = build_corner_spring(spec.spring)
+    damper = build_corner_damper(spec.damper)
+    _validate_side_signs(spec.hardpoints, spec.side)
+    _check_shim_support(spec.config, MultiLinkSuspension)
+    return MultiLinkSuspension(
+        name=spec.name,
+        version=spec.version,
+        units=spec.units,
+        side=spec.side,
+        hardpoints={
+            point: position.copy() for point, position in spec.hardpoints.items()
+        },
+        config=spec.config,
+        actuation=actuation,
+        spring=spring,
+        damper=damper,
     )
 
 
@@ -170,6 +208,33 @@ def build_macpherson_axle(spec: GeometrySpecBase) -> Suspension:
         )
         corners[side] = cast(CornerSuspension, build_macpherson(corner_geometry))
     return _assemble_axle(typed, corners, {})
+
+
+def build_multi_link_axle(spec: GeometrySpecBase) -> Suspension:
+    """Build a multi-link axle with composed shared hardware."""
+    typed = cast(MultiLinkAxleGeometrySpec, spec)
+    side_points = _build_axle_side_points(typed.hardpoints)
+    external_pickups, droplink_points = _extract_axle_pickups(typed, side_points)
+
+    corners: dict[Side, CornerSuspension] = {}
+    for side in (Side.LEFT, Side.RIGHT):
+        corner_geometry = MultiLinkGeometrySpec(
+            name=f"{typed.name}_{side.name.lower()}",
+            version=typed.version,
+            units=typed.units,
+            side=side,
+            config=SuspensionConfig.from_parts(
+                typed.vehicle_config,
+                typed.axle_config,
+                CornerConfig(),
+            ),
+            actuation=typed.axle_config.actuation,
+            spring=typed.axle_config.spring,
+            damper=typed.axle_config.damper,
+            hardpoints=side_points[side],
+        )
+        corners[side] = _build_multi_link_corner(corner_geometry, external_pickups)
+    return _assemble_axle(typed, corners, droplink_points)
 
 
 def build_trailing_arm_axle(spec: GeometrySpecBase) -> Suspension:
@@ -266,13 +331,24 @@ def build_actuation(
         raise ValueError(
             f"Architecture does not provide the '{spec.mount}' mounting body"
         )
+    mount_body = mount_bodies[spec.mount]
     if spec.type is ActuationType.DIRECT:
         if external_pickups:
             raise ValueError("Direct actuation does not accept rocker pickups")
-        return ActuationDirect(spring_pickup_body=mount_bodies[spec.mount])
+        # A two-joint rod carries the pickup on its centreline as a derived
+        # point; a three-point-plus body carries it rigidly anywhere.
+        return ActuationDirect(
+            spring_pickup_body=mount_body,
+            derive_pickup_on_link=len(mount_body) == 2,
+        )
     if spec.type is ActuationType.PUSHROD_ROCKER:
+        if len(mount_body) == 2:
+            raise ValueError(
+                "Pushrod-rocker actuation requires a rigid mounting body; "
+                f"'{spec.mount}' is a two-joint rod"
+            )
         return ActuationPushrodRocker(
-            pushrod_outboard_body=mount_bodies[spec.mount],
+            pushrod_outboard_body=mount_body,
             external_pickups=external_pickups,
         )
     raise TypeError(f"Unsupported actuation type: {spec.type}")

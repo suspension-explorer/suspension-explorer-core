@@ -12,13 +12,13 @@ import numpy as np
 import pytest
 
 from kinematics.core.constraints import DistanceConstraint, FixedAxisConstraint
-from kinematics.core.enums import Axis, PointID
+from kinematics.core.coordinates import CoordinateAxis, PointCoordinate
+from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode
 from kinematics.core.jacobians import (
     jac_angle,
     jac_coplanar,
     jac_distance,
     jac_equal_distance,
-    jac_point_on_line,
     jac_point_on_plane,
     jac_three_point_angle,
     jac_vectors_parallel,
@@ -309,51 +309,6 @@ class TestJacEqualDistance:
         np.testing.assert_allclose(j_eq[6:], -j_d2, atol=1e-14)
 
 
-class TestJacPointOnLine:
-    """Analytical vs. numerical derivatives for jac_point_on_line."""
-
-    def test_matches_numerical(self):
-        """Central-difference check for point-on-line constraint."""
-        line_point = np.array([1.0, 2.0, 3.0])
-        line_dir = np.array([1.0, 1.0, 1.0]) / math.sqrt(3.0)
-
-        # Point NOT on the line (to avoid the singularity).
-        pos = {P1: np.array([5.0, 3.0, 1.0])}
-        analytical = jac_point_on_line(pos[P1], line_point, line_dir)
-
-        def residual(p):
-            w = p[P1] - line_point
-            cross = np.cross(w, line_dir)
-            return float(np.linalg.norm(cross))
-
-        numerical = numerical_jacobian_row(residual, pos, [P1])
-        np.testing.assert_allclose(analytical, numerical, atol=TOLERANCE)
-
-    @pytest.mark.parametrize(
-        "line_dir",
-        [
-            np.array([1.0, 0.0, 0.0]),
-            np.array([0.0, 1.0, 0.0]),
-            np.array([0.0, 0.0, 1.0]),
-            np.array([1.0, 1.0, 0.0]) / math.sqrt(2.0),
-            np.array([1.0, 2.0, 3.0]) / math.sqrt(14.0),
-        ],
-    )
-    def test_various_line_directions(self, line_dir):
-        """Check derivatives for several line orientations."""
-        line_point = np.array([0.0, 0.0, 0.0])
-        pos = {P1: np.array([3.0, -2.0, 5.0])}
-        analytical = jac_point_on_line(pos[P1], line_point, line_dir)
-
-        def residual(p):
-            w = p[P1] - line_point
-            cross = np.cross(w, line_dir)
-            return float(np.linalg.norm(cross))
-
-        numerical = numerical_jacobian_row(residual, pos, [P1])
-        np.testing.assert_allclose(analytical, numerical, atol=TOLERANCE)
-
-
 class TestJacPointOnPlane:
     """Analytical vs. numerical derivatives for jac_point_on_plane."""
 
@@ -442,11 +397,6 @@ class TestFullJacobianAssembly:
         from kinematics.core.primitives.geometry import Point3
         from kinematics.core.solver import ResidualComputer
         from kinematics.core.state import SuspensionState
-        from kinematics.core.targeting import (
-            PointTarget,
-            PointTargetAxis,
-            TargetValueMode,
-        )
 
         positions = {
             P1: Point3([0.0, 0.0, 0.0]),
@@ -466,11 +416,8 @@ class TestFullJacobianAssembly:
         ]
 
         targets = [
-            PointTarget(
-                point_id=P1,
-                direction=PointTargetAxis(axis=Axis.X),
-                value=0.0,
-                mode=TargetValueMode.ABSOLUTE,
+            PointCoordinate(P1, CoordinateAxis(Axis.X), Scope.CORNER).target(
+                0.0, TargetValueMode.ABSOLUTE
             ),
         ]
 
@@ -512,11 +459,6 @@ class TestFullJacobianAssembly:
         from kinematics.core.primitives.geometry import Point3
         from kinematics.core.solver import ResidualComputer
         from kinematics.core.state import SuspensionState
-        from kinematics.core.targeting import (
-            PointTarget,
-            PointTargetAxis,
-            TargetValueMode,
-        )
 
         positions = {
             P1: Point3([0.0, 0.0, 0.0]),
@@ -538,17 +480,11 @@ class TestFullJacobianAssembly:
 
         x0 = state.get_free_array()
         bad_targets = [
-            PointTarget(
-                point_id=P1,
-                direction=PointTargetAxis(axis=Axis.X),
-                value=0.0,
-                mode=TargetValueMode.ABSOLUTE,
+            PointCoordinate(P1, CoordinateAxis(Axis.X), Scope.CORNER).target(
+                0.0, TargetValueMode.ABSOLUTE
             ),
-            PointTarget(
-                point_id=P2,
-                direction=PointTargetAxis(axis=Axis.Y),
-                value=0.0,
-                mode=TargetValueMode.ABSOLUTE,
+            PointCoordinate(P2, CoordinateAxis(Axis.Y), Scope.CORNER).target(
+                0.0, TargetValueMode.ABSOLUTE
             ),
         ]
 

@@ -2,12 +2,32 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Literal, Sequence
+from typing import TYPE_CHECKING, Annotated, Any, Literal, Sequence
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    field_serializer,
+    model_serializer,
+    model_validator,
+)
 
-from kinematics.core.enums import Axis, PointID, TargetValueMode
+from kinematics.core.coordinates import (
+    ActuatorCoordinate,
+    ChassisAxisSystem,
+    CoordinateAxis,
+    CoordinateDirection,
+    CoordinateTarget,
+    CoordinateType,
+    CoordinateVector,
+    PointCoordinate,
+    validate_sweep_controls,
+)
+from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode
+from kinematics.core.holds import CoordinateHold
 from kinematics.core.primitives.geometry import Direction3, extract_array
 from kinematics.core.primitives.point_ref import Side
 from kinematics.core.schema.decoding import (
@@ -19,14 +39,7 @@ from kinematics.core.schema.decoding import (
 from kinematics.core.targeting import (
     ACTUATOR_POSITION_TARGET_IDS,
     ELEMENT_LENGTH_TARGET_IDS,
-    ChassisAxisSystem,
-    PointTarget,
-    PointTargetAxis,
-    PointTargetVector,
-    ScalarTarget,
     SweepConfig,
-    TargetKind,
-    validate_sweep_controls,
 )
 
 if TYPE_CHECKING:
@@ -87,6 +100,7 @@ class SweepValueSpec(BaseModel):
 
     name: str | None = None
     side: SideValue | None = None
+    hold: bool = False
     mode: TargetValueModeValue = TargetValueMode.RELATIVE
     start: float | None = None
     stop: float | None = None
@@ -98,8 +112,39 @@ class SweepValueSpec(BaseModel):
             raise ValueError("Sweep target side must be 'left' or 'right'.")
         return self
 
+    @model_validator(mode="after")
+    def check_hold_values(self) -> "SweepValueSpec":
+        """A held coordinate has no authored value schedule."""
+        if not self.hold:
+            return self
+        conflicting = self.model_fields_set.intersection(
+            {"mode", "start", "stop", "values"}
+        )
+        if conflicting:
+            rendered = ", ".join(sorted(conflicting))
+            raise ValueError(
+                f"Held coordinate '{self.coordinate_name}' cannot specify {rendered}."
+            )
+        return self
+
+    @model_serializer(mode="wrap")
+    def serialize_hold_without_schedule(
+        self,
+        handler: SerializerFunctionWrapHandler,
+    ) -> dict[str, Any]:
+        """Keep explicit holds round-trip safe despite ordinary value defaults."""
+        data = dict(handler(self))
+        if self.hold:
+            for field_name in ("mode", "start", "stop", "values"):
+                data.pop(field_name, None)
+        return data
+
     def expand_values(self, default_steps: int | None) -> list[float]:
         """Expand explicit values or a start-stop range exactly once."""
+        if self.hold:
+            raise ValueError(
+                f"Held coordinate '{self.coordinate_name}' has no sweep values"
+            )
         if self.values is not None:
             return [float(value) for value in self.values]
         target_name = self.name or self.coordinate_name
@@ -197,6 +242,30 @@ SweepTargetSpec = Annotated[
 ]
 
 
+class VirtualSteeringAnalysisSpec(BaseModel):
+    """Analysis-only configuration for the virtual steering response."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    suspension_hold: str = "layout_default"
+
+    @model_validator(mode="after")
+    def check_suspension_hold(self) -> "VirtualSteeringAnalysisSpec":
+        if not self.suspension_hold.strip():
+            raise ValueError("Suspension-hold ID must not be empty")
+        return self
+
+
+class SweepAnalysisSpec(BaseModel):
+    """Optional calculations requested alongside the authored state sweep."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    virtual_steering: VirtualSteeringAnalysisSpec = Field(
+        default_factory=VirtualSteeringAnalysisSpec
+    )
+
+
 class SweepSpec(BaseModel):
     """Validated sweep file or API specification."""
 
@@ -205,6 +274,7 @@ class SweepSpec(BaseModel):
     version: int = 1
     steps: int | None = Field(default=None, ge=1)
     targets: list[SweepTargetSpec] = Field(min_length=1)
+    analysis: SweepAnalysisSpec = Field(default_factory=SweepAnalysisSpec)
 
     @model_validator(mode="after")
     def check_version(self) -> "SweepSpec":
@@ -212,15 +282,30 @@ class SweepSpec(BaseModel):
             raise ValueError(f"Unsupported sweep version: {self.version}")
         return self
 
+    @model_validator(mode="after")
+    def check_swept_target(self) -> "SweepSpec":
+        if not any(not target.hold for target in self.targets):
+            raise ValueError("A sweep requires at least one non-held target.")
+        return self
+
     @property
     def n_steps(self) -> int:
         """Return the validated number of values in each target dimension."""
-        lengths = {len(target.expand_values(self.steps)) for target in self.targets}
-        if len(lengths) > 1:
-            raise ValueError(
-                f"All targets must have the same length, got: {sorted(lengths)}"
-            )
-        return next(iter(lengths), 0)
+        sequences = _expanded_swept_values(self)
+        return len(sequences[0]) if sequences else 0
+
+
+def _expanded_swept_values(spec: SweepSpec) -> list[list[float]]:
+    """Expand swept targets once and validate their common length."""
+    sequences = [
+        target.expand_values(spec.steps) for target in spec.targets if not target.hold
+    ]
+    lengths = {len(sequence) for sequence in sequences}
+    if len(lengths) > 1:
+        raise ValueError(
+            f"All targets must have the same length, got: {sorted(lengths)}"
+        )
+    return sequences
 
 
 def build_sweep_config(
@@ -228,17 +313,15 @@ def build_sweep_config(
     suspension: "Suspension | None" = None,
 ) -> SweepConfig:
     """Expand a validated sweep and resolve optional side-qualified targets."""
-    target_sequences = [target.expand_values(spec.steps) for target in spec.targets]
-    lengths = {len(sequence) for sequence in target_sequences}
-    if len(lengths) > 1:
-        raise ValueError(
-            f"All targets must have the same length, got: {sorted(lengths)}"
-        )
+    target_sequences = _expanded_swept_values(spec)
+    if not target_sequences:
+        raise ValueError("A sweep requires at least one non-held target.")
 
-    dimensions: list[list[ScalarTarget]] = []
-    for target_index, (target_spec, values) in enumerate(
-        zip(spec.targets, target_sequences)
-    ):
+    dimensions: list[list[CoordinateTarget]] = []
+    held_coordinates = []
+    swept_values = iter(target_sequences)
+    for target_index, target_spec in enumerate(spec.targets):
+        values = [] if target_spec.hold else next(swept_values)
         try:
             if isinstance(target_spec, ElementLengthTargetSpec):
                 if suspension is None:
@@ -249,8 +332,11 @@ def build_sweep_config(
                 coordinate = suspension.resolve_drive_coordinate(
                     target_spec.element,
                     target_spec.side,
-                    TargetKind.ELEMENT_LENGTH,
+                    CoordinateType.ELEMENT_LENGTH,
                 )
+                if target_spec.hold:
+                    held_coordinates.append(coordinate)
+                    continue
                 dimensions.append(
                     [coordinate.target(value, target_spec.mode) for value in values]
                 )
@@ -258,11 +344,11 @@ def build_sweep_config(
 
             unit_vector = target_spec.direction.to_unit_vector()
             axis = vector_to_axis(unit_vector)
-            direction: PointTargetAxis | PointTargetVector
+            direction: CoordinateDirection
             if axis is not None:
-                direction = PointTargetAxis(axis)
+                direction = CoordinateAxis(axis)
             else:
-                direction = PointTargetVector(Direction3(unit_vector))
+                direction = CoordinateVector(Direction3(unit_vector))
 
             if isinstance(target_spec, ActuatorPositionTargetSpec):
                 if suspension is None:
@@ -273,17 +359,16 @@ def build_sweep_config(
                 coordinate = suspension.resolve_drive_coordinate(
                     target_spec.actuator,
                     target_spec.side,
-                    TargetKind.ACTUATOR_POSITION,
+                    CoordinateType.ACTUATOR_POSITION,
                 )
+                if not isinstance(coordinate, ActuatorCoordinate):
+                    raise TypeError("Resolved actuator coordinate has the wrong type")
+                coordinate = coordinate.with_direction(direction)
+                if target_spec.hold:
+                    held_coordinates.append(coordinate)
+                    continue
                 dimensions.append(
-                    [
-                        coordinate.position_target(
-                            direction,
-                            value,
-                            target_spec.mode,
-                        )
-                        for value in values
-                    ]
+                    [coordinate.target(value, target_spec.mode) for value in values]
                 )
                 continue
 
@@ -299,23 +384,42 @@ def build_sweep_config(
                     )
                 point_key = target_spec.point
 
+            point_coordinate = PointCoordinate(
+                point=point_key,
+                direction=direction,
+                scope=(
+                    Scope.AXLE
+                    if suspension is not None
+                    and suspension.is_axle
+                    and target_spec.side is None
+                    else Scope.CORNER
+                ),
+            )
+            if target_spec.hold:
+                held_coordinates.append(point_coordinate)
+                continue
             dimensions.append(
-                [
-                    PointTarget(
-                        point_id=point_key,
-                        direction=direction,
-                        value=value,
-                        mode=target_spec.mode,
-                    )
-                    for value in values
-                ]
+                [point_coordinate.target(value, target_spec.mode) for value in values]
             )
         except ValueError as error:
             raise ValueError(f"Sweep target {target_index}: {error}") from error
-    sweep_config = SweepConfig(dimensions)
+    sweep_config = SweepConfig(
+        dimensions,
+        hold=CoordinateHold(tuple(held_coordinates)),
+        suspension_hold_id=spec.analysis.virtual_steering.suspension_hold,
+    )
     if suspension is not None:
         suspension.validate_sweep_targets(
-            target for dimension in dimensions for target in dimension
+            (target for dimension in dimensions for target in dimension),
+            held_targets=sweep_config.hold.materialize(
+                suspension.initial_state().positions
+            ),
         )
-        validate_sweep_controls(sweep_config, suspension.actuator_dofs())
+        validate_sweep_controls(
+            sweep_config,
+            suspension.required_actuator_coordinates(),
+        )
+        # Selection is analysis-only: validate it after the state-driving
+        # target basis is built, without adding a residual to the sweep solve.
+        suspension.resolve_suspension_hold(sweep_config.suspension_hold_id)
     return sweep_config

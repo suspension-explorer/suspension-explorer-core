@@ -151,6 +151,15 @@ def _element_paths(
             ),
         )
     if isinstance(element, UprightElement):
+        # The carrier is drawn as a spoke set: one path from the (unmarked)
+        # axle midpoint to each carried joint. Authored outline segments are
+        # not rendered.
+        if len(element.attachments) == 2:
+            hub: ElementPathPoint = PointMidpoint(*element.attachments)
+            return tuple(
+                ElementPath((hub, joint), ElementType.UPRIGHT, element.label)
+                for joint in element.hardpoints
+            )
         return tuple(
             ElementPath(segment, ElementType.UPRIGHT, element.label)
             for segment in element.segments

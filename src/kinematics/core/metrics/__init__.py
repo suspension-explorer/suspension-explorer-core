@@ -18,3 +18,4 @@ from kinematics.core.metrics.main import (
     compute_metrics_for_state_from_suspension,
     compute_metrics_for_sweep,
 )
+from kinematics.core.metrics.steering import SteeringAxis

@@ -2,7 +2,8 @@ import numpy as np
 import pytest
 
 from kinematics.core.constraints import DistanceConstraint
-from kinematics.core.enums import Axis, PointID, TargetValueMode
+from kinematics.core.coordinates import CoordinateAxis, PointCoordinate
+from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
     DerivedPointsSpec,
@@ -16,7 +17,7 @@ from kinematics.core.solver import (
     solve_suspension_sweep,
 )
 from kinematics.core.state import SuspensionState
-from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
+from kinematics.core.targeting import SweepConfig
 
 
 @pytest.fixture
@@ -67,12 +68,9 @@ def simple_constraints(simple_positions, length_forward_leg, length_rearward_leg
 def simple_sweep_config():
     displacements = [0.0, 0.5, 1.0]
     point_targets = [
-        PointTarget(
-            point_id=PointID.LOWER_WISHBONE_OUTBOARD,
-            direction=PointTargetAxis(Axis.Z),
-            value=d,
-            mode=TargetValueMode.RELATIVE,
-        )
+        PointCoordinate(
+            PointID.LOWER_WISHBONE_OUTBOARD, CoordinateAxis(Axis.Z), Scope.CORNER
+        ).target(d, TargetValueMode.RELATIVE)
         for d in displacements
     ]
     return SweepConfig([point_targets])
@@ -216,12 +214,9 @@ def test_solve_sweep_rejects_converged_infeasible_target(
         positions=simple_positions,
         free_points={PointID.LOWER_WISHBONE_OUTBOARD},
     )
-    infeasible_target = PointTarget(
-        point_id=PointID.LOWER_WISHBONE_OUTBOARD,
-        direction=PointTargetAxis(Axis.Z),
-        value=10.0,
-        mode=TargetValueMode.ABSOLUTE,
-    )
+    infeasible_target = PointCoordinate(
+        PointID.LOWER_WISHBONE_OUTBOARD, CoordinateAxis(Axis.Z), Scope.CORNER
+    ).target(10.0, TargetValueMode.ABSOLUTE)
 
     with pytest.raises(RuntimeError, match="sweep step 0.*Worst residual row"):
         solve_suspension_sweep(

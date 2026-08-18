@@ -11,6 +11,7 @@ CORE_PACKAGE = PROJECT_ROOT / "src" / "kinematics" / "core"
 CLI_ONLY_DEPENDENCIES = ("matplotlib", "pyarrow", "typer", "yaml")
 PUBLIC_CORE_MODULES = {
     "kinematics.core.assembly",
+    "kinematics.core.coordinates",
     "kinematics.core.elements",
     "kinematics.core.export",
     "kinematics.core.input",
@@ -22,10 +23,12 @@ PUBLIC_CORE_MODULES = {
     "kinematics.core.primitives.point_ref",
     "kinematics.core.presentation",
     "kinematics.core.road",
+    "kinematics.core.screw_axis",
     "kinematics.core.schema.geometry",
     "kinematics.core.schema.sweep",
     "kinematics.core.solver",
     "kinematics.core.state",
+    "kinematics.core.steering_axis",
     "kinematics.core.suspensions.base",
     "kinematics.core.suspensions.build",
     "kinematics.core.sweep",

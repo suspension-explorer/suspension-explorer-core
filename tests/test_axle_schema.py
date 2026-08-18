@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 import yaml
 
+from kinematics.core.coordinates import CoordinateAxis, PointCoordinate
 from kinematics.core.enums import (
     ActuationType,
     ArbType,
@@ -28,7 +29,6 @@ from kinematics.core.schema.geometry import (
     DoubleWishboneGeometrySpec,
 )
 from kinematics.core.schema.sweep import SweepSpec, TargetSpec, build_sweep_config
-from kinematics.core.targeting import PointTarget, PointTargetAxis
 
 
 def _read_yaml_mapping(path: Path, kind: str) -> dict[str, Any]:
@@ -327,10 +327,10 @@ def test_x_axis_remains_an_axis_target() -> None:
 
     config = build_sweep_config(spec)
     target = config.target_sweeps[0][0]
-    assert isinstance(target, PointTarget)
-    assert target.point_id is PointID.WHEEL_CENTER
-    assert isinstance(target.direction, PointTargetAxis)
-    assert target.direction.axis is Axis.X
+    assert isinstance(target.coordinate, PointCoordinate)
+    assert target.coordinate.point is PointID.WHEEL_CENTER
+    assert isinstance(target.coordinate.direction, CoordinateAxis)
+    assert target.coordinate.direction.axis is Axis.X
 
 
 def test_sweep_spec_reports_expanded_step_count() -> None:
@@ -368,6 +368,16 @@ def test_sweep_spec_reports_expanded_step_count() -> None:
                 }
             ],
         },
+        {
+            "targets": [
+                {
+                    "type": "point",
+                    "point": PointID.TRACKROD_INBOARD,
+                    "direction": {"axis": Axis.Y},
+                    "hold": True,
+                }
+            ]
+        },
     ],
 )
 def test_sweep_spec_requires_targets_and_positive_steps(
@@ -377,15 +387,33 @@ def test_sweep_spec_requires_targets_and_positive_steps(
         SweepSpec.model_validate(raw)
 
 
-def test_hold_is_a_frontend_convenience_not_a_core_sweep_field() -> None:
-    """Core callers express a held actuator as an ordinary relative zero target."""
-    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+def test_target_spec_accepts_reference_state_hold_without_a_schedule() -> None:
+    target = TargetSpec.model_validate(
+        {
+            "type": "point",
+            "point": PointID.TRACKROD_INBOARD,
+            "direction": {"axis": Axis.Y},
+            "hold": True,
+        }
+    )
+
+    assert target.hold is True
+    assert not target.model_fields_set.intersection({"mode", "start", "stop", "values"})
+    dumped = target.model_dump(mode="json")
+    assert not dumped.keys() & {"mode", "start", "stop", "values"}
+    assert TargetSpec.model_validate(dumped) == target
+
+
+def test_target_spec_rejects_a_value_schedule_for_a_hold() -> None:
+    with pytest.raises(ValueError, match="Held coordinate 'trackrod_inboard'"):
         TargetSpec.model_validate(
             {
                 "type": "point",
                 "point": PointID.TRACKROD_INBOARD,
                 "direction": {"axis": Axis.Y},
                 "hold": True,
+                "start": 0.0,
+                "stop": 0.0,
             }
         )
 

@@ -1,14 +1,38 @@
-"""
-Main orchestration functions for suspension kinematics.
+"""Solve suspension sweeps and coordinate their analytical products.
 
-This module provides high-level functions to coordinate the solving of suspension
-geometries.
+Authored sweep targets have two jobs here: they define the nonlinear states
+that are actually solved, and their per-state analytical tangent basis supplies
+ordinary derivative metrics.  A partial derivative holds every other
+coordinate in that authored basis at zero rate, so it necessarily inherits the
+sweep's boundary conditions.
+
+An authored ``hold: true`` control uses the same scalar-coordinate machinery
+but captures its value once from the sweep reference state.  Its absolute
+target is then appended to every nonlinear solve and every authored tangent
+basis.  This is distinct from the steering-response hold below, which captures
+the selected suspension coordinate afresh at each already-solved state.
+
+The motion-derived steering axis is intentionally calculated through a second,
+semantically separate derivative product.  At every accepted state the
+suspension topology provides a steering actuator and an independent set of
+suspension-travel holds.  The steering-response module solves that analytical
+derivative at the current state and fits each upright's screw axis.  This keeps
+virtual steering metrics independent of wheel-centre, damper, heave, or roll
+targets used to reach the state while still avoiding nonlinear perturbation or
+finite differences.
+
+The orchestration below therefore keeps authored :class:`SweepTangents` and
+isolated steering-response axes as separate values and passes each only to its
+intended consumers.  A future complete sweep-path screw axis would be a third
+product formed from coordinated authored target rates, not another name for
+either of these two.
 """
 
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Callable, List
 
+from kinematics.core.coordinates import validate_sweep_controls
 from kinematics.core.diagnostics import (
     DiagnosticCategory,
     DiagnosticIssue,
@@ -18,6 +42,7 @@ from kinematics.core.diagnostics import (
 from kinematics.core.metrics.main import AxleMetricRows, MetricRow
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.point_ref import PointKey
+from kinematics.core.screw_axis import ScrewAxisStatus
 from kinematics.core.sensitivity import (
     TangentField,
     TangentSolveInfo,
@@ -29,8 +54,13 @@ from kinematics.core.solver import (
     solve_suspension_sweep,
 )
 from kinematics.core.state import SuspensionState
+from kinematics.core.steering_axis import (
+    SteeringResponseAxisResult,
+    SteeringResponseStatus,
+    compute_steering_response_axes_for_states,
+)
 from kinematics.core.suspensions.base import Suspension
-from kinematics.core.targeting import SweepConfig, validate_sweep_controls
+from kinematics.core.targeting import SweepConfig
 
 
 def solve_sweep(
@@ -53,9 +83,19 @@ def solve_sweep(
         solver information for each step in the sweep.
     """
     suspension.validate_sweep_targets(
-        target for target_sweep in sweep_config.target_sweeps for target in target_sweep
+        (
+            target
+            for target_sweep in sweep_config.target_sweeps
+            for target in target_sweep
+        ),
+        held_targets=sweep_config.hold.materialize(
+            suspension.initial_state().positions
+        ),
     )
-    validate_sweep_controls(sweep_config, suspension.actuator_dofs())
+    validate_sweep_controls(
+        sweep_config,
+        suspension.required_actuator_coordinates(),
+    )
     derived_spec = suspension.derived_spec()
     derived_manager = DerivedPointsManager(derived_spec)
 
@@ -120,17 +160,30 @@ class EvaluatedSweep:
     solver_stats: list[SolverInfo]
     metrics: SweepMetricsResult
     diagnostics: list[DiagnosticIssue]
+    steering_response_axes: tuple[tuple[SteeringResponseAxisResult, ...], ...] = ()
 
     def __post_init__(self) -> None:
         """
         Reject partial results that would truncate adapter output.
         """
+        if not self.steering_response_axes and self.states:
+            object.__setattr__(
+                self,
+                "steering_response_axes",
+                tuple(() for _ in self.states),
+            )
         lengths = (len(self.states), len(self.solver_stats), len(self.metrics.rows))
         if len(set(lengths)) != 1:
             raise ValueError(
                 "Evaluated sweep state, solver-stat, and metric counts must match: "
                 f"{lengths[0]} states, {lengths[1]} solver stats, "
                 f"{lengths[2]} metric rows."
+            )
+        if len(self.steering_response_axes) != len(self.states):
+            raise ValueError(
+                "Evaluated sweep steering-response-axis and state counts must match: "
+                f"{len(self.steering_response_axes)} axis frames, "
+                f"{len(self.states)} states."
             )
 
 
@@ -145,6 +198,7 @@ def compute_sweep_tangents(
     derived_manager = DerivedPointsManager(suspension.derived_spec())
     constraints = suspension.constraints()
     initial_state = suspension.initial_state()
+    held_targets = list(sweep_config.hold.materialize(initial_state.positions))
     tangents_per_step: list[list[TangentField]] = []
     solve_infos: list[TangentSolveInfo] = []
 
@@ -153,6 +207,7 @@ def compute_sweep_tangents(
             [target_sweep[step_index] for target_sweep in sweep_config.target_sweeps],
             initial_state,
         )
+        step_targets.extend(held_targets)
         fields, solve_info = compute_state_tangents(
             state,
             constraints,
@@ -177,17 +232,72 @@ def compute_sweep_metrics(
     if suspension.config is None:
         return SweepMetricsResult(rows=[OrderedDict() for _ in states])
 
-    derivative_error: str | None = None
+    tangents, derivative_error = _compute_sweep_tangents_safely(
+        suspension,
+        sweep_config,
+        states,
+    )
+    steering_response_axes = _compute_steering_axes(suspension, sweep_config, states)
+    return _compute_sweep_metrics_from_tangents(
+        suspension,
+        states,
+        tangents,
+        derivative_error,
+        steering_response_axes,
+    )
+
+
+def _compute_steering_axes(
+    suspension: Suspension,
+    sweep_config: SweepConfig,
+    states: list[SuspensionState],
+) -> tuple[tuple[SteeringResponseAxisResult, ...], ...]:
+    """Compute topology-isolated response axes independently of sweep tangents."""
+    return compute_steering_response_axes_for_states(
+        suspension,
+        states,
+        requested_option_id=sweep_config.suspension_hold_id,
+    )
+
+
+def _compute_sweep_tangents_safely(
+    suspension: Suspension,
+    sweep_config: SweepConfig,
+    states: list[SuspensionState],
+) -> tuple[SweepTangents | None, str | None]:
+    """Compute one shared tangent bundle, degrading advisory outputs on failure."""
     try:
-        tangents = compute_sweep_tangents(suspension, sweep_config, states)
-    except Exception as error:  # noqa: BLE001 - metrics degrade without derivatives
-        tangents = None
-        derivative_error = f"{type(error).__name__}: {error}"
+        return compute_sweep_tangents(suspension, sweep_config, states), None
+    except Exception as error:  # noqa: BLE001 - derivatives are advisory
+        return None, f"{type(error).__name__}: {error}"
+
+
+def _compute_sweep_metrics_from_tangents(
+    suspension: Suspension,
+    states: list[SuspensionState],
+    tangents: SweepTangents | None,
+    derivative_error: str | None,
+    steering_response_axes: tuple[tuple[SteeringResponseAxisResult, ...], ...]
+    | None = None,
+) -> SweepMetricsResult:
+    """Evaluate metrics from an already-computed tangent bundle."""
+    if suspension.config is None:
+        return SweepMetricsResult(rows=[OrderedDict() for _ in states])
+
+    if steering_response_axes is not None and len(steering_response_axes) != len(
+        states
+    ):
+        raise ValueError("State/steering-response-axis row count mismatch")
 
     rows = [
         suspension.compute_state_metrics(
             state,
             tangents.per_step[index] if tangents is not None else None,
+            (
+                steering_response_axes[index]
+                if steering_response_axes is not None
+                else None
+            ),
         )
         for index, state in enumerate(states)
     ]
@@ -234,6 +344,52 @@ def _derivative_issues(result: SweepMetricsResult) -> list[DiagnosticIssue]:
                     "be unique."
                 ),
                 value=min_sv,
+            )
+        )
+    return issues
+
+
+def _steering_axis_issues(
+    per_frame: tuple[tuple[SteeringResponseAxisResult, ...], ...],
+) -> list[DiagnosticIssue]:
+    """Summarize unavailable instantaneous axes without flooding diagnostics."""
+    grouped: dict[
+        tuple[SteeringResponseStatus, ScrewAxisStatus | None],
+        list[tuple[int, SteeringResponseAxisResult]],
+    ] = {}
+    for step, results in enumerate(per_frame):
+        for result in results:
+            if result.status is SteeringResponseStatus.VALID:
+                continue
+            key = (result.status, result.screw_axis_status)
+            grouped.setdefault(key, []).append((step, result))
+
+    issues: list[DiagnosticIssue] = []
+    for (status, screw_axis_status), occurrences in grouped.items():
+        first_step, first_result = occurrences[0]
+        status_description = status.value
+        if screw_axis_status is not None:
+            status_description += f" ({screw_axis_status.value})"
+        message = (
+            f"Steering-response axis status '{status_description}' occurred for "
+            f"{len(occurrences)} upright frame(s); first at step {first_step} "
+            f"for '{first_result.upright_label}'."
+        )
+        if first_result.message:
+            message = f"{message} {first_result.message}"
+        issues.append(
+            DiagnosticIssue(
+                step=first_step,
+                category=DiagnosticCategory.STEERING_AXIS,
+                severity=DiagnosticSeverity.WARNING,
+                message=message,
+                value=(
+                    first_result.twist.fit_max
+                    if first_result.twist is not None
+                    and first_result.screw_axis_status
+                    is ScrewAxisStatus.EXCESSIVE_FIT_ERROR
+                    else None
+                ),
             )
         )
     return issues
@@ -287,7 +443,19 @@ def _evaluate_finalized_sweep(
     exactly once, at solving time; only externally supplied states pay the
     copy-and-finalise pass in :func:`evaluate_solved_sweep`.
     """
-    metrics = compute_sweep_metrics(suspension, sweep_config, states)
+    tangents, derivative_error = _compute_sweep_tangents_safely(
+        suspension,
+        sweep_config,
+        states,
+    )
+    steering_response_axes = _compute_steering_axes(suspension, sweep_config, states)
+    metrics = _compute_sweep_metrics_from_tangents(
+        suspension,
+        states,
+        tangents,
+        derivative_error,
+        steering_response_axes,
+    )
     try:
         diagnostics = list(diagnose_sweep(suspension, states, solver_stats).issues)
     except Exception as error:  # noqa: BLE001 - diagnostics are advisory
@@ -304,11 +472,13 @@ def _evaluate_finalized_sweep(
             )
         ]
     diagnostics.extend(_derivative_issues(metrics))
+    diagnostics.extend(_steering_axis_issues(steering_response_axes))
     return EvaluatedSweep(
         states=states,
         solver_stats=solver_stats,
         metrics=metrics,
         diagnostics=diagnostics,
+        steering_response_axes=steering_response_axes,
     )
 
 

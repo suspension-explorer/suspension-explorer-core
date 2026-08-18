@@ -10,6 +10,8 @@ from kinematics.core.enums import Scope
 from kinematics.core.metrics.catalog import (
     get_default_corner_derivative_metrics,
     get_default_corner_metrics,
+    get_virtual_steering_metrics,
+    physical_steering_metric_keys,
 )
 from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
 from kinematics.core.metrics.units import MetricUnit, MetricUnitQuotient
@@ -156,6 +158,20 @@ def specs_by_key(
 def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpec]:
     """Return all metadata that the selected topology can emit."""
     state_specs = list(all_static_metric_specs())
+    if not _physical_steering_axis_available(suspension):
+        omitted = physical_steering_metric_keys()
+        state_specs = [spec for spec in state_specs if spec.key not in omitted]
+    if suspension.steering_actuator_coordinate() is not None:
+        state_specs.extend(
+            MetricSpec(
+                metric.column_name,
+                metric.label,
+                metric.unit,
+                MetricKind.STATE,
+                Scope.CORNER,
+            )
+            for metric in get_virtual_steering_metrics()
+        )
     derivatives: list[tuple[DerivativeMetricDefinition, Scope]] = []
     if suspension.is_axle:
         axle = cast("AxleSuspension", suspension)
@@ -191,6 +207,18 @@ def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpe
         spec = derivative_spec(definition, scope=scope)
         _merge_specs(result, (spec,))
     return result
+
+
+def _physical_steering_axis_available(suspension: "Suspension") -> bool:
+    """Return whether any corner declares a physical steering axis."""
+    if suspension.is_axle:
+        axle = cast("AxleSuspension", suspension)
+        return any(
+            corner.steering_axis_points() is not None
+            for corner in axle.corners.values()
+        )
+    corner = cast("CornerSuspension", suspension)
+    return corner.steering_axis_points() is not None
 
 
 def _merge_specs(

@@ -6,8 +6,7 @@ All functions accept a MetricContext and return angles in degrees.
 The calculations use the ISO 8855 vehicle-axis orientation (X forward,
 Y left, Z up), expressed here in chassis space. They are kinematic alignment
 angles relative to the chassis axes; they do not depend on world space or the
-road plane. Wheel-relative road metrics are documented separately in
-``steering_geometry``.
+road plane. Steering-axis metrics are documented separately in ``steering``.
 """
 
 from __future__ import annotations
@@ -16,8 +15,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from kinematics.core.coordinates import ChassisAxisSystem
 from kinematics.core.enums import Axis
-from kinematics.core.targeting import ChassisAxisSystem
 
 if TYPE_CHECKING:
     from kinematics.core.metrics.context import MetricContext
@@ -55,52 +54,6 @@ def calculate_camber(ctx: MetricContext) -> float:
     # Invert to match convention.
     camber_rad = angle if side > 0 else -angle
     return float(np.rad2deg(camber_rad))
-
-
-def calculate_caster(ctx: MetricContext) -> float:
-    """
-    Caster angle in degrees.
-
-    This is ISO 8855:2011 castor angle (§7.2.2), exposed under the conventional
-    project spelling ``caster``. The steering axis is expressed in chassis
-    space and resolved in the chassis XZ plane against chassis +Z. It does not
-    use the road plane or world vertical. Positive caster means the top of the
-    steering axis is tilted rearward.
-    """
-    steering = ctx.steering_axis
-
-    # Project onto the side view plane (XZ plane).
-    proj_x = steering[Axis.X]
-    proj_z = steering[Axis.Z]
-
-    # Positive caster = top tilted rearward (negative X relative to
-    # bottom). Negate x so rearward tilt gives a positive angle.
-    caster_rad = np.arctan2(-proj_x, proj_z)
-    return float(np.rad2deg(caster_rad))
-
-
-def calculate_kpi(ctx: MetricContext) -> float:
-    """
-    Kingpin inclination (KPI) angle in degrees.
-
-    This is ISO 8855:2011 steering-axis inclination (§7.2.5). The steering axis
-    is expressed in chassis space and resolved in the chassis YZ plane against
-    chassis +Z. It does not use the road plane or world vertical. Positive KPI
-    means the top of the steering axis is tilted inward, towards the vehicle
-    centerline.
-    """
-    side = ctx.side_sign
-    steering = ctx.steering_axis
-
-    # Project onto the front view plane (YZ plane).
-    proj_y = steering[Axis.Y]
-    proj_z = steering[Axis.Z]
-
-    # Positive KPI = top tilted inward. For the left side (Y > 0),
-    # inward tilt means negative Y component relative to bottom,
-    # so negate Y. For the right side, inward tilt is positive Y.
-    kpi_rad = np.arctan2(-side * proj_y, proj_z)
-    return float(np.rad2deg(kpi_rad))
 
 
 def calculate_toe(ctx: MetricContext) -> float:

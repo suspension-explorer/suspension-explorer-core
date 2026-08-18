@@ -1,0 +1,62 @@
+# Steered five-rod (multi-link) front corner, Audi-style: four independent
+# locating links plus a rack-driven track rod, each with its own outboard
+# ball joint, so no physical kingpin exists. The geometry is synthesized
+# about a designed virtual steering axis (KPI 13 deg, caster 4 deg, scrub
+# -5 mm, trail 22 mm at design): every locating-link line intersects that
+# axis, making rotation about it an exact mechanism motion. Link proportions
+# and joint elevations follow the published five-rod front suspension of
+# Knapczyk & Maniowski, Arch. Mech. Eng. 57(2), 2010.
+#
+# Wheel centre {x: 0, y: 875, z: 316}, tire 205/55 R16, left corner.
+type: multi_link
+side: left
+name: "multi_link_test"
+version: "0.0.1"
+units: millimeters
+
+actuation:
+  type: direct
+  mount: lower_rear_link
+spring:
+  type: coilover
+
+hardpoints:
+  # Upper link pair; virtual upper joint on the steer axis at z = 450.
+  upper_front_link_inboard: {x: 110, y: 468.5, z: 460}
+  upper_front_link_outboard: {x: 8.5, y: 729.5, z: 451.5}
+  upper_rear_link_inboard: {x: -146, y: 465, z: 439.5}
+  upper_rear_link_outboard: {x: -31.5, y: 726, z: 448.5}
+
+  # Lower link pair (tension strut + control arm); virtual lower joint on
+  # the steer axis at z = 200.
+  lower_front_link_inboard: {x: 232, y: 467.5, z: 178.5}
+  lower_front_link_outboard: {x: 39.5, y: 782.5, z: 197}
+  lower_rear_link_inboard: {x: -56, y: 439, z: 204}
+  lower_rear_link_outboard: {x: 1, y: 789.5, z: 200.5}
+
+  # Track rod, rack behind the axle; both joints tuned for near-zero bump
+  # steer over the full +/-150 mm travel.
+  trackrod_inboard: {x: -137.5, y: 502.5, z: 199}
+  trackrod_outboard: {x: -85.5, y: 816, z: 195}
+
+  # Axle (wheel spin axis).
+  axle_inboard: {x: 0, y: 725, z: 316}
+  axle_outboard: {x: 0, y: 875, z: 316}
+
+  # Coilover: body mount to a fork clamped around the lower-rear (support)
+  # link at 90% of its span, as on production multi-links. The pickup is a
+  # derived point on the rod centreline, so it follows the link exactly.
+  strut_top: {x: -25, y: 640, z: 640}
+  strut_bottom: {x: -4.7, y: 754.45, z: 200.85}
+
+config:
+  steering:
+    type: rack
+  wheel:
+    offset: 0  # ET convention: positive is inboard.
+    tire:
+      aspect_ratio: 0.55
+      section_width: 205
+      rim_diameter: 16  # Specified in inches.
+  cg_position: {x: 1080, y: 0, z: 520}
+  wheelbase: 2700.0

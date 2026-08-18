@@ -16,6 +16,13 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any, ClassVar, Sequence
 
 from kinematics.core.constraints import Constraint, DistanceConstraint
+from kinematics.core.coordinates import (
+    ActuatorCoordinate,
+    CoordinateAxis,
+    CoordinateType,
+    ElementLengthCoordinate,
+    ScalarCoordinate,
+)
 from kinematics.core.elements import (
     ElementType,
     RackElement,
@@ -31,6 +38,7 @@ from kinematics.core.enums import (
     Scope,
     SuspensionType,
 )
+from kinematics.core.holds import CoordinateHold
 from kinematics.core.metrics.main import AxleMetricRows, compute_metrics_for_axle_state
 from kinematics.core.points.derived.ground import (
     seed_from_contact_centres,
@@ -62,10 +70,6 @@ from kinematics.core.suspensions.axle.mechanisms import (
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.targeting import (
-    ActuatorDOF,
-    ChassisAxisSystem,
-    DriveCoordinate,
-    TargetKind,
     resolve_published_target_side,
     sweep_target_side_policy,
 )
@@ -75,6 +79,8 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
     from kinematics.core.metrics.registry import MetricSpec
     from kinematics.core.sensitivity import TangentField
+    from kinematics.core.steering_axis import SteeringResponseAxisResult
+    from kinematics.core.steering_response import SuspensionHoldCatalogue
 
 
 class _CornerPositionView(Mapping[PointID, Any]):
@@ -149,32 +155,31 @@ class AxleSuspension(Suspension):
             return None
         return (left, right)
 
-    def actuator_dofs(self) -> tuple[ActuatorDOF, ...]:
+    def required_actuator_coordinates(self) -> tuple[ActuatorCoordinate, ...]:
         """Require one shared rack coordinate for a steered axle."""
-        rack = self.rack_attachment_points()
-        if rack is None:
-            return ()
-        return (
-            ActuatorDOF(
-                id=ActuatorPositionCoordinateID.RACK,
-                name="steering rack",
-                point_keys=(
-                    PointRef(Side.LEFT, rack[0]),
-                    PointRef(Side.RIGHT, rack[1]),
-                ),
-                direction=ChassisAxisSystem.Y,
+        steering = self.steering_actuator_coordinate()
+        return (steering,) if steering is not None else ()
+
+    def steering_actuator_coordinate(self) -> ActuatorCoordinate | None:
+        """Return the shared rack coordinate for a steered axle."""
+        return next(
+            (
+                coordinate
+                for coordinate in self.drive_coordinates()
+                if isinstance(coordinate, ActuatorCoordinate)
+                and coordinate.id == ActuatorPositionCoordinateID.RACK.value
             ),
+            None,
         )
 
-    def drive_coordinates(self) -> tuple[DriveCoordinate, ...]:
+    def drive_coordinates(self) -> tuple[ScalarCoordinate, ...]:
         """Compose sided corner dampers and axle-owned variable coordinates."""
-        coordinates: list[DriveCoordinate] = []
+        coordinates: list[ScalarCoordinate] = []
         rack = self.rack_attachment_points()
         if rack is not None:
             coordinates.append(
-                DriveCoordinate(
-                    id=ActuatorPositionCoordinateID.RACK,
-                    kind=TargetKind.ACTUATOR_POSITION,
+                ActuatorCoordinate(
+                    id=ActuatorPositionCoordinateID.RACK.value,
                     label=ActuatorPositionCoordinateID.RACK.label,
                     unit=ActuatorPositionCoordinateID.RACK.unit,
                     point_keys=(
@@ -182,23 +187,18 @@ class AxleSuspension(Suspension):
                         PointRef(Side.RIGHT, rack[1]),
                     ),
                     scope=Scope.AXLE,
+                    direction=CoordinateAxis(Axis.Y),
                 )
             )
         for side in (Side.LEFT, Side.RIGHT):
             for coordinate in self.corners[side].drive_coordinates():
-                if coordinate.kind is TargetKind.ACTUATOR_POSITION:
+                if isinstance(coordinate, ActuatorCoordinate):
                     continue
                 coordinates.append(
-                    DriveCoordinate(
-                        id=coordinate.id,
-                        kind=coordinate.kind,
-                        label=coordinate.label,
-                        unit=coordinate.unit,
-                        point_keys=tuple(
-                            side_qualified(side, point)
-                            for point in coordinate.point_keys
+                    coordinate.map_points(
+                        lambda point, selected_side=side: side_qualified(
+                            selected_side, point
                         ),
-                        scope=Scope.CORNER,
                         side=side,
                     )
                 )
@@ -210,16 +210,109 @@ class AxleSuspension(Suspension):
             ):
                 coordinate_id = ElementLengthCoordinateID.HEAVE_LINK
                 coordinates.append(
-                    DriveCoordinate(
-                        id=coordinate_id,
-                        kind=TargetKind.ELEMENT_LENGTH,
+                    ElementLengthCoordinate(
+                        id=coordinate_id.value,
                         label=coordinate_id.label,
                         unit=coordinate_id.unit,
-                        point_keys=(element.point_a, element.point_b),
+                        point_a=element.point_a,
+                        point_b=element.point_b,
                         scope=Scope.AXLE,
                     )
                 )
         return tuple(coordinates)
+
+    def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
+        """Compose compatible corner options into one axle-level selection.
+
+        Each semantic option remains one user choice but expands to one
+        independent held coordinate per corner.  Shared axle mechanisms are
+        deliberately excluded: their motion may follow from the two corner
+        travel coordinates and is not an additional jounce degree of freedom.
+        """
+        from kinematics.core.steering_response import (
+            SuspensionHoldAvailability,
+            SuspensionHoldCatalogue,
+            SuspensionHoldOption,
+        )
+
+        catalogues = tuple(
+            self.corners[side].suspension_hold_catalogue()
+            for side in (Side.LEFT, Side.RIGHT)
+        )
+        if any(catalogue is None for catalogue in catalogues):
+            return None
+        left_catalogue, right_catalogue = catalogues
+        assert left_catalogue is not None and right_catalogue is not None
+        if left_catalogue.default_option_id != right_catalogue.default_option_id:
+            raise ValueError(
+                "Axle corners declare incompatible suspension-hold defaults"
+            )
+
+        right_by_id = {option.id: option for option in right_catalogue.options}
+        composed: list[SuspensionHoldOption] = []
+        for left_option in left_catalogue.options:
+            right_option = right_by_id.get(left_option.id)
+            if right_option is None:
+                continue
+            if left_option.composition_signature != right_option.composition_signature:
+                raise ValueError(
+                    f"Axle corners assign incompatible semantics to suspension "
+                    f"hold '{left_option.id}'"
+                )
+            held = tuple(
+                coordinate.map_points(
+                    lambda point, selected_side=side: side_qualified(
+                        selected_side, point
+                    ),
+                    side=side,
+                )
+                for side, option in (
+                    (Side.LEFT, left_option),
+                    (Side.RIGHT, right_option),
+                )
+                for coordinate in option.hold.coordinates
+            )
+            unavailable_reasons = tuple(
+                reason
+                for reason in (
+                    left_option.unavailable_reason,
+                    right_option.unavailable_reason,
+                )
+                if reason
+            )
+            warnings = tuple(
+                warning
+                for warning in (left_option.warning, right_option.warning)
+                if warning
+            )
+            availability = max(
+                (left_option.availability, right_option.availability),
+                key=(
+                    SuspensionHoldAvailability.AVAILABLE,
+                    SuspensionHoldAvailability.AVAILABLE_WITH_WARNING,
+                    SuspensionHoldAvailability.UNAVAILABLE,
+                ).index,
+            )
+            composed.append(
+                SuspensionHoldOption(
+                    id=left_option.id,
+                    label=left_option.label,
+                    description=left_option.description,
+                    hold=CoordinateHold(held),
+                    availability=availability,
+                    warning=" ".join(dict.fromkeys(warnings)) or None,
+                    unavailable_reason=(
+                        " ".join(dict.fromkeys(unavailable_reasons)) or None
+                    ),
+                )
+            )
+
+        if not composed:
+            return None
+        return SuspensionHoldCatalogue(
+            default_option_id=left_catalogue.default_option_id,
+            options=tuple(composed),
+        )
 
     def initial_state(self) -> SuspensionState:
         """Combine both corner states under side-qualified point keys."""
@@ -497,7 +590,10 @@ class AxleSuspension(Suspension):
 
     def resolve_target_key(self, point: PointID, side: Side | None) -> PointKey:
         """Resolve shared center points or require a side for corner points."""
-        side_policy = sweep_target_side_policy(TargetKind.POINT, point.name.lower())
+        side_policy = sweep_target_side_policy(
+            CoordinateType.POINT,
+            point.name.lower(),
+        )
         candidate_sides = (
             (None,) if side_policy == "shared" else (Side.LEFT, Side.RIGHT)
         )
@@ -514,6 +610,7 @@ class AxleSuspension(Suspension):
         self,
         state: SuspensionState,
         tangents: "Sequence[TangentField] | None" = None,
+        steering_response_axes: "Sequence[SteeringResponseAxisResult] | None" = None,
     ) -> "AxleMetricRows":
         """Compute structural corner and axle-level metric rows."""
         if self.config is None:
@@ -523,6 +620,7 @@ class AxleSuspension(Suspension):
             self,
             self.config,
             tangents,
+            steering_response_axes,
         )
 
     def elements(self) -> tuple[SuspensionElement, ...]:

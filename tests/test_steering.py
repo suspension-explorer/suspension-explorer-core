@@ -7,22 +7,22 @@ import pytest
 import yaml
 
 from kinematics.core.analysis import sweep_parameters
-from kinematics.core.constraints import PointOnLineConstraint
+from kinematics.core.constraints import PointOnPlaneConstraint
+from kinematics.core.coordinates import (
+    ActuatorCoordinate,
+    CoordinateAxis,
+    PointCoordinate,
+    target_export_column_name,
+    target_side,
+)
 from kinematics.core.elements import ElementType, RackElement, RigidLinkElement
-from kinematics.core.enums import Axis, PointID, SteeringType
+from kinematics.core.enums import Axis, PointID, Scope, SteeringType
 from kinematics.core.input import build_suspension, build_sweep
 from kinematics.core.metrics.main import AxleMetricRows
 from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
-from kinematics.core.targeting import (
-    ActuatorPositionTarget,
-    PointTarget,
-    PointTargetAxis,
-    SweepConfig,
-    target_export_column_name,
-    target_side,
-)
+from kinematics.core.targeting import SweepConfig
 
 
 def _read_yaml_mapping(path: Path) -> dict[str, Any]:
@@ -73,6 +73,16 @@ def test_rack_steering_uses_track_rods_not_toe_links(
         isinstance(element, RigidLinkElement) and element.type is ElementType.TOE_LINK
         for element in axle.elements()
     )
+    rack_guides = [
+        constraint
+        for constraint in axle.constraints()
+        if isinstance(constraint, PointOnPlaneConstraint)
+        and constraint.point_id
+        in {
+            PointRef(side, PointID.TRACKROD_INBOARD) for side in (Side.LEFT, Side.RIGHT)
+        }
+    ]
+    assert len(rack_guides) == 4
 
 
 @pytest.mark.parametrize(
@@ -109,11 +119,11 @@ def test_solve_revalidates_required_rack_control(test_data_dir: Path) -> None:
     sweep = SweepConfig(
         [
             [
-                PointTarget(
+                PointCoordinate(
                     PointRef(side, PointID.WHEEL_CENTER),
-                    PointTargetAxis(Axis.Z),
-                    0.0,
-                )
+                    CoordinateAxis(Axis.Z),
+                    Scope.CORNER,
+                ).target(0.0)
             ]
             for side in (Side.LEFT, Side.RIGHT)
         ]
@@ -236,9 +246,11 @@ def test_named_actuator_resolves_one_shared_rack_position(
     )
 
     target = sweep.target_sweeps[-1][0]
-    assert isinstance(target, ActuatorPositionTarget)
-    assert target.actuator_id == "rack"
-    assert target.point_id == PointRef(Side.LEFT, PointID.TRACKROD_INBOARD)
+    assert isinstance(target.coordinate, ActuatorCoordinate)
+    assert target.coordinate.id == "rack"
+    assert target.coordinate.point_keys[0] == PointRef(
+        Side.LEFT, PointID.TRACKROD_INBOARD
+    )
     assert target_side(target) is None
     assert target_export_column_name(target) == "target_rack"
 
@@ -355,11 +367,6 @@ def test_nonsteered_axle_fixes_toe_link_inboards(
     assert axle.config.steering.type is SteeringType.NONE
     assert axle.rack_attachment_points() is None
     assert not any(isinstance(element, RackElement) for element in axle.elements())
-    assert not any(
-        isinstance(constraint, PointOnLineConstraint)
-        for constraint in axle.constraints()
-    )
-
     state = axle.initial_state()
     for side in (Side.LEFT, Side.RIGHT):
         inboard = PointRef(side, PointID.TOE_LINK_INBOARD)

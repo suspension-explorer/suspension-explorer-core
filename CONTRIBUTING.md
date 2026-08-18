@@ -100,6 +100,14 @@ just spellcheck
 Before submitting a pull request, please make sure the relevant tests pass and
 that formatting, linting, and spelling checks are clean.
 
+### Code layout
+
+Within a function, use a single blank line to separate distinct conceptual
+phases such as deriving inputs, validating them, and performing the next
+calculation. Keep statements together when they form one tightly coupled
+operation. This semantic grouping is a review convention: the formatter checks
+objective layout, but it cannot infer the intended phases of an algorithm.
+
 ## Generated code
 
 Some source files are generated rather than edited directly.

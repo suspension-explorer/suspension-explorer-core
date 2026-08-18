@@ -5,40 +5,39 @@ from pathlib import Path
 import pytest
 
 from kinematics.cli.io.loaders import load_geometry
-from kinematics.core.enums import Axis, PointID, TargetValueMode
+from kinematics.core.coordinates import (
+    ActuatorCoordinate,
+    CoordinateAxis,
+    CoordinateTarget,
+    PointCoordinate,
+)
+from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode, Units
 from kinematics.core.metrics.catalog import get_default_corner_derivative_metrics
 from kinematics.core.metrics.main import compute_metrics_for_state
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.sensitivity import compute_state_tangents
 from kinematics.core.sweep import solve_sweep
-from kinematics.core.targeting import (
-    ActuatorPositionTarget,
-    PointTarget,
-    PointTargetAxis,
-    SweepConfig,
-)
+from kinematics.core.targeting import SweepConfig
 
 TEST_DATA = Path(__file__).parent / "data"
 FD_STEP = 0.25
 
 
-def _target(point: PointID, axis: Axis, value: float) -> PointTarget:
-    return PointTarget(
-        point_id=point,
-        direction=PointTargetAxis(axis),
-        value=value,
-        mode=TargetValueMode.ABSOLUTE,
+def _target(point: PointID, axis: Axis, value: float) -> CoordinateTarget:
+    return PointCoordinate(point, CoordinateAxis(axis), Scope.CORNER).target(
+        value, TargetValueMode.ABSOLUTE
     )
 
 
-def _rack_target(value: float) -> ActuatorPositionTarget:
-    return ActuatorPositionTarget(
-        actuator_id="rack",
-        point_id=PointID.TRACKROD_INBOARD,
-        direction=PointTargetAxis(Axis.Y),
-        value=value,
-        mode=TargetValueMode.ABSOLUTE,
-    )
+def _rack_target(value: float) -> CoordinateTarget:
+    return ActuatorCoordinate(
+        id="rack",
+        label="Rack",
+        unit=Units.MILLIMETERS.symbol,
+        point_keys=(PointID.TRACKROD_INBOARD,),
+        direction=CoordinateAxis(Axis.Y),
+        scope=Scope.CORNER,
+    ).target(value, TargetValueMode.ABSOLUTE)
 
 
 def _corner_definitions(corner):
@@ -83,9 +82,7 @@ def _metric_rows_at(
                     _target(PointID.WHEEL_CENTER, Axis.Z, value)
                     for value in wheel_values
                 ],
-                [
-                    _rack_target(value) for value in trackrod_inboard_y_values
-                ],
+                [_rack_target(value) for value in trackrod_inboard_y_values],
             ]
         ),
     )[0]

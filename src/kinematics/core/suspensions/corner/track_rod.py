@@ -6,8 +6,9 @@ from typing import ClassVar
 from kinematics.core.constraints import (
     Constraint,
     DistanceConstraint,
-    PointOnLineConstraint,
+    point_on_line_constraints,
 )
+from kinematics.core.coordinates import ChassisAxisSystem
 from kinematics.core.elements import ElementType, RigidLinkElement, SuspensionElement
 from kinematics.core.enums import PointID
 from kinematics.core.primitives.geometry import Point3
@@ -20,7 +21,6 @@ from kinematics.core.suspensions.corner.attachments import (
     anchored_rigid_point_constraints,
     validate_rigid_anchor_points,
 )
-from kinematics.core.targeting import ChassisAxisSystem
 
 
 @dataclass(frozen=True)
@@ -89,7 +89,7 @@ class TrackRod:
                 ),
             ),
             *attachment_constraints,
-            PointOnLineConstraint(
+            *point_on_line_constraints(
                 point_id=PointID.TRACKROD_INBOARD,
                 line_point=positions[PointID.TRACKROD_INBOARD],
                 line_direction=ChassisAxisSystem.Y,

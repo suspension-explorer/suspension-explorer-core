@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from kinematics.cli.io.loaders import load_geometry
+from kinematics.core.coordinates import CoordinateType
 from kinematics.core.enums import PointID
 from kinematics.core.input import build_sweep, parse_sweep_spec
 from kinematics.core.primitives.point_ref import PointRef, Side
@@ -14,7 +15,6 @@ from kinematics.core.targeting import (
     ACTUATOR_POSITION_TARGET_IDS,
     ELEMENT_LENGTH_TARGET_IDS,
     POINT_TARGET_IDS,
-    TargetKind,
     sweep_target_side_policy,
     sweep_target_vocabulary,
 )
@@ -60,6 +60,14 @@ EXPECTED_POINT_IDS = (
     "torsion_bar_axis_b",
     "damper_chassis",
     "damper_rocker",
+    "upper_front_link_inboard",
+    "upper_front_link_outboard",
+    "upper_rear_link_inboard",
+    "upper_rear_link_outboard",
+    "lower_front_link_inboard",
+    "lower_front_link_outboard",
+    "lower_rear_link_inboard",
+    "lower_rear_link_outboard",
 )
 
 
@@ -194,13 +202,15 @@ def test_schema_rejects_reserved_point_and_unknown_element_ids() -> None:
         parse_sweep_spec({"targets": [_actuator_target("bar")]})
 
 
-@pytest.mark.parametrize("kind", list(TargetKind))
-def test_unknown_side_policy_ids_raise_public_value_errors(kind: TargetKind) -> None:
+@pytest.mark.parametrize("coordinate_type", list(CoordinateType))
+def test_unknown_side_policy_ids_raise_public_value_errors(
+    coordinate_type: CoordinateType,
+) -> None:
     with pytest.raises(
         ValueError,
-        match=rf"Unknown {kind.value} coordinate ID 'not_a_coordinate'",
+        match=rf"Unknown {coordinate_type.value} coordinate ID 'not_a_coordinate'",
     ):
-        sweep_target_side_policy(kind, "not_a_coordinate")
+        sweep_target_side_policy(coordinate_type, "not_a_coordinate")
 
 
 @pytest.mark.parametrize(
@@ -268,18 +278,16 @@ def test_point_presence_mobility_and_side_rules_fail_actionably(
         )
     with pytest.raises(ValueError, match=r"'LOWER_WISHBONE_INBOARD_FRONT' is fixed"):
         build_sweep(
-            {
-                "targets": [
-                    _point_target("lower_wishbone_inboard_front", side="left")
-                ]
-            },
+            {"targets": [_point_target("lower_wishbone_inboard_front", side="left")]},
             corner,
         )
     sweep = build_sweep(
         {"targets": [_point_target("wheel_center", side="left")]},
         unsteered_corner,
     )
-    assert sweep.target_sweeps[0][0].required_points == (PointID.WHEEL_CENTER,)
+    assert sweep.target_sweeps[0][0].coordinate.required_points == (
+        PointID.WHEEL_CENTER,
+    )
     with pytest.raises(ValueError, match="requires side left"):
         build_sweep(
             {"targets": [_point_target("wheel_center")]},
@@ -316,12 +324,15 @@ def test_element_side_rules_remain_topology_specific(test_data_dir: Path) -> Non
         {"targets": [_element_target("damper", side="left")]},
         unsteered_corner,
     )
-    assert sweep.target_sweeps[0][0].coordinate_id == "damper"
-    assert next(
-        coordinate
-        for coordinate in unsteered_corner.drive_coordinates()
-        if coordinate.id == "damper"
-    ).side is Side.LEFT
+    assert sweep.target_sweeps[0][0].coordinate.id == "damper"
+    assert (
+        next(
+            coordinate
+            for coordinate in unsteered_corner.drive_coordinates()
+            if coordinate.id == "damper"
+        ).side
+        is Side.LEFT
+    )
     with pytest.raises(ValueError, match="requires side left"):
         build_sweep(
             {"targets": [_element_target("damper")]},
@@ -339,7 +350,7 @@ def test_element_side_rules_remain_topology_specific(test_data_dir: Path) -> Non
         corner.resolve_drive_coordinate(
             "rack",
             Side.LEFT,
-            TargetKind.ACTUATOR_POSITION,
+            CoordinateType.ACTUATOR_POSITION,
         )
     with pytest.raises(ValueError, match="requires side left or right"):
         build_sweep(

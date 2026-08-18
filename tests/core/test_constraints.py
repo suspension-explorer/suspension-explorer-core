@@ -9,16 +9,17 @@ from kinematics.core.constraints import (
     EqualDistanceConstraint,
     FixedAxisConstraint,
     MidpointOnPlaneConstraint,
-    PointOnLineConstraint,
     PointOnPlaneConstraint,
     SphericalJointConstraint,
     ThreePointAngleConstraint,
     VectorsParallelConstraint,
     VectorsPerpendicularConstraint,
+    point_on_line_constraints,
 )
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.primitives.constants import TEST_TOLERANCE
 from kinematics.core.primitives.geometry import Direction3, Point3
+from kinematics.core.primitives.point_ref import PointKey
 
 
 def simple_positions():
@@ -447,56 +448,56 @@ def test_midpoint_on_plane_constraint_uses_both_endpoints():
     assert constraint.residual(positions) == pytest.approx(0.25)
 
 
-def test_point_on_line_constraint_on_line():
-    """
-    Test point-on-line constraint when point is on the line.
-    """
+def test_point_on_line_constraints_are_two_transverse_planes():
+    """A line guide is represented by two signed plane constraints."""
     positions = simple_positions()
-
-    # Point y_unit (0,1,0) is on Y axis through origin
     line_point = Point3([0.0, 0.0, 0.0])
     line_direction = Direction3([0.0, 1.0, 0.0])
-
-    constraint = PointOnLineConstraint(
+    constraints = point_on_line_constraints(
         PointID.LOWER_WISHBONE_OUTBOARD,  # y_unit
         line_point,
         line_direction,
     )
 
-    residual = constraint.residual(positions)
-    assert math.isclose(residual, 0.0, abs_tol=TEST_TOLERANCE)
+    assert len(constraints) == 2
+    assert all(
+        constraint.residual(positions) == pytest.approx(0.0)
+        for constraint in constraints
+    )
+
+    positions[PointID.LOWER_WISHBONE_OUTBOARD] = Point3([1.0, 1.0, 0.0])
+    assert any(
+        abs(constraint.residual(positions)) > TEST_TOLERANCE
+        for constraint in constraints
+    )
 
 
-def test_point_on_line_constraint_off_line():
-    """
-    Test point-on-line constraint when point is off the line.
-    """
-    positions = simple_positions()
-
-    # Point x_unit (1,0,0) is distance 1 from Y axis
-    line_point = Point3([0.0, 0.0, 0.0])
-    line_direction = Direction3([0.0, 1.0, 0.0])
-
-    constraint = PointOnLineConstraint(
-        PointID.LOWER_WISHBONE_INBOARD_REAR,  # x_unit
+def test_point_on_line_constraints_support_an_arbitrary_direction():
+    """The transverse basis is orthonormal for a non-principal line."""
+    point_id = PointID.LOWER_WISHBONE_OUTBOARD
+    line_point = Point3([1.0, 2.0, 3.0])
+    line_direction = Direction3([1.0, 2.0, 3.0])
+    constraints = point_on_line_constraints(
+        point_id,
         line_point,
         line_direction,
     )
 
-    residual = constraint.residual(positions)
-    assert math.isclose(residual, 1.0, abs_tol=TEST_TOLERANCE)
+    normal_a, normal_b = (constraint.plane_normal.data for constraint in constraints)
+    assert float(normal_a @ line_direction.data) == pytest.approx(0.0)
+    assert float(normal_b @ line_direction.data) == pytest.approx(0.0)
+    assert float(normal_a @ normal_b) == pytest.approx(0.0)
 
+    positions: dict[PointKey, Point3] = {
+        point_id: Point3(line_point.data + 7.0 * line_direction.data),
+    }
+    assert all(
+        constraint.residual(positions) == pytest.approx(0.0)
+        for constraint in constraints
+    )
 
-def test_point_on_line_constraint_zero_direction():
-    """
-    Test point-on-line constraint raises error for zero direction vector.
-    """
-    with pytest.raises(ValueError):
-        PointOnLineConstraint(
-            PointID.LOWER_WISHBONE_INBOARD_FRONT,
-            Point3([0.0, 0.0, 0.0]),
-            Direction3([0.0, 0.0, 0.0]),  # Zero direction
-        )
+    positions[point_id] = Point3(positions[point_id].data + normal_a)
+    assert constraints[0].residual(positions) == pytest.approx(1.0)
 
 
 def test_point_on_plane_constraint_on_plane():

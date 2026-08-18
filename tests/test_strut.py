@@ -128,6 +128,7 @@ def test_corner_registry_has_one_complete_definition_per_architecture() -> None:
     expected_types = {
         "double_wishbone",
         "macpherson",
+        "multi_link",
         "trailing_arm",
     }
 
@@ -154,7 +155,7 @@ def test_coilover_topology_adds_moving_pickup_and_attachment_constraints() -> No
     assert PointID.STRUT_TOP in suspension.output_points()
     assert PointID.STRUT_BOTTOM in suspension.output_points()
     constraints = suspension.constraints()
-    assert len(constraints) == 21
+    assert len(constraints) == 22
     assert (
         sum(
             isinstance(constraint, ScalarTripleProductConstraint)

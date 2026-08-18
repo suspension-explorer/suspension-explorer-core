@@ -1,0 +1,49 @@
+# Mirrored multi-link front axle built from the multi_link_geometry.yaml
+# left corner (see that file for the geometry provenance).
+type: multi_link
+scope: axle
+name: "multi_link_axle_test"
+version: "0.0.1"
+units: millimeters
+
+vehicle_config:
+  cg_position: {x: 1080, y: 0, z: 520}
+  wheelbase: 2700.0
+  driven_axle: front
+
+axle_config:
+  axle_position: front
+  steering:
+    type: rack
+  actuation:
+    type: direct
+    mount: lower_rear_link
+  spring:
+    type: coilover
+  anti_roll:
+    type: none
+  heave_link:
+    type: none
+  wheel:
+    offset: 0
+    tire:
+      aspect_ratio: 0.55
+      section_width: 205
+      rim_diameter: 16
+
+hardpoints:
+  left:
+    upper_front_link_inboard: {x: 110, y: 468.5, z: 460}
+    upper_front_link_outboard: {x: 8.5, y: 729.5, z: 451.5}
+    upper_rear_link_inboard: {x: -146, y: 465, z: 439.5}
+    upper_rear_link_outboard: {x: -31.5, y: 726, z: 448.5}
+    lower_front_link_inboard: {x: 232, y: 467.5, z: 178.5}
+    lower_front_link_outboard: {x: 39.5, y: 782.5, z: 197}
+    lower_rear_link_inboard: {x: -56, y: 439, z: 204}
+    lower_rear_link_outboard: {x: 1, y: 789.5, z: 200.5}
+    trackrod_inboard: {x: -137.5, y: 502.5, z: 199}
+    trackrod_outboard: {x: -85.5, y: 816, z: 195}
+    axle_inboard: {x: 0, y: 725, z: 316}
+    axle_outboard: {x: 0, y: 875, z: 316}
+    strut_top: {x: -25, y: 640, z: 640}
+    strut_bottom: {x: -4.7, y: 754.45, z: 200.85}

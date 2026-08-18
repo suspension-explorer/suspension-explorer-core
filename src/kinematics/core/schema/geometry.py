@@ -90,7 +90,7 @@ class CornerDamperSpec(MechanismSpecBase):
     type: CornerDamperType = CornerDamperType.NONE
 
 
-def check_double_wishbone_mechanism_combination(
+def check_composed_mechanism_combination(
     actuation: ActuationSpec,
     spring: CornerSpringSpec,
     damper: CornerDamperSpec,
@@ -124,7 +124,7 @@ class DoubleWishboneGeometrySpec(CornerGeometrySpecBase):
     @model_validator(mode="after")
     def check_mechanisms(self) -> "DoubleWishboneGeometrySpec":
         """Validate the selected corner mechanism combination."""
-        check_double_wishbone_mechanism_combination(
+        check_composed_mechanism_combination(
             self.actuation,
             self.spring,
             self.damper,
@@ -137,6 +137,61 @@ class MacPhersonGeometrySpec(CornerGeometrySpecBase):
 
     type: Literal[SuspensionType.MACPHERSON] = SuspensionType.MACPHERSON
     hardpoints: HardpointMap
+
+
+_MULTI_LINK_DIRECT_MOUNTS = (
+    MountBody.UPRIGHT,
+    MountBody.LOWER_FRONT_LINK,
+    MountBody.LOWER_REAR_LINK,
+)
+
+
+def check_multi_link_mount(actuation: ActuationSpec) -> None:
+    """Restrict mounts to bodies a multi-link corner can actually offer.
+
+    Direct actuation may ride the upright or the centreline of a lower
+    locating rod (a fork clamped around the link). Pushrod-rocker actuation
+    needs a rigid off-axis pickup, which only the upright provides.
+    """
+    if actuation.type is ActuationType.PUSHROD_ROCKER:
+        if actuation.mount is not MountBody.UPRIGHT:
+            raise ValueError(
+                "Multi-link pushrod-rocker actuation must mount on the "
+                "upright; a two-joint locating rod cannot rigidly carry an "
+                "off-axis pickup"
+            )
+        return
+    if actuation.mount not in _MULTI_LINK_DIRECT_MOUNTS:
+        raise ValueError(
+            "Multi-link direct actuation must mount on the upright or on a "
+            "lower link's centreline"
+        )
+
+
+class MultiLinkGeometrySpec(CornerGeometrySpecBase):
+    """Multi-link corner with composed actuation and spring mechanisms.
+
+    Four independent locating rods plus the configured wheel-heading link.
+    The corner has no physical kingpin; steering geometry reports through the
+    motion-derived virtual metric family.
+    """
+
+    type: Literal[SuspensionType.MULTI_LINK] = SuspensionType.MULTI_LINK
+    actuation: ActuationSpec
+    spring: CornerSpringSpec
+    damper: CornerDamperSpec = Field(default_factory=CornerDamperSpec)
+    hardpoints: HardpointMap
+
+    @model_validator(mode="after")
+    def check_mechanisms(self) -> "MultiLinkGeometrySpec":
+        """Validate the selected corner mechanism combination."""
+        check_composed_mechanism_combination(
+            self.actuation,
+            self.spring,
+            self.damper,
+        )
+        check_multi_link_mount(self.actuation)
+        return self
 
 
 def check_trailing_arm_spring(spring: CornerSpringSpec) -> None:
@@ -176,7 +231,7 @@ class DoubleWishboneAxleConfig(AxleConfig):
     @model_validator(mode="after")
     def check_mechanisms(self) -> "DoubleWishboneAxleConfig":
         """Validate the symmetric corner mechanisms and shared hardware."""
-        check_double_wishbone_mechanism_combination(
+        check_composed_mechanism_combination(
             self.actuation,
             self.spring,
             self.damper,
@@ -262,6 +317,41 @@ class MacPhersonAxleGeometrySpec(AxleGeometrySpecBase):
         return self
 
 
+class MultiLinkAxleConfig(AxleConfig):
+    """Shared multi-link axle topology with symmetric corner mechanisms."""
+
+    actuation: ActuationSpec
+    spring: CornerSpringSpec
+    damper: CornerDamperSpec = Field(default_factory=CornerDamperSpec)
+
+    @model_validator(mode="after")
+    def check_mechanisms(self) -> "MultiLinkAxleConfig":
+        """Validate the symmetric corner mechanisms and shared hardware."""
+        check_composed_mechanism_combination(
+            self.actuation,
+            self.spring,
+            self.damper,
+        )
+        check_multi_link_mount(self.actuation)
+        has_rocker = self.actuation.type is ActuationType.PUSHROD_ROCKER
+        if self.anti_roll.type in (ArbType.U_BAR, ArbType.T_BAR) and not has_rocker:
+            raise ValueError(
+                "The implemented anti-roll mechanism requires pushrod-rocker actuation"
+            )
+        if self.heave_link.type is HeaveLinkType.ROCKER_TO_ROCKER and not has_rocker:
+            raise ValueError(
+                "A rocker-to-rocker heave link requires pushrod-rocker actuation"
+            )
+        return self
+
+
+class MultiLinkAxleGeometrySpec(AxleGeometrySpecBase):
+    """Mirrored or explicit full axle of multi-link corners."""
+
+    type: Literal[SuspensionType.MULTI_LINK] = SuspensionType.MULTI_LINK
+    axle_config: MultiLinkAxleConfig
+
+
 class TrailingArmAxleConfig(AxleConfig):
     """Shared configuration for two unsteered semi-trailing-arm corners."""
 
@@ -297,8 +387,10 @@ class TrailingArmAxleGeometrySpec(AxleGeometrySpecBase):
 GeometrySpec = (
     DoubleWishboneGeometrySpec
     | MacPhersonGeometrySpec
+    | MultiLinkGeometrySpec
     | TrailingArmGeometrySpec
     | DoubleWishboneAxleGeometrySpec
     | MacPhersonAxleGeometrySpec
+    | MultiLinkAxleGeometrySpec
     | TrailingArmAxleGeometrySpec
 )

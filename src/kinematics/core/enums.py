@@ -103,6 +103,19 @@ class PointID(IntEnum):
     DAMPER_CHASSIS = 39
     DAMPER_ROCKER = 40
 
+    # Multi-link locating geometry: four independent two-joint rods, each
+    # running from a fixed chassis mount to its own ball joint on the wheel
+    # carrier. No two rods share an outboard joint, so the steering axis is
+    # motion-derived rather than a physical joint-to-joint line.
+    UPPER_FRONT_LINK_INBOARD = 41
+    UPPER_FRONT_LINK_OUTBOARD = 42
+    UPPER_REAR_LINK_INBOARD = 43
+    UPPER_REAR_LINK_OUTBOARD = 44
+    LOWER_FRONT_LINK_INBOARD = 45
+    LOWER_FRONT_LINK_OUTBOARD = 46
+    LOWER_REAR_LINK_INBOARD = 47
+    LOWER_REAR_LINK_OUTBOARD = 48
+
     @property
     def sweep_side_policy(self) -> CoordinateSidePolicy:
         """Return static side ownership for this point coordinate."""
@@ -138,6 +151,7 @@ class SuspensionType(StrEnum):
 
     DOUBLE_WISHBONE = "double_wishbone"
     MACPHERSON = "macpherson"
+    MULTI_LINK = "multi_link"
     TRAILING_ARM = "trailing_arm"
 
 
@@ -163,10 +177,17 @@ class ActuationType(StrEnum):
 
 
 class MountBody(StrEnum):
-    """Rigid corner bodies that a moving mechanism pickup can be fixed to."""
+    """Corner bodies that a moving mechanism pickup can be carried by.
+
+    Three-point-plus bodies carry a pickup rigidly anywhere. A two-joint
+    locating rod is a two-force member, so it carries a pickup only on its
+    own centreline, as a derived point at a fixed axial position.
+    """
 
     LOWER_WISHBONE = "lower_wishbone"
     UPRIGHT = "upright"
+    LOWER_FRONT_LINK = "lower_front_link"
+    LOWER_REAR_LINK = "lower_rear_link"
 
 
 class CornerSpringType(StrEnum):

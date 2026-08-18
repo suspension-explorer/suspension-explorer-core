@@ -15,6 +15,13 @@ from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Sequence
 
 from kinematics.core.assembly import SuspensionAssembly
 from kinematics.core.constraints import Constraint
+from kinematics.core.coordinates import (
+    ActuatorCoordinate,
+    CoordinateTarget,
+    CoordinateType,
+    ElementLengthCoordinate,
+    ScalarCoordinate,
+)
 from kinematics.core.elements import SuspensionElement
 from kinematics.core.enums import (
     ElementLengthCoordinateID,
@@ -36,11 +43,10 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.main import AxleMetricRows, MetricRow
     from kinematics.core.metrics.registry import MetricSpec
     from kinematics.core.sensitivity import TangentField
-    from kinematics.core.targeting import (
-        ActuatorDOF,
-        DriveCoordinate,
-        ScalarTarget,
-        TargetKind,
+    from kinematics.core.steering_axis import SteeringResponseAxisResult
+    from kinematics.core.steering_response import (
+        SteeringResponseDefinition,
+        SuspensionHoldCatalogue,
     )
 
 
@@ -208,21 +214,19 @@ class Suspension(ABC):
         """Return installed spring/damper endpoints, if present."""
         return None
 
-    def drive_coordinates(self) -> "tuple[DriveCoordinate, ...]":
+    def drive_coordinates(self) -> tuple[ScalarCoordinate, ...]:
         """Return explicitly driveable scalar coordinates in stable order."""
-        from kinematics.core.targeting import DriveCoordinate, TargetKind
-
         endpoints = self.damper_points()
         if endpoints is None:
             return ()
         coordinate_id = ElementLengthCoordinateID.DAMPER
         return (
-            DriveCoordinate(
-                id=coordinate_id,
-                kind=TargetKind.ELEMENT_LENGTH,
+            ElementLengthCoordinate(
+                id=coordinate_id.value,
                 label=coordinate_id.label,
                 unit=coordinate_id.unit,
-                point_keys=endpoints,
+                point_a=endpoints[0],
+                point_b=endpoints[1],
                 scope=Scope.CORNER,
                 side=Side.LEFT,
             ),
@@ -232,28 +236,30 @@ class Suspension(ABC):
         self,
         coordinate_id: str,
         side: Side | None,
-        kind: "TargetKind | None" = None,
-    ) -> "DriveCoordinate":
+        coordinate_type: CoordinateType | None = None,
+    ) -> ScalarCoordinate:
         """Resolve one stable drive-coordinate ID under topology side rules."""
-        from kinematics.core.targeting import (
-            TargetKind,
-            resolve_published_target_side,
-        )
+        from kinematics.core.targeting import resolve_published_target_side
 
         available = self.drive_coordinates()
         candidates = [
             item
             for item in available
-            if item.id == coordinate_id and (kind is None or item.kind is kind)
+            if item.id == coordinate_id
+            and (coordinate_type is None or item.type is coordinate_type)
         ]
         available_ids = sorted(
-            {item.id for item in available if kind is None or item.kind is kind}
+            {
+                item.id
+                for item in available
+                if coordinate_type is None or item.type is coordinate_type
+            }
         )
         available_text = ", ".join(available_ids) if available_ids else "none"
         coordinate_kind = {
-            TargetKind.ELEMENT_LENGTH: "element-length target",
-            TargetKind.ACTUATOR_POSITION: "actuator-position target",
-        }.get(kind, "drive coordinate")
+            CoordinateType.ELEMENT_LENGTH: "element-length target",
+            CoordinateType.ACTUATOR_POSITION: "actuator-position target",
+        }.get(coordinate_type, "drive coordinate")
         if not candidates:
             raise ValueError(
                 f"Driveable {coordinate_kind} '{coordinate_id}' is unavailable for "
@@ -278,6 +284,7 @@ class Suspension(ABC):
         self,
         state: SuspensionState,
         tangents: "Sequence[TangentField] | None" = None,
+        steering_response_axes: "Sequence[SteeringResponseAxisResult] | None" = None,
     ) -> "MetricRow | AxleMetricRows":
         """Compute metric output for one solved state."""
         ...
@@ -364,54 +371,64 @@ class Suspension(ABC):
                     f"type '{suspension_type}'."
                 )
 
-    def validate_sweep_targets(self, targets: Iterable["ScalarTarget"]) -> None:
+    def validate_sweep_targets(
+        self,
+        targets: Iterable[CoordinateTarget],
+        *,
+        held_targets: Iterable[CoordinateTarget] = (),
+    ) -> None:
         """Validate driven points and topology-declared scalar coordinates."""
-        target_list = tuple(targets)
+        target_list = (*targets, *held_targets)
         self.validate_sweep_target_points(
-            point
-            for target in target_list
-            for point in target.driven_points
+            point for target in target_list for point in target.coordinate.driven_points
         )
         available = self.drive_coordinates()
         for target in target_list:
-            target_key = target.drive_coordinate_key
-            if target_key is None:
+            coordinate = target.coordinate
+            if not isinstance(
+                coordinate,
+                ActuatorCoordinate | ElementLengthCoordinate,
+            ):
                 continue
-            target_kind, target_id, target_points, target_side = target_key
             if not any(
-                coordinate.kind is target_kind
-                and coordinate.id == target_id
-                and (target_points is None or coordinate.point_keys == target_points)
-                and coordinate.side is target_side
-                for coordinate in available
+                type(candidate) is type(coordinate)
+                and candidate.id == coordinate.id
+                and (
+                    isinstance(coordinate, ActuatorCoordinate)
+                    or candidate.point_keys == coordinate.point_keys
+                )
+                and candidate.side is coordinate.side
+                for candidate in available
             ):
                 available_ids = (
                     ", ".join(
                         sorted(
                             {
-                                coordinate.id
-                                for coordinate in available
-                                if coordinate.kind is target_kind
+                                candidate.id
+                                for candidate in available
+                                if type(candidate) is type(coordinate)
                             }
                         )
                     )
                     or "none"
                 )
                 raise ValueError(
-                    f"{target.coordinate_description.capitalize()} is not declared "
+                    f"{coordinate.coordinate_description.capitalize()} is not declared "
                     f"driveable for this suspension. Available driveable "
-                    f"{target_kind.value} IDs: {available_ids}."
+                    f"{coordinate.type.value} IDs: {available_ids}."
                 )
 
     def resolve_target_key(self, point: PointID, side: Side | None) -> PointKey:
         """Resolve a sweep target for a single-corner suspension."""
         from kinematics.core.targeting import (
-            TargetKind,
             resolve_published_target_side,
             sweep_target_side_policy,
         )
 
-        side_policy = sweep_target_side_policy(TargetKind.POINT, point.name.lower())
+        side_policy = sweep_target_side_policy(
+            CoordinateType.POINT,
+            point.name.lower(),
+        )
         candidate_sides = (None,) if side_policy == "shared" else (Side.LEFT,)
         resolve_published_target_side(
             f"Sweep target for '{point.name}'",
@@ -420,9 +437,60 @@ class Suspension(ABC):
         )
         return point
 
-    def actuator_dofs(self) -> "tuple[ActuatorDOF, ...]":
+    def required_actuator_coordinates(self) -> tuple[ActuatorCoordinate, ...]:
         """Return physical actuator coordinates that every sweep must control."""
         return ()
+
+    def steering_actuator_coordinate(self) -> ActuatorCoordinate | None:
+        """Return the steering actuator coordinate, if this suspension has one."""
+        return None
+
+    def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
+        """Return topology-owned suspension holds for virtual steering."""
+        return None
+
+    def resolve_suspension_hold(
+        self,
+        requested_option_id: str | None = None,
+    ) -> "SteeringResponseDefinition | None":
+        """Resolve one explicit suspension hold or the layout default."""
+        from kinematics.core.steering_response import (
+            SteeringResponseDefinition,
+            SuspensionHoldAvailability,
+            SuspensionHoldSelectionSource,
+        )
+
+        steering = self.steering_actuator_coordinate()
+        catalogue = self.suspension_hold_catalogue()
+        if steering is None or catalogue is None:
+            if requested_option_id not in (None, "layout_default"):
+                raise ValueError(
+                    f"Suspension type '{self.reported_type_key().value}' does not "
+                    "publish suspension-hold options."
+                )
+            return None
+        uses_default = requested_option_id in (None, "layout_default")
+        option_id = catalogue.default_option_id if uses_default else requested_option_id
+        assert option_id is not None
+        option = catalogue.option(option_id)
+        if option.availability is SuspensionHoldAvailability.UNAVAILABLE:
+            reason = option.unavailable_reason or "The option is unavailable."
+            raise ValueError(f"Suspension hold '{option.id}' is unavailable: {reason}")
+        return SteeringResponseDefinition(
+            steering_actuator=steering,
+            hold=option.hold,
+            owner=self.reported_type_key().value,
+            definition_id=option.id,
+            requested_option_id=requested_option_id,
+            selection_source=(
+                SuspensionHoldSelectionSource.LAYOUT_DEFAULT
+                if uses_default
+                else SuspensionHoldSelectionSource.USER_OVERRIDE
+            ),
+            label=option.label,
+            description=option.description,
+            warning=option.warning,
+        )
 
     def closure_points(self) -> tuple[PointKey, ...]:
         """

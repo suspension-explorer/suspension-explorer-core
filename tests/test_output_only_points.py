@@ -11,12 +11,13 @@ from pathlib import Path
 import pytest
 
 from kinematics.cli.io.loaders import load_geometry
-from kinematics.core.enums import Axis, PointID
+from kinematics.core.coordinates import CoordinateAxis, PointCoordinate
+from kinematics.core.enums import Axis, PointID, Scope
 from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.schema.sweep import SweepSpec, build_sweep_config
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.sweep import solve_sweep
-from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
+from kinematics.core.targeting import SweepConfig
 
 OUTPUT_ONLY_MESSAGE = "is a derived output of suspension type .* and cannot be driven"
 
@@ -89,11 +90,9 @@ def test_direct_sweep_config_cannot_bypass_output_only_validation(
     sweep = SweepConfig(
         [
             [
-                PointTarget(
-                    PointID.WHEEL_CONTACT_CENTRE,
-                    PointTargetAxis(Axis.Z),
-                    0.0,
-                )
+                PointCoordinate(
+                    PointID.WHEEL_CONTACT_CENTRE, CoordinateAxis(Axis.Z), Scope.CORNER
+                ).target(0.0)
             ]
         ]
     )
@@ -135,7 +134,9 @@ def test_corner_accepts_wheel_center_sweep_target(test_data_dir: Path) -> None:
 
     targets = [sweep[0] for sweep in config.target_sweeps]
     assert [
-        target.point_id for target in targets if isinstance(target, PointTarget)
+        target.coordinate.point
+        for target in targets
+        if isinstance(target.coordinate, PointCoordinate)
     ] == [PointID.WHEEL_CENTER]
 
 
@@ -162,7 +163,9 @@ def test_axle_accepts_wheel_center_sweep_target(test_data_dir: Path) -> None:
 
     targets = [sweep[0] for sweep in config.target_sweeps]
     assert [
-        target.point_id for target in targets if isinstance(target, PointTarget)
+        target.coordinate.point
+        for target in targets
+        if isinstance(target.coordinate, PointCoordinate)
     ] == [
         PointRef(Side.LEFT, PointID.WHEEL_CENTER),
         PointRef(Side.RIGHT, PointID.WHEEL_CENTER),

@@ -17,10 +17,10 @@ from kinematics.core.metrics.anti_geometry import (
 from kinematics.core.metrics.catalog import get_default_corner_metrics
 from kinematics.core.metrics.context import MetricContext
 from kinematics.core.metrics.main import compute_metrics_for_state_from_suspension
-from kinematics.core.metrics.steering_geometry import (
+from kinematics.core.metrics.steering import (
     calculate_mechanical_trail,
     calculate_scrub_radius,
-    calculate_steering_axis_offset_ground,
+    calculate_steering_axis_offset_at_ground,
 )
 from kinematics.core.metrics.swing_arms import calculate_fvsa_length
 from kinematics.core.metrics.units import MetricUnit
@@ -360,6 +360,8 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
         road=ground,
     )
 
+    steering_axis = ctx.steering_axis
+    assert steering_axis is not None
     intersection = ctx.steering_axis_ground_intersection
     assert intersection is not None
     np.testing.assert_allclose(
@@ -377,9 +379,25 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
     expected_trail = float(displacement.dot(forward_axis))
     expected_scrub = displacement.norm()
 
-    steering_axis_offset = calculate_steering_axis_offset_ground(ctx)
-    scrub_radius = calculate_scrub_radius(ctx)
-    mechanical_trail = calculate_mechanical_trail(ctx)
+    steering_axis_offset = calculate_steering_axis_offset_at_ground(
+        steering_axis,
+        ctx.road,
+        ctx.wheel_contact_centre,
+        ctx.wheel_axis,
+        ctx.side_sign,
+    )
+    scrub_radius = calculate_scrub_radius(
+        steering_axis,
+        ctx.road,
+        ctx.wheel_contact_centre,
+    )
+    mechanical_trail = calculate_mechanical_trail(
+        steering_axis,
+        ctx.road,
+        ctx.wheel_contact_centre,
+        ctx.wheel_axis,
+        ctx.side_sign,
+    )
     assert steering_axis_offset is not None
     assert scrub_radius is not None
     assert mechanical_trail is not None

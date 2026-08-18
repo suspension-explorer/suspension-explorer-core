@@ -5,16 +5,23 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.constraints import DistanceConstraint
-from kinematics.core.enums import Axis, PointID, SuspensionType, TargetValueMode
+from kinematics.core.coordinates import (
+    ActuatorCoordinate,
+    CoordinateAxis,
+    PointCoordinate,
+)
+from kinematics.core.enums import (
+    Axis,
+    PointID,
+    Scope,
+    SuspensionType,
+    TargetValueMode,
+    Units,
+)
 from kinematics.core.points.derived.manager import DerivedPointsManager
 from kinematics.core.primitives.constants import TEST_TOLERANCE
 from kinematics.core.sweep import solve_sweep
-from kinematics.core.targeting import (
-    ActuatorPositionTarget,
-    PointTarget,
-    PointTargetAxis,
-    SweepConfig,
-)
+from kinematics.core.targeting import SweepConfig
 
 
 @pytest.fixture
@@ -36,24 +43,22 @@ def sweep_config_fixture(displacements):
 
     # Create hub displacement sweep.
     hub_targets = [
-        PointTarget(
-            point_id=PointID.WHEEL_CENTER,
-            direction=PointTargetAxis(Axis.Z),
-            value=x,
-            mode=TargetValueMode.RELATIVE,
-        )
+        PointCoordinate(
+            PointID.WHEEL_CENTER, CoordinateAxis(Axis.Z), Scope.CORNER
+        ).target(x, TargetValueMode.RELATIVE)
         for x in hub_displacements
     ]
 
     # Create steer sweep.
     steer_targets = [
-        ActuatorPositionTarget(
-            actuator_id="rack",
-            point_id=PointID.TRACKROD_INBOARD,
-            direction=PointTargetAxis(Axis.Y),
-            value=x,
-            mode=TargetValueMode.RELATIVE,
-        )
+        ActuatorCoordinate(
+            id="rack",
+            label="Rack",
+            unit=Units.MILLIMETERS.symbol,
+            point_keys=(PointID.TRACKROD_INBOARD,),
+            direction=CoordinateAxis(Axis.Y),
+            scope=Scope.CORNER,
+        ).target(x, TargetValueMode.RELATIVE)
         for x in steer_displacements
     ]
 

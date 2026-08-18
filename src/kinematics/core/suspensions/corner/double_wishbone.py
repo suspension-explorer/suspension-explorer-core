@@ -7,7 +7,6 @@ actuation and spring behavior is composed through typed mechanism fields.
 
 from __future__ import annotations
 
-from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, Sequence, cast
 
@@ -31,6 +30,7 @@ from kinematics.core.enums import (
     SteeringType,
     SuspensionType,
 )
+from kinematics.core.holds import CoordinateHold
 from kinematics.core.points.derived.definitions import build_wheel_derived_spec
 from kinematics.core.points.derived.manager import (
     DerivedPointsManager,
@@ -62,6 +62,13 @@ from kinematics.core.suspensions.corner.mechanisms import (
     CornerDamperNone,
     CornerSpring,
     CornerSpringNone,
+    composed_derivative_metric_definitions,
+    composed_mechanism_elements,
+    composed_mechanism_free_points,
+    composed_output_points,
+    composed_topology_metric_values,
+    composed_upright_attachments,
+    validate_composed_mechanisms,
 )
 from kinematics.core.suspensions.corner.toe_link import ToeLink
 from kinematics.core.suspensions.corner.track_rod import TrackRod
@@ -70,6 +77,7 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
     from kinematics.core.metrics.main import MetricRow
     from kinematics.core.metrics.registry import MetricSpec
+    from kinematics.core.steering_response import SuspensionHoldCatalogue
 
 
 @dataclass
@@ -199,45 +207,123 @@ class DoubleWishboneSuspension(CornerSuspension):
         """Validate base geometry and selected mechanism compatibility."""
         super().validate_hardpoints()
         self.wheel_heading_link.validate(self.hardpoints)
-        self.actuation.validate(self.hardpoints)
-        self.spring.validate(self.actuation)
-        if (
-            self.spring.damper_points is not None
-            and self.damper.damper_points is not None
-        ):
-            raise ValueError(
-                "A separate linear damper cannot be combined with a coilover"
-            )
-        self.damper.validate(self.actuation, self.hardpoints)
+        validate_composed_mechanisms(
+            self.hardpoints,
+            self.actuation,
+            self.spring,
+            self.damper,
+        )
 
     def free_points(self) -> Sequence[PointID]:
         """Return base and selected mechanism moving points."""
         return (
             *self.FREE_POINTS,
             *self.wheel_heading_link.free_points,
-            *self.actuation.free_points,
-            *self.spring.free_points,
-            *self.damper.free_points,
+            *composed_mechanism_free_points(
+                self.actuation,
+                self.spring,
+                self.damper,
+            ),
         )
 
     def output_points(self) -> tuple[PointKey, ...]:
         """Return base and selected mechanism output points."""
-        return tuple(
-            dict.fromkeys(
-                (
-                    *self.LOCATING_OUTPUT_POINTS,
-                    *self.wheel_heading_link.OUTPUT_POINTS,
-                    *self.WHEEL_OUTPUT_POINTS,
-                    *self.actuation.output_points,
-                    *self.spring.output_points,
-                    *self.damper.output_points,
-                )
-            )
+        return composed_output_points(
+            (
+                *self.LOCATING_OUTPUT_POINTS,
+                *self.wheel_heading_link.OUTPUT_POINTS,
+                *self.WHEEL_OUTPUT_POINTS,
+            ),
+            self.actuation,
+            self.spring,
+            self.damper,
         )
 
     def damper_points(self) -> tuple[PointKey, PointKey] | None:
         """Return selected linear spring/damper endpoints."""
         return self.damper.damper_points or self.spring.damper_points
+
+    def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
+        """Declare semantic fixed-travel choices for double-wishbone steering."""
+        from kinematics.core.steering_response import (
+            SuspensionHoldAvailability,
+            SuspensionHoldCatalogue,
+            SuspensionHoldOption,
+        )
+
+        if self.steering_actuator_coordinate() is None:
+            return None
+
+        lower = self._arm_angle_coordinate(
+            coordinate_id="lower_wishbone_angle",
+            label="Lower wishbone angle",
+            hinge_point_a=PointID.LOWER_WISHBONE_INBOARD_FRONT,
+            hinge_point_b=PointID.LOWER_WISHBONE_INBOARD_REAR,
+            carried_point=PointID.LOWER_WISHBONE_OUTBOARD,
+        )
+        upper = self._arm_angle_coordinate(
+            coordinate_id="upper_wishbone_angle",
+            label="Upper wishbone angle",
+            hinge_point_a=PointID.UPPER_WISHBONE_INBOARD_FRONT,
+            hinge_point_b=PointID.UPPER_WISHBONE_INBOARD_REAR,
+            carried_point=PointID.UPPER_WISHBONE_OUTBOARD,
+        )
+        options = [
+            SuspensionHoldOption(
+                id="lower_wishbone_angle",
+                label="Lower wishbone angle",
+                description=(
+                    "Fixes suspension travel at the lower wishbone, isolating "
+                    "steering from jounce independently of the internal "
+                    "suspension mechanism."
+                ),
+                hold=CoordinateHold((lower,)),
+            ),
+            SuspensionHoldOption(
+                id="upper_wishbone_angle",
+                label="Upper wishbone angle",
+                description=(
+                    "Fixes suspension travel at the upper wishbone, isolating "
+                    "steering from jounce in the ideal rigid double-wishbone "
+                    "mechanism."
+                ),
+                hold=CoordinateHold((upper,)),
+            ),
+        ]
+
+        damper = self._installed_damper_coordinate()
+        if damper is not None:
+            mounted_to_upright = self.actuation.moving_pickup_body == self.UPRIGHT_BODY
+            warning = (
+                "Locks the internal suspension at its current damper length. "
+                "Because the actuation pickup is mounted on the upright, the "
+                "wishbones and hub may move in response to steering and the "
+                "response axis may differ from the physical kingpin axis."
+                if mounted_to_upright
+                else None
+            )
+            options.append(
+                SuspensionHoldOption(
+                    id="damper_length",
+                    label="Damper length",
+                    description=(
+                        "Locks the internal suspension at the current installed "
+                        "true damper length during the steering response."
+                    ),
+                    hold=CoordinateHold((damper,)),
+                    availability=(
+                        SuspensionHoldAvailability.AVAILABLE_WITH_WARNING
+                        if warning is not None
+                        else SuspensionHoldAvailability.AVAILABLE
+                    ),
+                    warning=warning,
+                )
+            )
+
+        return SuspensionHoldCatalogue(
+            default_option_id="lower_wishbone_angle",
+            options=tuple(options),
+        )
 
     def steering_axis_points(self) -> tuple[PointID, PointID]:
         """The steering axis runs between the two outboard ball joints."""
@@ -332,34 +418,23 @@ class DoubleWishboneSuspension(CornerSuspension):
     ) -> tuple[DerivativeMetricDefinition, ...]:
         """Compose derivative declarations from actuation and spring mechanisms."""
         initial = self.initial_state()
-        return (
-            *self.actuation.derivative_metric_definitions(initial, self.side),
-            *self.spring.derivative_metric_definitions(
-                initial,
-                self.actuation,
-                self.side,
-            ),
-            *self.damper.derivative_metric_definitions(
-                initial,
-                self.actuation,
-                self.side,
-            ),
+        return composed_derivative_metric_definitions(
+            initial,
+            self.side,
+            self.actuation,
+            self.spring,
+            self.damper,
         )
 
     def topology_metric_values(self, state: SuspensionState) -> MetricRow:
         """Compose state metrics from actuation and spring mechanisms."""
-        initial = self.initial_state()
-        row: MetricRow = OrderedDict()
-        row.update(self.actuation.topology_metric_values(state, initial, self.side))
-        row.update(
-            self.spring.topology_metric_values(
-                state,
-                initial,
-                self.actuation,
-                self.side,
-            )
+        return composed_topology_metric_values(
+            state,
+            self.initial_state(),
+            self.side,
+            self.actuation,
+            self.spring,
         )
-        return row
 
     def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
         """Compose state metric metadata from installed corner mechanisms."""
@@ -372,7 +447,12 @@ class DoubleWishboneSuspension(CornerSuspension):
         """Standard wheel derived points from the axle pair."""
         if self.config is None:
             raise ValueError("Cannot compute derived spec without config")
-        return build_wheel_derived_spec(self.config.wheel)
+        actuation_spec = self.actuation.derived_spec(self.hardpoints)
+        wheel_spec = build_wheel_derived_spec(self.config.wheel)
+        return DerivedPointsSpec(
+            {**actuation_spec.functions, **wheel_spec.functions},
+            {**actuation_spec.dependencies, **wheel_spec.dependencies},
+        )
 
     def compute_side_view_instant_center(self, state: SuspensionState) -> Point3 | None:
         """
@@ -458,10 +538,15 @@ class DoubleWishboneSuspension(CornerSuspension):
     def elements(self) -> tuple[SuspensionElement, ...]:
         """Return the physical elements in this corner."""
         heading_link_outboard = self.wheel_heading_link.outboard_point
-        actuation_elements = (
-            self.actuation.elements(self.damper.rocker_pickups)
-            if isinstance(self.actuation, ActuationPushrodRocker)
-            else self.actuation.elements()
+        upright_hardpoints = composed_upright_attachments(
+            (
+                PointID.UPPER_WISHBONE_OUTBOARD,
+                PointID.LOWER_WISHBONE_OUTBOARD,
+                heading_link_outboard,
+            ),
+            self.actuation,
+            self.UPRIGHT_BODY,
+            self.hardpoints,
         )
         base_elements: tuple[SuspensionElement, ...] = (
             RigidLinkElement(
@@ -490,11 +575,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             ),
             UprightElement(
                 label="Upright",
-                hardpoints=(
-                    PointID.UPPER_WISHBONE_OUTBOARD,
-                    PointID.LOWER_WISHBONE_OUTBOARD,
-                    heading_link_outboard,
-                ),
+                hardpoints=upright_hardpoints,
                 attachments=(PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD),
                 segments=(
                     (heading_link_outboard, PointID.UPPER_WISHBONE_OUTBOARD),
@@ -524,9 +605,11 @@ class DoubleWishboneSuspension(CornerSuspension):
         return (
             *base_elements,
             *self.wheel_heading_link.elements(),
-            *actuation_elements,
-            *self.spring.elements(self.actuation),
-            *self.damper.elements(self.actuation),
+            *composed_mechanism_elements(
+                self.actuation,
+                self.spring,
+                self.damper,
+            ),
         )
 
     def apply_camber_shim(self, positions: dict[PointKey, Point3]) -> None:
@@ -606,10 +689,9 @@ class DoubleWishboneSuspension(CornerSuspension):
 
     def upright_attachment_points(self) -> tuple[PointID, ...]:
         """Return points carried by the upright during camber-shim setup."""
-        base_attachments = (
-            *self.UPRIGHT_ATTACHMENTS,
-            self.wheel_heading_link.outboard_point,
+        return composed_upright_attachments(
+            (*self.UPRIGHT_ATTACHMENTS, self.wheel_heading_link.outboard_point),
+            self.actuation,
+            self.UPRIGHT_BODY,
+            self.hardpoints,
         )
-        if self.actuation.moving_pickup_body == self.UPRIGHT_BODY:
-            return (*base_attachments, self.actuation.moving_pickup_point)
-        return base_attachments

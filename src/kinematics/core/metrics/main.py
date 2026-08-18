@@ -21,10 +21,13 @@ from kinematics.core.metrics.axle_metrics import append_axle_state_metrics
 from kinematics.core.metrics.catalog import (
     get_default_corner_derivative_metrics,
     get_default_corner_metrics,
+    get_virtual_steering_metrics,
+    physical_steering_metric_keys,
 )
 from kinematics.core.metrics.context import MetricContext
 from kinematics.core.metrics.derivatives import evaluate_derivative_metrics
 from kinematics.core.metrics.registry import flat_key
+from kinematics.core.metrics.steering import SteeringAxis
 from kinematics.core.primitives.point_ref import PointKey, PointRef, Side
 from kinematics.core.road import RoadPlane
 from kinematics.core.schema.config import SuspensionConfig
@@ -32,10 +35,11 @@ from kinematics.core.sensitivity import TangentField
 from kinematics.core.state import SuspensionState
 
 if TYPE_CHECKING:
+    from kinematics.core.coordinates import ActuatorCoordinate
+    from kinematics.core.steering_axis import SteeringResponseAxisResult
     from kinematics.core.suspensions.axle import AxleSuspension
     from kinematics.core.suspensions.base import Suspension
     from kinematics.core.suspensions.corner.base import CornerSuspension
-    from kinematics.core.targeting import ActuatorDOF
 
 
 MetricRow = OrderedDict[str, float | None]
@@ -71,6 +75,7 @@ def compute_metrics_for_axle_state(
     axle: AxleSuspension,
     config: SuspensionConfig,
     tangents: "Sequence[TangentField] | None" = None,
+    steering_response_axes: "Sequence[SteeringResponseAxisResult] | None" = None,
 ) -> AxleMetricRows:
     """Compute corner and axle metrics against one axle-local road plane.
 
@@ -86,6 +91,7 @@ def compute_metrics_for_axle_state(
         state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE)),
         state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE)),
     )
+    steering_axes_by_side = _steering_axes_by_side(steering_response_axes)
     for side in (Side.LEFT, Side.RIGHT):
         corner = axle.corners[side]
         corner_state = axle.corner_state(state, side)
@@ -94,10 +100,15 @@ def compute_metrics_for_axle_state(
             corner_state,
             corner,
             corner_config,
-            _corner_tangents(tangents, side, axle.actuator_dofs())
+            _corner_tangents(
+                tangents,
+                side,
+                axle.required_actuator_coordinates(),
+            )
             if tangents
             else None,
             road=road,
+            steering_response_axis=steering_axes_by_side.get(side),
         )
         corner_rows[side] = side_row
 
@@ -123,20 +134,36 @@ def compute_metrics_for_axle_state(
     return AxleMetricRows(axle=axle_row, corners=corner_rows)
 
 
+def _steering_axes_by_side(
+    results: "Sequence[SteeringResponseAxisResult] | None",
+) -> dict[Side, SteeringResponseAxisResult | None]:
+    """Map axle upright results structurally through side-qualified point keys."""
+    grouped: dict[Side, list[SteeringResponseAxisResult]] = {}
+    for result in results or ():
+        sides = {key.side for key in result.point_keys if isinstance(key, PointRef)}
+        if len(sides) == 1:
+            side = next(iter(sides))
+            grouped.setdefault(side, []).append(result)
+    return {
+        side: side_results[0] if len(side_results) == 1 else None
+        for side, side_results in grouped.items()
+    }
+
+
 def _corner_tangents(
     tangents: "Sequence[TangentField]",
     side: Side,
-    actuator_dofs: "Sequence[ActuatorDOF]",
+    required_actuator_coordinates: "Sequence[ActuatorCoordinate]",
 ) -> list["TangentField"]:
     """Project axle tangents into one corner, including shared actuators."""
     result: list[TangentField] = []
     for tangent in tangents:
-        selector_point = tangent.target.selector_point
+        selector_point = tangent.target.coordinate.selector_point
         if selector_point is not None:
             local_target = _local_tangent_target(
                 selector_point,
                 side,
-                actuator_dofs,
+                required_actuator_coordinates,
             )
             if local_target is None:
                 continue
@@ -144,9 +171,9 @@ def _corner_tangents(
                 lambda _point: local_target
             )
         else:
-            if not tangent.target.required_points or not all(
+            if not tangent.target.coordinate.required_points or not all(
                 isinstance(point, PointRef) and point.side is side
-                for point in tangent.target.required_points
+                for point in tangent.target.coordinate.required_points
             ):
                 continue
             local_tangent_target = tangent.target.map_points(
@@ -156,9 +183,9 @@ def _corner_tangents(
             TangentField(
                 target_index=tangent.target_index,
                 target=local_tangent_target,
-                velocities={
-                    key.point: velocity
-                    for key, velocity in tangent.velocities.items()
+                rates={
+                    key.point: rate
+                    for key, rate in tangent.rates.items()
                     if isinstance(key, PointRef) and key.side is side
                 },
             )
@@ -169,12 +196,12 @@ def _corner_tangents(
 def _local_tangent_target(
     target_key: PointKey,
     side: Side,
-    actuator_dofs: "Sequence[ActuatorDOF]",
+    required_actuator_coordinates: "Sequence[ActuatorCoordinate]",
 ) -> PointID | None:
     """Resolve a side-local target or its equivalent shared actuator point."""
     if isinstance(target_key, PointRef) and target_key.side is side:
         return target_key.point
-    for actuator in actuator_dofs:
+    for actuator in required_actuator_coordinates:
         if target_key not in actuator.point_keys:
             continue
         for point_id in actuator.point_keys:
@@ -190,6 +217,7 @@ def compute_metrics_for_state(
     tangents: "Sequence[TangentField] | None" = None,
     *,
     road: RoadPlane | None = None,
+    steering_response_axis: "SteeringResponseAxisResult | None" = None,
 ) -> MetricRow:
     """
     Compute all corner-level metrics for a single solved state.
@@ -209,12 +237,24 @@ def compute_metrics_for_state(
         road: Optional shared axle road plane in chassis coordinates.
             Standalone corner callers omit this and use the horizontal plane
             through their wheel contact centre.
+        steering_response_axis: Optional isolated steering-response result.
+            A valid result supplies the additive virtual steering metrics;
+            an invalid or unavailable result leaves those values undefined.
 
     Returns:
         An ordered mapping of metric column names to values. Values are
         None when the underlying geometry is undefined (e.g. parallel
         links producing an IC at infinity).
     """
+    motion_axis = steering_response_axis.axis if steering_response_axis else None
+    virtual_axis = (
+        None
+        if motion_axis is None
+        else SteeringAxis.from_unoriented_line(
+            motion_axis.point,
+            motion_axis.direction,
+        )
+    )
     ctx = MetricContext(
         state=state,
         suspension=suspension,
@@ -223,9 +263,43 @@ def compute_metrics_for_state(
     )
 
     catalog = get_default_corner_metrics()
+    virtual_catalog = (
+        get_virtual_steering_metrics()
+        if suspension.steering_actuator_coordinate() is not None
+        else ()
+    )
+    virtual_by_physical_key = {
+        metric.column_name.removesuffix("_virtual"): metric
+        for metric in virtual_catalog
+    }
+    virtual_ctx = (
+        None
+        if virtual_axis is None
+        else MetricContext(
+            state=state,
+            suspension=suspension,
+            config=config,
+            road=ctx.road,
+            steering_axis=virtual_axis,
+        )
+    )
+    # An architecture without a physical steering axis omits the physical
+    # steering columns entirely; its steering geometry reports only through
+    # the motion-derived ``*_virtual`` family.
+    omitted_physical_keys = (
+        physical_steering_metric_keys()
+        if suspension.steering_axis_points() is None
+        else frozenset()
+    )
     row: MetricRow = OrderedDict()
     for metric in catalog:
-        row[metric.column_name] = metric.compute(ctx)
+        if metric.column_name not in omitted_physical_keys:
+            row[metric.column_name] = metric.compute(ctx)
+        virtual_metric = virtual_by_physical_key.get(metric.column_name)
+        if virtual_metric is not None:
+            row[virtual_metric.column_name] = (
+                None if virtual_ctx is None else virtual_metric.compute(virtual_ctx)
+            )
     row.update(suspension.topology_metric_values(state))
     if tangents:
         definitions = (

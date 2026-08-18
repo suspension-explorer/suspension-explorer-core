@@ -6,6 +6,26 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Added the multi-link locating architecture (`type: multi_link`) at corner and
+  axle scope: four independent two-joint locating rods (upper front/rear, lower
+  front/rear), each with its own outboard ball joint on the rigid wheel
+  carrier, plus the configured track rod or toe link. Direct-coilover and
+  pushrod-rocker actuation mount on the upright, and a direct spring pickup
+  may alternatively ride a lower link's centreline as a derived point (a
+  damper fork clamped around the two-force rod), so no rigid off-axis pickup
+  is ever asked of a two-joint member. The corner publishes a locked-internals
+  (damper length)
+  suspension hold, and its steering geometry reports exclusively through the
+  virtual screw-axis metric family because no two ball joints define a physical
+  kingpin.
+- Made the physical steering axis optional on corner architectures.
+  `steering_axis_points()` may now return `None`, in which case the physical
+  caster/KPI/scrub/trail/offset columns and their hub-travel derivatives are
+  omitted from metric rows and metadata while the `*_virtual` family still
+  reports. Plane-intersection instant centres may likewise be undefined for a
+  multi-link carrier; the dependent swing-arm and anti-geometry metrics degrade
+  to null values.
+
 - Added topology-owned scalar drive coordinates for named actuator positions and
   true element lengths. Element-length targets support relative displacement or
   absolute pin-centre length, analytical residuals and Jacobians, analytical
@@ -23,11 +43,12 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Relicensed from Apache-2.0 to AGPL-3.0-only with a separate commercial
-  licensing option, effective from 0.6.0. Releases up to and including
-  v0.5.1 remain available under Apache-2.0. External contributions now
-  require acceptance of the contributor terms and copyright assignment
-  described in CONTRIBUTING.md.
+- Upright presentation geometry is now a spoke set: one rendered path from
+  the synthetic axle midpoint to each carried joint (e.g. axle midpoint to
+  UBJ, LBJ, and track-rod end on a double wishbone), replacing the authored
+  outline segments. An upright-mounted actuation pickup (pushrod outboard or
+  direct spring pickup) receives its own spoke. The midpoint is a
+  presentation-only point and draws no hardpoint marker.
 - Generalized sweep solving around one scalar-target protocol. Point
   projections, named actuator positions, and element lengths now share value
   expansion, absolute conversion, measurement, point partials, remapping,
@@ -67,6 +88,15 @@ All notable changes to this project will be documented in this file.
   `actuator: rack`.
 - Standalone right-corner geometry is rejected. Model a right-hand corner as
   part of an axle instead.
+
+## [0.6.0] - 2026-08-16
+
+### Changed
+
+- Relicensed from Apache-2.0 to AGPL-3.0-only with a separate commercial
+  licensing option. Releases up to and including v0.5.1 remain available under
+  Apache-2.0. External contributions now require acceptance of the contributor
+  terms and copyright assignment described in CONTRIBUTING.md.
 
 ## [0.5.1] - 2026-07-31
 

@@ -48,6 +48,98 @@ class MetricDefinition:
     unit: MetricUnit
 
 
+def _build_steering_metrics(
+    *,
+    column_suffix: str = "",
+    label_suffix: str = "",
+) -> tuple[MetricDefinition, ...]:
+    """Build one catalog family around the axis selected by the context."""
+    from kinematics.core.metrics.steering import (
+        calculate_caster,
+        calculate_kpi,
+        calculate_mechanical_trail,
+        calculate_scrub_radius,
+        calculate_steering_axis_offset_at_ground,
+    )
+
+    def caster(ctx: "MetricContext") -> float | None:
+        axis = ctx.steering_axis
+        if axis is None:
+            return None
+        return calculate_caster(axis)
+
+    def kpi(ctx: "MetricContext") -> float | None:
+        axis = ctx.steering_axis
+        if axis is None:
+            return None
+        return calculate_kpi(axis, ctx.side_sign)
+
+    def steering_axis_offset_at_ground(ctx: "MetricContext") -> float | None:
+        axis = ctx.steering_axis
+        if axis is None:
+            return None
+        return calculate_steering_axis_offset_at_ground(
+            axis,
+            ctx.road,
+            ctx.wheel_contact_centre,
+            ctx.wheel_axis,
+            ctx.side_sign,
+        )
+
+    def scrub_radius(ctx: "MetricContext") -> float | None:
+        axis = ctx.steering_axis
+        if axis is None:
+            return None
+        return calculate_scrub_radius(
+            axis,
+            ctx.road,
+            ctx.wheel_contact_centre,
+        )
+
+    def mechanical_trail(ctx: "MetricContext") -> float | None:
+        axis = ctx.steering_axis
+        if axis is None:
+            return None
+        return calculate_mechanical_trail(
+            axis,
+            ctx.road,
+            ctx.wheel_contact_centre,
+            ctx.wheel_axis,
+            ctx.side_sign,
+        )
+
+    def definition(
+        name: str,
+        compute: Callable[["MetricContext"], float | None],
+        label: str,
+        unit: MetricUnit,
+    ) -> MetricDefinition:
+        return MetricDefinition(
+            f"{name}{column_suffix}",
+            compute,
+            f"{label}{label_suffix}",
+            unit,
+        )
+
+    return (
+        definition("caster", caster, "Caster", MetricUnit.DEG),
+        definition("kpi", kpi, "KPI", MetricUnit.DEG),
+        definition(
+            "steering_axis_offset_ground",
+            steering_axis_offset_at_ground,
+            "Steering-Axis Offset at Ground",
+            MetricUnit.MM,
+        ),
+        definition("scrub_radius", scrub_radius, "Scrub Radius", MetricUnit.MM),
+        definition(
+            "mechanical_trail",
+            mechanical_trail,
+            "Mechanical Trail",
+            MetricUnit.MM,
+        ),
+    )
+
+
 def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
     """
     Build the default corner metric catalog.
@@ -56,8 +148,6 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
     """
     from kinematics.core.metrics.angles import (
         calculate_camber,
-        calculate_caster,
-        calculate_kpi,
         calculate_steer,
         calculate_toe,
     )
@@ -66,11 +156,6 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
         calculate_anti_lift_pct,
         calculate_anti_squat_pct,
         calculate_svsa_angle,
-    )
-    from kinematics.core.metrics.steering_geometry import (
-        calculate_mechanical_trail,
-        calculate_scrub_radius,
-        calculate_steering_axis_offset_ground,
     )
     from kinematics.core.metrics.swing_arms import (
         calculate_fvsa_length,
@@ -92,23 +177,7 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
 
     return (
         MetricDefinition("camber", calculate_camber, "Camber", MetricUnit.DEG),
-        MetricDefinition("caster", calculate_caster, "Caster", MetricUnit.DEG),
-        MetricDefinition("kpi", calculate_kpi, "KPI", MetricUnit.DEG),
-        MetricDefinition(
-            "steering_axis_offset_ground",
-            calculate_steering_axis_offset_ground,
-            "Steering-Axis Offset at Ground",
-            MetricUnit.MM,
-        ),
-        MetricDefinition(
-            "scrub_radius", calculate_scrub_radius, "Scrub Radius", MetricUnit.MM
-        ),
-        MetricDefinition(
-            "mechanical_trail",
-            calculate_mechanical_trail,
-            "Mechanical Trail",
-            MetricUnit.MM,
-        ),
+        *_build_steering_metrics(),
         MetricDefinition(
             "toe_angle",
             calculate_toe,
@@ -185,6 +254,23 @@ def get_default_corner_metrics() -> tuple[MetricDefinition, ...]:
     return _build_default_corner_metrics()
 
 
+def get_virtual_steering_metrics() -> tuple[MetricDefinition, ...]:
+    """Return additive labels for the common metrics on the virtual-axis context."""
+    return _build_steering_metrics(
+        column_suffix="_virtual",
+        label_suffix=", Virtual",
+    )
+
+
+def physical_steering_metric_keys() -> frozenset[str]:
+    """Column names of the steering family evaluated on the physical axis.
+
+    Architectures without a physical steering axis omit exactly these columns
+    while keeping their ``*_virtual`` counterparts.
+    """
+    return frozenset(metric.column_name for metric in _build_steering_metrics())
+
+
 def get_default_corner_derivative_metrics(
     suspension: "CornerSuspension",
 ) -> tuple[DerivativeMetricDefinition, ...]:
@@ -199,7 +285,7 @@ def get_default_corner_derivative_metrics(
     """
     side_sign = suspension.side.lateral_sign
     axle_inboard, axle_outboard = suspension.wheel_axis_points()
-    lower_pivot, upper_pivot = suspension.steering_axis_points()
+    steering_axis_points = suspension.steering_axis_points()
     rack_attachment = suspension.rack_attachment_point()
     hub_z_driver = PointCoordinateResponse.from_chassis_axis(
         PointID.WHEEL_CENTER,
@@ -256,49 +342,63 @@ def get_default_corner_derivative_metrics(
             ),
             driver=hub_z_driver,
         ),
-        DerivativeMetricDefinition(
-            response=response(
-                lambda positions: kernels.caster_deg(
-                    positions, lower_pivot, upper_pivot
-                ),
-                "caster",
-                "Caster",
-                MetricUnit.DEG,
-            ),
-            driver=hub_z_driver,
-        ),
-        DerivativeMetricDefinition(
-            response=response(
-                lambda positions: kernels.kpi_deg(
-                    positions, side_sign, lower_pivot, upper_pivot
-                ),
-                "kpi",
-                "KPI",
-                MetricUnit.DEG,
-            ),
-            driver=hub_z_driver,
-        ),
-        DerivativeMetricDefinition(
-            response=PointCoordinateResponse.from_axis(
-                PointID.WHEEL_CONTACT_CENTRE,
-                (0.0, side_sign, 0.0),
-                name="half_track",
-                unit=MetricUnit.MM,
-                label="Half-Track",
-            ),
-            driver=hub_z_driver,
-        ),
-        DerivativeMetricDefinition(
-            response=PointCoordinateResponse.from_axis(
-                PointID.WHEEL_CENTER,
-                (1.0, 0.0, 0.0),
-                name="wheel_center_x",
-                unit=MetricUnit.MM,
-                label="Wheel Center X",
-            ),
-            driver=hub_z_driver,
-        ),
     ]
+
+    if steering_axis_points is not None:
+        # Physical caster/KPI responses only exist for architectures with a
+        # joint-to-joint steering axis; motion-derived axes report virtually.
+        lower_pivot, upper_pivot = steering_axis_points
+        definitions.extend(
+            (
+                DerivativeMetricDefinition(
+                    response=response(
+                        lambda positions: kernels.caster_deg(
+                            positions, lower_pivot, upper_pivot
+                        ),
+                        "caster",
+                        "Caster",
+                        MetricUnit.DEG,
+                    ),
+                    driver=hub_z_driver,
+                ),
+                DerivativeMetricDefinition(
+                    response=response(
+                        lambda positions: kernels.kpi_deg(
+                            positions, side_sign, lower_pivot, upper_pivot
+                        ),
+                        "kpi",
+                        "KPI",
+                        MetricUnit.DEG,
+                    ),
+                    driver=hub_z_driver,
+                ),
+            )
+        )
+
+    definitions.extend(
+        (
+            DerivativeMetricDefinition(
+                response=PointCoordinateResponse.from_axis(
+                    PointID.WHEEL_CONTACT_CENTRE,
+                    (0.0, side_sign, 0.0),
+                    name="half_track",
+                    unit=MetricUnit.MM,
+                    label="Half-Track",
+                ),
+                driver=hub_z_driver,
+            ),
+            DerivativeMetricDefinition(
+                response=PointCoordinateResponse.from_axis(
+                    PointID.WHEEL_CENTER,
+                    (1.0, 0.0, 0.0),
+                    name="wheel_center_x",
+                    unit=MetricUnit.MM,
+                    label="Wheel Center X",
+                ),
+                driver=hub_z_driver,
+            ),
+        )
+    )
 
     if rack_attachment is not None:
         # Rack displacement is the rack attachment point chassis Y offset;

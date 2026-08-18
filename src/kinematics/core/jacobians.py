@@ -367,42 +367,6 @@ def jac_equal_distance(
     )  # noqa: E501
 
 
-# Residual: softnorm(|cross(p - line_point, line_direction)|^2)
-# line_point and line_direction are fixed; only p has free coordinates.
-def jac_point_on_line(
-    p: np.ndarray,
-    line_point: np.ndarray,
-    line_direction: np.ndarray,
-) -> np.ndarray:
-    """
-    Jacobian row for PointOnLineConstraint.
-
-    Residual: `|cross(p - line_point, line_direction)|`.
-    Returns `[dR/dp_x, dR/dp_y, dR/dp_z]`.
-    """
-    px, py, pz = float(p[0]), float(p[1]), float(p[2])
-    lpx = float(line_point[0])
-    lpy = float(line_point[1])
-    lpz = float(line_point[2])
-    ldx = float(line_direction[0])
-    ldy = float(line_direction[1])
-    ldz = float(line_direction[2])
-    t0 = -lpy + py
-    t1 = -lpx + px
-    t2 = -t0 * ldx + t1 * ldy
-    t3 = -lpz + pz
-    t4 = -t1 * ldz + t3 * ldx
-    t5 = t0 * ldz - t3 * ldy
-    t6 = 1 / math.sqrt(EPS_SQ + t2**2 + t4**2 + t5**2)
-    return np.array(
-        [
-            t6 * (t2 * ldy - t4 * ldz),
-            t6 * (-t2 * ldx + t5 * ldz),
-            t6 * (t4 * ldx - t5 * ldy),
-        ]
-    )  # noqa: E501
-
-
 # Residual: dot(p - plane_point, plane_normal)
 # Linear residual — the Jacobian is simply the plane normal.
 def jac_point_on_plane(

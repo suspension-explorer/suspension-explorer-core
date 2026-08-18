@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 import yaml
 
+from kinematics.core.coordinates import CoordinateAxis, PointCoordinate
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.input import (
     build_suspension,
@@ -17,7 +18,6 @@ from kinematics.core.primitives.point_ref import PointRef, Side
 from kinematics.core.schema.sweep import TargetSpec
 from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.corner import DoubleWishboneSuspension
-from kinematics.core.targeting import PointTarget, PointTargetAxis
 
 
 def _read_mapping(path: Path) -> dict[str, Any]:
@@ -61,10 +61,10 @@ def test_core_builds_sweep_from_decoded_mapping(test_data_dir: Path) -> None:
     assert target_spec.side is Side.LEFT
     assert target_spec.direction.axis is Axis.Z
     target = sweep.target_sweeps[0][0]
-    assert isinstance(target, PointTarget)
-    assert target.point_id == PointRef(Side.LEFT, PointID.WHEEL_CENTER)
-    assert isinstance(target.direction, PointTargetAxis)
-    assert target.direction.axis is Axis.Z
+    assert isinstance(target.coordinate, PointCoordinate)
+    assert target.coordinate.point == PointRef(Side.LEFT, PointID.WHEEL_CENTER)
+    assert isinstance(target.coordinate.direction, CoordinateAxis)
+    assert target.coordinate.direction.axis is Axis.Z
 
 
 def test_missing_coordinate_is_a_field_located_value_error(

@@ -38,11 +38,12 @@ tool.
 
 | Area                      | Supported                                                                                 | Important limits                                                                                                   |
 | ------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Locating architectures    | Double wishbone and MacPherson strut                                                      | Each may be built as one corner or a composed two-corner axle.                                                     |
+| Locating architectures    | Double wishbone, MacPherson strut, multi-link (five-rod), and semi-trailing arm           | Each may be built as one corner or a composed two-corner axle.                                                     |
 | Axle geometry             | Mirrored or explicitly authored left and right corners                                    | If `hardpoints.right` is omitted, the complete left geometry and side-local setup are mirrored through `Y = 0`.    |
 | Wheel-heading control     | Translating steering rack or fixed toe link                                               | Select `steering.type: rack` or `steering.type: none`; front/rear position does not select steering automatically. |
 | Double-wishbone actuation | Direct or pushrod-rocker, mounted to the lower wishbone or upright                        | Direct actuation cannot be combined with a torsion bar.                                                            |
 | Double-wishbone springs   | None, coilover, or torsion bar                                                            | A torsion bar requires pushrod-rocker actuation.                                                                   |
+| Multi-link corners        | Four independent locating rods plus track rod or toe link; actuation on the upright or a direct spring on a lower link's centreline | No physical kingpin exists; steering geometry reports through the virtual (screw-axis) metric family only.        |
 | Axle mechanisms           | U-bar or T-bar anti-roll mechanism and rocker-to-rocker heave link                        | These mechanisms require a double-wishbone axle with pushrod-rocker actuation.                                     |
 | Setup changes             | Outboard camber shims on double-wishbone corners                                          | Explicit asymmetric axle hardpoints require corresponding side-local setup when a shim is used.                    |
 | Outputs                   | Solved point positions, solver statistics, diagnostics, metrics, in either CSV or Parquet | Plotting and animation require the optional visualization dependencies.                                            |
@@ -63,7 +64,8 @@ Jacobian rather than by finite differencing adjacent sweep steps.
 - Multibody dynamics, inertia, damping, applied loads, and transient behavior.
 - Bushing, chassis, tire, or component compliance.
 - Stress, fatigue, strength, and packaging or interference checks.
-- Suspension architectures other than double wishbone and MacPherson strut.
+- Suspension architectures other than double wishbone, MacPherson strut,
+  multi-link, and semi-trailing arm.
 - Offset-axis MacPherson struts. The model requires the authored strut clamp to
   lie on the lower-ball-joint-to-top-mount steering axis within 1 mm.
 - Arbitrary mechanism combinations. Geometry is rejected when the selected
@@ -277,24 +279,26 @@ targets:
   - type: actuator_position
     actuator: rack
     direction: { axis: y }
-    mode: relative
-    start: 0
-    stop: 0
+    hold: true
 ```
 
 Every physical actuator must be controlled exactly once. A rack-steered model
-therefore needs one `type: actuator_position`, `actuator: rack` target along Y,
-even when the rack is held at zero displacement. `relative` values are measured
-from the authored design condition; `absolute` values are coordinates in chassis
-space. Every corner-owned target must identify `side: left` or `side: right`.
+therefore needs one `type: actuator_position`, `actuator: rack` control along Y.
+`hold: true` captures that coordinate at the sweep reference state and enforces
+the captured value at every step; it can likewise hold a point coordinate or an
+element length. Held controls have no `mode`, `start`, `stop`, or `values`.
+Swept `relative` values are measured from the authored design condition;
+`absolute` values are coordinates in chassis space. Every corner-owned target
+must identify `side: left` or `side: right`.
 A standalone corner exposes only `left`; an axle exposes both sides. Shared
 coordinates such as `rack` remain unsided. A physical `trackrod_inboard` point
 target does not substitute for the named rack actuator coordinate.
 
-All target sequences must have the same number of values. Multiple targets are
+All swept target sequences must have the same number of values. Multiple targets are
 paired by index rather than expanded into a Cartesian product. Use `start`,
 `stop`, and the file-level `steps`, or give every target an equal-length
-`values` list.
+`values` list. A profile must contain at least one swept target in addition to
+any held controls.
 
 ### 3. Check the design condition
 
@@ -432,6 +436,75 @@ metric metadata, per-frame solver information, applicable corner and axle
 metrics, renderer-neutral element paths, reference conditions, and diagnostics.
 The CLI is a thin adapter around this core API for YAML input and file output.
 
+### Steering-response axes
+
+> A steering-response axis is obtained from unit positive rack motion at the
+> current solved configuration while topology-declared suspension-travel
+> coordinates are held at their current values.
+
+The response is a separate analytical derivative at each already-solved state;
+it does not inherit the targets that authored the surrounding sweep. A double
+wishbone defaults to its lower-wishbone angle, while the supported
+MacPherson model defaults to strut length. An axle composes independent left and
+right holds with its shared rack. If a topology cannot declare a sufficient
+suspension hold, the response is unavailable rather than selected from an
+underconstrained motion family.
+
+Each topology also publishes its available hold choices. The sweep may leave the
+default choice implicit or select one by stable ID:
+
+```yaml
+analysis:
+  virtual_steering:
+    suspension_hold: upper_wishbone_angle
+```
+
+This block changes analysis only; it never adds a target to the state solve.
+Each option names the local counterfactual it represents. Availability warnings,
+such as fixed damper length with an upright-mounted pushrod, remain in structured
+analysis output.
+
+One result is calculated for every upright at every rack-steered sweep step and
+exposed as `frame.steering_response_axes`. It carries the axis point and
+direction, angular rate, screw pitch, rigid-body fit residuals, point count, and
+an explicit validity status. The same data is drawn as a clipped dash-dot line
+in every view of CLI animations without contributing to automatic plot bounds.
+
+This is an instantaneous kinematic axis, not necessarily a physical kingpin or
+ball-joint line. A spatial linkage or a real steering-to-spring coupling may
+produce nonzero screw pitch. An incomplete or inconsistent suspension hold,
+near-pure translation, degenerate upright geometry, or a poor rigid-body fit
+leaves the axis unavailable for that frame and reports a diagnostic. The response
+uses an analytical tangent at that state; it does not finite-difference adjacent
+sweep frames, perturb and re-solve the rack, or modify the authored sweep.
+
+Existing caster, KPI, steering-axis offset, scrub-radius, and mechanical-trail
+metrics retain their physical steering-axis definitions. Rack-steered results
+also report an additive, motion-derived family using the suffix `_virtual`:
+`caster_virtual`, `kpi_virtual`, `steering_axis_offset_ground_virtual`,
+`scrub_radius_virtual`, and `mechanical_trail_virtual`. Each is ordered beside
+its physical counterpart and displayed with labels such as `Caster, Virtual`.
+Here **virtual steering axis** means the isolated steering-response screw-axis
+line above. The values use the same chassis, tyre, road-plane, and sign
+conventions as their physical-axis counterparts. They are `None` when that
+frame has no valid finite axis; selecting another published hold changes only
+the virtual family and never the original physical metrics. Screw pitch and
+angular rate remain separate axis properties
+rather than being folded into these five line-based geometry values.
+
+Holding wheel-centre height during the authored sweep is not the same as fixing
+the wishbones: it adds the jounce needed to cancel vertical motion from steering
+around an inclined axis. That remains the correct solved path, but it no longer
+changes the virtual steering definition. At each of those states, the selected
+suspension hold fixes current suspension travel and recovers the steering-only response.
+For the ideal double-wishbone fixture, the default fitted virtual line
+therefore agrees with the ball-joint line even while the authored internals move
+between frames.
+
+Internally, physical pivots and the motion fit each establish the same
+source-agnostic `SteeringAxis` representation. One common geometry path then
+computes its road intersection, caster, KPI, offset, scrub radius, and trail.
+
 ## How the solver works
 
 ```text
@@ -450,7 +523,7 @@ validate and expand coordinated sweep targets
 solve each step with scipy.optimize.least_squares
         |
         v
-calculate derived points, metrics, derivatives, and diagnostics
+calculate analytical tangents once, then metrics, steering axes, and diagnostics
         |
         v
 structured analysis or CLI file export

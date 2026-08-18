@@ -11,7 +11,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
+import numpy as np
+
 from kinematics.core.assembly import SuspensionAssembly
+from kinematics.core.coordinates import ScalarCoordinate
 from kinematics.core.diagnostics import (
     DiagnosticCategory,
     DiagnosticIssue,
@@ -33,8 +36,13 @@ from kinematics.core.presentation import (
     wheel_references,
 )
 from kinematics.core.primitives.point_ref import point_key_name
+from kinematics.core.screw_axis import ScrewAxisStatus
 from kinematics.core.solver import SolverInfo
 from kinematics.core.state import SuspensionState
+from kinematics.core.steering_axis import (
+    SteeringResponseAxisResult,
+    SteeringResponseStatus,
+)
 from kinematics.core.suspensions.base import Suspension
 from kinematics.core.sweep import (
     EvaluatedSweep,
@@ -44,6 +52,11 @@ from kinematics.core.sweep import (
     solve_sweep,
 )
 from kinematics.core.targeting import SweepConfig
+
+if TYPE_CHECKING:
+    from kinematics.core.steering_response import (
+        SuspensionHoldCatalogue,
+    )
 
 if TYPE_CHECKING:
     from kinematics.core.suspensions.axle import AxleSuspension
@@ -77,8 +90,8 @@ class SweepParameter:
 
 
 @dataclass(frozen=True)
-class DriveCoordinateInfo:
-    """Transport-safe metadata for one topology-declared drive coordinate."""
+class CoordinateInfo:
+    """Transport-safe metadata for one suspension coordinate."""
 
     id: str
     type: str
@@ -87,6 +100,63 @@ class DriveCoordinateInfo:
     scope: str
     side: str | None
     point_keys: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SteeringResponseDefinitionInfo:
+    """Transport-safe provenance for the steering-response derivative."""
+
+    owner: str
+    definition_id: str
+    provenance: str
+    steering_coordinate_id: str
+    held_coordinates: tuple[CoordinateInfo, ...]
+    requested_option_id: str | None
+    resolved_option_id: str
+    selection_source: str
+    label: str
+    description: str
+    warning: str | None
+
+
+@dataclass(frozen=True)
+class SuspensionHoldOptionInfo:
+    """Transport-safe metadata for one topology-owned suspension hold."""
+
+    id: str
+    label: str
+    description: str
+    availability: str
+    warning: str | None
+    unavailable_reason: str | None
+    held_coordinates: tuple[CoordinateInfo, ...]
+
+
+@dataclass(frozen=True)
+class SuspensionHoldCatalogueInfo:
+    """Renderer-neutral suspension-hold catalogue."""
+
+    default_option_id: str
+    options: tuple[SuspensionHoldOptionInfo, ...]
+
+
+@dataclass(frozen=True)
+class AnalyzedSteeringResponseAxis:
+    """Renderer-independent steering-axis result for one upright and frame."""
+
+    upright_label: str
+    point_keys: tuple[str, ...]
+    status: SteeringResponseStatus
+    screw_axis_status: ScrewAxisStatus | None
+    point: tuple[float, float, float] | None
+    direction: tuple[float, float, float] | None
+    pitch: float | None
+    angular_rate: float | None
+    fit_rms: float | None
+    fit_max: float | None
+    fit_rank: int
+    point_count: int
+    message: str | None
 
 
 @dataclass(frozen=True)
@@ -99,6 +169,7 @@ class AnalyzedFrame:
     corner_metrics: dict[str, MetricRow]
     world_space: WorldSpace | None
     solver: SolverInfo
+    steering_response_axes: tuple[AnalyzedSteeringResponseAxis, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -121,7 +192,8 @@ class StaticPose:
     wheel: WheelDimensions | None
     elements: list[NamedElementPath]
     wheel_references: list[WheelReferences]
-    drive_coordinates: list[DriveCoordinateInfo]
+    drive_coordinates: list[CoordinateInfo]
+    suspension_hold_catalogue: SuspensionHoldCatalogueInfo | None
 
 
 @dataclass(frozen=True)
@@ -129,6 +201,7 @@ class SweepAnalysis:
     """Complete structured result of a suspension sweep."""
 
     suspension: SuspensionInfo
+    steering_response: SteeringResponseDefinitionInfo | None
     point_keys: list[str]
     metric_keys: list[str]
     corner_metric_keys: list[str]
@@ -156,6 +229,72 @@ def _suspension_info(suspension: Suspension) -> SuspensionInfo:
     )
 
 
+def _coordinate_info(
+    coordinate: ScalarCoordinate,
+) -> CoordinateInfo:
+    """Convert one suspension coordinate to stable analysis metadata."""
+    return CoordinateInfo(
+        id=coordinate.id,
+        type=coordinate.type.value,
+        label=coordinate.label,
+        unit=coordinate.unit,
+        scope=coordinate.scope.value,
+        side=(coordinate.side.name.lower() if coordinate.side is not None else None),
+        point_keys=tuple(point_key_name(point) for point in coordinate.point_keys),
+    )
+
+
+def _steering_response_info(
+    suspension: Suspension,
+    sweep_config: SweepConfig,
+) -> SteeringResponseDefinitionInfo | None:
+    """Describe the topology-owned suspension hold, when available."""
+    definition = suspension.resolve_suspension_hold(sweep_config.suspension_hold_id)
+    if definition is None:
+        return None
+    return SteeringResponseDefinitionInfo(
+        owner=definition.owner,
+        definition_id=definition.definition_id,
+        provenance=definition.provenance,
+        steering_coordinate_id=definition.steering_coordinate_id,
+        held_coordinates=tuple(
+            _coordinate_info(coordinate) for coordinate in definition.hold.coordinates
+        ),
+        requested_option_id=definition.requested_option_id,
+        resolved_option_id=definition.definition_id,
+        selection_source=definition.selection_source.value,
+        label=definition.label,
+        description=definition.description,
+        warning=definition.warning,
+    )
+
+
+def _suspension_hold_catalogue_info(
+    catalogue: "SuspensionHoldCatalogue | None",
+) -> SuspensionHoldCatalogueInfo | None:
+    """Convert topology capability metadata without adding UI policy."""
+    if catalogue is None:
+        return None
+    return SuspensionHoldCatalogueInfo(
+        default_option_id=catalogue.default_option_id,
+        options=tuple(
+            SuspensionHoldOptionInfo(
+                id=option.id,
+                label=option.label,
+                description=option.description,
+                availability=option.availability.value,
+                warning=option.warning,
+                unavailable_reason=option.unavailable_reason,
+                held_coordinates=tuple(
+                    _coordinate_info(coordinate)
+                    for coordinate in option.hold.coordinates
+                ),
+            )
+            for option in catalogue.options
+        ),
+    )
+
+
 def sweep_parameters(
     sweep_config: SweepConfig,
     states: Sequence[SuspensionState] | None = None,
@@ -167,25 +306,25 @@ def sweep_parameters(
             continue
         target = dimension[0]
         values = (
-            [float(target.measure(state.positions)) for state in states]
+            [float(target.coordinate.measure(state.positions)) for state in states]
             if states is not None
             else [float(item.value) for item in dimension]
         )
-        structural_side = target.structural_side
+        coordinate = target.coordinate
         parameters.append(
             SweepParameter(
-                type=target.kind.value,
-                coordinate_id=target.coordinate_id,
-                label=target.label,
-                unit=target.unit,
+                type=coordinate.type.value,
+                coordinate_id=coordinate.id,
+                label=coordinate.label,
+                unit=coordinate.unit,
                 values=values,
-                point=target.parameter_point,
-                axis=target.parameter_axis,
-                actuator=target.parameter_actuator,
-                element=target.parameter_element,
+                point=coordinate.parameter_point,
+                axis=coordinate.parameter_axis,
+                actuator=coordinate.parameter_actuator,
+                element=coordinate.parameter_element,
                 side=(
-                    structural_side.name.lower()
-                    if structural_side is not None
+                    coordinate.side.name.lower()
+                    if coordinate.side is not None
                     else None
                 ),
             )
@@ -200,7 +339,13 @@ def _hold_sweep_config(sweep_config: SweepConfig) -> SweepConfig | None:
             continue
         target = dimension[0]
         hold_dimensions.append([target.with_value(0.0, TargetValueMode.RELATIVE)])
-    return SweepConfig(hold_dimensions) if hold_dimensions else None
+    if not hold_dimensions:
+        return None
+    return SweepConfig(
+        hold_dimensions,
+        hold=sweep_config.hold,
+        suspension_hold_id=sweep_config.suspension_hold_id,
+    )
 
 
 def _split_metric_rows(
@@ -210,6 +355,41 @@ def _split_metric_rows(
     if isinstance(rows, AxleMetricRows):
         return rows.axle, {side.name.lower(): row for side, row in rows.corners.items()}
     return rows, {}
+
+
+def _finite_or_none(value: float) -> float | None:
+    """Return a JSON-safe finite float, or ``None`` for unavailable diagnostics."""
+    return float(value) if np.isfinite(value) else None
+
+
+def _vector_tuple(values: np.ndarray) -> tuple[float, float, float]:
+    """Convert a three-component internal array to a fixed primitive tuple."""
+    return (float(values[0]), float(values[1]), float(values[2]))
+
+
+def _analyzed_steering_response_axis(
+    result: SteeringResponseAxisResult,
+) -> AnalyzedSteeringResponseAxis:
+    """Convert one core result to primitive structured analysis values."""
+    axis = result.axis
+    twist = result.twist
+    fit_rms = axis.fit_rms if axis is not None else (twist.fit_rms if twist else None)
+    fit_max = axis.fit_max if axis is not None else (twist.fit_max if twist else None)
+    return AnalyzedSteeringResponseAxis(
+        upright_label=result.upright_label,
+        point_keys=tuple(point_key_name(key) for key in result.point_keys),
+        status=result.status,
+        screw_axis_status=result.screw_axis_status,
+        point=_vector_tuple(axis.point.data) if axis else None,
+        direction=_vector_tuple(axis.direction.data) if axis else None,
+        pitch=float(axis.pitch) if axis else None,
+        angular_rate=float(axis.angular_rate) if axis else None,
+        fit_rms=_finite_or_none(fit_rms) if fit_rms is not None else None,
+        fit_max=_finite_or_none(fit_max) if fit_max is not None else None,
+        fit_rank=twist.fit_rank if twist is not None else 0,
+        point_count=result.point_count,
+        message=result.message,
+    )
 
 
 def _setup_reference(
@@ -286,8 +466,14 @@ def analyze_evaluated_sweep(
     assembly = suspension.assembly()
 
     frames: list[AnalyzedFrame] = []
-    for index, (state, info, row) in enumerate(
-        zip(evaluated.states, evaluated.solver_stats, evaluated.metrics.rows)
+    for index, (state, info, row, steering_axes) in enumerate(
+        zip(
+            evaluated.states,
+            evaluated.solver_stats,
+            evaluated.metrics.rows,
+            evaluated.steering_response_axes,
+            strict=True,
+        )
     ):
         metrics, corner_metrics = _split_metric_rows(row)
         frames.append(
@@ -305,6 +491,9 @@ def analyze_evaluated_sweep(
                     else None
                 ),
                 solver=info,
+                steering_response_axes=tuple(
+                    _analyzed_steering_response_axis(result) for result in steering_axes
+                ),
             )
         )
 
@@ -339,6 +528,7 @@ def analyze_evaluated_sweep(
 
     return SweepAnalysis(
         suspension=_suspension_info(suspension),
+        steering_response=_steering_response_info(suspension, sweep_config),
         point_keys=named_point_keys(assembly),
         metric_keys=metric_keys,
         corner_metric_keys=corner_metric_keys,
@@ -369,21 +559,10 @@ def initial_pose(suspension: Suspension) -> StaticPose:
         elements=named_element_paths(assembly),
         wheel_references=wheel_references(assembly),
         drive_coordinates=[
-            DriveCoordinateInfo(
-                id=coordinate.id,
-                type=coordinate.kind.value,
-                label=coordinate.label,
-                unit=coordinate.unit,
-                scope=coordinate.scope.value,
-                side=(
-                    coordinate.side.name.lower()
-                    if coordinate.side is not None
-                    else None
-                ),
-                point_keys=tuple(
-                    point_key_name(point) for point in coordinate.point_keys
-                ),
-            )
+            _coordinate_info(coordinate)
             for coordinate in suspension.drive_coordinates()
         ],
+        suspension_hold_catalogue=_suspension_hold_catalogue_info(
+            suspension.suspension_hold_catalogue()
+        ),
     )

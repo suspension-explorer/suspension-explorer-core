@@ -4,27 +4,36 @@ import numpy as np
 import pytest
 
 from kinematics.cli.io.loaders import load_geometry
-from kinematics.core.enums import Axis, PointID, TargetValueMode
-from kinematics.core.points.derived.manager import DerivedPointsManager
-from kinematics.core.primitives.geometry import extract_array
+from kinematics.core.constraints import Constraint, FixedAxisConstraint
+from kinematics.core.coordinates import (
+    ActuatorCoordinate,
+    CoordinateAxis,
+    CoordinateTarget,
+    CoordinateVector,
+    PointCoordinate,
+)
+from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode
+from kinematics.core.points.derived.manager import (
+    DerivedPointsManager,
+    DerivedPointsSpec,
+)
+from kinematics.core.primitives.geometry import Direction3, Point3, extract_array
 from kinematics.core.sensitivity import (
     TangentField,
     combine_tangents,
     compute_state_tangents,
 )
+from kinematics.core.state import SuspensionState
 from kinematics.core.sweep import solve_sweep
-from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
+from kinematics.core.targeting import SweepConfig
 
 FD_STEP = 0.25
 
 
-def _bump_target(value: float) -> PointTarget:
-    return PointTarget(
-        point_id=PointID.WHEEL_CENTER,
-        direction=PointTargetAxis(axis=Axis.Z),
-        value=value,
-        mode=TargetValueMode.ABSOLUTE,
-    )
+def _bump_target(value: float) -> CoordinateTarget:
+    return PointCoordinate(
+        PointID.WHEEL_CENTER, CoordinateAxis(Axis.Z), Scope.CORNER
+    ).target(value, TargetValueMode.ABSOLUTE)
 
 
 def test_corner_tangent_matches_finite_difference(
@@ -40,10 +49,9 @@ def test_corner_tangent_matches_finite_difference(
         for coordinate in corner.drive_coordinates()
         if coordinate.id == "rack"
     )
-    rack_target = rack_coordinate.position_target(
-        PointTargetAxis(axis=Axis.Y),
-        trackrod_inboard_y,
-        TargetValueMode.ABSOLUTE,
+    assert isinstance(rack_coordinate, ActuatorCoordinate)
+    rack_target = rack_coordinate.with_direction(CoordinateAxis(Axis.Y)).target(
+        trackrod_inboard_y, TargetValueMode.ABSOLUTE
     )
     targets = [_bump_target(target_z), rack_target]
 
@@ -74,7 +82,7 @@ def test_corner_tangent_matches_finite_difference(
             - extract_array(states[0].positions[point_id])
         ) / (2.0 * FD_STEP)
         np.testing.assert_allclose(
-            field.velocity(point_id),
+            field.rate(point_id),
             finite_difference,
             rtol=1e-3,
             atol=1e-5,
@@ -84,7 +92,167 @@ def test_corner_tangent_matches_finite_difference(
     assert solve_info.rank == solve_info.n_variables
     assert solve_info.smallest_singular_value > 0.0
     assert np.isfinite(solve_info.condition_number)
-    assert field.velocity(PointID.WHEEL_CENTER)[Axis.Z] == pytest.approx(1.0)
+    assert solve_info.full_column_rank
+    assert solve_info.nullity == 0
+    assert solve_info.rate_consistent
+    assert solve_info.response_for_target(0).unique
+    assert solve_info.response_for_target(1).unique
+    assert field.rate(PointID.WHEEL_CENTER)[Axis.Z] == pytest.approx(1.0)
+
+
+def test_full_rank_inconsistent_tangent_is_not_reported_as_unique() -> None:
+    point = PointID.WHEEL_CENTER
+    state = SuspensionState(
+        positions={point: Point3([1.0, 2.0, 3.0])},
+        free_points={point},
+    )
+    constraints: list[Constraint] = [
+        FixedAxisConstraint(point, axis, float(state.positions[point][axis]))
+        for axis in Axis
+    ]
+    target = PointCoordinate(point, CoordinateAxis(Axis.X), Scope.CORNER).target(
+        1.0, TargetValueMode.ABSOLUTE
+    )
+
+    _fields, info = compute_state_tangents(
+        state,
+        constraints,
+        DerivedPointsManager(DerivedPointsSpec({}, {})),
+        [target],
+    )
+
+    response = info.response_for_target(0)
+    assert info.full_column_rank
+    assert info.nullity == 0
+    assert info.mobility == 0
+    assert info.target_rank == 0
+    assert not info.rate_consistent
+    # The reduced solve never compromises permanent constraints to partially
+    # satisfy an impossible target request.
+    assert response.max_constraint_rate_residual == pytest.approx(0.0)
+    assert response.selected_target_rate_residual == pytest.approx(1.0)
+    assert response.max_other_target_rate_residual == 0.0
+    assert response.max_rate_residual > response.consistency_tolerance
+    assert not response.rate_consistent
+    assert not response.unique
+
+
+def test_consistent_but_underconstrained_tangent_is_not_unique() -> None:
+    point = PointID.WHEEL_CENTER
+    state = SuspensionState(
+        positions={point: Point3([1.0, 2.0, 3.0])},
+        free_points={point},
+    )
+    target = PointCoordinate(point, CoordinateAxis(Axis.X), Scope.CORNER).target(
+        1.0, TargetValueMode.ABSOLUTE
+    )
+
+    _fields, info = compute_state_tangents(
+        state,
+        [],
+        DerivedPointsManager(DerivedPointsSpec({}, {})),
+        [target],
+    )
+
+    response = info.response_for_target(0)
+    assert info.rank == 1
+    assert info.nullity == 2
+    assert not info.full_column_rank
+    assert info.rank_deficient
+    assert response.rate_consistent
+    assert not response.unique
+
+
+def test_one_dof_mechanism_needs_no_hold_beyond_its_driver() -> None:
+    point = PointID.WHEEL_CENTER
+    state = SuspensionState(
+        positions={point: Point3([1.0, 2.0, 3.0])},
+        free_points={point},
+    )
+    constraints: list[Constraint] = [
+        FixedAxisConstraint(point, Axis.Y, 2.0),
+        FixedAxisConstraint(point, Axis.Z, 3.0),
+    ]
+    target = PointCoordinate(point, CoordinateAxis(Axis.X), Scope.CORNER).target(
+        1.0, TargetValueMode.ABSOLUTE
+    )
+
+    fields, info = compute_state_tangents(
+        state,
+        constraints,
+        DerivedPointsManager(DerivedPointsSpec({}, {})),
+        [target],
+    )
+
+    assert info.constraint_rank == 2
+    assert info.mobility == 1
+    assert info.target_rank == 1
+    assert info.nullity == 0
+    assert info.response_for_target(0).unique
+    assert fields[0].rate(point) == pytest.approx([1.0, 0.0, 0.0])
+
+
+def test_ill_conditioning_cannot_hide_an_inconsistent_target_basis() -> None:
+    point = PointID.WHEEL_CENTER
+    state = SuspensionState(
+        positions={point: Point3([1.0, 2.0, 3.0])},
+        free_points={point},
+    )
+    constraints: list[Constraint] = [FixedAxisConstraint(point, Axis.Z, 3.0)]
+    targets = [
+        PointCoordinate(
+            point,
+            CoordinateVector(Direction3([1.0, y_component, 0.0])),
+            Scope.CORNER,
+        ).target(1.0, TargetValueMode.ABSOLUTE)
+        for y_component in (0.0, 1e-12, 2e-12)
+    ]
+
+    _fields, info = compute_state_tangents(
+        state,
+        constraints,
+        DerivedPointsManager(DerivedPointsSpec({}, {})),
+        targets,
+    )
+
+    response = info.response_for_target(0)
+    assert info.full_column_rank
+    assert info.condition_number > 1e11
+    assert response.max_rate_residual > 0.3
+    assert response.max_rate_residual > response.consistency_tolerance
+    assert not response.rate_consistent
+    assert not response.unique
+
+
+def test_target_rate_diagnostics_cover_selected_and_held_targets() -> None:
+    point = PointID.WHEEL_CENTER
+    state = SuspensionState(
+        positions={point: Point3([1.0, 2.0, 3.0])},
+        free_points={point},
+    )
+    targets = [
+        PointCoordinate(point, CoordinateAxis(axis), Scope.CORNER).target(
+            float(state.positions[point][axis]), TargetValueMode.ABSOLUTE
+        )
+        for axis in Axis
+    ]
+
+    _fields, info = compute_state_tangents(
+        state,
+        [],
+        DerivedPointsManager(DerivedPointsSpec({}, {})),
+        targets,
+    )
+
+    for target_index in range(3):
+        response = info.response_for_target(target_index)
+        assert response.target_rate_residuals == pytest.approx((0.0, 0.0, 0.0))
+        assert response.selected_target_rate_residual == pytest.approx(0.0)
+        assert response.max_other_target_rate_residual == pytest.approx(0.0)
+        assert response.unique
+
+    with pytest.raises(KeyError, match="target index 3"):
+        info.response_for_target(3)
 
 
 def test_combine_tangents_is_linear() -> None:
@@ -92,12 +260,12 @@ def test_combine_tangents_is_linear() -> None:
     field_a = TangentField(
         target_index=0,
         target=target,
-        velocities={PointID.WHEEL_CENTER: np.array([1.0, 0.0, 0.0])},
+        rates={PointID.WHEEL_CENTER: np.array([1.0, 0.0, 0.0])},
     )
     field_b = TangentField(
         target_index=1,
         target=target,
-        velocities={PointID.WHEEL_CENTER: np.array([0.0, 2.0, 0.0])},
+        rates={PointID.WHEEL_CENTER: np.array([0.0, 2.0, 0.0])},
     )
 
     combined = combine_tangents([field_a, field_b], [2.0, -1.0])

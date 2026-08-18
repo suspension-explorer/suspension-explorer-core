@@ -17,6 +17,7 @@ import pytest
 
 from kinematics.cli.io.loaders import load_geometry
 from kinematics.core.constraints import Constraint, DistanceConstraint
+from kinematics.core.coordinates import CoordinateAxis, PointCoordinate
 from kinematics.core.diagnostics import (
     DiagnosticCategory,
     DiagnosticIssue,
@@ -32,6 +33,7 @@ from kinematics.core.enums import (
     Axis,
     AxlePosition,
     PointID,
+    Scope,
     SteeringType,
     SuspensionType,
 )
@@ -49,7 +51,7 @@ from kinematics.core.suspensions.axle import AxleSuspension
 from kinematics.core.suspensions.corner import DoubleWishboneSuspension
 from kinematics.core.suspensions.corner.base import CornerSuspension
 from kinematics.core.sweep import compute_sweep_metrics, solve_sweep
-from kinematics.core.targeting import PointTarget, PointTargetAxis, SweepConfig
+from kinematics.core.targeting import SweepConfig
 
 TEST_DATA = Path(__file__).parent / "data"
 
@@ -265,11 +267,11 @@ def test_stub_axle_solves_and_reports_metrics_through_role_hooks():
     sweep = SweepConfig(
         target_sweeps=[
             [
-                PointTarget(
+                PointCoordinate(
                     PointRef(side, PointID.WHEEL_CENTER),
-                    PointTargetAxis(Axis.Z),
-                    value,
-                )
+                    CoordinateAxis(Axis.Z),
+                    Scope.CORNER,
+                ).target(value)
                 for value in bump_values
             ]
             for side in (Side.LEFT, Side.RIGHT)
@@ -339,11 +341,15 @@ def test_metric_context_resolves_steering_axis_through_role_hooks():
         config=corner.config,
     )
 
-    lower, upper = ctx.steering_axis_pivots
+    pivots = ctx.steering_axis_pivots
+    assert pivots is not None
+    lower, upper = pivots
     # The stub declares KNUCKLE as the lower pivot and CHASSIS_FRONT as the
     # upper pivot.
     initial = corner.initial_state()
     assert (lower - initial.get(KNUCKLE)).norm() == pytest.approx(0.0)
     assert (upper - initial.get(CHASSIS_FRONT)).norm() == pytest.approx(0.0)
     expected_direction = (upper - lower).normalize()
-    assert ctx.steering_axis.data == pytest.approx(expected_direction.data)
+    axis = ctx.steering_axis
+    assert axis is not None
+    assert axis.direction.data == pytest.approx(expected_direction.data)
