@@ -154,7 +154,7 @@ def test_incomplete_suspension_hold_is_reported_as_rank_deficient(
         steering_actuator=steering,
         hold=CoordinateHold(),
         owner="test",
-        definition_id="missing_jounce_hold",
+        definition_id="missing_suspension_travel_hold",
     )
     monkeypatch.setattr(
         suspension,
@@ -173,7 +173,7 @@ def test_incomplete_suspension_hold_is_reported_as_rank_deficient(
     assert response.solve_info.target_rank == 1
     assert response.solve_info.nullity == 1
     assert response.message is not None
-    assert "missing_jounce_hold" in response.message
+    assert "missing_suspension_travel_hold" in response.message
     assert "nullity 1" in response.message
 
 

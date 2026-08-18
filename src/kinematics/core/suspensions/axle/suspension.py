@@ -227,7 +227,8 @@ class AxleSuspension(Suspension):
         Each semantic option remains one user choice but expands to one
         independent held coordinate per corner.  Shared axle mechanisms are
         deliberately excluded: their motion may follow from the two corner
-        travel coordinates and is not an additional jounce degree of freedom.
+        travel coordinates and is not an additional suspension-travel degree of
+        freedom.
         """
         from kinematics.core.steering_response import (
             SuspensionHoldAvailability,

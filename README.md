@@ -493,10 +493,11 @@ angular rate remain separate axis properties
 rather than being folded into these five line-based geometry values.
 
 Holding wheel-centre height during the authored sweep is not the same as fixing
-the wishbones: it adds the jounce needed to cancel vertical motion from steering
-around an inclined axis. That remains the correct solved path, but it no longer
-changes the virtual steering definition. At each of those states, the selected
-suspension hold fixes current suspension travel and recovers the steering-only response.
+the wishbones: it adds the suspension travel needed to cancel vertical motion
+from steering around an inclined axis. That remains the correct solved path, but
+it no longer changes the virtual steering definition. At each of those states,
+the selected suspension hold fixes current suspension travel and recovers the
+steering-only response.
 For the ideal double-wishbone fixture, the default fitted virtual line
 therefore agrees with the ball-joint line even while the authored internals move
 between frames.
