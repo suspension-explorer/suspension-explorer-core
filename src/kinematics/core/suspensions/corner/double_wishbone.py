@@ -274,8 +274,8 @@ class DoubleWishboneSuspension(CornerSuspension):
                 label="Lower wishbone angle",
                 description=(
                     "Fixes suspension travel at the lower wishbone, isolating "
-                    "steering from jounce independently of the internal "
-                    "suspension mechanism."
+                    "steering from outboard suspension travel independently of "
+                    "the internal suspension mechanism."
                 ),
                 hold=CoordinateHold((lower,)),
             ),
@@ -284,8 +284,8 @@ class DoubleWishboneSuspension(CornerSuspension):
                 label="Upper wishbone angle",
                 description=(
                     "Fixes suspension travel at the upper wishbone, isolating "
-                    "steering from jounce in the ideal rigid double-wishbone "
-                    "mechanism."
+                    "steering from outboard suspension travel in the ideal rigid "
+                    "double-wishbone mechanism."
                 ),
                 hold=CoordinateHold((upper,)),
             ),

@@ -199,7 +199,7 @@ def test_same_state_has_same_axis_under_different_authored_target_bases() -> Non
 
 
 def test_upper_wishbone_option_is_equivalent_to_canonical_fixed_travel() -> None:
-    """Both wishbone angles span the same local jounce coordinate."""
+    """Both wishbone angles span the same local suspension-travel coordinate."""
     suspension = load_geometry(DATA_DIR / GEOMETRY)
     sweep = load_sweep(DATA_DIR / "axle_steer_sweep.yaml", suspension)
     canonical = solve_evaluated_sweep(suspension, sweep)

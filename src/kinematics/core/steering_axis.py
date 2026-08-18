@@ -25,10 +25,11 @@ configuration; they do not move the suspension back to design condition.
 This target basis is intentionally independent of the authored sweep target basis. A
 wheel-centre-height target is not a suspension-travel lock: steering about an
 inclined kingpin would normally move the wheel centre vertically, so holding
-that height forces a compensating jounce response.  Fitting the resulting
-absolute upright motion yields the correct screw axis of combined steering and
-jacking, but not an isolated steering axis.  Replacing the authored target
-basis with the topology-owned suspension hold removes that accidental dependency.
+that height forces a compensating suspension-travel response.  Fitting the
+resulting absolute upright motion yields the correct screw axis of combined
+steering and jacking, but not an isolated steering axis.  Replacing the authored
+target basis with the topology-owned suspension hold removes that accidental
+dependency.
 
 For an ideal double wishbone whose declared wishbone angle fixes travel,
 the response makes both outer ball-joint rates zero to first order.
