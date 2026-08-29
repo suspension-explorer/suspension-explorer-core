@@ -51,7 +51,8 @@ tool.
 The calculated metrics include wheel travel, longitudinal wheel-center travel,
 half-track, ISO track, track change, toe angle, ISO steer angle, camber, caster,
 kingpin inclination, scrub radius, mechanical trail, instant-center geometry,
-roll center, heave, suspension roll, ride-height change, anti-pitch geometry,
+roll center, heave, suspension roll, ride-height change, anti-dive and
+anti-squat geometry,
 damper and mechanism travel, and applicable motion ratios. Metric availability
 depends on the architecture and installed mechanisms.
 
