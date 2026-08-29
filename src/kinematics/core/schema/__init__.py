@@ -6,6 +6,7 @@ from kinematics.core.schema.config import (
     CamberShimConfig,
     CornerConfig,
     HeaveLinkConfig,
+    LengthShimConfig,
     SteeringConfig,
     SuspensionConfig,
     TireConfig,

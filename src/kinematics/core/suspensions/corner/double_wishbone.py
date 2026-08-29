@@ -125,7 +125,7 @@ class DoubleWishboneSuspension(CornerSuspension):
     }
 
     SUPPORTED_SHIMS: ClassVar[frozenset[ShimType]] = frozenset(
-        {ShimType.OUTBOARD_CAMBER}
+        {ShimType.OUTBOARD_CAMBER, ShimType.PUSHROD, ShimType.TOE}
     )
 
     # Points included in solver output (CSV/Parquet), in column order.
@@ -179,17 +179,24 @@ class DoubleWishboneSuspension(CornerSuspension):
         """Install a track rod or fixed toe link for wheel-heading control."""
         if self.config is None:
             raise ValueError("Double-wishbone suspension requires configuration")
+        toe_length_adjustment = (
+            self.config.toe_shim.length_adjustment
+            if self.config.toe_shim is not None
+            else 0.0
+        )
         # The four upright anchors already overdetermine this attachment, while
         # the upright angle constraint preserves the authored assembly branch.
         if self.config.steering.type is SteeringType.RACK:
             self.wheel_heading_link = TrackRod(
                 self.UPRIGHT_BODY,
                 preserve_attachment_handedness=False,
+                length_adjustment=toe_length_adjustment,
             )
         else:
             self.wheel_heading_link = ToeLink(
                 self.UPRIGHT_BODY,
                 preserve_attachment_handedness=False,
+                length_adjustment=toe_length_adjustment,
             )
         super().__post_init__()
 

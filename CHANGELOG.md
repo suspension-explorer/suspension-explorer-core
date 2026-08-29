@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Added simple pushrod/pullrod and toe setup shims. The setup-minus-design
+  thickness changes the corresponding pushrod, pullrod, track-rod, or toe-link
+  constraint length during the solve, with side-local corner and axle setup
+  support. Pushrod shims require pushrod-rocker actuation.
+
 ## [0.6.2] - 2026-08-18
 
 ### Changed

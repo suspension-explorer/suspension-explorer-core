@@ -37,7 +37,7 @@ from kinematics.core.elements import (
     VariableLengthLinkElement,
     WheelElement,
 )
-from kinematics.core.enums import Axis, PointID, SteeringType, SuspensionType
+from kinematics.core.enums import Axis, PointID, ShimType, SteeringType, SuspensionType
 from kinematics.core.holds import CoordinateHold
 from kinematics.core.metrics.derivatives import (
     DerivativeMetricDefinition,
@@ -104,6 +104,7 @@ class MacPhersonSuspension(CornerSuspension):
             PointID.AXLE_OUTBOARD,
         }
     )
+    SUPPORTED_SHIMS: ClassVar[frozenset[ShimType]] = frozenset({ShimType.TOE})
 
     # Points included in solver output, hardpoints first, then derived.
     LOCATING_OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
@@ -146,10 +147,21 @@ class MacPhersonSuspension(CornerSuspension):
         """Install a track rod or fixed toe link for wheel-heading control."""
         if self.config is None:
             raise ValueError("MacPherson suspension requires configuration")
+        toe_length_adjustment = (
+            self.config.toe_shim.length_adjustment
+            if self.config.toe_shim is not None
+            else 0.0
+        )
         if self.config.steering.type is SteeringType.RACK:
-            self.wheel_heading_link = TrackRod(self.UPRIGHT_BODY)
+            self.wheel_heading_link = TrackRod(
+                self.UPRIGHT_BODY,
+                length_adjustment=toe_length_adjustment,
+            )
         else:
-            self.wheel_heading_link = ToeLink(self.UPRIGHT_BODY)
+            self.wheel_heading_link = ToeLink(
+                self.UPRIGHT_BODY,
+                length_adjustment=toe_length_adjustment,
+            )
         super().__post_init__()
 
     def required_points(self) -> frozenset[PointID]:

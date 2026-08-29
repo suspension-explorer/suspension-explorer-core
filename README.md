@@ -45,7 +45,7 @@ tool.
 | Double-wishbone springs   | None, coilover, or torsion bar                                                            | A torsion bar requires pushrod-rocker actuation.                                                                   |
 | Multi-link corners        | Four independent locating rods plus track rod or toe link; actuation on the upright or a direct spring on a lower link's centreline | No physical kingpin exists; steering geometry reports through the virtual (screw-axis) metric family only.        |
 | Axle mechanisms           | U-bar or T-bar anti-roll mechanism and rocker-to-rocker heave link                        | These mechanisms require a double-wishbone axle with pushrod-rocker actuation.                                     |
-| Setup changes             | Outboard camber shims on double-wishbone corners                                          | Explicit asymmetric axle hardpoints require corresponding side-local setup when a shim is used.                    |
+| Setup changes             | Pushrod/pullrod ride-height shims, toe shims, and outboard double-wishbone camber shims    | Pushrod shims require pushrod-rocker actuation; explicit asymmetric axles require corresponding side-local setup.  |
 | Outputs                   | Solved point positions, solver statistics, diagnostics, metrics, in either CSV or Parquet | Plotting and animation require the optional visualization dependencies.                                            |
 
 The calculated metrics include wheel travel, longitudinal wheel-center travel,
@@ -259,6 +259,49 @@ For `steering.type: rack`, use `trackrod_inboard` and `trackrod_outboard`.
 For `steering.type: none`, replace them with `toe_link_inboard` and
 `toe_link_outboard`. A fixed toe link is part of the chassis geometry and is
 not a steering actuator.
+
+### Setup shims
+
+Simple setup shims are declared in the corner `config` using design and setup
+stack thicknesses in millimetres:
+
+```yaml
+config:
+  # Other corner configuration...
+  pushrod_shim:
+    design_thickness: 1.0
+    setup_thickness: 3.0
+  toe_shim:
+    design_thickness: 0.0
+    setup_thickness: 1.0
+```
+
+The solver adds `setup_thickness - design_thickness` to the authored link
+length. A positive `pushrod_shim` value therefore lengthens the pushrod or
+pullrod constraint, while a positive `toe_shim` value lengthens the installed
+track rod or fixed toe link. The resulting ride-height and toe directions
+depend on the authored mechanism geometry; the shim sign describes physical
+link length, not a guaranteed positive metric direction.
+
+Pushrod shims require `actuation.type: pushrod_rocker`. Because this kinematic
+model does not solve spring forces or static equilibrium, a pushrod shim sets
+ride height when the rocker position is controlled, for example by holding or
+targeting the installed damper length. If wheel-center Z is targeted instead,
+that target controls ride height and the shim changes the corresponding rocker
+position.
+
+Toe shims work with rack-steered track rods and with fixed toe links. They
+change the heading-link length inside the nonlinear solve while all authored
+rack or suspension targets remain unchanged. An unchanged stack
+(`setup_thickness == design_thickness`) has no effect.
+
+The high-level static-pose API also evaluates this assembled setup state, so a
+live preview reflects pushrod/pullrod ride-height and toe changes before a
+sweep is run.
+
+For axle geometry, place the same entries below `axle_config.left_setup` and,
+for explicit asymmetric right hardpoints, `axle_config.right_setup`. When the
+right corner is mirrored, the complete left setup is mirrored automatically.
 
 ### 2. Define a bump sweep
 

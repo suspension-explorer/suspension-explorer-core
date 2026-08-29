@@ -80,6 +80,11 @@ def _build_double_wishbone_corner(
         spec.actuation,
         mount_bodies=DoubleWishboneSuspension.MOUNT_BODIES,
         external_pickups=external_pickups,
+        pushrod_length_adjustment=(
+            spec.config.pushrod_shim.length_adjustment
+            if spec.config.pushrod_shim is not None
+            else None
+        ),
     )
     spring = build_corner_spring(spec.spring)
     damper = build_corner_damper(spec.damper)
@@ -118,6 +123,11 @@ def _build_multi_link_corner(
         spec.actuation,
         mount_bodies=MultiLinkSuspension.MOUNT_BODIES,
         external_pickups=external_pickups,
+        pushrod_length_adjustment=(
+            spec.config.pushrod_shim.length_adjustment
+            if spec.config.pushrod_shim is not None
+            else None
+        ),
     )
     spring = build_corner_spring(spec.spring)
     damper = build_corner_damper(spec.damper)
@@ -159,7 +169,7 @@ def build_trailing_arm(spec: GeometrySpecBase) -> Suspension:
 def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
     """Build a double-wishbone axle with composed shared hardware."""
     typed = cast(DoubleWishboneAxleGeometrySpec, spec)
-    corner_setups = _double_wishbone_axle_corner_setups(typed)
+    corner_setups = _axle_corner_setups(typed)
     side_points = _build_axle_side_points(typed.hardpoints)
     external_pickups, droplink_points = _extract_axle_pickups(typed, side_points)
 
@@ -191,6 +201,7 @@ def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
 def build_macpherson_axle(spec: GeometrySpecBase) -> Suspension:
     """Build a MacPherson axle from a left and optional explicit right corner."""
     typed = cast(MacPhersonAxleGeometrySpec, spec)
+    corner_setups = _axle_corner_setups(typed)
     side_points = _build_axle_side_points(typed.hardpoints)
     corners: dict[Side, CornerSuspension] = {}
     for side in (Side.LEFT, Side.RIGHT):
@@ -202,7 +213,7 @@ def build_macpherson_axle(spec: GeometrySpecBase) -> Suspension:
             config=SuspensionConfig.from_parts(
                 typed.vehicle_config,
                 typed.axle_config,
-                CornerConfig(),
+                corner_setups[side],
             ),
             hardpoints=side_points[side],
         )
@@ -213,6 +224,7 @@ def build_macpherson_axle(spec: GeometrySpecBase) -> Suspension:
 def build_multi_link_axle(spec: GeometrySpecBase) -> Suspension:
     """Build a multi-link axle with composed shared hardware."""
     typed = cast(MultiLinkAxleGeometrySpec, spec)
+    corner_setups = _axle_corner_setups(typed)
     side_points = _build_axle_side_points(typed.hardpoints)
     external_pickups, droplink_points = _extract_axle_pickups(typed, side_points)
 
@@ -226,7 +238,7 @@ def build_multi_link_axle(spec: GeometrySpecBase) -> Suspension:
             config=SuspensionConfig.from_parts(
                 typed.vehicle_config,
                 typed.axle_config,
-                CornerConfig(),
+                corner_setups[side],
             ),
             actuation=typed.axle_config.actuation,
             spring=typed.axle_config.spring,
@@ -240,6 +252,7 @@ def build_multi_link_axle(spec: GeometrySpecBase) -> Suspension:
 def build_trailing_arm_axle(spec: GeometrySpecBase) -> Suspension:
     """Build a mirrored or explicit full axle of unsteered semi-trailing arms."""
     typed = cast(TrailingArmAxleGeometrySpec, spec)
+    corner_setups = _axle_corner_setups(typed)
     side_points = _build_axle_side_points(typed.hardpoints)
     corners: dict[Side, CornerSuspension] = {}
     for side in (Side.LEFT, Side.RIGHT):
@@ -251,7 +264,7 @@ def build_trailing_arm_axle(spec: GeometrySpecBase) -> Suspension:
             config=SuspensionConfig.from_parts(
                 typed.vehicle_config,
                 typed.axle_config,
-                CornerConfig(),
+                corner_setups[side],
             ),
             spring=typed.axle_config.spring,
             hardpoints=side_points[side],
@@ -320,6 +333,7 @@ def build_actuation(
     *,
     mount_bodies: Mapping[MountBody, tuple[PointID, ...]],
     external_pickups: tuple[RockerPickup, ...] = (),
+    pushrod_length_adjustment: float | None = None,
 ) -> Actuation:
     """
     Build one typed corner actuation mechanism.
@@ -333,6 +347,11 @@ def build_actuation(
         )
     mount_body = mount_bodies[spec.mount]
     if spec.type is ActuationType.DIRECT:
+        if pushrod_length_adjustment is not None:
+            raise ValueError(
+                "A pushrod shim requires pushrod-rocker actuation; "
+                "direct actuation has no pushrod or pullrod"
+            )
         if external_pickups:
             raise ValueError("Direct actuation does not accept rocker pickups")
         # A two-joint rod carries the pickup on its centreline as a derived
@@ -350,6 +369,7 @@ def build_actuation(
         return ActuationPushrodRocker(
             pushrod_outboard_body=mount_body,
             external_pickups=external_pickups,
+            pushrod_length_adjustment=pushrod_length_adjustment or 0.0,
         )
     raise TypeError(f"Unsupported actuation type: {spec.type}")
 
@@ -445,9 +465,7 @@ def _build_axle_side_points(
     return {Side.LEFT: left, Side.RIGHT: right_points}
 
 
-def _double_wishbone_axle_corner_setups(
-    spec: DoubleWishboneAxleGeometrySpec,
-) -> dict[Side, CornerConfig]:
+def _axle_corner_setups(spec: AxleGeometrySpecBase) -> dict[Side, CornerConfig]:
     """Return the authored left setup and explicit or mirrored right setup."""
     left = spec.axle_config.left_setup
     right = spec.axle_config.right_setup
@@ -517,11 +535,15 @@ def _check_shim_support(
     config: SuspensionConfig,
     cls: type[CornerSuspension],
 ) -> None:
-    """Reject a camber shim config on an architecture without shim support."""
-    if (
-        config.camber_shim is not None
-        and ShimType.OUTBOARD_CAMBER not in cls.SUPPORTED_SHIMS
-    ):
-        raise ValueError(
-            f"Suspension type '{cls.TYPE_KEY}' does not support outboard camber shims"
-        )
+    """Reject configured shims that the corner architecture cannot carry."""
+    configured_shims = (
+        (ShimType.OUTBOARD_CAMBER, config.camber_shim),
+        (ShimType.PUSHROD, config.pushrod_shim),
+        (ShimType.TOE, config.toe_shim),
+    )
+    for shim_type, shim_config in configured_shims:
+        if shim_config is not None and shim_type not in cls.SUPPORTED_SHIMS:
+            shim_name = shim_type.value.replace("_", "-")
+            raise ValueError(
+                f"Suspension type '{cls.TYPE_KEY}' does not support {shim_name} shims"
+            )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from math import isfinite
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from kinematics.core.enums import ArbType, AxlePosition, HeaveLinkType, SteeringType
 from kinematics.core.primitives.constants import EPS_GEOMETRIC, MM_PER_INCH
@@ -71,6 +71,33 @@ class CamberShimConfig(BaseModel):
         return self
 
 
+class LengthShimConfig(BaseModel):
+    """Design and setup thickness for a shim that changes a link length.
+
+    Lengths are in millimetres. The installed link-length adjustment is
+    ``setup_thickness - design_thickness``: a positive value lengthens the
+    affected pushrod, pullrod, toe link, or track rod.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    design_thickness: float
+    setup_thickness: float
+
+    @field_validator("design_thickness", "setup_thickness")
+    @classmethod
+    def check_finite_thickness(cls, value: float) -> float:
+        """Require finite shim stack thicknesses."""
+        if not isfinite(value):
+            raise ValueError("Shim thicknesses must be finite")
+        return value
+
+    @property
+    def length_adjustment(self) -> float:
+        """Return the setup link-length change in millimetres."""
+        return self.setup_thickness - self.design_thickness
+
+
 class VehicleConfig(BaseModel):
     """Vehicle-wide configuration shared across all axles."""
 
@@ -122,8 +149,26 @@ class SteeringConfig(BaseModel):
     type: SteeringType
 
 
+class CornerConfig(BaseModel):
+    """Side-local setup applied to one corner model."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True, extra="forbid")
+
+    camber_shim: CamberShimConfig | None = None
+    pushrod_shim: LengthShimConfig | None = None
+    toe_shim: LengthShimConfig | None = None
+
+    @property
+    def has_setup(self) -> bool:
+        """Return whether this corner declares any side-local setup."""
+        return any(
+            shim is not None
+            for shim in (self.camber_shim, self.pushrod_shim, self.toe_shim)
+        )
+
+
 class AxleConfig(BaseModel):
-    """Configuration and shared mechanisms owned by one axle."""
+    """Shared axle mechanisms and optional side-local corner setup."""
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True, extra="forbid")
 
@@ -132,14 +177,8 @@ class AxleConfig(BaseModel):
     wheel: WheelConfig
     anti_roll: AntiRollConfig
     heave_link: HeaveLinkConfig
-
-
-class CornerConfig(BaseModel):
-    """Side-local setup applied to one corner model."""
-
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True, extra="forbid")
-
-    camber_shim: CamberShimConfig | None = None
+    left_setup: CornerConfig = Field(default_factory=CornerConfig)
+    right_setup: CornerConfig | None = None
 
 
 class SuspensionConfig(VehicleConfig):
@@ -149,6 +188,8 @@ class SuspensionConfig(VehicleConfig):
     wheel: WheelConfig
     axle_position: AxlePosition | None = None
     camber_shim: CamberShimConfig | None = None
+    pushrod_shim: LengthShimConfig | None = None
+    toe_shim: LengthShimConfig | None = None
 
     @classmethod
     def from_parts(
@@ -165,5 +206,7 @@ class SuspensionConfig(VehicleConfig):
                 "wheel": axle.wheel,
                 "axle_position": axle.axle_position,
                 "camber_shim": corner.camber_shim,
+                "pushrod_shim": corner.pushrod_shim,
+                "toe_shim": corner.toe_shim,
             }
         )

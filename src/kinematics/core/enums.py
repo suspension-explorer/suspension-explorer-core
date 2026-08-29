@@ -144,6 +144,8 @@ class ShimType(StrEnum):
     """Supported suspension shim adjustments."""
 
     OUTBOARD_CAMBER = "outboard_camber"
+    PUSHROD = "pushrod"
+    TOE = "toe"
 
 
 class SuspensionType(StrEnum):
