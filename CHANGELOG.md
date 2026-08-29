@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-29
+
 ### Added
 
 - Added simple pushrod/pullrod and toe setup shims. The setup-minus-design
