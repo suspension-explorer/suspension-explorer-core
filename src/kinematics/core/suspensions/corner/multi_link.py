@@ -155,7 +155,9 @@ class MultiLinkSuspension(CornerSuspension):
         ),
     }
 
-    SUPPORTED_SHIMS: ClassVar[frozenset[ShimType]] = frozenset()
+    SUPPORTED_SHIMS: ClassVar[frozenset[ShimType]] = frozenset(
+        {ShimType.PUSHROD, ShimType.TOE}
+    )
 
     # Points included in solver output (CSV/Parquet), in column order.
     # Hardpoints first, then derived points.
@@ -212,12 +214,23 @@ class MultiLinkSuspension(CornerSuspension):
         """Install a track rod or fixed toe link for wheel-heading control."""
         if self.config is None:
             raise ValueError("Multi-link suspension requires configuration")
+        toe_length_adjustment = (
+            self.config.toe_shim.length_adjustment
+            if self.config.toe_shim is not None
+            else 0.0
+        )
         # The anchored attachment pins the authored assembly branch; there is
         # no separate upright angle constraint to preserve it here.
         if self.config.steering.type is SteeringType.RACK:
-            self.wheel_heading_link = TrackRod(self.UPRIGHT_BODY)
+            self.wheel_heading_link = TrackRod(
+                self.UPRIGHT_BODY,
+                length_adjustment=toe_length_adjustment,
+            )
         else:
-            self.wheel_heading_link = ToeLink(self.UPRIGHT_BODY)
+            self.wheel_heading_link = ToeLink(
+                self.UPRIGHT_BODY,
+                length_adjustment=toe_length_adjustment,
+            )
         super().__post_init__()
 
     def required_points(self) -> frozenset[PointID]:

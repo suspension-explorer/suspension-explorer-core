@@ -20,7 +20,6 @@ from kinematics.core.enums import (
 from kinematics.core.primitives.point_ref import Side
 from kinematics.core.schema.config import (
     AxleConfig,
-    CornerConfig,
     SuspensionConfig,
     VehicleConfig,
 )
@@ -225,8 +224,6 @@ class DoubleWishboneAxleConfig(AxleConfig):
     actuation: ActuationSpec
     spring: CornerSpringSpec
     damper: CornerDamperSpec = Field(default_factory=CornerDamperSpec)
-    left_setup: CornerConfig = Field(default_factory=CornerConfig)
-    right_setup: CornerConfig | None = None
 
     @model_validator(mode="after")
     def check_mechanisms(self) -> "DoubleWishboneAxleConfig":
@@ -270,15 +267,8 @@ class AxleGeometrySpecBase(GeometrySpecBase):
     axle_config: AxleConfig
     hardpoints: AxleHardpointsSpec
 
-
-class DoubleWishboneAxleGeometrySpec(AxleGeometrySpecBase):
-    """Double-wishbone axle with corner mechanisms and shared hardware."""
-
-    type: Literal[SuspensionType.DOUBLE_WISHBONE] = SuspensionType.DOUBLE_WISHBONE
-    axle_config: DoubleWishboneAxleConfig
-
     @model_validator(mode="after")
-    def check_right_setup(self) -> "DoubleWishboneAxleGeometrySpec":
+    def check_right_setup(self) -> "AxleGeometrySpecBase":
         """Keep explicit asymmetric geometry and side-local setup paired."""
         if self.axle_config.right_setup is not None and self.hardpoints.right is None:
             raise ValueError(
@@ -286,7 +276,7 @@ class DoubleWishboneAxleGeometrySpec(AxleGeometrySpecBase):
             )
         if (
             self.hardpoints.right is not None
-            and self.axle_config.left_setup.camber_shim is not None
+            and self.axle_config.left_setup.has_setup
             and self.axle_config.right_setup is None
         ):
             raise ValueError(
@@ -294,6 +284,13 @@ class DoubleWishboneAxleGeometrySpec(AxleGeometrySpecBase):
                 "axle_config.left_setup contains side-local setup"
             )
         return self
+
+
+class DoubleWishboneAxleGeometrySpec(AxleGeometrySpecBase):
+    """Double-wishbone axle with corner mechanisms and shared hardware."""
+
+    type: Literal[SuspensionType.DOUBLE_WISHBONE] = SuspensionType.DOUBLE_WISHBONE
+    axle_config: DoubleWishboneAxleConfig
 
 
 class MacPhersonAxleGeometrySpec(AxleGeometrySpecBase):

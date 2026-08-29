@@ -11,6 +11,7 @@ from kinematics.core.constraints import (
 from kinematics.core.coordinates import ChassisAxisSystem
 from kinematics.core.elements import ElementType, RigidLinkElement, SuspensionElement
 from kinematics.core.enums import PointID
+from kinematics.core.primitives.constants import EPS_GEOMETRIC
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.primitives.vector_utils.geometric import (
@@ -37,6 +38,7 @@ class TrackRod:
 
     upright_anchors: tuple[PointID, ...]
     preserve_attachment_handedness: bool = True
+    length_adjustment: float = 0.0
 
     @property
     def inboard_point(self) -> PointID:
@@ -58,7 +60,7 @@ class TrackRod:
         return (PointID.TRACKROD_OUTBOARD, PointID.TRACKROD_INBOARD)
 
     def constraints(self, initial_state: SuspensionState) -> list[Constraint]:
-        """Hold length, attach to the upright, and constrain rack translation."""
+        """Hold shim-adjusted length, attach upright, and guide rack motion."""
         positions = initial_state.positions
         if self.preserve_attachment_handedness:
             attachment_constraints = anchored_rigid_point_constraints(
@@ -79,14 +81,22 @@ class TrackRod:
                 for anchor in self.upright_anchors
             ]
 
+        design_length = compute_point_point_distance(
+            positions[PointID.TRACKROD_INBOARD],
+            positions[PointID.TRACKROD_OUTBOARD],
+        )
+        setup_length = design_length + self.length_adjustment
+        if setup_length <= EPS_GEOMETRIC:
+            raise ValueError(
+                "Toe shim produces a non-positive setup track-rod length: "
+                f"{setup_length:g} mm"
+            )
+
         return [
             DistanceConstraint(
                 PointID.TRACKROD_INBOARD,
                 PointID.TRACKROD_OUTBOARD,
-                compute_point_point_distance(
-                    positions[PointID.TRACKROD_INBOARD],
-                    positions[PointID.TRACKROD_OUTBOARD],
-                ),
+                setup_length,
             ),
             *attachment_constraints,
             *point_on_line_constraints(

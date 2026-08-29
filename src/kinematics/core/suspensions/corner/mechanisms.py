@@ -271,6 +271,7 @@ class ActuationPushrodRocker:
 
     pushrod_outboard_body: tuple[PointID, ...]
     external_pickups: tuple[RockerPickup, ...] = ()
+    pushrod_length_adjustment: float = 0.0
 
     @property
     def moving_pickup_point(self) -> PointID:
@@ -368,7 +369,7 @@ class ActuationPushrodRocker:
             )
 
     def constraints(self, initial: SuspensionState) -> list[Constraint]:
-        """Build fixed pushrod and rigid rocker pickup constraints."""
+        """Build shim-adjusted pushrod and rigid rocker pickup constraints."""
         positions = initial.positions
 
         def distance(point_a: PointID, point_b: PointID) -> DistanceConstraint:
@@ -383,9 +384,23 @@ class ActuationPushrodRocker:
             PointID.PUSHROD_OUTBOARD,
             self.pushrod_outboard_body,
         )
+        design_pushrod_length = compute_point_point_distance(
+            positions[PointID.PUSHROD_OUTBOARD],
+            positions[PointID.PUSHROD_INBOARD],
+        )
+        setup_pushrod_length = design_pushrod_length + self.pushrod_length_adjustment
+        if setup_pushrod_length <= EPS_GEOMETRIC:
+            raise ValueError(
+                "Pushrod shim produces a non-positive setup link length: "
+                f"{setup_pushrod_length:g} mm"
+            )
         constraints.extend(
             (
-                distance(PointID.PUSHROD_OUTBOARD, PointID.PUSHROD_INBOARD),
+                DistanceConstraint(
+                    PointID.PUSHROD_OUTBOARD,
+                    PointID.PUSHROD_INBOARD,
+                    setup_pushrod_length,
+                ),
                 distance(PointID.PUSHROD_INBOARD, PointID.ROCKER_AXIS_A),
                 distance(PointID.PUSHROD_INBOARD, PointID.ROCKER_AXIS_B),
             )

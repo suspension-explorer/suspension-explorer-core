@@ -14,13 +14,24 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 
 from kinematics.core.assembly import SuspensionAssembly
-from kinematics.core.coordinates import ScalarCoordinate
+from kinematics.core.coordinates import (
+    CoordinateAxis,
+    ElementLengthCoordinate,
+    PointCoordinate,
+    ScalarCoordinate,
+)
 from kinematics.core.diagnostics import (
     DiagnosticCategory,
     DiagnosticIssue,
     DiagnosticSeverity,
 )
-from kinematics.core.enums import TargetValueMode
+from kinematics.core.enums import (
+    Axis,
+    ElementLengthCoordinateID,
+    PointID,
+    Scope,
+    TargetValueMode,
+)
 from kinematics.core.metrics.main import AxleMetricRows, MetricRow
 from kinematics.core.metrics.metadata import MetricDisplay, metric_display_for_keys
 from kinematics.core.metrics.registry import metric_specs_for_suspension
@@ -35,7 +46,7 @@ from kinematics.core.presentation import (
     wheel_dimensions,
     wheel_references,
 )
-from kinematics.core.primitives.point_ref import point_key_name
+from kinematics.core.primitives.point_ref import PointRef, Side, point_key_name
 from kinematics.core.screw_axis import ScrewAxisStatus
 from kinematics.core.solver import SolverInfo
 from kinematics.core.state import SuspensionState
@@ -429,6 +440,70 @@ def _setup_reference(
     )
 
 
+def _has_active_length_setup(suspension: Suspension) -> bool:
+    """Return whether any corner has a non-identity pushrod or toe shim."""
+    corners = (
+        cast("AxleSuspension", suspension).corners.values()
+        if suspension.is_axle
+        else (suspension,)
+    )
+    return any(
+        shim is not None and shim.length_adjustment != 0.0
+        for corner in corners
+        if corner.config is not None
+        for shim in (corner.config.pushrod_shim, corner.config.toe_shim)
+    )
+
+
+def _static_setup_sweep(suspension: Suspension) -> SweepConfig:
+    """Build one fully constrained state for an assembled static preview.
+
+    Installed mechanism coordinates preserve the authored spring/damper and
+    actuator positions while setup link lengths are applied. A bare corner has
+    no installed travel coordinate, so wheel-centre height supplies the same
+    fixed-travel boundary condition used by a conventional setup operation.
+    """
+    coordinates = list(suspension.drive_coordinates())
+    damper_sides = {
+        coordinate.side
+        for coordinate in coordinates
+        if isinstance(coordinate, ElementLengthCoordinate)
+        and coordinate.id == ElementLengthCoordinateID.DAMPER.value
+    }
+    sides = (Side.LEFT, Side.RIGHT) if suspension.is_axle else (suspension.side,)
+    for side in sides:
+        if side in damper_sides:
+            continue
+        point = (
+            PointRef(side, PointID.WHEEL_CENTER)
+            if suspension.is_axle
+            else PointID.WHEEL_CENTER
+        )
+        coordinates.append(
+            PointCoordinate(
+                point=point,
+                direction=CoordinateAxis(Axis.Z),
+                scope=Scope.CORNER,
+                side=side,
+            )
+        )
+    return SweepConfig(
+        [
+            [coordinate.target(0.0, TargetValueMode.RELATIVE)]
+            for coordinate in coordinates
+        ]
+    )
+
+
+def _static_setup_state(suspension: Suspension) -> SuspensionState:
+    """Return the authored state or solve the active length-shim setup."""
+    state = suspension.initial_state()
+    if not _has_active_length_setup(suspension):
+        return state
+    states, _solver_stats = solve_sweep(suspension, _static_setup_sweep(suspension))
+    return states[0]
+
+
 def analyze_sweep(suspension: Suspension, sweep_config: SweepConfig) -> SweepAnalysis:
     """Solve a sweep and assemble a complete structured analysis."""
     return analyze_evaluated_sweep(
@@ -548,8 +623,8 @@ def analyze_evaluated_sweep(
 
 
 def initial_pose(suspension: Suspension) -> StaticPose:
-    """Return the as-assembled pose without running a sweep."""
-    state = suspension.initial_state()
+    """Return the as-assembled static setup pose."""
+    state = _static_setup_state(suspension)
     assembly = suspension.assembly()
     return StaticPose(
         suspension=_suspension_info(suspension),
