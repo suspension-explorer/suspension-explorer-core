@@ -124,6 +124,8 @@ def test_arb_axle_emits_hub_relative_derivatives(test_data_dir: Path) -> None:
         "deriv_torsion_bar_twist_wrt_hub_z",
     }
     expected_axle = {
+        "deriv_arb_end_displacement_wrt_hub_z_left",
+        "deriv_arb_end_displacement_wrt_hub_z_right",
         "deriv_arb_twist_wrt_hub_z_left",
         "deriv_arb_twist_wrt_hub_z_right",
     }
@@ -138,6 +140,7 @@ def test_arb_axle_emits_hub_relative_derivatives(test_data_dir: Path) -> None:
             assert all(corner[key] is not None for key in expected_corner)
             assert "rocker_angle" in corner
             assert "arb_arm_angle" in corner
+            assert "arb_end_displacement" in corner
 
 
 def test_arb_diagnostics_detect_mirrored_arm_branch(test_data_dir: Path) -> None:

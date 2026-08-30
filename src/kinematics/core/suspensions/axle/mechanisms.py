@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from math import acos, degrees
+from math import acos, degrees, radians
 from typing import TYPE_CHECKING, Any, Mapping
 
 import numpy as np
@@ -77,6 +77,14 @@ ARB_ARM_ANGLE_SPEC = MetricSpec(
     "arb_arm_angle",
     "ARB Arm Angle",
     MetricUnit.DEG,
+    MetricKind.STATE,
+    Scope.CORNER,
+    "arb",
+)
+ARB_END_DISPLACEMENT_SPEC = MetricSpec(
+    "arb_end_displacement",
+    "ARB End Displacement",
+    MetricUnit.MM,
     MetricKind.STATE,
     Scope.CORNER,
     "arb",
@@ -375,29 +383,66 @@ class ArbUBar:
             }
             return angles[Side.LEFT] - angles[Side.RIGHT]
 
-        response = CallableScalarResponse(
+        twist_response = CallableScalarResponse(
             arb_twist,
             name="arb_twist",
             unit=MetricUnit.DEG,
             label="ARB Twist",
         )
-        return tuple(
-            DerivativeMetricDefinition(
-                response=response,
-                driver=PointCoordinateResponse.from_chassis_axis(
-                    PointRef(side, PointID.WHEEL_CENTER),
-                    Axis.Z,
-                    name=f"hub_z_{side.name.lower()}",
-                    unit=MetricUnit.MM,
-                    label=f"{side.name.title()} Hub Z",
-                ),
+        arm_radii = {
+            side: compute_point_to_line_distance(
+                design.get(PointRef(side, PointID.DROPLINK_U_BAR)),
+                design.get(axis_a_key),
+                Direction3(axis_direction),
             )
             for side in (Side.LEFT, Side.RIGHT)
-        )
+        }
+        definitions: list[DerivativeMetricDefinition] = []
+
+        def arb_end_displacement(selected_side: Side):
+            def calculate(positions):
+                result = (
+                    kernels.rotation_about_fixed_axis_deg(
+                        positions,
+                        PointRef(selected_side, PointID.DROPLINK_U_BAR),
+                        design_pickups[selected_side],
+                        axis_point,
+                        axis_direction,
+                    )
+                    * arm_radii[selected_side]
+                    * np.pi
+                    / 180.0
+                )
+                assert isinstance(result, dual.DualScalar)
+                return result
+
+            return calculate
+
+        for side in (Side.LEFT, Side.RIGHT):
+            driver = PointCoordinateResponse.from_chassis_axis(
+                PointRef(side, PointID.WHEEL_CENTER),
+                Axis.Z,
+                name=f"hub_z_{side.name.lower()}",
+                unit=MetricUnit.MM,
+                label=f"{side.name.title()} Hub Z",
+            )
+            end_displacement_response = CallableScalarResponse(
+                arb_end_displacement(side),
+                name="arb_end_displacement",
+                unit=MetricUnit.MM,
+                label="ARB End Displacement",
+            )
+            definitions.extend(
+                (
+                    DerivativeMetricDefinition(twist_response, driver),
+                    DerivativeMetricDefinition(end_displacement_response, driver),
+                )
+            )
+        return tuple(definitions)
 
     def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
         """Declare per-corner arm angle and axle anti-roll twist."""
-        return (ARB_ARM_ANGLE_SPEC, ARB_TWIST_SPEC)
+        return (ARB_ARM_ANGLE_SPEC, ARB_END_DISPLACEMENT_SPEC, ARB_TWIST_SPEC)
 
     def topology_metric_values(
         self,
@@ -421,10 +466,26 @@ class ArbUBar:
             )
             for side in (Side.LEFT, Side.RIGHT)
         }
+        arm_radii = {
+            side: compute_point_to_line_distance(
+                design.get(PointRef(side, PointID.DROPLINK_U_BAR)),
+                axis_a,
+                axis,
+            )
+            for side in (Side.LEFT, Side.RIGHT)
+        }
         return AxleMetricRows(
             axle=OrderedDict([("arb_twist", angles[Side.LEFT] - angles[Side.RIGHT])]),
             corners={
-                side: OrderedDict([("arb_arm_angle", angle)])
+                side: OrderedDict(
+                    (
+                        ("arb_arm_angle", angle),
+                        (
+                            "arb_end_displacement",
+                            arm_radii[side] * radians(angle),
+                        ),
+                    )
+                )
                 for side, angle in angles.items()
             },
         )

@@ -269,6 +269,12 @@ class TrailingArmSuspension(CornerSuspension):
         """Return the chassis-to-arm damper fitted with either spring type."""
         return (PointID.STRUT_TOP, PointID.STRUT_BOTTOM)
 
+    def spring_points(self) -> tuple[PointKey, PointKey] | None:
+        """Return coilover endpoints; a torsion spring has no linear length."""
+        if self.spring_type is not CornerSpringType.COILOVER:
+            return None
+        return (PointID.STRUT_TOP, PointID.STRUT_BOTTOM)
+
     def initial_state(self) -> SuspensionState:
         """Build the design state and its wheel-derived presentation points."""
         if self._initial_state is not None:
