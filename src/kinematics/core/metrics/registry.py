@@ -79,6 +79,13 @@ _AXLE_BASE_SPECS = (
         Scope.AXLE,
     ),
     MetricSpec(
+        "ackermann_percentage",
+        "Ackermann",
+        MetricUnit.PERCENT,
+        MetricKind.STATE,
+        Scope.AXLE,
+    ),
+    MetricSpec(
         "roll_center_y",
         "Roll Center Y",
         MetricUnit.MM,

@@ -251,3 +251,41 @@ def calculate_anti_squat_pct(ctx: "MetricContext") -> float | None:
     rise = ctx.road.signed_distance(svic) - ctx.road.signed_distance(wc)
     tan_theta = rise / run
     return 100.0 * (ctx.wheelbase / height) * tan_theta
+
+
+def calculate_braking_anti_ratio(ctx: "MetricContext") -> float | None:
+    """Return the braking anti reaction as a dimensionless force ratio.
+
+    Front axles use anti-dive and rear axles use anti-lift. The dimensionless
+    ratio exposes the same geometric response as the existing percentage
+    without changing the established percent outputs.
+    """
+    if ctx.config.axle_position is AxlePosition.FRONT:
+        percentage = calculate_anti_dive_pct(ctx)
+    elif ctx.config.axle_position is AxlePosition.REAR:
+        percentage = calculate_anti_lift_pct(ctx)
+    else:
+        return None
+    return None if percentage is None else percentage / 100.0
+
+
+def calculate_braking_anti_angle(ctx: "MetricContext") -> float | None:
+    """Return the angle whose tangent is the braking anti force ratio."""
+    ratio = calculate_braking_anti_ratio(ctx)
+    return None if ratio is None else degrees(atan(ratio))
+
+
+def calculate_traction_anti_ratio(ctx: "MetricContext") -> float | None:
+    """Return driven-axle anti-lift or anti-squat as a force ratio.
+
+    The existing `anti_squat` percentage covers rear anti-squat and front
+    anti-lift according to the configured driven axle.
+    """
+    percentage = calculate_anti_squat_pct(ctx)
+    return None if percentage is None else percentage / 100.0
+
+
+def calculate_traction_anti_angle(ctx: "MetricContext") -> float | None:
+    """Return the angle whose tangent is the traction anti force ratio."""
+    ratio = calculate_traction_anti_ratio(ctx)
+    return None if ratio is None else degrees(atan(ratio))

@@ -214,6 +214,10 @@ class Suspension(ABC):
         """Return installed spring/damper endpoints, if present."""
         return None
 
+    def spring_points(self) -> tuple[PointKey, PointKey] | None:
+        """Return installed linear spring endpoints, if present."""
+        return None
+
     def drive_coordinates(self) -> tuple[ScalarCoordinate, ...]:
         """Return explicitly driveable scalar coordinates in stable order."""
         endpoints = self.damper_points()

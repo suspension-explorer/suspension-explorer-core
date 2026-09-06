@@ -196,6 +196,49 @@ def calculate_mechanical_trail(
     return displacement.dot(longitudinal)
 
 
+def calculate_steering_axis_longitudinal_offset_at_wheel_center(
+    axis: SteeringAxis,
+    road: RoadPlane,
+    wheel_center: Point3,
+    wheel_axis: Vector3 | Direction3,
+    side_sign: float,
+) -> float | None:
+    """Return rearward-positive steering-axis offset at wheel-centre height.
+
+    The steering axis is intersected with the plane through the wheel centre
+    parallel to the local road. The displacement is resolved along the tyre's
+    forward axis, so a steering axis behind the wheel centre is positive.
+    """
+    displacement = _wheel_center_plane_displacement(axis, road, wheel_center)
+    tyre_axes = _tyre_road_axes(wheel_axis, road, side_sign)
+    if displacement is None or tyre_axes is None:
+        return None
+    longitudinal, _ = tyre_axes
+    return -displacement.dot(longitudinal)
+
+
+def calculate_steering_axis_lateral_offset_at_wheel_center(
+    axis: SteeringAxis,
+    road: RoadPlane,
+    wheel_center: Point3,
+    wheel_axis: Vector3 | Direction3,
+    side_sign: float,
+) -> float | None:
+    """Return inboard-positive steering-axis offset at wheel-centre height.
+
+    The intersection construction matches
+    :func:`calculate_steering_axis_longitudinal_offset_at_wheel_center`.
+    Folding the tyre-lateral component by vehicle side makes an inboard axis
+    positive for both left and right corners.
+    """
+    displacement = _wheel_center_plane_displacement(axis, road, wheel_center)
+    tyre_axes = _tyre_road_axes(wheel_axis, road, side_sign)
+    if displacement is None or tyre_axes is None:
+        return None
+    _, lateral = tyre_axes
+    return -side_sign * displacement.dot(lateral)
+
+
 def _road_displacement(
     axis: SteeringAxis,
     road: RoadPlane,
@@ -206,6 +249,19 @@ def _road_displacement(
     if intersection is None or not np.isfinite(contact_centre.data).all():
         return None
     return intersection - contact_centre
+
+
+def _wheel_center_plane_displacement(
+    axis: SteeringAxis,
+    road: RoadPlane,
+    wheel_center: Point3,
+) -> Vector3 | None:
+    """Return wheel-centre-to-axis displacement in a road-parallel plane."""
+    wheel_center_plane = RoadPlane.through(road.normal, wheel_center)
+    intersection = axis.intersect_road(wheel_center_plane)
+    if intersection is None or not np.isfinite(wheel_center.data).all():
+        return None
+    return intersection - wheel_center
 
 
 def _tyre_road_axes(

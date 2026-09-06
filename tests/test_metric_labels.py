@@ -47,11 +47,20 @@ def test_current_derivative_specs_have_explicit_labels(test_data_dir: Path) -> N
         labels[spec.key] = spec.label
 
     assert labels == {
+        "deriv_arb_end_displacement_wrt_hub_z_left": (
+            "ARB End Displacement wrt. Left Hub Z"
+        ),
+        "deriv_arb_end_displacement_wrt_hub_z_right": (
+            "ARB End Displacement wrt. Right Hub Z"
+        ),
         "deriv_arb_twist_wrt_hub_z_left": "ARB Twist wrt. Left Hub Z",
         "deriv_arb_twist_wrt_hub_z_right": "ARB Twist wrt. Right Hub Z",
         "deriv_camber_wrt_hub_z": "Camber wrt. Hub Z",
         "deriv_camber_wrt_rack_displacement": ("Camber wrt. Rack Displacement"),
         "deriv_caster_wrt_hub_z": "Caster wrt. Hub Z",
+        "deriv_contact_patch_lateral_migration_wrt_hub_z": (
+            "Contact-Patch Lateral Migration wrt. Hub Z"
+        ),
         "deriv_damper_length_wrt_hub_z": "Damper Length wrt. Hub Z",
         "deriv_half_track_wrt_hub_z": "Half-Track wrt. Hub Z",
         "deriv_heave_link_length_wrt_hub_z_left": ("Heave Link Length wrt. Left Hub Z"),
@@ -66,10 +75,12 @@ def test_current_derivative_specs_have_explicit_labels(test_data_dir: Path) -> N
             "Steer Angle wrt. Rack Displacement"
         ),
         "deriv_rocker_angle_wrt_hub_z": "Rocker Angle wrt. Hub Z",
+        "deriv_spring_length_wrt_hub_z": "Spring Length wrt. Hub Z",
         "deriv_t_bar_center_x_wrt_hub_z_left": ("T-Bar Center X wrt. Left Hub Z"),
         "deriv_t_bar_center_x_wrt_hub_z_right": ("T-Bar Center X wrt. Right Hub Z"),
         "deriv_torsion_bar_twist_wrt_hub_z": ("Torsion Bar Twist wrt. Hub Z"),
         "deriv_wheel_center_x_wrt_hub_z": "Wheel Center X wrt. Hub Z",
+        "deriv_wheel_center_recession_wrt_hub_z": ("Wheel Center Recession wrt. Hub Z"),
     }
 
 

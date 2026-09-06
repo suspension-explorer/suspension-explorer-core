@@ -116,6 +116,8 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
         assert "deriv_camber_wrt_hub_z" in row
         assert "deriv_damper_length_wrt_hub_z" in row
         assert row["deriv_damper_length_wrt_hub_z"] is not None
+        assert "deriv_spring_length_wrt_hub_z" in row
+        assert row["deriv_spring_length_wrt_hub_z"] is not None
         non_derivative = compute_metrics_for_state(
             state,
             suspension,
