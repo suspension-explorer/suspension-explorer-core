@@ -14,10 +14,11 @@ kinematic pickup. A separate damper runs from the chassis to the carrier.
 from __future__ import annotations
 
 from collections import OrderedDict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import partial
 from math import degrees
-from typing import TYPE_CHECKING, ClassVar, Sequence
+from typing import TYPE_CHECKING, ClassVar, override
 
 import numpy as np
 
@@ -171,12 +172,14 @@ class TrailingArmSuspension(CornerSuspension):
             )
         super().__post_init__()
 
+    @override
     def required_points(self) -> frozenset[PointID]:
         """Return locating hardpoints plus the selected spring hardware."""
         if self.spring_type is CornerSpringType.COILOVER:
             return self.REQUIRED_POINTS | self.COILOVER_POINTS
         return self.REQUIRED_POINTS | self.TORSION_POINTS
 
+    @override
     def validate_hardpoints(self) -> None:
         """Require an oblique arm pivot, rearward arm, and valid spring hardware."""
         super().validate_hardpoints()
@@ -235,10 +238,12 @@ class TrailingArmSuspension(CornerSuspension):
                     "TRAILING_ARM_PIVOT_A must lie on TORSION_BAR_AXIS_A/B."
                 )
 
+    @override
     def free_points(self) -> Sequence[PointID]:
         """Return the moving arm point; all carrier pickups derive from it."""
         return self.FREE_POINTS
 
+    @override
     def output_points(self) -> tuple[PointKey, ...]:
         """Return locating, wheel, and selected spring points for export."""
         if self.spring_type is CornerSpringType.COILOVER:
@@ -252,6 +257,7 @@ class TrailingArmSuspension(CornerSuspension):
             )
         return (*self.LOCATING_OUTPUT_POINTS, *self.WHEEL_OUTPUT_POINTS, *spring_points)
 
+    @override
     def steering_axis_points(self) -> tuple[PointID, PointID]:
         """Expose a stable carrier reference line for generic angle metrics.
 
@@ -261,20 +267,24 @@ class TrailingArmSuspension(CornerSuspension):
         """
         return (PointID.TRAILING_ARM_OUTBOARD, PointID.AXLE_INBOARD)
 
+    @override
     def rack_attachment_point(self) -> PointID | None:
         """Semi-trailing arms are intentionally unsteered."""
         return None
 
+    @override
     def damper_points(self) -> tuple[PointKey, PointKey] | None:
         """Return the chassis-to-arm damper fitted with either spring type."""
         return (PointID.STRUT_TOP, PointID.STRUT_BOTTOM)
 
+    @override
     def spring_points(self) -> tuple[PointKey, PointKey] | None:
         """Return coilover endpoints; a torsion spring has no linear length."""
         if self.spring_type is not CornerSpringType.COILOVER:
             return None
         return (PointID.STRUT_TOP, PointID.STRUT_BOTTOM)
 
+    @override
     def initial_state(self) -> SuspensionState:
         """Build the design state and its wheel-derived presentation points."""
         if self._initial_state is not None:
@@ -287,6 +297,7 @@ class TrailingArmSuspension(CornerSuspension):
         )
         return self._initial_state
 
+    @override
     def constraints(self) -> list[Constraint]:
         """Build the arm, carrier, and selected spring-actuation constraints."""
         initial = self.initial_state()
@@ -304,6 +315,7 @@ class TrailingArmSuspension(CornerSuspension):
             distance(PointID.TRAILING_ARM_PIVOT_B, PointID.TRAILING_ARM_OUTBOARD),
         ]
 
+    @override
     def derived_spec(self) -> DerivedPointsSpec:
         """Derive rigid carrier pickups, then the common wheel presentation points."""
         if self.config is None:
@@ -353,6 +365,7 @@ class TrailingArmSuspension(CornerSuspension):
         pivot_a = state.get(PointID.TRAILING_ARM_PIVOT_A)
         return pivot_a, (state.get(PointID.TRAILING_ARM_PIVOT_B) - pivot_a).normalize()
 
+    @override
     def compute_side_view_instant_center(self, state: SuspensionState) -> Point3 | None:
         """Intersect the oblique pivot axis with the wheel's side-view plane."""
         pivot, direction = self._pivot_axis(state)
@@ -362,6 +375,7 @@ class TrailingArmSuspension(CornerSuspension):
             float(state.get(PointID.WHEEL_CENTER)[Axis.Y]),
         )
 
+    @override
     def compute_front_view_instant_center(
         self, state: SuspensionState
     ) -> Point3 | None:
@@ -388,6 +402,7 @@ class TrailingArmSuspension(CornerSuspension):
             )
         )
 
+    @override
     def derivative_metric_definitions(
         self,
     ) -> tuple[DerivativeMetricDefinition, ...]:
@@ -441,18 +456,21 @@ class TrailingArmSuspension(CornerSuspension):
             ),
         )
 
+    @override
     def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
         """Expose torsion twist only when a torsion spring is selected."""
         if self.spring_type is CornerSpringType.TORSION_BAR:
             return (TORSION_BAR_TWIST_SPEC,)
         return ()
 
+    @override
     def topology_metric_values(self, state: SuspensionState) -> MetricRow:
         """Return the torsion bar angular deflection when installed."""
         if self.spring_type is CornerSpringType.TORSION_BAR:
             return OrderedDict([("torsion_bar_twist", self._torsion_twist(state))])
         return OrderedDict()
 
+    @override
     def elements(self) -> tuple[SuspensionElement, ...]:
         """Return renderer-neutral arm, carrier, wheel, and spring hardware."""
         carrier_hardpoints = (PointID.TRAILING_ARM_OUTBOARD,)

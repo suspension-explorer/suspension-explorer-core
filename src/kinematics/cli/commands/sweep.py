@@ -87,6 +87,7 @@ def run_sweep_files(
             evaluated.states,
             evaluated.solver_stats,
             evaluated.metrics.rows,
+            strict=False,
         )
     ):
         writer.add_frame(

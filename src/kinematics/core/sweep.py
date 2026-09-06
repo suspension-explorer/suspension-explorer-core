@@ -29,8 +29,9 @@ either of these two.
 """
 
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, List
+from typing import Any
 
 from kinematics.core.coordinates import validate_sweep_controls
 from kinematics.core.diagnostics import (
@@ -66,7 +67,7 @@ from kinematics.core.targeting import SweepConfig
 def solve_sweep(
     suspension: Suspension,
     sweep_config: SweepConfig,
-) -> tuple[List[SuspensionState], List[SolverInfo]]:
+) -> tuple[list[SuspensionState], list[SolverInfo]]:
     """
     Orchestrates the solving of suspension kinematics for a parametric sweep.
 
@@ -190,7 +191,7 @@ class EvaluatedSweep:
 def compute_sweep_tangents(
     suspension: Suspension,
     sweep_config: SweepConfig,
-    states: List[SuspensionState],
+    states: list[SuspensionState],
 ) -> SweepTangents:
     """
     Compute solution-manifold tangents for every solved sweep state.
@@ -224,7 +225,7 @@ def compute_sweep_tangents(
 def compute_sweep_metrics(
     suspension: Suspension,
     sweep_config: SweepConfig,
-    states: List[SuspensionState],
+    states: list[SuspensionState],
 ) -> SweepMetricsResult:
     """
     Compute all sweep metrics, reporting derivative failures explicitly.
@@ -268,7 +269,7 @@ def _compute_sweep_tangents_safely(
     """Compute one shared tangent bundle, degrading advisory outputs on failure."""
     try:
         return compute_sweep_tangents(suspension, sweep_config, states), None
-    except Exception as error:  # noqa: BLE001 - derivatives are advisory
+    except Exception as error:
         return None, f"{type(error).__name__}: {error}"
 
 
@@ -404,10 +405,10 @@ def evaluate_solved_sweep(
     """
     Compute metrics and diagnostics for an already solved sweep.
 
-    Supplied states are copied and the copies are finalised through the
+    Supplied states are copied and the copies are finalized through the
     suspension's ground closure, so externally produced states cannot carry
     stale closure outputs into metrics and the caller's states are never
-    mutated. The returned :class:`EvaluatedSweep` holds the finalised copies.
+    mutated. The returned :class:`EvaluatedSweep` holds the finalized copies.
     Seeds thread exactly as they do during solving: the first state recovers
     its seed from its stored contact-centre values and each solved root seeds the
     next state, so already-finalised states reproduce their stored values.
@@ -437,7 +438,7 @@ def _evaluate_finalized_sweep(
     solver_stats: list[SolverInfo],
 ) -> EvaluatedSweep:
     """
-    Evaluate states that are already finalised at the solver accept boundary.
+    Evaluate states that are already finalized at the solver accept boundary.
 
     :func:`solve_evaluated_sweep` comes here directly so the sweep is closed
     exactly once, at solving time; only externally supplied states pay the
@@ -458,7 +459,7 @@ def _evaluate_finalized_sweep(
     )
     try:
         diagnostics = list(diagnose_sweep(suspension, states, solver_stats).issues)
-    except Exception as error:  # noqa: BLE001 - diagnostics are advisory
+    except Exception as error:
         diagnostics = [
             DiagnosticIssue(
                 step=None,
@@ -489,7 +490,7 @@ def solve_evaluated_sweep(
     """
     Solve one sweep and compute its metrics and advisory diagnostics.
 
-    States from :func:`solve_sweep` are finalised at the solver's accept
+    States from :func:`solve_sweep` are finalized at the solver's accept
     boundary, so they are evaluated directly without a second closure pass.
     """
     states, solver_stats = solve_sweep(suspension, sweep_config)

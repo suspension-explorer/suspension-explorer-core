@@ -63,8 +63,10 @@ def _motion(
         np.cross(rotation_rate_vector, points - axis_point)
         + pitch * rotation_rate_vector
     )
-    positions = {key: Point3(point) for key, point in zip(POINT_KEYS, points)}
-    tangent = _tangent({key: rate for key, rate in zip(POINT_KEYS, rates)})
+    positions = {
+        key: Point3(point) for key, point in zip(POINT_KEYS, points, strict=False)
+    }
+    tangent = _tangent(dict(zip(POINT_KEYS, rates, strict=False)))
     return positions, tangent
 
 
@@ -246,7 +248,9 @@ def test_collinear_points_return_degenerate_geometry_status() -> None:
 
 
 def test_pure_translation_returns_no_finite_axis() -> None:
-    positions = {key: Point3(point) for key, point in zip(POINT_KEYS, POINTS)}
+    positions = {
+        key: Point3(point) for key, point in zip(POINT_KEYS, POINTS, strict=False)
+    }
     tangent = _tangent({key: np.array([2.0, -1.0, 3.0]) for key in POINT_KEYS})
 
     result = compute_screw_axis(positions, tangent, POINT_KEYS)

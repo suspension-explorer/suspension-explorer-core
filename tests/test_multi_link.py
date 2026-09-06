@@ -94,7 +94,7 @@ def test_metrics_report_virtual_steering_family_only(multi_link):
     sweep = load_sweep(TEST_DATA / "corner_steer_bump_sweep.yaml", multi_link)
     states, _ = solve_sweep(multi_link, sweep)
     evaluated = compute_sweep_metrics(multi_link, sweep, states)
-    row = cast(MetricRow, evaluated.rows[len(evaluated.rows) // 2])
+    row = cast("MetricRow", evaluated.rows[len(evaluated.rows) // 2])
 
     for key in PHYSICAL_STEERING_KEYS:
         assert key not in row
@@ -135,7 +135,7 @@ def test_axle_builds_mirrors_and_solves():
     assert catalogue.default_option_id == "damper_length"
 
     sweep = load_sweep(TEST_DATA / "axle_steer_sweep.yaml", suspension)
-    states, infos = solve_sweep(suspension, sweep)
+    _states, infos = solve_sweep(suspension, sweep)
     assert all(info.converged for info in infos)
 
 

@@ -1,4 +1,4 @@
-"""Tests for the softnorm regularisation utilities."""
+"""Tests for the softnorm regularization utilities."""
 
 import math
 
@@ -6,7 +6,7 @@ from kinematics.core.primitives.soft_math import EPS, EPS_SQ, softnorm
 
 
 class TestEpsSq:
-    """Sanity checks on the regularisation constant."""
+    """Sanity checks on the regularization constant."""
 
     def test_positive(self):
         assert EPS_SQ > 0
@@ -15,7 +15,7 @@ class TestEpsSq:
         assert EPS_SQ < 1e-6
 
     def test_eps_is_sqrt_eps_sq(self):
-        assert EPS == math.sqrt(EPS_SQ)
+        assert math.sqrt(EPS_SQ) == EPS
 
 
 class TestSoftnorm:

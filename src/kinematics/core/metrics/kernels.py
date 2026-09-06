@@ -19,7 +19,7 @@ To stay substrate-generic the kernels avoid the float-only geometry wrappers
 helpers in kinematics.core.primitives.dual. Angle kernels feed unnormalized direction
 vectors straight into atan2: atan2(k*y, k*x) is identical to atan2(y, x) for
 any positive scale k, as a function of the positions, so values AND
-derivatives are unaffected and the normalisation step can be skipped.
+derivatives are unaffected and the normalization step can be skipped.
 
 Sign conventions mirror the catalog metrics in ``kinematics.core.metrics.angles``.
 All supplied positions and axes are expressed in chassis coordinates using the
@@ -29,7 +29,7 @@ left / -1 right). These kernels do not reference road space or world space.
 
 from __future__ import annotations
 
-from typing import Mapping, Union
+from collections.abc import Mapping
 
 import numpy as np
 
@@ -46,9 +46,9 @@ from kinematics.core.primitives.geometry import extract_array
 from kinematics.core.primitives.point_ref import PointKey
 
 # A kernel input position: raw array, geometry wrapper, or dual vector.
-PositionLike = Union[np.ndarray, DualVec3, object]
+PositionLike = np.ndarray | DualVec3 | object
 # A kernel result: float on the plain substrate, DualScalar on the dual one.
-Scalar = Union[float, DualScalar]
+Scalar = float | DualScalar
 
 # Constant chassis axes as raw arrays (constants have zero derivative).
 _X_AXIS = np.array([1.0, 0.0, 0.0])
@@ -163,10 +163,7 @@ def toe_deg(
 
     # Toe-in points the axle vector slightly forward (+X) on the left,
     # measured against +Y; on the right, against -Y.
-    if side_sign > 0:
-        toe = atan2(proj_x, proj_y)
-    else:
-        toe = atan2(proj_x, -proj_y)
+    toe = atan2(proj_x, proj_y) if side_sign > 0 else atan2(proj_x, -proj_y)
     return degrees(toe)
 
 

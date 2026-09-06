@@ -64,7 +64,7 @@ class CamberShimConfig(BaseModel):
     setup_thickness: float
 
     @model_validator(mode="after")
-    def validate_face_definition(self) -> "CamberShimConfig":
+    def validate_face_definition(self) -> CamberShimConfig:
         datum_separation = (self.shim_face_point_b - self.shim_face_point_a).norm()
         if datum_separation < EPS_GEOMETRIC:
             raise ValueError("shim_face_point_a and shim_face_point_b must be distinct")
@@ -74,7 +74,7 @@ class CamberShimConfig(BaseModel):
 class LengthShimConfig(BaseModel):
     """Design and setup thickness for a shim that changes a link length.
 
-    Lengths are in millimetres. The installed link-length adjustment is
+    Lengths are in millimeters. The installed link-length adjustment is
     ``setup_thickness - design_thickness``: a positive value lengthens the
     affected pushrod, pullrod, toe link, or track rod.
     """
@@ -94,7 +94,7 @@ class LengthShimConfig(BaseModel):
 
     @property
     def length_adjustment(self) -> float:
-        """Return the setup link-length change in millimetres."""
+        """Return the setup link-length change in millimeters."""
         return self.setup_thickness - self.design_thickness
 
 
@@ -197,7 +197,7 @@ class SuspensionConfig(VehicleConfig):
         vehicle: VehicleConfig,
         axle: AxleConfig,
         corner: CornerConfig,
-    ) -> "SuspensionConfig":
+    ) -> SuspensionConfig:
         """Combine shared vehicle data with one corner's local setup."""
         return cls.model_validate(
             {

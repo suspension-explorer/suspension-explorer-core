@@ -60,7 +60,7 @@ def test_geometry_rejects_unsupported_length_units(test_data_dir: Path) -> None:
     data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
     data["units"] = "degrees"
 
-    with pytest.raises(ValueError, match="millimeters"):
+    with pytest.raises(ValueError, match=r"millimeters"):
         parse_geometry_spec(data)
 
 
@@ -99,7 +99,7 @@ def test_axle_rejects_boolean_steering_flag(test_data_dir: Path) -> None:
     data["axle_config"].pop("steering")
     data["axle_config"]["steered"] = True
 
-    with pytest.raises(ValueError, match="axle_config.steering"):
+    with pytest.raises(ValueError, match=r"axle_config.steering"):
         parse_geometry_spec(data)
 
 
@@ -107,7 +107,7 @@ def test_axle_rejects_unknown_steering_type(test_data_dir: Path) -> None:
     data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
     data["axle_config"]["steering"] = {"type": "rear_steer_magic"}
 
-    with pytest.raises(ValueError, match="steering.type"):
+    with pytest.raises(ValueError, match=r"steering.type"):
         parse_geometry_spec(data)
 
 
@@ -133,7 +133,7 @@ def test_t_bar_requires_pushrod_rocker_actuation(test_data_dir: Path) -> None:
     data["axle_config"]["actuation"]["type"] = "direct"
     data["axle_config"]["spring"]["type"] = "none"
 
-    with pytest.raises(ValueError, match="requires pushrod-rocker actuation"):
+    with pytest.raises(ValueError, match=r"requires pushrod-rocker actuation"):
         parse_geometry_spec(data)
 
 
@@ -166,7 +166,7 @@ def test_core_enum_parser_is_case_sensitive() -> None:
     assert parse_enum(PointID, "wheel_center") is PointID.WHEEL_CENTER
     assert parse_enum(PointID, "wheel_contact_centre") is PointID.WHEEL_CONTACT_CENTRE
 
-    with pytest.raises(ValueError, match="Invalid PointID"):
+    with pytest.raises(ValueError, match=r"Invalid PointID"):
         parse_enum(PointID, "WHEEL_CENTER")
 
 
@@ -192,7 +192,7 @@ def test_axle_geometry_requires_left_corner(test_data_dir: Path) -> None:
     data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
     data["hardpoints"].pop("left")
 
-    with pytest.raises(ValueError, match="left"):
+    with pytest.raises(ValueError, match=r"left"):
         parse_geometry_spec(data)
 
 
@@ -200,7 +200,7 @@ def test_axle_geometry_requires_front_or_rear_position(test_data_dir: Path) -> N
     data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
     data["axle_config"].pop("axle_position")
 
-    with pytest.raises(ValueError, match="axle_position"):
+    with pytest.raises(ValueError, match=r"axle_position"):
         parse_geometry_spec(data)
 
 
@@ -227,7 +227,7 @@ def test_right_setup_requires_explicit_right_hardpoints(
     data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
     data["axle_config"]["right_setup"] = {}
 
-    with pytest.raises(ValueError, match="right_setup requires explicit"):
+    with pytest.raises(ValueError, match=r"right_setup requires explicit"):
         parse_geometry_spec(data)
 
 
@@ -245,7 +245,7 @@ def test_explicit_right_hardpoints_require_explicit_side_local_setup(
 
     with pytest.raises(
         ValueError,
-        match="hardpoints.right requires axle_config.right_setup",
+        match=r"hardpoints.right requires axle_config.right_setup",
     ):
         parse_geometry_spec(data)
 
@@ -258,7 +258,7 @@ def test_axle_config_rejects_per_side_mechanisms(test_data_dir: Path) -> None:
         "spring": axle_config.pop("spring"),
     }
 
-    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+    with pytest.raises(ValueError, match=r"Extra inputs are not permitted"):
         parse_geometry_spec(data)
 
 
@@ -275,7 +275,7 @@ def test_standalone_corner_defaults_to_left(test_data_dir: Path) -> None:
 def test_axle_left_corner_rejects_right_handed_geometry(test_data_dir: Path) -> None:
     data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
     data["hardpoints"]["left"]["axle_outboard"]["y"] = -950.0
-    with pytest.raises(ValueError, match="Side 'left' requires AXLE_OUTBOARD Y > 0"):
+    with pytest.raises(ValueError, match=r"Side 'left' requires AXLE_OUTBOARD Y > 0"):
         build_suspension(data)
 
 
@@ -287,7 +287,7 @@ def test_axle_scoped_configuration_is_not_vehicle_configuration(
     data = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml", "Geometry")
     data["vehicle_config"][field] = data["axle_config"].pop(field)
 
-    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+    with pytest.raises(ValueError, match=r"Extra inputs are not permitted"):
         parse_geometry_spec(data)
 
 
@@ -307,7 +307,7 @@ def test_side_target_requires_suspension_context() -> None:
         }
     )
 
-    with pytest.raises(ValueError, match="requires a suspension context"):
+    with pytest.raises(ValueError, match=r"requires a suspension context"):
         build_sweep_config(spec)
 
 
@@ -405,7 +405,7 @@ def test_target_spec_accepts_reference_state_hold_without_a_schedule() -> None:
 
 
 def test_target_spec_rejects_a_value_schedule_for_a_hold() -> None:
-    with pytest.raises(ValueError, match="Held coordinate 'trackrod_inboard'"):
+    with pytest.raises(ValueError, match=r"Held coordinate 'trackrod_inboard'"):
         TargetSpec.model_validate(
             {
                 "type": "point",
@@ -438,5 +438,5 @@ def test_sweep_spec_step_count_validates_target_lengths() -> None:
         }
     )
 
-    with pytest.raises(ValueError, match="same length"):
+    with pytest.raises(ValueError, match=r"same length"):
         _ = spec.n_steps

@@ -47,28 +47,117 @@ extend-exclude = ["src/kinematics/generated"]
 
 [tool.ruff.lint]
 select = [
-    "E", # pycodestyle errors
-    "W", # pycodestyle warnings
-    "F", # Pyflakes
-    "I", # isort
-    "D", # pydocstyle
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # Pyflakes
+    "I",    # isort
+    "D",    # pydocstyle
+    "A",    # flake8-builtins
+    "ARG",  # flake8-unused-arguments
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "ICN",  # flake8-import-conventions
+    "ISC",  # flake8-implicit-str-concat
+    "N",    # pep8-naming
+    "PIE",  # flake8-pie
+    "PL",   # Pylint
+    "PTH",  # flake8-use-pathlib
+    "RET",  # flake8-return
+    "RSE",  # flake8-raise
+    "RUF",  # Ruff-specific rules
+    "SIM",  # flake8-simplify
+    "T20",  # flake8-print
+    "TC",   # flake8-type-checking
+    "UP",   # pyupgrade
 ]
 ignore = [
-    "D100", # Missing docstring in public module
-    "D102", # Missing docstring in public method (too noisy for property implementations)
-    "D104", # Missing docstring in public package
-    "D105", # Missing docstring in magic method
-    "D107", # Missing docstring in __init__
-    "D200", # One-line docstring should fit on one line with quotes
-    "D203", # 1 blank line required before class docstring (conflicts with D211)
-    "D205", # Blank line required between summary and description (too noisy for wrapped summaries)
-    "D212", # Multi-line docstring summary should start at the first line (we want D213)
+    "D100",   # Missing docstring in public module
+    "D102",   # Missing docstring in public method (too noisy for property implementations)
+    "D104",   # Missing docstring in public package
+    "D105",   # Missing docstring in magic method
+    "D107",   # Missing docstring in __init__
+    "D200",   # One-line docstring should fit on one line with quotes
+    "D203",   # 1 blank line required before class docstring (conflicts with D211)
+    "D205",   # Blank line required between summary and description (too noisy for wrapped summaries)
+    "D212",   # Multi-line docstring summary should start at the first line (we want D213)
+    "ISC001", # Implicit string concatenation (conflicts with the formatter)
+    # Suspension and mechanism classes implement a shared interface, and
+    # renderer/solver callbacks have fixed signatures, so an implementation
+    # often does not use every argument the contract defines.
+    "ARG001",
+    "ARG002",
+    "ARG005",
+    # Annotations are evaluated at runtime (Pydantic schemas and plain
+    # signatures alike). Moving these imports into TYPE_CHECKING blocks would
+    # require "from __future__ import annotations" across the package for no
+    # practical gain, so runtime imports stay at module level.
+    "TC001",
+    "TC002",
+    "TC003",
+    # PEP 695 generics and type aliases are lazily evaluated, which breaks the
+    # Pydantic schemas built from these annotations. Keep the explicit forms.
+    "UP040",
+    "UP046",
+    "UP047",
+    # Flags every literal comparison, including self-evident structural bounds
+    # such as "len(states) < 2". Named physical constants are still required.
+    "PLR2004",
+    # "id" and "type" are domain field names on the schema models.
+    "A002",
+    # Defaults such as SolverConfig() are immutable NamedTuples.
+    "B008",
+    # Point3, Vector3, and Direction3 compare exactly on float data. They are
+    # deliberately unhashable: two geometrically equal points need not share a
+    # hash. Making them hashable is a design decision, not a lint fix.
+    "PLW1641",
+    # Math and factory naming: "Writer = animation.writers[...]" binds a class,
+    # and single-capital names match the surrounding mathematical notation.
+    "N803",
+    "N806",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["D103"]                 # Test functions don't need docstrings
-"visualize_*.py" = ["D103"]                # Script functions don't need docstrings
+# Test and script functions do not need docstrings. Tests assert on hardcoded
+# values by design, and fixtures routinely take arguments they do not use.
+"tests/**/*.py" = [
+    "D103",
+    "PLR2004",
+    "ARG001",
+    "ARG002",
+    "PLC0415",
+    "PLR0913",
+    "PLR0915",
+    "T201",
+]
+"visualize_*.py" = ["D103", "T201", "PLR2004"]
+# Developer scripts print to the terminal by design.
+"tools/**/*.py" = ["D103", "T201", "PLR2004", "PLC0415", "PLR0915"]
+"scripts/**/*.py" = ["D103", "T201", "PLR2004", "PLC0415", "PLR0915"]
+# Typer declares CLI options as function-call defaults; that is the idiom.
+"src/kinematics/cli/app.py" = ["B008", "PLC0415", "T201"]
+"src/kinematics/cli/bootstrap.py" = ["PLC0415", "T201"]
+# These modules defer imports to break circular dependencies at module level.
+# The deferral is deliberate and documented at each site.
+"src/kinematics/cli/visualization/api.py" = ["PLC0415"]
+"src/kinematics/cli/visualization/vector_utils.py" = ["PLC0415", "T201"]
+"src/kinematics/core/metrics/catalog.py" = ["PLC0415"]
+"src/kinematics/core/metrics/derivatives.py" = ["PLC0415"]
+"src/kinematics/core/primitives/vector_utils/generic.py" = ["PLC0415"]
+"src/kinematics/core/suspensions/axle/suspension.py" = ["PLC0415"]
+"src/kinematics/core/suspensions/base.py" = ["PLC0415"]
+"src/kinematics/core/suspensions/corner/base.py" = ["PLC0415"]
+"src/kinematics/core/suspensions/corner/double_wishbone.py" = ["PLC0415"]
+"src/kinematics/core/suspensions/corner/macpherson.py" = ["PLC0415"]
+"src/kinematics/core/suspensions/corner/multi_link.py" = ["PLC0415"]
+"src/kinematics/core/targeting.py" = ["PLC0415"]
 "src/kinematics/**/__init__.py" = ["F401"] # Package imports define public APIs
+
+[tool.ruff.lint.pylint]
+# Hardpoint-heavy geometry constructors legitimately take many arguments, and
+# dispatch functions over the architecture enums fan out widely.
+max-args = 10
+max-returns = 10
+max-branches = 20
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -101,8 +190,14 @@ exclude_lines = [
 [tool.codespell]
 skip = ".git,*.pyc,*.pyo,__pycache__,*.egg-info,.venv,venv,.mypy_cache,.ruff_cache"
 # Ignore words that are valid in our domain (e.g., technical terms, variable names).
-ignore-words-list = "nd"
-builtin = "clear,rare,informal,usage"
+#
+# "writeable" is the NumPy array flag name. "centre" and "catalogue" spellings
+# are load-bearing identifiers in the wire schema (PointID.WHEEL_CONTACT_CENTRE
+# and suspension_hold_catalogue both reach the frontend), so renaming them is a
+# deliberate cross-repo change rather than a spelling fix.
+ignore-words-list = "nd,writeable,centre,centres,centred,catalogue,catalogues"
+# en-GB_to_en-US enforces American spelling (behaviour, modelled, normalised...).
+builtin = "clear,rare,informal,usage,en-GB_to_en-US"
 
 # ty type checker settings.
 # --------------------------------------------------------------------------------------

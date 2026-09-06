@@ -2,8 +2,8 @@
 Renderer-neutral, name-keyed geometry derived from suspension assemblies.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 import numpy as np
 

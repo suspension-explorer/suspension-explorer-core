@@ -11,8 +11,9 @@ chassis coordinates using the ISO 8855 vehicle-axis orientation.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from kinematics.core.enums import Axis, PointID
 from kinematics.core.metrics import kernels
@@ -44,7 +45,7 @@ class MetricDefinition:
     """
 
     column_name: str
-    compute: Callable[["MetricContext"], float | None]
+    compute: Callable[[MetricContext], float | None]
     label: str
     unit: MetricUnit
 
@@ -65,19 +66,19 @@ def _build_steering_metrics(
         calculate_steering_axis_offset_at_ground,
     )
 
-    def caster(ctx: "MetricContext") -> float | None:
+    def caster(ctx: MetricContext) -> float | None:
         axis = ctx.steering_axis
         if axis is None:
             return None
         return calculate_caster(axis)
 
-    def kpi(ctx: "MetricContext") -> float | None:
+    def kpi(ctx: MetricContext) -> float | None:
         axis = ctx.steering_axis
         if axis is None:
             return None
         return calculate_kpi(axis, ctx.side_sign)
 
-    def steering_axis_offset_at_ground(ctx: "MetricContext") -> float | None:
+    def steering_axis_offset_at_ground(ctx: MetricContext) -> float | None:
         axis = ctx.steering_axis
         if axis is None:
             return None
@@ -89,7 +90,7 @@ def _build_steering_metrics(
             ctx.side_sign,
         )
 
-    def scrub_radius(ctx: "MetricContext") -> float | None:
+    def scrub_radius(ctx: MetricContext) -> float | None:
         axis = ctx.steering_axis
         if axis is None:
             return None
@@ -99,7 +100,7 @@ def _build_steering_metrics(
             ctx.wheel_contact_centre,
         )
 
-    def mechanical_trail(ctx: "MetricContext") -> float | None:
+    def mechanical_trail(ctx: MetricContext) -> float | None:
         axis = ctx.steering_axis
         if axis is None:
             return None
@@ -111,7 +112,7 @@ def _build_steering_metrics(
             ctx.side_sign,
         )
 
-    def longitudinal_offset_wheel_center(ctx: "MetricContext") -> float | None:
+    def longitudinal_offset_wheel_center(ctx: MetricContext) -> float | None:
         axis = ctx.steering_axis
         if axis is None:
             return None
@@ -123,7 +124,7 @@ def _build_steering_metrics(
             ctx.side_sign,
         )
 
-    def lateral_offset_wheel_center(ctx: "MetricContext") -> float | None:
+    def lateral_offset_wheel_center(ctx: MetricContext) -> float | None:
         axis = ctx.steering_axis
         if axis is None:
             return None
@@ -137,7 +138,7 @@ def _build_steering_metrics(
 
     def definition(
         name: str,
-        compute: Callable[["MetricContext"], float | None],
+        compute: Callable[[MetricContext], float | None],
         label: str,
         unit: MetricUnit,
     ) -> MetricDefinition:
@@ -213,8 +214,8 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
         calculate_wheel_travel,
     )
 
-    def _ic_coord(attr: str, axis: Axis) -> Callable[["MetricContext"], float | None]:
-        def extract(ctx: "MetricContext") -> float | None:
+    def _ic_coord(attr: str, axis: Axis) -> Callable[[MetricContext], float | None]:
+        def extract(ctx: MetricContext) -> float | None:
             """Extract one chassis-axis coordinate from an instant centre."""
             ic = getattr(ctx, attr)
             return None if ic is None else float(ic[axis])
@@ -360,7 +361,7 @@ def physical_steering_metric_keys() -> frozenset[str]:
 
 
 def get_default_corner_derivative_metrics(
-    suspension: "CornerSuspension",
+    suspension: CornerSuspension,
 ) -> tuple[DerivativeMetricDefinition, ...]:
     """
     Declare derivative metrics common to every supported corner.

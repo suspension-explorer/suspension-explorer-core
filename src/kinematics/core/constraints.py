@@ -8,8 +8,9 @@ Each constraint computes a residual value that the solver attempts to drive to z
 
 import copy
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from math import atan2
-from typing import Callable, ClassVar, Set
+from typing import ClassVar, override
 
 import numpy as np
 
@@ -46,11 +47,10 @@ class Constraint(ABC):
 
     @property
     @abstractmethod
-    def involved_points(self) -> Set[PointKey]:
+    def involved_points(self) -> set[PointKey]:
         """
         Returns a set of all PointIDs that this constraint operates on.
         """
-        pass
 
     @abstractmethod
     def residual(self, positions: dict[PointKey, Point3]) -> float:
@@ -60,7 +60,6 @@ class Constraint(ABC):
         The solver's goal is to drive this value to zero. Returns a scalar float
         representing the constraint violation.
         """
-        pass
 
     def remap(self, mapping: Callable[[PointKey], PointKey]) -> "Constraint":
         """
@@ -119,9 +118,11 @@ class DistanceConstraint(Constraint):
         self.target_distance = target_distance
 
     @property
-    def involved_points(self) -> Set[PointKey]:
+    @override
+    def involved_points(self) -> set[PointKey]:
         return {self.p1, self.p2}
 
+    @override
     def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the distance residual.
@@ -156,9 +157,11 @@ class SphericalJointConstraint(Constraint):
         self.p2 = p2
 
     @property
-    def involved_points(self) -> Set[PointKey]:
+    @override
+    def involved_points(self) -> set[PointKey]:
         return {self.p1, self.p2}
 
+    @override
     def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the distance between the two points.
@@ -217,9 +220,11 @@ class AngleConstraint(Constraint):
         self.target_angle = target_angle
 
     @property
-    def involved_points(self) -> Set[PointKey]:
+    @override
+    def involved_points(self) -> set[PointKey]:
         return {self.v1_start, self.v1_end, self.v2_start, self.v2_end}
 
+    @override
     def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the angle residual.
@@ -281,9 +286,11 @@ class ThreePointAngleConstraint(Constraint):
         self.target_angle = target_angle
 
     @property
-    def involved_points(self) -> Set[PointKey]:
+    @override
+    def involved_points(self) -> set[PointKey]:
         return {self.p1, self.p2, self.p3}
 
+    @override
     def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the angle residual at the vertex.
@@ -345,9 +352,11 @@ class VectorsParallelConstraint(Constraint):
         self.v2_end = v2_end
 
     @property
-    def involved_points(self) -> Set[PointKey]:
+    @override
+    def involved_points(self) -> set[PointKey]:
         return {self.v1_start, self.v1_end, self.v2_start, self.v2_end}
 
+    @override
     def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the parallel vectors constraint residual.
@@ -408,9 +417,11 @@ class VectorsPerpendicularConstraint(Constraint):
         self.v2_end = v2_end
 
     @property
-    def involved_points(self) -> Set[PointKey]:
+    @override
+    def involved_points(self) -> set[PointKey]:
         return {self.v1_start, self.v1_end, self.v2_start, self.v2_end}
 
+    @override
     def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the perpendicular constraint residual.
@@ -460,9 +471,11 @@ class EqualDistanceConstraint(Constraint):
         self.p4 = p4
 
     @property
-    def involved_points(self) -> Set[PointKey]:
+    @override
+    def involved_points(self) -> set[PointKey]:
         return {self.p1, self.p2, self.p3, self.p4}
 
+    @override
     def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the equal distance residual.
@@ -502,9 +515,11 @@ class FixedAxisConstraint(Constraint):
         self.value = value
 
     @property
-    def involved_points(self) -> Set[PointKey]:
+    @override
+    def involved_points(self) -> set[PointKey]:
         return {self.point_id}
 
+    @override
     def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the axis coordinate residual.
@@ -550,9 +565,11 @@ class PointOnPlaneConstraint(Constraint):
         self.plane_normal = plane_normal
 
     @property
-    def involved_points(self) -> Set[PointKey]:
+    @override
+    def involved_points(self) -> set[PointKey]:
         return {self.point_id}
 
+    @override
     def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the signed distance from point to plane.
@@ -618,10 +635,12 @@ class MidpointOnPlaneConstraint(Constraint):
         self.plane_normal = plane_normal
 
     @property
-    def involved_points(self) -> Set[PointKey]:
+    @override
+    def involved_points(self) -> set[PointKey]:
         """Return the two points defining the midpoint."""
         return {self.point_a, self.point_b}
 
+    @override
     def residual(self, positions: dict[PointKey, Point3]) -> float:
         """Return the signed distance from the midpoint to the plane."""
         point_a = positions[self.point_a]
@@ -660,9 +679,11 @@ class CoplanarPointsConstraint(Constraint):
         self.p4 = p4
 
     @property
-    def involved_points(self) -> Set[PointKey]:
+    @override
+    def involved_points(self) -> set[PointKey]:
         return {self.p1, self.p2, self.p3, self.p4}
 
+    @override
     def residual(self, positions: dict[PointKey, Point3]) -> float:
         """
         Compute the coplanarity residual using scalar triple product.
@@ -696,6 +717,7 @@ class ScalarTripleProductConstraint(CoplanarPointsConstraint):
         self.target_volume = target_volume
         self.scale = scale
 
+    @override
     def residual(self, positions: dict[PointKey, Point3]) -> float:
         """Return signed-volume error normalized by the authored magnitude."""
         return (super().residual(positions) - self.target_volume) / self.scale

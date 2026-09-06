@@ -110,7 +110,7 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     assert result.derivative_error is None
     assert len(result.rows) == len(states)
     assert result.tangent_solve_infos is not None
-    for state, row in zip(states, result.rows):
+    for state, row in zip(states, result.rows, strict=False):
         # A corner sweep yields plain metric rows, never axle row bundles.
         assert not isinstance(row, AxleMetricRows)
         assert "deriv_camber_wrt_hub_z" in row
@@ -184,7 +184,7 @@ def test_coilover_sweep_emits_corner_derivative_metrics() -> None:
     travel_delta = right_travel - left_travel
     camber_difference = right_camber - left_camber
     expected_camber_derivative = camber_difference / travel_delta
-    midpoint_row = cast(MetricRow, result.rows[midpoint])
+    midpoint_row = cast("MetricRow", result.rows[midpoint])
     assert midpoint_row["deriv_camber_wrt_hub_z"] == pytest.approx(
         expected_camber_derivative,
         rel=2e-3,
@@ -214,7 +214,7 @@ def test_tangent_failure_is_visible_and_preserves_base_metrics(
     assert result.derivative_error == "RuntimeError: synthetic tangent failure"
     assert result.tangent_solve_infos is None
     assert len(result.rows) == len(states)
-    first_row = cast(MetricRow, result.rows[0])
+    first_row = cast("MetricRow", result.rows[0])
     assert "camber" in first_row
     assert "deriv_camber_wrt_hub_z" not in first_row
 
@@ -229,7 +229,7 @@ def _anti_context(
     """Build the minimal synthetic context consumed by anti metrics."""
     wheel_contact_centre = Point3([0.0, 800.0, 0.0])
     return cast(
-        MetricContext,
+        "MetricContext",
         SimpleNamespace(
             config=SimpleNamespace(
                 axle_position=axle_position,

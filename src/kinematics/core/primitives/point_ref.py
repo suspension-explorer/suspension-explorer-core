@@ -8,7 +8,7 @@ without colliding. :class:`PointRef` pairs a :class:`Side` with a ``PointID`` to
 give each corner its own namespace while keeping the runtime machinery
 key-agnostic.
 
-The :data:`PointKey` alias (``PointID | PointRef``) is the generalised key type:
+The :data:`PointKey` alias (``PointID | PointRef``) is the generalized key type:
 single-corner code keeps building plain ``PointID`` keyed dicts, while axle code
 builds ``PointRef`` keyed dicts. Nothing in the solver, state, or constraint
 runtime depends on which concrete key type is used -- only on hashability,
@@ -83,7 +83,7 @@ class PointRef(NamedTuple):
         return f"{self.side.name}_{self.point.name}"
 
 
-# Generalised point-key type. Single-corner code uses PointID; axle code uses
+# Generalized point-key type. Single-corner code uses PointID; axle code uses
 # PointRef. All core machinery (state, constraints, solver, derived points) is
 # annotated over this alias so it works with either concrete key type.
 PointKey = PointID | PointRef

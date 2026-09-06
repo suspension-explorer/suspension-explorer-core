@@ -10,8 +10,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import OrderedDict
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from kinematics.core.assembly import SuspensionAssembly
 from kinematics.core.constraints import Constraint
@@ -287,30 +288,30 @@ class Suspension(ABC):
     def compute_state_metrics(
         self,
         state: SuspensionState,
-        tangents: "Sequence[TangentField] | None" = None,
-        steering_response_axes: "Sequence[SteeringResponseAxisResult] | None" = None,
-    ) -> "MetricRow | AxleMetricRows":
+        tangents: Sequence[TangentField] | None = None,
+        steering_response_axes: Sequence[SteeringResponseAxisResult] | None = None,
+    ) -> MetricRow | AxleMetricRows:
         """Compute metric output for one solved state."""
         ...
 
     def derivative_metric_definitions(
         self,
-    ) -> "tuple[DerivativeMetricDefinition, ...]":
+    ) -> tuple[DerivativeMetricDefinition, ...]:
         """Topology-specific declarative derivative metrics."""
         return ()
 
-    def topology_metric_values(self, state: SuspensionState) -> "MetricRow":
+    def topology_metric_values(self, state: SuspensionState) -> MetricRow:
         """Return non-derivative metrics owned by this topology."""
         return OrderedDict()
 
-    def topology_metric_specs(self) -> "tuple[MetricSpec, ...]":
+    def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
         """Return state metric metadata owned by this topology."""
         return ()
 
     def topology_diagnostics(
         self,
-        states: "list[SuspensionState]",
-    ) -> "list[DiagnosticIssue]":
+        states: list[SuspensionState],
+    ) -> list[DiagnosticIssue]:
         """Return advisory checks owned by this concrete topology."""
         return []
 
@@ -332,7 +333,7 @@ class Suspension(ABC):
 
     def apply_ground_closure(
         self,
-        positions: "dict[PointKey, Any]",
+        positions: dict[PointKey, Any],
         seed: float | None = None,
     ) -> float | None:
         """
@@ -449,14 +450,14 @@ class Suspension(ABC):
         """Return the steering actuator coordinate, if this suspension has one."""
         return None
 
-    def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
+    def suspension_hold_catalogue(self) -> SuspensionHoldCatalogue | None:
         """Return topology-owned suspension holds for virtual steering."""
         return None
 
     def resolve_suspension_hold(
         self,
         requested_option_id: str | None = None,
-    ) -> "SteeringResponseDefinition | None":
+    ) -> SteeringResponseDefinition | None:
         """Resolve one explicit suspension hold or the layout default."""
         from kinematics.core.steering_response import (
             SteeringResponseDefinition,

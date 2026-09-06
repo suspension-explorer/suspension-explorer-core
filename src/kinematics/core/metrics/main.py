@@ -13,8 +13,9 @@ contact centre. Metric evaluation does not use world-space vehicle placement.
 from __future__ import annotations
 
 from collections import OrderedDict
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Mapping, Sequence, cast, overload
+from typing import TYPE_CHECKING, cast, overload
 
 from kinematics.core.enums import PointID
 from kinematics.core.metrics.axle_metrics import append_axle_state_metrics
@@ -74,8 +75,8 @@ def compute_metrics_for_axle_state(
     state: SuspensionState,
     axle: AxleSuspension,
     config: SuspensionConfig,
-    tangents: "Sequence[TangentField] | None" = None,
-    steering_response_axes: "Sequence[SteeringResponseAxisResult] | None" = None,
+    tangents: Sequence[TangentField] | None = None,
+    steering_response_axes: Sequence[SteeringResponseAxisResult] | None = None,
 ) -> AxleMetricRows:
     """Compute corner and axle metrics against one axle-local road plane.
 
@@ -135,7 +136,7 @@ def compute_metrics_for_axle_state(
 
 
 def _steering_axes_by_side(
-    results: "Sequence[SteeringResponseAxisResult] | None",
+    results: Sequence[SteeringResponseAxisResult] | None,
 ) -> dict[Side, SteeringResponseAxisResult | None]:
     """Map axle upright results structurally through side-qualified point keys."""
     grouped: dict[Side, list[SteeringResponseAxisResult]] = {}
@@ -151,10 +152,10 @@ def _steering_axes_by_side(
 
 
 def _corner_tangents(
-    tangents: "Sequence[TangentField]",
+    tangents: Sequence[TangentField],
     side: Side,
-    required_actuator_coordinates: "Sequence[ActuatorCoordinate]",
-) -> list["TangentField"]:
+    required_actuator_coordinates: Sequence[ActuatorCoordinate],
+) -> list[TangentField]:
     """Project axle tangents into one corner, including shared actuators."""
     result: list[TangentField] = []
     for tangent in tangents:
@@ -168,7 +169,7 @@ def _corner_tangents(
             if local_target is None:
                 continue
             local_tangent_target = tangent.target.map_points(
-                lambda _point: local_target
+                lambda _point, _target=local_target: _target
             )
         else:
             if not tangent.target.coordinate.required_points or not all(
@@ -196,7 +197,7 @@ def _corner_tangents(
 def _local_tangent_target(
     target_key: PointKey,
     side: Side,
-    required_actuator_coordinates: "Sequence[ActuatorCoordinate]",
+    required_actuator_coordinates: Sequence[ActuatorCoordinate],
 ) -> PointID | None:
     """Resolve a side-local target or its equivalent shared actuator point."""
     if isinstance(target_key, PointRef) and target_key.side is side:
@@ -212,12 +213,12 @@ def _local_tangent_target(
 
 def compute_metrics_for_state(
     state: SuspensionState,
-    suspension: "CornerSuspension",
+    suspension: CornerSuspension,
     config: SuspensionConfig,
-    tangents: "Sequence[TangentField] | None" = None,
+    tangents: Sequence[TangentField] | None = None,
     *,
     road: RoadPlane | None = None,
-    steering_response_axis: "SteeringResponseAxisResult | None" = None,
+    steering_response_axis: SteeringResponseAxisResult | None = None,
 ) -> MetricRow:
     """
     Compute all corner-level metrics for a single solved state.
@@ -313,26 +314,26 @@ def compute_metrics_for_state(
 @overload
 def compute_metrics_for_sweep(
     states: list[SuspensionState],
-    suspension: "AxleSuspension",
+    suspension: AxleSuspension,
     config: SuspensionConfig,
-    tangents_per_state: "Sequence[Sequence[TangentField]] | None" = None,
+    tangents_per_state: Sequence[Sequence[TangentField]] | None = None,
 ) -> list[AxleMetricRows]: ...
 
 
 @overload
 def compute_metrics_for_sweep(
     states: list[SuspensionState],
-    suspension: "Suspension",
+    suspension: Suspension,
     config: SuspensionConfig,
-    tangents_per_state: "Sequence[Sequence[TangentField]] | None" = None,
+    tangents_per_state: Sequence[Sequence[TangentField]] | None = None,
 ) -> list[MetricRow]: ...
 
 
 def compute_metrics_for_sweep(
     states: list[SuspensionState],
-    suspension: "Suspension",
+    suspension: Suspension,
     config: SuspensionConfig,
-    tangents_per_state: "Sequence[Sequence[TangentField]] | None" = None,
+    tangents_per_state: Sequence[Sequence[TangentField]] | None = None,
     # The overloads narrow the element type per suspension kind. The invariant
     # list return of each overload is only assignable to a covariant Sequence
     # here, so the implementation widens to Sequence.
@@ -387,9 +388,9 @@ def compute_metrics_for_sweep(
 
 def _compute_metrics_for_suspension_state(
     state: SuspensionState,
-    suspension: "Suspension",
+    suspension: Suspension,
     config: SuspensionConfig,
-    tangents: "Sequence[TangentField] | None" = None,
+    tangents: Sequence[TangentField] | None = None,
 ) -> MetricRow | AxleMetricRows:
     """Dispatch calculation while preserving each metric's reference system."""
     if suspension.is_axle:
@@ -402,20 +403,20 @@ def _compute_metrics_for_suspension_state(
 @overload
 def compute_metrics_for_state_from_suspension(
     state: SuspensionState,
-    suspension: "AxleSuspension",
+    suspension: AxleSuspension,
 ) -> AxleMetricRows: ...
 
 
 @overload
 def compute_metrics_for_state_from_suspension(
     state: SuspensionState,
-    suspension: "Suspension",
+    suspension: Suspension,
 ) -> MetricRow: ...
 
 
 def compute_metrics_for_state_from_suspension(
     state: SuspensionState,
-    suspension: "Suspension",
+    suspension: Suspension,
 ) -> MetricRow | AxleMetricRows:
     """
     Compute metrics using parameters from the suspension configuration.

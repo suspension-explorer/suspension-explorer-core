@@ -63,9 +63,7 @@ def sweep_config_fixture(displacements):
     ]
 
     # Create sweep config.
-    sweep_config = SweepConfig([hub_targets, steer_targets])
-
-    return sweep_config
+    return SweepConfig([hub_targets, steer_targets])
 
 
 @pytest.mark.manual
@@ -100,7 +98,7 @@ def test_run_solver(
     target_point_id = PointID.WHEEL_CENTER
 
     # Verify constraints are maintained.
-    for state, displacement in zip(position_states, hub_displacements):
+    for state, displacement in zip(position_states, hub_displacements, strict=False):
         # Verify length constraints.
         for constraint in length_constraints:
             p1 = state.positions[constraint.p1]

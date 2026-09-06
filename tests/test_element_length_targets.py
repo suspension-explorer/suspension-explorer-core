@@ -77,13 +77,13 @@ def test_element_target_modes_resolve_once_against_setup_length() -> None:
     assert resolved[1] is absolute
     assert resolved[1].value == pytest.approx(321.0)
 
-    with pytest.raises(ValueError, match="at least"):
+    with pytest.raises(ValueError, match=r"at least"):
         coordinate.target(-1.0, TargetValueMode.ABSOLUTE)
-    with pytest.raises(ValueError, match="at least"):
+    with pytest.raises(ValueError, match=r"at least"):
         coordinate.target(0.0, TargetValueMode.ABSOLUTE)
-    with pytest.raises(ValueError, match="at least"):
+    with pytest.raises(ValueError, match=r"at least"):
         coordinate.target(EPS_GEOMETRIC / 2.0, TargetValueMode.ABSOLUTE)
-    with pytest.raises(ValueError, match="finite"):
+    with pytest.raises(ValueError, match=r"finite"):
         coordinate.target(float("nan"), TargetValueMode.RELATIVE)
     with pytest.raises(ValueError, match=r"Sweep target 0.*at least"):
         convert_targets_to_absolute(
@@ -170,7 +170,7 @@ def test_target_without_free_or_derived_dependency_fails_actionably() -> None:
         n_target_variables=1,
     )
 
-    with pytest.raises(ValueError, match="no free or derived point dependency"):
+    with pytest.raises(ValueError, match=r"no free or derived point dependency"):
         computer.compute_jacobian(np.empty(0), [target])
 
 
@@ -236,12 +236,12 @@ def test_canonical_mixed_yaml_specs_remain_typed_and_round_trip() -> None:
             }
         ]
     }
-    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+    with pytest.raises(ValueError, match=r"Extra inputs are not permitted"):
         parse_sweep_spec(invalid)
 
 
 def test_sweep_target_type_is_required() -> None:
-    with pytest.raises(ValueError, match="Unable to extract tag.*type"):
+    with pytest.raises(ValueError, match=r"Unable to extract tag.*type"):
         parse_sweep_spec(
             {
                 "targets": [
@@ -285,7 +285,9 @@ def test_supported_corner_damper_topologies_solve_length_sweeps(
     ]
 
     assert all(info.converged for info in infos)
-    for state, expected, target in zip(states, absolute, sweep.target_sweeps[0]):
+    for state, expected, target in zip(
+        states, absolute, sweep.target_sweeps[0], strict=False
+    ):
         assert target.coordinate.measure(state.positions) == pytest.approx(
             expected, abs=1e-5
         )
@@ -435,7 +437,7 @@ def test_axle_catalog_and_side_resolution_are_stable() -> None:
         "left_strut_bottom",
     )
 
-    with pytest.raises(ValueError, match="requires side left or right"):
+    with pytest.raises(ValueError, match=r"requires side left or right"):
         build_sweep(
             {
                 "targets": [
@@ -448,7 +450,7 @@ def test_axle_catalog_and_side_resolution_are_stable() -> None:
             },
             suspension,
         )
-    with pytest.raises(ValueError, match="Unknown element-length target ID 'pushrod'"):
+    with pytest.raises(ValueError, match=r"Unknown element-length target ID 'pushrod'"):
         build_sweep(
             {
                 "targets": [
@@ -492,11 +494,11 @@ def test_axle_solves_independent_sided_damper_targets_and_reports_series() -> No
         ("damper", "left"),
         ("damper", "right"),
     ]
-    for dimension, parameter in zip(sweep.target_sweeps, parameters):
+    for dimension, parameter in zip(sweep.target_sweeps, parameters, strict=False):
         assert parameter.values == pytest.approx(
             [
                 target.coordinate.measure(state.positions)
-                for target, state in zip(dimension, states)
+                for target, state in zip(dimension, states, strict=False)
             ]
         )
 

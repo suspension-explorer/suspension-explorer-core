@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import TYPE_CHECKING, Sequence, cast
+from typing import TYPE_CHECKING, cast
 
 from kinematics.core.enums import Scope
 from kinematics.core.metrics.catalog import (
@@ -162,7 +163,7 @@ def specs_by_key(
     return {spec.key: spec for spec in specs}
 
 
-def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpec]:
+def metric_specs_for_suspension(suspension: Suspension) -> dict[str, MetricSpec]:
     """Return all metadata that the selected topology can emit."""
     state_specs = list(all_static_metric_specs())
     if not _physical_steering_axis_available(suspension):
@@ -216,7 +217,7 @@ def metric_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpe
     return result
 
 
-def _physical_steering_axis_available(suspension: "Suspension") -> bool:
+def _physical_steering_axis_available(suspension: Suspension) -> bool:
     """Return whether any corner declares a physical steering axis."""
     if suspension.is_axle:
         axle = cast("AxleSuspension", suspension)
@@ -240,7 +241,7 @@ def _merge_specs(
         result[spec.key] = spec
 
 
-def flat_specs_for_suspension(suspension: "Suspension") -> dict[str, MetricSpec]:
+def flat_specs_for_suspension(suspension: Suspension) -> dict[str, MetricSpec]:
     """Render topology metadata using the same keys as flat result exports."""
     specs = metric_specs_for_suspension(suspension)
     if not suspension.is_axle:

@@ -241,7 +241,7 @@ class ActuationDirect:
         state: SuspensionState,
         initial: SuspensionState,
         side: Side,
-    ) -> "MetricRow":
+    ) -> MetricRow:
         """Direct actuation adds no state metrics itself."""
         return OrderedDict()
 
@@ -254,7 +254,7 @@ class ActuationDirect:
 
 
 # How far an authored on-link pickup may sit off the rod centreline, in
-# millimetres, before the coincident-with-the-link modelling choice is
+# millimeters, before the coincident-with-the-link modeling choice is
 # considered violated rather than an authoring rounding error.
 LINK_PICKUP_ALIGNMENT_TOLERANCE_MM = 1.0
 
@@ -531,7 +531,7 @@ class ActuationPushrodRocker:
         state: SuspensionState,
         initial: SuspensionState,
         side: Side,
-    ) -> "MetricRow":
+    ) -> MetricRow:
         """Return rocker rotation from the design state."""
         return OrderedDict([("rocker_angle", self.rocker_angle(state, initial, side))])
 
@@ -606,7 +606,7 @@ class CornerSpringNone:
         initial: SuspensionState,
         actuation: Actuation,
         side: Side,
-    ) -> "MetricRow":
+    ) -> MetricRow:
         """Add no spring state metrics."""
         return OrderedDict()
 
@@ -678,7 +678,7 @@ class CornerSpringCoilover:
         initial: SuspensionState,
         actuation: Actuation,
         side: Side,
-    ) -> "MetricRow":
+    ) -> MetricRow:
         """The shared metric catalog calculates installed damper length."""
         return OrderedDict()
 
@@ -747,7 +747,7 @@ class CornerSpringTorsionBar:
         initial: SuspensionState,
         actuation: Actuation,
         side: Side,
-    ) -> "MetricRow":
+    ) -> MetricRow:
         """Return torsion-bar twist from the design state."""
         if not isinstance(actuation, ActuationPushrodRocker):
             raise ValueError("Corner torsion-bar metrics require rocker actuation")
@@ -958,7 +958,7 @@ def composed_topology_metric_values(
     side: Side,
     actuation: Actuation,
     spring: CornerSpring,
-) -> "MetricRow":
+) -> MetricRow:
     """Compose state metric values from the installed mechanisms."""
     row: MetricRow = OrderedDict()
     row.update(actuation.topology_metric_values(state, initial, side))

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any, Literal, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Annotated, Any, Literal, override
 
 import numpy as np
 from pydantic import (
@@ -70,7 +71,7 @@ class DirectionSpec(BaseModel):
     vector: Sequence[float] | None = None
 
     @model_validator(mode="after")
-    def check_exactly_one(self) -> "DirectionSpec":
+    def check_exactly_one(self) -> DirectionSpec:
         if (self.axis is None) == (self.vector is None):
             raise ValueError("Specify exactly one of 'axis' or 'vector'")
         return self
@@ -107,13 +108,13 @@ class SweepValueSpec(BaseModel):
     values: Sequence[float] | None = None
 
     @model_validator(mode="after")
-    def check_side(self) -> "SweepValueSpec":
+    def check_side(self) -> SweepValueSpec:
         if self.side == Side.CENTER:
             raise ValueError("Sweep target side must be 'left' or 'right'.")
         return self
 
     @model_validator(mode="after")
-    def check_hold_values(self) -> "SweepValueSpec":
+    def check_hold_values(self) -> SweepValueSpec:
         """A held coordinate has no authored value schedule."""
         if not self.hold:
             return self
@@ -174,11 +175,12 @@ class TargetSpec(SweepValueSpec):
     direction: DirectionSpec
 
     @property
+    @override
     def coordinate_name(self) -> str:
         return self.point.name.lower()
 
     @model_validator(mode="after")
-    def check_point(self) -> "TargetSpec":
+    def check_point(self) -> TargetSpec:
         if self.point is PointID.NOT_ASSIGNED:
             raise ValueError(
                 "Point target ID 'not_assigned' is reserved and cannot be used"
@@ -198,11 +200,12 @@ class ElementLengthTargetSpec(SweepValueSpec):
     element: str
 
     @property
+    @override
     def coordinate_name(self) -> str:
         return self.element
 
     @model_validator(mode="after")
-    def check_element(self) -> "ElementLengthTargetSpec":
+    def check_element(self) -> ElementLengthTargetSpec:
         if not self.element.strip():
             raise ValueError("Element target ID must not be empty")
         if self.element not in ELEMENT_LENGTH_TARGET_IDS:
@@ -222,11 +225,12 @@ class ActuatorPositionTargetSpec(SweepValueSpec):
     direction: DirectionSpec
 
     @property
+    @override
     def coordinate_name(self) -> str:
         return self.actuator
 
     @model_validator(mode="after")
-    def check_actuator(self) -> "ActuatorPositionTargetSpec":
+    def check_actuator(self) -> ActuatorPositionTargetSpec:
         if self.actuator not in ACTUATOR_POSITION_TARGET_IDS:
             expected = ", ".join(ACTUATOR_POSITION_TARGET_IDS)
             raise ValueError(
@@ -250,7 +254,7 @@ class VirtualSteeringAnalysisSpec(BaseModel):
     suspension_hold: str = "layout_default"
 
     @model_validator(mode="after")
-    def check_suspension_hold(self) -> "VirtualSteeringAnalysisSpec":
+    def check_suspension_hold(self) -> VirtualSteeringAnalysisSpec:
         if not self.suspension_hold.strip():
             raise ValueError("Suspension-hold ID must not be empty")
         return self
@@ -277,13 +281,13 @@ class SweepSpec(BaseModel):
     analysis: SweepAnalysisSpec = Field(default_factory=SweepAnalysisSpec)
 
     @model_validator(mode="after")
-    def check_version(self) -> "SweepSpec":
+    def check_version(self) -> SweepSpec:
         if self.version != 1:
             raise ValueError(f"Unsupported sweep version: {self.version}")
         return self
 
     @model_validator(mode="after")
-    def check_swept_target(self) -> "SweepSpec":
+    def check_swept_target(self) -> SweepSpec:
         if not any(not target.hold for target in self.targets):
             raise ValueError("A sweep requires at least one non-held target.")
         return self
@@ -308,9 +312,9 @@ def _expanded_swept_values(spec: SweepSpec) -> list[list[float]]:
     return sequences
 
 
-def build_sweep_config(
+def build_sweep_config(  # noqa: PLR0915 - known long; split when next changed
     spec: SweepSpec,
-    suspension: "Suspension | None" = None,
+    suspension: Suspension | None = None,
 ) -> SweepConfig:
     """Expand a validated sweep and resolve optional side-qualified targets."""
     target_sequences = _expanded_swept_values(spec)

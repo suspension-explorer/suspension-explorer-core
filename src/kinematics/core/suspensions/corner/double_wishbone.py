@@ -7,8 +7,9 @@ actuation and spring behavior is composed through typed mechanism fields.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, Sequence, cast
+from typing import TYPE_CHECKING, ClassVar, cast, override
 
 from kinematics.core.constraints import (
     AngleConstraint,
@@ -200,6 +201,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             )
         super().__post_init__()
 
+    @override
     def required_points(self) -> frozenset[PointID]:
         """Return base and selected mechanism point requirements."""
         return (
@@ -210,6 +212,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             | self.damper.required_points
         )
 
+    @override
     def validate_hardpoints(self) -> None:
         """Validate base geometry and selected mechanism compatibility."""
         super().validate_hardpoints()
@@ -221,6 +224,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             self.damper,
         )
 
+    @override
     def free_points(self) -> Sequence[PointID]:
         """Return base and selected mechanism moving points."""
         return (
@@ -233,6 +237,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             ),
         )
 
+    @override
     def output_points(self) -> tuple[PointKey, ...]:
         """Return base and selected mechanism output points."""
         return composed_output_points(
@@ -246,15 +251,18 @@ class DoubleWishboneSuspension(CornerSuspension):
             self.damper,
         )
 
+    @override
     def damper_points(self) -> tuple[PointKey, PointKey] | None:
         """Return selected linear spring/damper endpoints."""
         return self.damper.damper_points or self.spring.damper_points
 
+    @override
     def spring_points(self) -> tuple[PointKey, PointKey] | None:
         """Return the linear coil spring endpoints, when selected."""
         return self.spring.damper_points
 
-    def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
+    @override
+    def suspension_hold_catalogue(self) -> SuspensionHoldCatalogue | None:
         """Declare semantic fixed-travel choices for double-wishbone steering."""
         from kinematics.core.steering_response import (
             SuspensionHoldAvailability,
@@ -336,16 +344,19 @@ class DoubleWishboneSuspension(CornerSuspension):
             options=tuple(options),
         )
 
+    @override
     def steering_axis_points(self) -> tuple[PointID, PointID]:
         """The steering axis runs between the two outboard ball joints."""
         return (PointID.LOWER_WISHBONE_OUTBOARD, PointID.UPPER_WISHBONE_OUTBOARD)
 
+    @override
     def rack_attachment_point(self) -> PointID | None:
         """Return the track-rod rack pickup for a steered corner."""
         if isinstance(self.wheel_heading_link, TrackRod):
             return self.wheel_heading_link.inboard_point
         return None
 
+    @override
     def initial_state(self) -> SuspensionState:
         """Build initial state from hardpoints, applying shims if configured."""
         if self._initial_state is not None:
@@ -372,6 +383,7 @@ class DoubleWishboneSuspension(CornerSuspension):
         )
         return self._initial_state
 
+    @override
     def constraints(self) -> list[Constraint]:
         """Build geometric constraints for double wishbone."""
         initial_state = self.initial_state()
@@ -424,6 +436,7 @@ class DoubleWishboneSuspension(CornerSuspension):
         constraints.extend(self.damper.constraints(initial_state, self.actuation))
         return constraints
 
+    @override
     def derivative_metric_definitions(
         self,
     ) -> tuple[DerivativeMetricDefinition, ...]:
@@ -437,6 +450,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             self.damper,
         )
 
+    @override
     def topology_metric_values(self, state: SuspensionState) -> MetricRow:
         """Compose state metrics from actuation and spring mechanisms."""
         return composed_topology_metric_values(
@@ -447,6 +461,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             self.spring,
         )
 
+    @override
     def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
         """Compose state metric metadata from installed corner mechanisms."""
         return (
@@ -454,6 +469,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             *self.spring.topology_metric_specs(),
         )
 
+    @override
     def derived_spec(self) -> DerivedPointsSpec:
         """Standard wheel derived points from the axle pair."""
         if self.config is None:
@@ -465,6 +481,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             {**actuation_spec.dependencies, **wheel_spec.dependencies},
         )
 
+    @override
     def compute_side_view_instant_center(self, state: SuspensionState) -> Point3 | None:
         """
         Compute side view instant center from wishbone planes.
@@ -485,11 +502,9 @@ class DoubleWishboneSuspension(CornerSuspension):
             return None
 
         axis_point, axis_direction = instant_axis
-        svic = intersect_line_with_vertical_plane(
+        return intersect_line_with_vertical_plane(
             axis_point, axis_direction, wheel_center_y
         )
-
-        return svic
 
     def compute_instant_axis(
         self, state: SuspensionState
@@ -518,6 +533,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             d2=lower_plane[1],
         )
 
+    @override
     def compute_front_view_instant_center(
         self, state: SuspensionState
     ) -> Point3 | None:
@@ -546,6 +562,7 @@ class DoubleWishboneSuspension(CornerSuspension):
             axis_point, axis_direction, Axis.X, wheel_center_x
         )
 
+    @override
     def elements(self) -> tuple[SuspensionElement, ...]:
         """Return the physical elements in this corner."""
         heading_link_outboard = self.wheel_heading_link.outboard_point

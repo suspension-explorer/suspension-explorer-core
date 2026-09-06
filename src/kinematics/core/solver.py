@@ -6,9 +6,9 @@ satisfying geometric constraints and position targets using Levenberg-
 Marquardt.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable, NamedTuple
+from typing import Any, NamedTuple
 
 import numpy as np
 from scipy.optimize import OptimizeResult, least_squares
@@ -306,7 +306,7 @@ class ResidualComputer:
     # Analytical Jacobian
     # ------------------------------------------------------------------
 
-    def build_jac_plan(self, constraint: Constraint):
+    def build_jac_plan(self, constraint: Constraint):  # noqa: PLR0915 - known long; split when next changed
         """
         Pre-compute the Jacobian function and distribution mapping for constraint.
 
@@ -705,7 +705,7 @@ def solve_suspension_sweep(
             can leave the solver carrying stale closure values; suspensions
             without closure outputs pass `Suspension.apply_ground_closure`,
             which is a no-op for them. The parameter is deliberately required:
-            a caller that skips finalisation receives kinematic intermediates,
+            a caller that skips finalization receives kinematic intermediates,
             never complete-looking solved states.
 
     Returns:
@@ -796,7 +796,7 @@ def solve_suspension_sweep(
         # rather than the actual solution x*. We must explicitly restore it to
         # result.x to ensure the stored state matches the returned solution.
         #
-        # This synchronisation is necessary because we reuse working_state across all
+        # This synchronization is necessary because we reuse working_state across all
         # residual evaluations for performance (avoiding dict allocations on each call).
         # The tradeoff is this explicit sync requirement.
         working_state.update_from_array(result.x)

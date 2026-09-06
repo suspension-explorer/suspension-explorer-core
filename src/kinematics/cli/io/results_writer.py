@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, override
 
 import numpy as np
 import pyarrow as pa
@@ -76,7 +76,7 @@ def compute_file_hash(path: str | Path) -> str:
         Hexadecimal hash string, or empty string if file cannot be read.
     """
     try:
-        with open(path, "rb") as f:
+        with Path(path).open("rb") as f:
             return hashlib.file_digest(f, "sha256").hexdigest()
     except Exception:
         return ""
@@ -236,7 +236,6 @@ class BaseResultsWriter(ABC):
 
         Must be implemented by subclasses.
         """
-        pass
 
 
 class ParquetWriter(BaseResultsWriter):
@@ -259,6 +258,7 @@ class ParquetWriter(BaseResultsWriter):
         writer.write()
     """
 
+    @override
     def write(self) -> None:
         """
         Write all accumulated frames to the Parquet file.
@@ -357,7 +357,7 @@ class ParquetWriter(BaseResultsWriter):
                     else None
                 ),
             )
-            for name, array in zip(names, arrays)
+            for name, array in zip(names, arrays, strict=False)
         ]
         table = pa.Table.from_arrays(arrays, schema=pa.schema(fields))
 
@@ -396,6 +396,7 @@ class CsvWriter(BaseResultsWriter):
         writer.write()
     """
 
+    @override
     def write(self) -> None:
         """
         Write all accumulated frames to the CSV file.
@@ -444,7 +445,7 @@ class CsvWriter(BaseResultsWriter):
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write to CSV.
-        with open(self.output_path, "w", newline="") as csvfile:
+        with self.output_path.open("w", newline="") as csvfile:
             # Write metadata to top.
             for key, value in self.metadata.items():
                 csvfile.write(f"# {key}: {value}\n")
@@ -493,11 +494,9 @@ def create_writer_for_path(
 
     if suffix == SupportedFormat.PARQUET.value:
         return ParquetWriter(output_path, geometry_path, sweep_path, **extra_metadata)
-    elif suffix == SupportedFormat.CSV.value:
+    if suffix == SupportedFormat.CSV.value:
         return CsvWriter(output_path, geometry_path, sweep_path, **extra_metadata)
-    else:
-        supported_formats = ", ".join(f.value for f in SupportedFormat)
-        raise ValueError(
-            f"Unsupported file extension: {suffix}. "
-            f"Supported formats: {supported_formats}"
-        )
+    supported_formats = ", ".join(f.value for f in SupportedFormat)
+    raise ValueError(
+        f"Unsupported file extension: {suffix}. Supported formats: {supported_formats}"
+    )

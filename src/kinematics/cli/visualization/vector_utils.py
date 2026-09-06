@@ -3,7 +3,7 @@ Visualization utilities for geometric computations.
 """
 
 import importlib
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import numpy as np
 
@@ -23,8 +23,8 @@ def plot_plane_from_points(
     a: Point3,
     b: Point3,
     c: Point3,
-    normal: Optional[Direction3] = None,
-    d: Optional[float] = None,
+    normal: Direction3 | None = None,
+    d: float | None = None,
     title: str = "Plane from Three Points",
 ) -> None:
     """
@@ -52,7 +52,7 @@ def plot_plane_from_points(
 
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection="3d")
-    ax3d = cast(Any, ax)
+    ax3d = cast("Any", ax)
 
     # Plot the three points.
     points = np.array([a.data, b.data, c.data])
@@ -135,8 +135,8 @@ def plot_plane_intersection(
     d1: float,
     n2: Direction3,
     d2: float,
-    line_point: Optional[Point3] = None,
-    line_direction: Optional[Direction3] = None,
+    line_point: Point3 | None = None,
+    line_direction: Direction3 | None = None,
     title: str = "Plane Intersection",
 ) -> None:
     """
@@ -164,7 +164,7 @@ def plot_plane_intersection(
 
     fig = plt.figure(figsize=(12, 8))
     ax = fig.add_subplot(111, projection="3d")
-    ax3d = cast(Any, ax)
+    ax3d = cast("Any", ax)
 
     # Plot intersection line if provided.
     if line_point is not None and line_direction is not None:
@@ -240,7 +240,7 @@ def plot_line_plane_intersection(
     line_point: Point3,
     line_direction: Direction3,
     plane_y: float,
-    intersection: Optional[Point3] = None,
+    intersection: Point3 | None = None,
     title: str = "Line-Plane Intersection",
 ) -> None:
     """
@@ -266,7 +266,7 @@ def plot_line_plane_intersection(
 
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection="3d")
-    ax3d = cast(Any, ax)
+    ax3d = cast("Any", ax)
 
     # Plot the line.
     plot_range = 10.0

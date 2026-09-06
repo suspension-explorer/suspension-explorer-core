@@ -858,14 +858,14 @@ def test_toe_and_iso_steer_use_distinct_sign_conventions() -> None:
     """Toe is inward-positive; ISO steer is vehicle-Z RHR on both sides."""
     angle = radians(10.0)
     left = cast(
-        MetricContext,
+        "MetricContext",
         SimpleNamespace(
             side_sign=1.0,
             wheel_axis=Direction3((-sin(angle), cos(angle), 0.0)),
         ),
     )
     right = cast(
-        MetricContext,
+        "MetricContext",
         SimpleNamespace(
             side_sign=-1.0,
             wheel_axis=Direction3((sin(angle), -cos(angle), 0.0)),

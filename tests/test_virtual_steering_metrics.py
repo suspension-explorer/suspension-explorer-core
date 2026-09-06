@@ -127,7 +127,7 @@ def test_authored_tangent_failure_does_not_disable_virtual_metrics(
     evaluated = solve_evaluated_sweep(suspension, sweep)
 
     for raw_row in evaluated.metrics.rows:
-        row = cast(MetricRow, raw_row)
+        row = cast("MetricRow", raw_row)
         assert set(VIRTUAL_KEYS).issubset(row)
         _assert_finite_values(row, VIRTUAL_KEYS)
         assert set(PHYSICAL_STEERING_KEYS).issubset(row)
@@ -143,7 +143,7 @@ def test_missing_suspension_hold_keeps_virtual_columns_null(
     analysis = analyze_evaluated_sweep(suspension, sweep, evaluated)
 
     for raw_row in evaluated.metrics.rows:
-        row = cast(MetricRow, raw_row)
+        row = cast("MetricRow", raw_row)
         assert set(VIRTUAL_KEYS).issubset(row)
         assert all(row[key] is None for key in VIRTUAL_KEYS)
     assert any(
@@ -187,4 +187,4 @@ def test_virtual_metrics_are_independent_of_the_single_sweep_tangent_bundle(
 
     assert call_count == 1
     for raw_row in evaluated.metrics.rows:
-        _assert_finite_values(cast(MetricRow, raw_row), VIRTUAL_KEYS)
+        _assert_finite_values(cast("MetricRow", raw_row), VIRTUAL_KEYS)

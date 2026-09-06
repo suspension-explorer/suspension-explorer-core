@@ -292,8 +292,8 @@ def test_ground_closure_is_applied_at_every_public_state_boundary(
 
     The low-level solver requires an explicit finaliser; a deliberate no-op
     yields kinematic intermediates whose tangents still sit at design values.
-    solve_sweep() finalises at the solver's accept boundary, and
-    evaluate_solved_sweep() finalises copies of externally supplied states
+    solve_sweep() finalizes at the solver's accept boundary, and
+    evaluate_solved_sweep() finalizes copies of externally supplied states
     without mutating the caller's, so both public boundaries must agree with
     a direct closure of the raw states.
     """
@@ -323,7 +323,7 @@ def test_ground_closure_is_applied_at_every_public_state_boundary(
     closed_left = solved_states[step].get(tangent_refs[0])
     assert float((closed_left - stale_left).norm()) > 10.0
 
-    # evaluate_solved_sweep() must finalise COPIES of the raw states to the
+    # evaluate_solved_sweep() must finalize COPIES of the raw states to the
     # same closure, leaving the caller's states untouched.
     evaluated = evaluate_solved_sweep(axle, sweep, raw_states, raw_stats)
     for state, reference in zip(evaluated.states, solved_states, strict=True):

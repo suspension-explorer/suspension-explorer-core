@@ -4,14 +4,10 @@ Derived point specifications and management.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Container, Iterable, Mapping
 from dataclasses import dataclass
 from typing import (
-    Callable,
-    Container,
     Generic,
-    Iterable,
-    Mapping,
-    Set,
     TypeAlias,
     TypeVar,
     cast,
@@ -50,9 +46,9 @@ class DerivedPointsSpec(Generic[_K]):
     # value type covariant, so a concrete function map whose values are subtypes
     # of PositionFn is accepted instead of requiring an exact PositionFn match.
     functions: Mapping[_K, PositionFn]
-    dependencies: Mapping[_K, Set[_K]]
+    dependencies: Mapping[_K, set[_K]]
 
-    def all_points(self) -> Set[_K]:
+    def all_points(self) -> set[_K]:
         """
         Get all derived point IDs defined in this spec.
 
@@ -169,11 +165,12 @@ class DerivedPointsManager:
         nodes: set[PointKey] = set(self.dependency_graph)
 
         for node in nodes:
-            if node not in visited:
-                if self._dependency_path_contains_cycle(node, visited, recursion_stack):
-                    raise ValueError(
-                        "Circular dependency detected in derived point definitions."
-                    )
+            if node not in visited and self._dependency_path_contains_cycle(
+                node, visited, recursion_stack
+            ):
+                raise ValueError(
+                    "Circular dependency detected in derived point definitions."
+                )
 
         visited.clear()
         order = []
@@ -206,8 +203,8 @@ class DerivedPointsManager:
         """
         for point_id in self.update_order:
             update_func = self.spec.functions[point_id]
-            update_positions = cast(dict[PointKey, PositionValue], positions)
-            positions[point_id] = cast(_V, update_func(update_positions))
+            update_positions = cast("dict[PointKey, PositionValue]", positions)
+            positions[point_id] = cast("_V", update_func(update_positions))
 
     def _get_computation_plan(
         self, point_id: PointKey
@@ -275,10 +272,10 @@ class DerivedPointsManager:
             chain: Derived points in dependency order, as returned by
                    _get_computation_plan().
         """
-        update_positions = cast(dict[PointKey, PositionValue], positions)
+        update_positions = cast("dict[PointKey, PositionValue]", positions)
         for point_id in chain:
             positions[point_id] = cast(
-                _V, self.spec.functions[point_id](update_positions)
+                "_V", self.spec.functions[point_id](update_positions)
             )
 
     def update_required_in_place(

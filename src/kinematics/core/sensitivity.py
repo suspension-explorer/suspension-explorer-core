@@ -29,7 +29,7 @@ remaining mechanism modes explicit, prevents target rows from compromising
 permanent-constraint rates, and permits a well-posed zero-hold response when
 the mechanism already has only one local degree of freedom.
 
-Rows are normalised only for the reduced solve and conditioning diagnostics;
+Rows are normalized only for the reduced solve and conditioning diagnostics;
 the physical derivatives are unchanged because the corresponding right-hand
 side rows receive the same scaling.  A scale-independent projection ratio
 ``||g_i N|| / ||g_i||`` additionally reports when a coordinate is losing
@@ -181,7 +181,7 @@ class TangentSolveInfo:
 
     @property
     def smallest_singular_value(self) -> float:
-        """Smallest normalised target-space singular value, or zero if deficient."""
+        """Smallest normalized target-space singular value, or zero if deficient."""
         if self.target_rank < self.mobility:
             return 0.0
         return self.singular_values[-1] if self.singular_values else 0.0
@@ -374,14 +374,14 @@ def _constraint_tangent_space(
     if constraint_jacobian.shape != (constraint_jacobian.shape[0], n_variables):
         raise ValueError("Constraint Jacobian has an unexpected variable count")
 
-    normalised, _row_scales = _normalise_rows(constraint_jacobian)
+    normalized, _row_scales = _normalise_rows(constraint_jacobian)
     if n_variables == 0:
         return _ConstraintTangentSpace(
             basis=np.empty((0, 0), dtype=np.float64),
             rank=0,
             singular_values=(),
         )
-    if normalised.shape[0] == 0:
+    if normalized.shape[0] == 0:
         return _ConstraintTangentSpace(
             basis=np.eye(n_variables, dtype=np.float64),
             rank=0,
@@ -389,10 +389,10 @@ def _constraint_tangent_space(
         )
 
     _left, singular_values, right_transpose = np.linalg.svd(
-        normalised,
+        normalized,
         full_matrices=True,
     )
-    rank = _singular_value_rank(singular_values, normalised.shape)
+    rank = _singular_value_rank(singular_values, normalized.shape)
     return _ConstraintTangentSpace(
         basis=right_transpose[rank:].T.copy(),
         rank=rank,
@@ -445,9 +445,9 @@ def _normalise_rows(matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     threshold = max(matrix.shape) * _RANK_RELATIVE_TOLERANCE * largest_norm
     meaningful = row_norms > threshold
     scales[meaningful] = 1.0 / row_norms[meaningful]
-    normalised = matrix * scales[:, None]
-    normalised[~meaningful] = 0.0
-    return normalised, scales
+    normalized = matrix * scales[:, None]
+    normalized[~meaningful] = 0.0
+    return normalized, scales
 
 
 def _singular_value_rank(
@@ -466,7 +466,7 @@ def _target_condition_number(
     target_rank: int,
     mobility: int,
 ) -> float:
-    """Return normalised hold transversality conditioning."""
+    """Return normalized hold transversality conditioning."""
     if mobility == 0:
         return 1.0
     if target_rank < mobility or singular_values.size == 0:
@@ -557,7 +557,7 @@ def combine_tangents(
         )
 
     combined: dict[PointKey, np.ndarray] = {}
-    for field, coefficient in zip(fields, coefficients):
+    for field, coefficient in zip(fields, coefficients, strict=False):
         for point_id, rate in field.rates.items():
             accumulated = combined.get(point_id)
             if accumulated is None:

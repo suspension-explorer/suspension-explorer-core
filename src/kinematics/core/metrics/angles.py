@@ -73,7 +73,7 @@ def calculate_toe(ctx: MetricContext) -> float:
     proj_y = axle[Axis.Y]
 
     # Toe-in results in the axle vector pointing slightly forward (+X).
-    if side > 0:  # Left side
+    if side > 0:  # noqa: SIM108 - the branches document the sign convention
         toe_rad = np.arctan2(proj_x, proj_y)
     else:  # Right side: measure relative to -Y axis
         toe_rad = np.arctan2(proj_x, -proj_y)
@@ -95,7 +95,7 @@ def calculate_steer(ctx: MetricContext) -> float:
     axle = ctx.wheel_axis
     side = ctx.side_sign
 
-    # The wheel axis is inboard-to-outboard. ``side * (axle × +Z)`` is the
+    # The wheel axis is inboard-to-outboard. ``side * cross(axle, +Z)`` is the
     # wheel's forward direction on either side of the vehicle.
     forward_x = side * axle[Axis.Y]
     forward_y = -side * axle[Axis.X]

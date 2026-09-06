@@ -3,7 +3,7 @@ Per-state suspension travel metrics.
 
 These metrics report wheel travel, design-relative migration, half-track, and
 installed spring and damper lengths.
-Every value is a scalar in millimetres. Coordinates follow the ISO 8855
+Every value is a scalar in millimeters. Coordinates follow the ISO 8855
 vehicle-axis orientation (X forward, Y left, Z up), expressed in chassis
 space. These metrics do not use the local road plane or world space.
 """
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.context import MetricContext
 
 
-def calculate_wheel_travel(ctx: "MetricContext") -> float | None:
+def calculate_wheel_travel(ctx: MetricContext) -> float | None:
     """
     Vertical wheel travel in mm relative to the design condition.
 
@@ -34,7 +34,7 @@ def calculate_wheel_travel(ctx: "MetricContext") -> float | None:
     return current_z - design_z
 
 
-def calculate_half_track(ctx: "MetricContext") -> float | None:
+def calculate_half_track(ctx: MetricContext) -> float | None:
     """
     Half-track at this corner in mm.
 
@@ -48,7 +48,7 @@ def calculate_half_track(ctx: "MetricContext") -> float | None:
     return abs(float(ctx.wheel_contact_centre[Axis.Y]))
 
 
-def calculate_wheel_center_recession(ctx: "MetricContext") -> float:
+def calculate_wheel_center_recession(ctx: MetricContext) -> float:
     """Return rearward wheel-centre travel from design in mm.
 
     Chassis X is forward, so recession is design X minus current X. Positive
@@ -57,7 +57,7 @@ def calculate_wheel_center_recession(ctx: "MetricContext") -> float:
     return float(ctx.design_wheel_center[Axis.X] - ctx.wheel_center[Axis.X])
 
 
-def calculate_contact_patch_lateral_migration(ctx: "MetricContext") -> float:
+def calculate_contact_patch_lateral_migration(ctx: MetricContext) -> float:
     """Return inboard contact-patch travel from design in mm.
 
     The lateral displacement is folded by side so positive always means
@@ -68,7 +68,7 @@ def calculate_contact_patch_lateral_migration(ctx: "MetricContext") -> float:
     return ctx.side_sign * (design_y - current_y)
 
 
-def calculate_damper_length(ctx: "MetricContext") -> float | None:
+def calculate_damper_length(ctx: MetricContext) -> float | None:
     """
     Installed spring/damper (coilover) length in mm.
 
@@ -88,7 +88,7 @@ def calculate_damper_length(ctx: "MetricContext") -> float | None:
     return float((top - bottom).norm())
 
 
-def calculate_spring_length(ctx: "MetricContext") -> float | None:
+def calculate_spring_length(ctx: MetricContext) -> float | None:
     """Return installed linear spring length in mm, when present.
 
     A coilover shares endpoints with its damper but remains a distinct physical

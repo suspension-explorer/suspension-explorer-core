@@ -12,10 +12,10 @@ from kinematics.core.suspensions.base import Suspension
 def _read_yaml_mapping(path: Path, kind: str) -> dict[str, Any]:
     """Read a YAML file and require a top-level mapping."""
     try:
-        with open(path, "r", encoding="utf-8") as file:
+        with path.open(encoding="utf-8") as file:
             data = yaml.safe_load(file)
     except FileNotFoundError:
-        raise FileNotFoundError(f"{kind} file not found: {path}")
+        raise FileNotFoundError(f"{kind} file not found: {path}") from None
     except yaml.YAMLError as error:
         raise ValueError(f"Error parsing {kind.lower()} file: {error}") from error
 

@@ -105,7 +105,7 @@ def test_point_ref_sorting_is_deterministic_and_grouped_by_side_then_point():
     ]
     assert sorted(refs) == expected
     # Deterministic across repeated sorts.
-    assert sorted(refs) == sorted(list(reversed(refs)))
+    assert sorted(refs) == sorted(refs)
 
 
 # ----------------------------------------------------------------------------

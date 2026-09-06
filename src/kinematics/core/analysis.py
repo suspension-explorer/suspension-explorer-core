@@ -281,7 +281,7 @@ def _steering_response_info(
 
 
 def _suspension_hold_catalogue_info(
-    catalogue: "SuspensionHoldCatalogue | None",
+    catalogue: SuspensionHoldCatalogue | None,
 ) -> SuspensionHoldCatalogueInfo | None:
     """Convert topology capability metadata without adding UI policy."""
     if catalogue is None:
@@ -417,7 +417,7 @@ def _setup_reference(
         if not states:
             return None, None
         row = compute_sweep_metrics(suspension, hold_config, states).rows[0]
-    except Exception as error:  # noqa: BLE001 - the reference is optional
+    except Exception as error:
         return None, DiagnosticIssue(
             step=None,
             category=DiagnosticCategory.REFERENCE,

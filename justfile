@@ -61,9 +61,13 @@ generate-animation:
 generate-jacobians:
     uv run python tools/generate_jacobians.py
 
-# Type check.
+# Type check at maximum strictness.
+#
+# missing-type-argument is the one exception: nearly every array here is
+# np.ndarray, and spelling out ndarray[Any, dtype[float64]] at each of ~400
+# sites would obscure the mathematics it annotates.
 type-check:
-    uv run ty check .
+    uv run ty check --error all --ignore missing-type-argument .
 
 # Linting.
 lint:

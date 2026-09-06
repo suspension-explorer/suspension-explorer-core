@@ -5,8 +5,9 @@ This module provides reusable plotting functionality for both single states and
 animation sequences.
 """
 
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping, cast
+from typing import cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -141,10 +142,10 @@ def create_four_view_axes() -> tuple[Figure, dict[str, Axes3D]]:
     gs = fig.add_gridspec(2, 2)
 
     axes = {
-        "front": cast(Axes3D, fig.add_subplot(gs[0, 0], projection="3d")),
-        "top": cast(Axes3D, fig.add_subplot(gs[1, 0], projection="3d")),
-        "side": cast(Axes3D, fig.add_subplot(gs[0, 1], projection="3d")),
-        "iso": cast(Axes3D, fig.add_subplot(gs[1, 1], projection="3d")),
+        "front": cast("Axes3D", fig.add_subplot(gs[0, 0], projection="3d")),
+        "top": cast("Axes3D", fig.add_subplot(gs[1, 0], projection="3d")),
+        "side": cast("Axes3D", fig.add_subplot(gs[0, 1], projection="3d")),
+        "iso": cast("Axes3D", fig.add_subplot(gs[1, 1], projection="3d")),
     }
 
     return fig, axes
@@ -277,7 +278,7 @@ def create_single_view_plot(
     # Create single plot.
     fig = plt.figure(figsize=(12, 8))
     ax_raw = fig.add_subplot(111, projection="3d")
-    ax = cast(Axes3D, ax_raw)
+    ax = cast("Axes3D", ax_raw)
 
     # Compute bounds and configure axis.
     _, _, (x_mid, y_mid, z_mid, max_range) = compute_bounds_from_positions(positions)

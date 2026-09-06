@@ -5,7 +5,7 @@ local or equivalent ``road plane`` (§2.7) at a tyre contact.  The supported
 world-space presentation uses a straight, level road, while chassis-coordinate
 road planes may be banked or graded relative to the moving chassis.
 During a solve, however, points remain in chassis coordinates and the road
-plane moves relative to that basis as the modelled axle heaves or rolls.
+plane moves relative to that basis as the modeled axle heaves or rolls.
 
 The axle contact closure is deliberately longitudinally invariant: its road
 plane is extruded parallel to chassis X.  A single axle can therefore resolve

@@ -67,7 +67,7 @@ from kinematics.core.suspensions.corner.mechanisms import (
 
 def build_double_wishbone(spec: GeometrySpecBase) -> Suspension:
     """Build one double-wishbone corner with composed mechanisms."""
-    typed = cast(DoubleWishboneGeometrySpec, spec)
+    typed = cast("DoubleWishboneGeometrySpec", spec)
     return _build_double_wishbone_corner(typed)
 
 
@@ -93,7 +93,7 @@ def _build_double_wishbone_corner(
 
 def build_macpherson(spec: GeometrySpecBase) -> Suspension:
     """Build one MacPherson strut corner."""
-    typed = cast(MacPhersonGeometrySpec, spec)
+    typed = cast("MacPhersonGeometrySpec", spec)
     _validate_side_signs(typed.hardpoints, typed.side)
     _check_shim_support(typed.config, MacPhersonSuspension)
     return MacPhersonSuspension(
@@ -110,7 +110,7 @@ def build_macpherson(spec: GeometrySpecBase) -> Suspension:
 
 def build_multi_link(spec: GeometrySpecBase) -> Suspension:
     """Build one multi-link corner with composed mechanisms."""
-    typed = cast(MultiLinkGeometrySpec, spec)
+    typed = cast("MultiLinkGeometrySpec", spec)
     return _build_multi_link_corner(typed)
 
 
@@ -150,7 +150,7 @@ def _build_multi_link_corner(
 
 def build_trailing_arm(spec: GeometrySpecBase) -> Suspension:
     """Build one unsteered semi-trailing-arm corner."""
-    typed = cast(TrailingArmGeometrySpec, spec)
+    typed = cast("TrailingArmGeometrySpec", spec)
     _validate_side_signs(typed.hardpoints, typed.side)
     _check_shim_support(typed.config, TrailingArmSuspension)
     return TrailingArmSuspension(
@@ -168,7 +168,7 @@ def build_trailing_arm(spec: GeometrySpecBase) -> Suspension:
 
 def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
     """Build a double-wishbone axle with composed shared hardware."""
-    typed = cast(DoubleWishboneAxleGeometrySpec, spec)
+    typed = cast("DoubleWishboneAxleGeometrySpec", spec)
     corner_setups = _axle_corner_setups(typed)
     side_points = _build_axle_side_points(typed.hardpoints)
     external_pickups, droplink_points = _extract_axle_pickups(typed, side_points)
@@ -200,7 +200,7 @@ def build_double_wishbone_axle(spec: GeometrySpecBase) -> Suspension:
 
 def build_macpherson_axle(spec: GeometrySpecBase) -> Suspension:
     """Build a MacPherson axle from a left and optional explicit right corner."""
-    typed = cast(MacPhersonAxleGeometrySpec, spec)
+    typed = cast("MacPhersonAxleGeometrySpec", spec)
     corner_setups = _axle_corner_setups(typed)
     side_points = _build_axle_side_points(typed.hardpoints)
     corners: dict[Side, CornerSuspension] = {}
@@ -217,13 +217,13 @@ def build_macpherson_axle(spec: GeometrySpecBase) -> Suspension:
             ),
             hardpoints=side_points[side],
         )
-        corners[side] = cast(CornerSuspension, build_macpherson(corner_geometry))
+        corners[side] = cast("CornerSuspension", build_macpherson(corner_geometry))
     return _assemble_axle(typed, corners, {})
 
 
 def build_multi_link_axle(spec: GeometrySpecBase) -> Suspension:
     """Build a multi-link axle with composed shared hardware."""
-    typed = cast(MultiLinkAxleGeometrySpec, spec)
+    typed = cast("MultiLinkAxleGeometrySpec", spec)
     corner_setups = _axle_corner_setups(typed)
     side_points = _build_axle_side_points(typed.hardpoints)
     external_pickups, droplink_points = _extract_axle_pickups(typed, side_points)
@@ -251,7 +251,7 @@ def build_multi_link_axle(spec: GeometrySpecBase) -> Suspension:
 
 def build_trailing_arm_axle(spec: GeometrySpecBase) -> Suspension:
     """Build a mirrored or explicit full axle of unsteered semi-trailing arms."""
-    typed = cast(TrailingArmAxleGeometrySpec, spec)
+    typed = cast("TrailingArmAxleGeometrySpec", spec)
     corner_setups = _axle_corner_setups(typed)
     side_points = _build_axle_side_points(typed.hardpoints)
     corners: dict[Side, CornerSuspension] = {}
@@ -269,7 +269,7 @@ def build_trailing_arm_axle(spec: GeometrySpecBase) -> Suspension:
             spring=typed.axle_config.spring,
             hardpoints=side_points[side],
         )
-        corners[side] = cast(CornerSuspension, build_trailing_arm(corner_geometry))
+        corners[side] = cast("CornerSuspension", build_trailing_arm(corner_geometry))
     return _assemble_axle(typed, corners, {})
 
 
@@ -458,10 +458,7 @@ def _build_axle_side_points(
     """Return the authored left hardpoints and explicit or mirrored right map."""
     left = _copy_points(hardpoints.left)
     right = hardpoints.right
-    if right is None:
-        right_points = _mirror_hardpoints(left)
-    else:
-        right_points = _copy_points(right)
+    right_points = _mirror_hardpoints(left) if right is None else _copy_points(right)
     return {Side.LEFT: left, Side.RIGHT: right_points}
 
 

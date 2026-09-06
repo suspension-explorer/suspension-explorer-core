@@ -4,8 +4,9 @@ Core state management for suspension kinematics.
 
 from __future__ import annotations
 
+import builtins
 from dataclasses import dataclass, field
-from typing import Generic, List, Set, TypeVar
+from typing import Generic, TypeVar
 
 import numpy as np
 
@@ -40,17 +41,17 @@ class SuspensionState(Generic[KeyT]):
     """
 
     positions: dict[KeyT, Point3]
-    free_points: Set[KeyT]
-    free_points_order: List[KeyT] = field(init=False)
+    free_points: builtins.set[KeyT]
+    free_points_order: list[KeyT] = field(init=False)
 
     def __post_init__(self) -> None:
         """
         Initialize consistent ordering for free points.
         """
-        self.free_points_order = sorted(list(self.free_points))
+        self.free_points_order = sorted(self.free_points)
 
     @property
-    def fixed_points(self) -> Set[KeyT]:
+    def fixed_points(self) -> builtins.set[KeyT]:
         """
         Points that are fixed (not free to move).
         """
@@ -116,7 +117,7 @@ class SuspensionState(Generic[KeyT]):
         """
         self.positions = new_positions
 
-    def copy(self) -> "SuspensionState[KeyT]":
+    def copy(self) -> SuspensionState[KeyT]:
         """
         Create a deep copy.
         """

@@ -1,5 +1,6 @@
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Mapping, Sequence
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -159,7 +160,7 @@ class SuspensionVisualizer:
         """
         Update all link artists with new geometry for animation.
         """
-        for line, link in zip(artists, self.links):
+        for line, link in zip(artists, self.links, strict=False):
             pts = np.asarray([positions[name] for name in link.points])
             line.set_data(pts[:, 0], pts[:, 1])
             line.set_3d_properties(pts[:, 2])
@@ -372,7 +373,9 @@ class SuspensionVisualizer:
         """
         Update every configured wheel's artists.
         """
-        for wheel_artists, references in zip(artists, self.wheel_references):
+        for wheel_artists, references in zip(
+            artists, self.wheel_references, strict=False
+        ):
             self._update_single_wheel(wheel_artists, positions, references, num_bands)
 
     def _update_single_wheel(

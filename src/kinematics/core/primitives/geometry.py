@@ -20,7 +20,8 @@ Disallowed operations (raise TypeError at runtime):
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Final, Protocol, overload
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Final, Protocol, overload, override
 
 import numpy as np
 from numpy.typing import NDArray
@@ -173,6 +174,7 @@ class Point3:
     def copy(self) -> Point3:
         return Point3(self.data.copy())
 
+    @override
     def __eq__(self, other: object) -> bool:
         # Exact bitwise comparison via np.array_equal. Use almost_equals for
         # tolerant comparison across two arithmetic paths.
@@ -190,6 +192,7 @@ class Point3:
             return NotImplemented
         return bool(np.allclose(self.data, other.data, rtol=rtol, atol=atol))
 
+    @override
     def __repr__(self) -> str:
         return f"Point3({self.data})"
 
@@ -359,6 +362,7 @@ class Vector3:
     def copy(self) -> Vector3:
         return Vector3(self.data.copy())
 
+    @override
     def __eq__(self, other: object) -> bool:
         # Exact comparison; use almost_equals for tolerant comparison.
         if isinstance(other, Vector3):
@@ -375,6 +379,7 @@ class Vector3:
             return NotImplemented
         return bool(np.allclose(self.data, other.data, rtol=rtol, atol=atol))
 
+    @override
     def __repr__(self) -> str:
         return f"Vector3({self.data})"
 
@@ -490,6 +495,7 @@ class Direction3:
 
     # -- Utilities ----------------------------------------------------------
 
+    @override
     def __eq__(self, other: object) -> bool:
         # Exact comparison; use almost_equals for tolerant comparison.
         if isinstance(other, Direction3):
@@ -506,6 +512,7 @@ class Direction3:
             return NotImplemented
         return bool(np.allclose(self.data, other.data, rtol=rtol, atol=atol))
 
+    @override
     def __repr__(self) -> str:
         return f"Direction3({self.data})"
 

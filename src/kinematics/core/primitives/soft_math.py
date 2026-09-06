@@ -1,5 +1,5 @@
 """
-Softnorm regularisation utilities for the Jacobian functions.
+Softnorm regularization utilities for the Jacobian functions.
 
 Norm-based residuals use `sqrt(s + EPS_SQ) - EPS` instead of `sqrt(s)`
 so the derivative stays finite when a constraint is exactly satisfied (s = 0),
@@ -19,7 +19,7 @@ EPS_SQ: float = EPS**2
 
 def softnorm(sum_of_squares: float) -> float:
     """
-    Bias-corrected regularised norm: `sqrt(s + EPS_SQ) - EPS`.
+    Bias-corrected regularized norm: `sqrt(s + EPS_SQ) - EPS`.
 
     Returns exactly zero when sum_of_squares is zero, with finite derivatives
     everywhere.

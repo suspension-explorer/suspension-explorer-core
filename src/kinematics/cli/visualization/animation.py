@@ -5,12 +5,12 @@ This module provides animation functionality for suspension systems, making use 
 common plotting utilities from plots.py.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
 
-import matplotlib.animation as animation
 import matplotlib.pyplot as plt
+from matplotlib import animation
 
 from kinematics.cli.visualization.clipping import Bounds3D
 from kinematics.cli.visualization.main import SuspensionVisualizer
@@ -57,7 +57,7 @@ def pingpong_animation_frames(frames: Sequence[AnimationFrame]) -> list[Animatio
     return [*frames, *frames[-2:0:-1]]
 
 
-def create_animation(
+def create_animation(  # noqa: PLR0915 - known long; split when next changed
     position_states: list[dict[str, tuple[float, float, float]]],
     initial_positions: dict[str, tuple[float, float, float]],
     visualizer: SuspensionVisualizer,
@@ -103,7 +103,7 @@ def create_animation(
         configure_3d_axis(ax, view_name, x_mid, y_mid, z_mid, max_range)
 
     # Use unified draw_links to create link artists.
-    link_artists: dict[str, list] = {k: [] for k in axes.keys()}
+    link_artists: dict[str, list] = {k: [] for k in axes}
     for view_name, ax in axes.items():
         link_artists[view_name] = visualizer.draw_links(ax, initial_positions)
 
@@ -125,7 +125,7 @@ def create_animation(
 
     # Use unified draw_wheel to create wheel artists.
     num_bands = 36
-    wheel_artists: dict[str, list[dict]] = {k: [] for k in axes.keys()}
+    wheel_artists: dict[str, list[dict]] = {k: [] for k in axes}
     for view_name, ax in axes.items():
         wheel_artists[view_name] = visualizer.draw_wheel(
             ax, initial_positions, num_bands=num_bands
@@ -148,11 +148,11 @@ def create_animation(
         positions = frame.positions
 
         # Update links.
-        for view_name in axes.keys():
+        for view_name in axes:
             visualizer.update_links(link_artists[view_name], positions)
 
         # Update wheel geometry.
-        for view_name in axes.keys():
+        for view_name in axes:
             visualizer.update_wheel(
                 wheel_artists[view_name], positions, num_bands=num_bands
             )
@@ -174,7 +174,7 @@ def create_animation(
             )
 
         artists = []
-        for view_name in axes.keys():
+        for view_name in axes:
             artists.extend(link_artists[view_name])
             for wheel in wheel_artists[view_name]:
                 artists.extend(wheel["rims"])
@@ -218,7 +218,7 @@ def create_animation(
                 frame = pingpong_frames[frame_index]
                 positions = frame.positions
                 # Update all artists for this frame.
-                for view_name in axes.keys():
+                for view_name in axes:
                     visualizer.update_links(link_artists[view_name], positions)
                     visualizer.update_wheel(
                         wheel_artists[view_name], positions, num_bands=num_bands
