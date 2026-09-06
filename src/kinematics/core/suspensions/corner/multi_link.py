@@ -292,6 +292,10 @@ class MultiLinkSuspension(CornerSuspension):
         """Return selected linear spring/damper endpoints."""
         return self.damper.damper_points or self.spring.damper_points
 
+    def spring_points(self) -> tuple[PointKey, PointKey] | None:
+        """Return the linear coil spring endpoints, when selected."""
+        return self.spring.damper_points
+
     def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
         """Declare the locked-internals hold for multi-link steering response.
 

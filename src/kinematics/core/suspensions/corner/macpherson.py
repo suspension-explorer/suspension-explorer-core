@@ -242,6 +242,10 @@ class MacPhersonSuspension(CornerSuspension):
         """The strut is the spring/damper: top mount to upright clamp."""
         return (PointID.STRUT_TOP, PointID.STRUT_BOTTOM)
 
+    def spring_points(self) -> tuple[PointKey, PointKey] | None:
+        """The strut coil spring shares the top mount and upright clamp."""
+        return (PointID.STRUT_TOP, PointID.STRUT_BOTTOM)
+
     def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
         """Declare strut and lower-arm fixed-travel steering definitions."""
         from kinematics.core.steering_response import (

@@ -250,6 +250,10 @@ class DoubleWishboneSuspension(CornerSuspension):
         """Return selected linear spring/damper endpoints."""
         return self.damper.damper_points or self.spring.damper_points
 
+    def spring_points(self) -> tuple[PointKey, PointKey] | None:
+        """Return the linear coil spring endpoints, when selected."""
+        return self.spring.damper_points
+
     def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
         """Declare semantic fixed-travel choices for double-wishbone steering."""
         from kinematics.core.steering_response import (

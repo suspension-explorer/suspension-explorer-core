@@ -21,6 +21,7 @@ from kinematics.core.metrics.derivatives import (
     DerivativeMetricDefinition,
     DualPositions,
     PointCoordinateResponse,
+    PointDistanceResponse,
 )
 from kinematics.core.metrics.units import MetricUnit
 from kinematics.core.primitives.dual import DualScalar
@@ -59,6 +60,8 @@ def _build_steering_metrics(
         calculate_kpi,
         calculate_mechanical_trail,
         calculate_scrub_radius,
+        calculate_steering_axis_lateral_offset_at_wheel_center,
+        calculate_steering_axis_longitudinal_offset_at_wheel_center,
         calculate_steering_axis_offset_at_ground,
     )
 
@@ -108,6 +111,30 @@ def _build_steering_metrics(
             ctx.side_sign,
         )
 
+    def longitudinal_offset_wheel_center(ctx: "MetricContext") -> float | None:
+        axis = ctx.steering_axis
+        if axis is None:
+            return None
+        return calculate_steering_axis_longitudinal_offset_at_wheel_center(
+            axis,
+            ctx.road,
+            ctx.wheel_center,
+            ctx.wheel_axis,
+            ctx.side_sign,
+        )
+
+    def lateral_offset_wheel_center(ctx: "MetricContext") -> float | None:
+        axis = ctx.steering_axis
+        if axis is None:
+            return None
+        return calculate_steering_axis_lateral_offset_at_wheel_center(
+            axis,
+            ctx.road,
+            ctx.wheel_center,
+            ctx.wheel_axis,
+            ctx.side_sign,
+        )
+
     def definition(
         name: str,
         compute: Callable[["MetricContext"], float | None],
@@ -137,6 +164,18 @@ def _build_steering_metrics(
             "Mechanical Trail",
             MetricUnit.MM,
         ),
+        definition(
+            "steering_axis_longitudinal_offset_wheel_center",
+            longitudinal_offset_wheel_center,
+            "Steering-Axis Longitudinal Offset at Wheel Center",
+            MetricUnit.MM,
+        ),
+        definition(
+            "steering_axis_lateral_offset_wheel_center",
+            lateral_offset_wheel_center,
+            "Steering-Axis Lateral Offset at Wheel Center",
+            MetricUnit.MM,
+        ),
     )
 
 
@@ -155,15 +194,22 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
         calculate_anti_dive_pct,
         calculate_anti_lift_pct,
         calculate_anti_squat_pct,
+        calculate_braking_anti_angle,
+        calculate_braking_anti_ratio,
         calculate_svsa_angle,
+        calculate_traction_anti_angle,
+        calculate_traction_anti_ratio,
     )
     from kinematics.core.metrics.swing_arms import (
         calculate_fvsa_length,
         calculate_svsa_length,
     )
     from kinematics.core.metrics.travel import (
+        calculate_contact_patch_lateral_migration,
         calculate_damper_length,
         calculate_half_track,
+        calculate_spring_length,
+        calculate_wheel_center_recession,
         calculate_wheel_travel,
     )
 
@@ -218,9 +264,27 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
             MetricUnit.MM,
         ),
         MetricDefinition(
+            "wheel_center_recession",
+            calculate_wheel_center_recession,
+            "Wheel Center Recession",
+            MetricUnit.MM,
+        ),
+        MetricDefinition(
+            "contact_patch_lateral_migration",
+            calculate_contact_patch_lateral_migration,
+            "Contact-Patch Lateral Migration",
+            MetricUnit.MM,
+        ),
+        MetricDefinition(
             "damper_length",
             calculate_damper_length,
             "Damper Length",
+            MetricUnit.MM,
+        ),
+        MetricDefinition(
+            "spring_length",
+            calculate_spring_length,
+            "Spring Length",
             MetricUnit.MM,
         ),
         MetricDefinition(
@@ -243,6 +307,30 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
             calculate_anti_squat_pct,
             "Anti-Squat",
             MetricUnit.PERCENT,
+        ),
+        MetricDefinition(
+            "braking_anti_ratio",
+            calculate_braking_anti_ratio,
+            "Braking Anti Ratio",
+            MetricUnit.DIMENSIONLESS,
+        ),
+        MetricDefinition(
+            "braking_anti_angle",
+            calculate_braking_anti_angle,
+            "Braking Anti Angle",
+            MetricUnit.DEG,
+        ),
+        MetricDefinition(
+            "traction_anti_ratio",
+            calculate_traction_anti_ratio,
+            "Traction Anti Ratio",
+            MetricUnit.DIMENSIONLESS,
+        ),
+        MetricDefinition(
+            "traction_anti_angle",
+            calculate_traction_anti_angle,
+            "Traction Anti Angle",
+            MetricUnit.DEG,
         ),
     )
 
@@ -397,8 +485,44 @@ def get_default_corner_derivative_metrics(
                 ),
                 driver=hub_z_driver,
             ),
+            DerivativeMetricDefinition(
+                response=PointCoordinateResponse.from_chassis_axis(
+                    PointID.WHEEL_CENTER,
+                    Axis.X,
+                    name="wheel_center_recession",
+                    unit=MetricUnit.MM,
+                    label="Wheel Center Recession",
+                ),
+                driver=hub_z_driver,
+                scale=-1.0,
+            ),
+            DerivativeMetricDefinition(
+                response=PointCoordinateResponse.from_axis(
+                    PointID.WHEEL_CONTACT_CENTRE,
+                    (0.0, -side_sign, 0.0),
+                    name="contact_patch_lateral_migration",
+                    unit=MetricUnit.MM,
+                    label="Contact-Patch Lateral Migration",
+                ),
+                driver=hub_z_driver,
+            ),
         )
     )
+
+    spring_points = suspension.spring_points()
+    if spring_points is not None:
+        definitions.append(
+            DerivativeMetricDefinition(
+                response=PointDistanceResponse(
+                    spring_points[0],
+                    spring_points[1],
+                    name="spring_length",
+                    unit=MetricUnit.MM,
+                    label="Spring Length",
+                ),
+                driver=hub_z_driver,
+            )
+        )
 
     if rack_attachment is not None:
         # Rack displacement is the rack attachment point chassis Y offset;

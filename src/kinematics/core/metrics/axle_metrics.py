@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from math import atan2, degrees, hypot
+from math import atan2, degrees, hypot, radians, tan
 from typing import TYPE_CHECKING
 
 from kinematics.core.enums import Axis, PointID
+from kinematics.core.metrics.angles import calculate_steer
+from kinematics.core.metrics.context import MetricContext
 from kinematics.core.primitives.constants import EPS_GEOMETRIC
 from kinematics.core.primitives.geometry import Point3
 from kinematics.core.primitives.point_ref import PointRef, Side
@@ -96,6 +98,12 @@ def append_axle_state_metrics(
     )
     row["track"] = design_contact_separation
     row["track_change"] = current_contact_separation - design_contact_separation
+    row["ackermann_percentage"] = _ackermann_percentage(
+        state,
+        axle,
+        road,
+        design_contact_separation,
+    )
 
     roll_center_y, roll_center_z = _roll_center(state, axle)
     row["roll_center_y"] = roll_center_y
@@ -111,6 +119,71 @@ def append_axle_state_metrics(
         design_rack_y = float(left_corner.initial_state().get(rack_attachment)[Axis.Y])
         current_rack_y = float(state.get(PointRef(Side.LEFT, rack_attachment))[Axis.Y])
         row["rack_displacement"] = current_rack_y - design_rack_y
+
+
+def _ackermann_percentage(
+    state: SuspensionState,
+    axle: AxleSuspension,
+    road: RoadPlane,
+    track_mm: float,
+) -> float | None:
+    """Return geometric Ackermann percentage for the current steered state.
+
+    Perfect Ackermann satisfies `cot(outer) - cot(inner) = track / wheelbase`.
+    Parallel steer is zero percent. The result is undefined at or sufficiently
+    near straight ahead, or for an axle without a rack actuator.
+    """
+    if any(corner.rack_attachment_point() is None for corner in axle.corners.values()):
+        return None
+
+    steer_deg: dict[Side, float] = {}
+    for side in (Side.LEFT, Side.RIGHT):
+        corner = axle.corners[side]
+        if corner.config is None:
+            return None
+        context = MetricContext(
+            axle.corner_state(state, side),
+            corner,
+            corner.config,
+            road=road,
+        )
+        steer_deg[side] = calculate_steer(context)
+
+    left_config = axle.corners[Side.LEFT].config
+    if left_config is None:
+        return None
+    wheelbase_mm = left_config.wheelbase
+    return _ackermann_from_angles(
+        steer_deg[Side.LEFT],
+        steer_deg[Side.RIGHT],
+        track_mm,
+        wheelbase_mm,
+    )
+
+
+def _ackermann_from_angles(
+    left_steer_deg: float,
+    right_steer_deg: float,
+    track_mm: float,
+    wheelbase_mm: float,
+) -> float | None:
+    """Return Ackermann percentage from signed left and right steer angles."""
+    steer_deg = {Side.LEFT: left_steer_deg, Side.RIGHT: right_steer_deg}
+    mean_steer = 0.5 * (left_steer_deg + right_steer_deg)
+    if abs(mean_steer) < EPS_GEOMETRIC:
+        return None
+    inner_side = Side.LEFT if mean_steer > 0.0 else Side.RIGHT
+    outer_side = Side.RIGHT if inner_side is Side.LEFT else Side.LEFT
+    inner_tangent = tan(radians(abs(steer_deg[inner_side])))
+    outer_tangent = tan(radians(abs(steer_deg[outer_side])))
+    if abs(inner_tangent) < EPS_GEOMETRIC or abs(outer_tangent) < EPS_GEOMETRIC:
+        return None
+
+    ideal_cotangent_difference = track_mm / wheelbase_mm
+    if abs(ideal_cotangent_difference) < EPS_GEOMETRIC:
+        return None
+    actual_cotangent_difference = 1.0 / outer_tangent - 1.0 / inner_tangent
+    return 100.0 * actual_cotangent_difference / ideal_cotangent_difference
 
 
 def _roll_center(

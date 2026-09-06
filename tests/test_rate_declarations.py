@@ -99,6 +99,16 @@ def _metric_rows_at(
         ("deriv_caster_wrt_hub_z", "caster", 1.0),
         ("deriv_kpi_wrt_hub_z", "kpi", 1.0),
         ("deriv_half_track_wrt_hub_z", "half_track", 1.0),
+        (
+            "deriv_wheel_center_recession_wrt_hub_z",
+            "wheel_center_recession",
+            1.0,
+        ),
+        (
+            "deriv_contact_patch_lateral_migration_wrt_hub_z",
+            "contact_patch_lateral_migration",
+            1.0,
+        ),
     ],
 )
 @pytest.mark.parametrize("geometry_name", ["geometry.yaml", "macpherson_geometry.yaml"])

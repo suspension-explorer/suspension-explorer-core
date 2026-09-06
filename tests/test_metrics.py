@@ -56,6 +56,7 @@ def test_metric_catalog_uses_supported_units() -> None:
         MetricUnit.MM,
         MetricUnit.DEG,
         MetricUnit.PERCENT,
+        MetricUnit.DIMENSIONLESS,
     }
 
 
@@ -825,6 +826,8 @@ def test_default_corner_metric_catalog_matches_trusted_set() -> None:
         "steering_axis_offset_ground",
         "scrub_radius",
         "mechanical_trail",
+        "steering_axis_longitudinal_offset_wheel_center",
+        "steering_axis_lateral_offset_wheel_center",
         "toe_angle",
         "steer_angle",
         "svic_x",
@@ -835,11 +838,18 @@ def test_default_corner_metric_catalog_matches_trusted_set() -> None:
         "fvsa_length",
         "wheel_travel",
         "half_track",
+        "wheel_center_recession",
+        "contact_patch_lateral_migration",
         "damper_length",
+        "spring_length",
         "svsa_angle",
         "anti_dive",
         "anti_lift",
         "anti_squat",
+        "braking_anti_ratio",
+        "braking_anti_angle",
+        "traction_anti_ratio",
+        "traction_anti_angle",
     ]
     assert column_names == expected
 
