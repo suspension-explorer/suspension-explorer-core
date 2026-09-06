@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Added wheel-center recession and contact-patch lateral migration relative to
+  the design state, with positive values for rearward and inboard movement,
+  respectively, plus their hub-travel derivatives.
+- Added installed linear spring length and its hub-travel derivative, separate
+  from damper length. Coilovers share spring and damper endpoints; torsion
+  springs have no linear spring-length metric.
+- Added longitudinal and lateral steering-axis offsets at wheel-center height
+  for both physical and virtual steering axes. The offsets use a road-parallel
+  plane and are positive rearward and inboard, respectively.
+- Added dimensionless braking and traction anti ratios and their corresponding
+  angles alongside the existing anti-dive, anti-lift, and anti-squat percentages.
+- Added axle Ackermann percentage for rack-steered axles. Perfect Ackermann is
+  100 percent and parallel steering is zero; the result is undefined at straight
+  ahead or when the required steering geometry is unavailable.
+- Added per-corner U-bar anti-roll-bar end displacement, measured as signed arc
+  length from design, and its derivative with respect to that corner's hub
+  travel.
+
 ## [0.7.0] - 2026-08-29
 
 ### Added
