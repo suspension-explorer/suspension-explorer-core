@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-06
+
 ### Added
 
 - Added wheel-center recession and contact-patch lateral migration relative to
