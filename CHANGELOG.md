@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-09-07
+
 ### Changed
 
 - Expanded Ruff lint checks and enabled all ty diagnostics as errors, with
