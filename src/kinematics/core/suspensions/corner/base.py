@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from abc import abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar, Sequence
+from typing import TYPE_CHECKING, ClassVar, override
 
 from kinematics.core.coordinates import (
     ActuatorCoordinate,
@@ -45,11 +46,13 @@ class CornerSuspension(Suspension):
 
     TYPE_KEY: ClassVar[SuspensionType]
 
+    @override
     def reported_type_key(self) -> SuspensionType:
         """Return the corner architecture identity."""
         return self.TYPE_KEY
 
     @abstractmethod
+    @override
     def free_points(self) -> Sequence[PointID]:
         """
         Corner free points are always bare PointID values.
@@ -93,11 +96,13 @@ class CornerSuspension(Suspension):
         """
         ...
 
+    @override
     def required_actuator_coordinates(self) -> tuple[ActuatorCoordinate, ...]:
         """Require the rack translation coordinate for a steered corner."""
         steering = self.steering_actuator_coordinate()
         return (steering,) if steering is not None else ()
 
+    @override
     def steering_actuator_coordinate(self) -> ActuatorCoordinate | None:
         """Return the rack translation coordinate for a steered corner."""
         return next(
@@ -110,6 +115,7 @@ class CornerSuspension(Suspension):
             None,
         )
 
+    @override
     def drive_coordinates(self) -> tuple[ScalarCoordinate, ...]:
         """Expose a named rack position plus installed element coordinates."""
         coordinates = super().drive_coordinates()
@@ -150,7 +156,7 @@ class CornerSuspension(Suspension):
         hinge_point_a: PointID,
         hinge_point_b: PointID,
         carried_point: PointID,
-    ) -> "ArmAngleCoordinate":
+    ) -> ArmAngleCoordinate:
         """Build one fixed-axis signed arm angle from the design state."""
         from kinematics.core.coordinates import ArmAngleCoordinate
 
@@ -165,12 +171,13 @@ class CornerSuspension(Suspension):
             side=self.side,
         )
 
+    @override
     def compute_state_metrics(
         self,
         state: SuspensionState,
-        tangents: "Sequence[TangentField] | None" = None,
-        steering_response_axes: "Sequence[SteeringResponseAxisResult] | None" = None,
-    ) -> "MetricRow":
+        tangents: Sequence[TangentField] | None = None,
+        steering_response_axes: Sequence[SteeringResponseAxisResult] | None = None,
+    ) -> MetricRow:
         """Compute one corner metric row, including derivatives when tangents exist."""
         if self.config is None:
             raise ValueError("Suspension has no configuration")

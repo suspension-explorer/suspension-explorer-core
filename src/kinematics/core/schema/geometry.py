@@ -40,7 +40,7 @@ class GeometrySpecBase(BaseModel):
     name: str = "unnamed"
     version: str = "0.0.0"
     # Every length-valued schema, solver tolerance, and metric currently uses
-    # millimetres. Reject a misleading declaration until input normalization is
+    # millimeters. Reject a misleading declaration until input normalization is
     # implemented end to end.
     units: Literal[Units.MILLIMETERS] = Units.MILLIMETERS
     type: SuspensionType
@@ -55,7 +55,7 @@ class CornerGeometrySpecBase(GeometrySpecBase):
     config: SuspensionConfig
 
     @model_validator(mode="after")
-    def check_physical_side(self) -> "CornerGeometrySpecBase":
+    def check_physical_side(self) -> CornerGeometrySpecBase:
         """A corner must be declared as the physical left or right side."""
         if self.side == Side.CENTER:
             raise ValueError("Corner geometry side must be 'left' or 'right'.")
@@ -121,7 +121,7 @@ class DoubleWishboneGeometrySpec(CornerGeometrySpecBase):
     hardpoints: HardpointMap
 
     @model_validator(mode="after")
-    def check_mechanisms(self) -> "DoubleWishboneGeometrySpec":
+    def check_mechanisms(self) -> DoubleWishboneGeometrySpec:
         """Validate the selected corner mechanism combination."""
         check_composed_mechanism_combination(
             self.actuation,
@@ -182,7 +182,7 @@ class MultiLinkGeometrySpec(CornerGeometrySpecBase):
     hardpoints: HardpointMap
 
     @model_validator(mode="after")
-    def check_mechanisms(self) -> "MultiLinkGeometrySpec":
+    def check_mechanisms(self) -> MultiLinkGeometrySpec:
         """Validate the selected corner mechanism combination."""
         check_composed_mechanism_combination(
             self.actuation,
@@ -207,7 +207,7 @@ class TrailingArmGeometrySpec(CornerGeometrySpecBase):
     hardpoints: HardpointMap
 
     @model_validator(mode="after")
-    def check_mechanisms(self) -> "TrailingArmGeometrySpec":
+    def check_mechanisms(self) -> TrailingArmGeometrySpec:
         """Reject spring choices without a trailing-arm implementation."""
         check_trailing_arm_spring(self.spring)
         if self.config.steering.type.value != "none":
@@ -226,7 +226,7 @@ class DoubleWishboneAxleConfig(AxleConfig):
     damper: CornerDamperSpec = Field(default_factory=CornerDamperSpec)
 
     @model_validator(mode="after")
-    def check_mechanisms(self) -> "DoubleWishboneAxleConfig":
+    def check_mechanisms(self) -> DoubleWishboneAxleConfig:
         """Validate the symmetric corner mechanisms and shared hardware."""
         check_composed_mechanism_combination(
             self.actuation,
@@ -268,7 +268,7 @@ class AxleGeometrySpecBase(GeometrySpecBase):
     hardpoints: AxleHardpointsSpec
 
     @model_validator(mode="after")
-    def check_right_setup(self) -> "AxleGeometrySpecBase":
+    def check_right_setup(self) -> AxleGeometrySpecBase:
         """Keep explicit asymmetric geometry and side-local setup paired."""
         if self.axle_config.right_setup is not None and self.hardpoints.right is None:
             raise ValueError(
@@ -299,7 +299,7 @@ class MacPhersonAxleGeometrySpec(AxleGeometrySpecBase):
     type: Literal[SuspensionType.MACPHERSON] = SuspensionType.MACPHERSON
 
     @model_validator(mode="after")
-    def check_axle_mechanisms(self) -> "MacPhersonAxleGeometrySpec":
+    def check_axle_mechanisms(self) -> MacPhersonAxleGeometrySpec:
         """Reject shared hardware that needs a rocker corner."""
         if self.axle_config.anti_roll.type in (ArbType.U_BAR, ArbType.T_BAR):
             raise ValueError(
@@ -322,7 +322,7 @@ class MultiLinkAxleConfig(AxleConfig):
     damper: CornerDamperSpec = Field(default_factory=CornerDamperSpec)
 
     @model_validator(mode="after")
-    def check_mechanisms(self) -> "MultiLinkAxleConfig":
+    def check_mechanisms(self) -> MultiLinkAxleConfig:
         """Validate the symmetric corner mechanisms and shared hardware."""
         check_composed_mechanism_combination(
             self.actuation,
@@ -355,7 +355,7 @@ class TrailingArmAxleConfig(AxleConfig):
     spring: CornerSpringSpec
 
     @model_validator(mode="after")
-    def check_mechanisms(self) -> "TrailingArmAxleConfig":
+    def check_mechanisms(self) -> TrailingArmAxleConfig:
         """Limit the axle to hardware represented by this locating model."""
         check_trailing_arm_spring(self.spring)
         if self.steering.type.value != "none":

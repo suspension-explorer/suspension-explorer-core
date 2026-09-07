@@ -55,7 +55,7 @@ def test_steering_response_axis_is_recomputed_per_frame() -> None:
     assert all(result.status is SteeringResponseStatus.VALID for result in left_results)
     assert all(result.axis is not None for result in left_results)
 
-    axes = [cast(InstantaneousScrewAxis, result.axis) for result in left_results]
+    axes = [cast("InstantaneousScrewAxis", result.axis) for result in left_results]
     points = np.asarray([axis.point.data for axis in axes])
     directions = np.asarray([axis.direction.data for axis in axes])
 

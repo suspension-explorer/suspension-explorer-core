@@ -10,10 +10,10 @@ add a corner class, not an axle class.
 from __future__ import annotations
 
 from collections import OrderedDict
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, ClassVar, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, override
 
 from kinematics.core.constraints import Constraint, DistanceConstraint
 from kinematics.core.coordinates import (
@@ -90,14 +90,17 @@ class _CornerPositionView(Mapping[PointID, Any]):
         self._positions = positions
         self._side = side
 
+    @override
     def __getitem__(self, point: PointID) -> Any:
         return self._positions[PointRef(self._side, point)]
 
+    @override
     def __iter__(self) -> Iterator[PointID]:
         for key in self._positions:
             if isinstance(key, PointRef) and key.side is self._side:
                 yield key.point
 
+    @override
     def __len__(self) -> int:
         return sum(1 for _ in self)
 
@@ -113,14 +116,17 @@ class AxleSuspension(Suspension):
     heave_link: AxleHeaveLink = field(default_factory=HeaveLinkNone, kw_only=True)
 
     @property
+    @override
     def is_axle(self) -> bool:
         """Whether this topology composes multiple corner suspensions."""
         return True
 
+    @override
     def reported_type_key(self) -> SuspensionType:
         """Return the builder-supplied geometry type identity."""
         return self.type_key
 
+    @override
     def validate_hardpoints(self) -> None:
         """Require one explicitly sided corner on each side."""
         if set(self.corners) != {Side.LEFT, Side.RIGHT}:
@@ -155,11 +161,13 @@ class AxleSuspension(Suspension):
             return None
         return (left, right)
 
+    @override
     def required_actuator_coordinates(self) -> tuple[ActuatorCoordinate, ...]:
         """Require one shared rack coordinate for a steered axle."""
         steering = self.steering_actuator_coordinate()
         return (steering,) if steering is not None else ()
 
+    @override
     def steering_actuator_coordinate(self) -> ActuatorCoordinate | None:
         """Return the shared rack coordinate for a steered axle."""
         return next(
@@ -172,6 +180,7 @@ class AxleSuspension(Suspension):
             None,
         )
 
+    @override
     def drive_coordinates(self) -> tuple[ScalarCoordinate, ...]:
         """Compose sided corner dampers and axle-owned variable coordinates."""
         coordinates: list[ScalarCoordinate] = []
@@ -221,7 +230,8 @@ class AxleSuspension(Suspension):
                 )
         return tuple(coordinates)
 
-    def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
+    @override
+    def suspension_hold_catalogue(self) -> SuspensionHoldCatalogue | None:
         """Compose compatible corner options into one axle-level selection.
 
         Each semantic option remains one user choice but expands to one
@@ -315,6 +325,7 @@ class AxleSuspension(Suspension):
             options=tuple(composed),
         )
 
+    @override
     def initial_state(self) -> SuspensionState:
         """Combine both corner states under side-qualified point keys."""
         if self._initial_state is not None:
@@ -344,6 +355,7 @@ class AxleSuspension(Suspension):
         self._initial_state = state
         return self._initial_state
 
+    @override
     def free_points(self) -> Sequence[PointKey]:
         """Return both corners' free points under side-qualified keys."""
         corner_points = tuple(
@@ -353,6 +365,7 @@ class AxleSuspension(Suspension):
         )
         return (*corner_points, *self.anti_roll.free_points)
 
+    @override
     def output_points(self) -> tuple[PointKey, ...]:
         """Return composed corner and shared mechanism output points."""
         corner_points = tuple(
@@ -362,6 +375,7 @@ class AxleSuspension(Suspension):
         )
         return tuple(dict.fromkeys((*corner_points, *self.anti_roll.output_points)))
 
+    @override
     def output_only_points(self) -> tuple[PointKey, ...]:
         """Return each corner's undriveable outputs under side-qualified keys."""
         return tuple(
@@ -372,6 +386,7 @@ class AxleSuspension(Suspension):
             )
         )
 
+    @override
     def closure_points(self) -> tuple[PointKey, ...]:
         """Return the coupled contact centres when ground closure owns them."""
         if self._ground_closure_plan() is None:
@@ -404,6 +419,7 @@ class AxleSuspension(Suspension):
             return None
         return road
 
+    @override
     def constraints(self) -> list[Constraint]:
         """Combine remapped corner constraints and the rigid rack coupling."""
         constraints = [
@@ -428,6 +444,7 @@ class AxleSuspension(Suspension):
         constraints.extend(self.anti_roll.constraints(self))
         return constraints
 
+    @override
     def derivative_metric_definitions(
         self,
     ) -> tuple[DerivativeMetricDefinition, ...]:
@@ -437,6 +454,7 @@ class AxleSuspension(Suspension):
             *self.heave_link.derivative_metric_definitions(self),
         )
 
+    @override
     def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
         """Compose state metric metadata from installed axle mechanisms."""
         return (
@@ -456,6 +474,7 @@ class AxleSuspension(Suspension):
                 result.corners.setdefault(side, OrderedDict()).update(row)
         return result
 
+    @override
     def topology_diagnostics(
         self,
         states: list[SuspensionState],
@@ -468,6 +487,7 @@ class AxleSuspension(Suspension):
         issues.extend(self.anti_roll.topology_diagnostics(self, states))
         return issues
 
+    @override
     def derived_spec(self) -> DerivedPointsSpec:
         """Combine remapped corner derived-point specifications."""
         functions: dict[PointKey, PositionFn] = {}
@@ -525,6 +545,7 @@ class AxleSuspension(Suspension):
             "right_radius": right_corner.config.wheel.tire.nominal_radius,
         }
 
+    @override
     def apply_ground_closure(
         self,
         positions: dict[PointKey, Any],
@@ -579,16 +600,19 @@ class AxleSuspension(Suspension):
         }
         return SuspensionState(positions, free_points)
 
+    @override
     def compute_side_view_instant_center(self, state: SuspensionState) -> Point3 | None:
         """Reject axle-level use of a per-corner construction."""
         raise NotImplementedError("Use corner_state() and the selected corner.")
 
+    @override
     def compute_front_view_instant_center(
         self, state: SuspensionState
     ) -> Point3 | None:
         """Reject axle-level use of a per-corner construction."""
         raise NotImplementedError("Use corner_state() and the selected corner.")
 
+    @override
     def resolve_target_key(self, point: PointID, side: Side | None) -> PointKey:
         """Resolve shared center points or require a side for corner points."""
         side_policy = sweep_target_side_policy(
@@ -607,12 +631,13 @@ class AxleSuspension(Suspension):
             return PointRef(Side.CENTER, point)
         return PointRef(selected_side, point)
 
+    @override
     def compute_state_metrics(
         self,
         state: SuspensionState,
-        tangents: "Sequence[TangentField] | None" = None,
-        steering_response_axes: "Sequence[SteeringResponseAxisResult] | None" = None,
-    ) -> "AxleMetricRows":
+        tangents: Sequence[TangentField] | None = None,
+        steering_response_axes: Sequence[SteeringResponseAxisResult] | None = None,
+    ) -> AxleMetricRows:
         """Compute structural corner and axle-level metric rows."""
         if self.config is None:
             raise ValueError("Suspension has no configuration")
@@ -624,6 +649,7 @@ class AxleSuspension(Suspension):
             steering_response_axes,
         )
 
+    @override
     def elements(self) -> tuple[SuspensionElement, ...]:
         """Return side-qualified corner elements and shared axle hardware."""
         elements = tuple(

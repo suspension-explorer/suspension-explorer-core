@@ -1,4 +1,4 @@
-"""Fit parameterised rigid-body twists and extract instantaneous screw axes.
+"""Fit parameterized rigid-body twists and extract instantaneous screw axes.
 
 This module is deliberately ignorant of suspension and sweep semantics.  Its
 input is a point-rate field for a collection of points on one rigid body; the
@@ -7,7 +7,7 @@ bump-and-steer, or motion along an authored sweep.  The mathematics cannot make
 that distinction after the rates have been supplied.
 
 For positions ``p_i(lambda)``, point rates ``r_i = dp_i/dlambda`` and a
-reference point ``p_ref``, the least-squares fit recovers the parameterised
+reference point ``p_ref``, the least-squares fit recovers the parameterized
 rigid-body twist satisfying
 
 ``r_i = r_ref + rho x (p_i - p_ref)``,
@@ -30,7 +30,7 @@ per radian), and angular rate with respect to ``lambda``.  Changing the scale
 of the supplied rate field changes angular rate but not the line or pitch.
 
 The implementation performs no geometry perturbation and never differentiates
-neighbouring solved states or fitted axis values.  Invalid point geometry,
+neighboring solved states or fitted axis values.  Invalid point geometry,
 rank-deficient fits, non-finite values, near-pure translation and excessive fit
 residuals are returned as explicit statuses.  Geometry, angular-rate and fit
 tolerances scale with the supplied body and rate magnitudes so a tiny
@@ -51,9 +51,9 @@ responsibility belongs to the steering-response orchestration layer.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Mapping, Sequence
 
 import numpy as np
 

@@ -1,8 +1,8 @@
 """Single catalogue of supported suspension geometry types."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Callable
 
 from kinematics.core.enums import Scope, SuspensionType
 from kinematics.core.schema.geometry import (

@@ -8,20 +8,20 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from kinematics.cli.visualization.animation import (  # noqa: E402
+from kinematics.cli.visualization.animation import (
     aligned_animation_frames,
     pingpong_animation_frames,
 )
-from kinematics.cli.visualization.clipping import Bounds3D  # noqa: E402
-from kinematics.cli.visualization.main import SuspensionVisualizer  # noqa: E402
-from kinematics.core.enums import PointID  # noqa: E402
-from kinematics.core.primitives.geometry import Point3, Vector3  # noqa: E402
-from kinematics.core.screw_axis import (  # noqa: E402
+from kinematics.cli.visualization.clipping import Bounds3D
+from kinematics.cli.visualization.main import SuspensionVisualizer
+from kinematics.core.enums import PointID
+from kinematics.core.primitives.geometry import Point3, Vector3
+from kinematics.core.screw_axis import (
     InstantaneousScrewAxis,
     ScrewAxisResult,
     ScrewAxisStatus,
 )
-from kinematics.core.steering_axis import (  # noqa: E402
+from kinematics.core.steering_axis import (
     SteeringResponseAxisResult,
     SteeringResponseStatus,
 )

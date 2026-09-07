@@ -95,7 +95,7 @@ def test_steered_axle_requires_rack_control_target(
 ) -> None:
     axle = build_suspension(_read_yaml_mapping(test_data_dir / geometry_name))
 
-    with pytest.raises(ValueError, match="target for actuator 'steering rack'"):
+    with pytest.raises(ValueError, match=r"target for actuator 'steering rack'"):
         build_sweep(
             {
                 "version": 1,
@@ -129,7 +129,7 @@ def test_solve_revalidates_required_rack_control(test_data_dir: Path) -> None:
         ]
     )
 
-    with pytest.raises(ValueError, match="target for actuator 'steering rack'"):
+    with pytest.raises(ValueError, match=r"target for actuator 'steering rack'"):
         solve_sweep(axle, sweep)
 
 
@@ -318,14 +318,14 @@ def test_steering_type_requires_matching_heading_link_hardpoints(
 ) -> None:
     rack_points_for_fixed_toe = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml")
     rack_points_for_fixed_toe["axle_config"]["steering"] = {"type": "none"}
-    with pytest.raises(ValueError, match="Missing required hardpoints:.*TOE_LINK"):
+    with pytest.raises(ValueError, match=r"Missing required hardpoints:.*TOE_LINK"):
         build_suspension(rack_points_for_fixed_toe)
 
     toe_points_for_rack = _read_yaml_mapping(test_data_dir / "axle_geometry.yaml")
     for hardpoints in toe_points_for_rack["hardpoints"].values():
         hardpoints["toe_link_inboard"] = hardpoints.pop("trackrod_inboard")
         hardpoints["toe_link_outboard"] = hardpoints.pop("trackrod_outboard")
-    with pytest.raises(ValueError, match="Missing required hardpoints:.*TRACKROD"):
+    with pytest.raises(ValueError, match=r"Missing required hardpoints:.*TRACKROD"):
         build_suspension(toe_points_for_rack)
 
 
@@ -450,7 +450,7 @@ def test_nonsteered_axle_rejects_fixed_toe_link_sweep_target(
 ) -> None:
     axle = _build_fixed_toe_axle(test_data_dir, geometry_name)
 
-    with pytest.raises(ValueError, match="TOE_LINK_INBOARD.*fixed"):
+    with pytest.raises(ValueError, match=r"TOE_LINK_INBOARD.*fixed"):
         build_sweep(
             {
                 "version": 1,

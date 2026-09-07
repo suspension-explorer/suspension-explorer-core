@@ -10,7 +10,8 @@ np.dot and np.linalg.norm works unmodified with dual-number inputs.
 from __future__ import annotations
 
 import math
-from typing import Callable, Mapping, TypeVar, overload
+from collections.abc import Callable, Mapping
+from typing import TypeVar, overload, override
 
 import numpy as np
 
@@ -31,7 +32,7 @@ class DualScalar:
     normalize_vector and similar functions.
     """
 
-    __slots__ = ("val", "deriv")
+    __slots__ = ("deriv", "val")
 
     def __init__(self, val: float, deriv: float = 0.0):
         self.val = float(val)
@@ -178,6 +179,7 @@ class DualScalar:
     def __float__(self) -> float:
         return self.val
 
+    @override
     def __repr__(self) -> str:
         return f"DualScalar(val={self.val}, deriv={self.deriv})"
 
@@ -193,7 +195,7 @@ class DualVec3:
     via numpy's __array_function__ protocol.
     """
 
-    __slots__ = ("val", "deriv")
+    __slots__ = ("deriv", "val")
 
     def __init__(self, val: np.ndarray, deriv: np.ndarray | None = None):
         self.val = np.asarray(val, dtype=np.float64)
@@ -320,6 +322,7 @@ class DualVec3:
                 return DualVec3(a.val * b, a.deriv * b)
         return NotImplemented
 
+    @override
     def __repr__(self) -> str:
         return f"DualVec3(val={self.val}, deriv={self.deriv})"
 

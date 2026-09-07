@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.context import MetricContext
 
 
-def calculate_svsa_angle(ctx: "MetricContext") -> float | None:
+def calculate_svsa_angle(ctx: MetricContext) -> float | None:
     """
     Side-view swing-arm line inclination in degrees.
 
@@ -71,7 +71,7 @@ def calculate_svsa_angle(ctx: "MetricContext") -> float | None:
     return degrees(atan(rise / run))
 
 
-def _cg_height_above_road(ctx: "MetricContext") -> float | None:
+def _cg_height_above_road(ctx: MetricContext) -> float | None:
     """
     CG height above the road plane in mm, or None if not strictly positive.
 
@@ -88,7 +88,7 @@ def _cg_height_above_road(ctx: "MetricContext") -> float | None:
     return height
 
 
-def calculate_anti_dive_pct(ctx: "MetricContext") -> float | None:
+def calculate_anti_dive_pct(ctx: MetricContext) -> float | None:
     """
     Front-axle anti-dive percentage under braking.
 
@@ -141,7 +141,7 @@ def calculate_anti_dive_pct(ctx: "MetricContext") -> float | None:
     return 100.0 * config.front_brake_bias * (ctx.wheelbase / height) * tan_theta
 
 
-def calculate_anti_lift_pct(ctx: "MetricContext") -> float | None:
+def calculate_anti_lift_pct(ctx: MetricContext) -> float | None:
     """
     Rear-axle anti-lift percentage under braking.
 
@@ -193,7 +193,7 @@ def calculate_anti_lift_pct(ctx: "MetricContext") -> float | None:
     return 100.0 * rear_brake_bias * (ctx.wheelbase / height) * tan_theta
 
 
-def calculate_anti_squat_pct(ctx: "MetricContext") -> float | None:
+def calculate_anti_squat_pct(ctx: MetricContext) -> float | None:
     """
     Anti-squat (rear) / anti-lift (front) percentage under acceleration.
 
@@ -253,7 +253,7 @@ def calculate_anti_squat_pct(ctx: "MetricContext") -> float | None:
     return 100.0 * (ctx.wheelbase / height) * tan_theta
 
 
-def calculate_braking_anti_ratio(ctx: "MetricContext") -> float | None:
+def calculate_braking_anti_ratio(ctx: MetricContext) -> float | None:
     """Return the braking anti reaction as a dimensionless force ratio.
 
     Front axles use anti-dive and rear axles use anti-lift. The dimensionless
@@ -269,13 +269,13 @@ def calculate_braking_anti_ratio(ctx: "MetricContext") -> float | None:
     return None if percentage is None else percentage / 100.0
 
 
-def calculate_braking_anti_angle(ctx: "MetricContext") -> float | None:
+def calculate_braking_anti_angle(ctx: MetricContext) -> float | None:
     """Return the angle whose tangent is the braking anti force ratio."""
     ratio = calculate_braking_anti_ratio(ctx)
     return None if ratio is None else degrees(atan(ratio))
 
 
-def calculate_traction_anti_ratio(ctx: "MetricContext") -> float | None:
+def calculate_traction_anti_ratio(ctx: MetricContext) -> float | None:
     """Return driven-axle anti-lift or anti-squat as a force ratio.
 
     The existing `anti_squat` percentage covers rear anti-squat and front
@@ -285,7 +285,7 @@ def calculate_traction_anti_ratio(ctx: "MetricContext") -> float | None:
     return None if percentage is None else percentage / 100.0
 
 
-def calculate_traction_anti_angle(ctx: "MetricContext") -> float | None:
+def calculate_traction_anti_angle(ctx: MetricContext) -> float | None:
     """Return the angle whose tangent is the traction anti force ratio."""
     ratio = calculate_traction_anti_ratio(ctx)
     return None if ratio is None else degrees(atan(ratio))

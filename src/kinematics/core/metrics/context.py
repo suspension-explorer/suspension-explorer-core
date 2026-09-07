@@ -39,7 +39,7 @@ class MetricContext:
     """
 
     state: SuspensionState
-    suspension: "CornerSuspension"
+    suspension: CornerSuspension
     config: SuspensionConfig
     road: RoadPlane
     _steering_axis: SteeringAxis | None
@@ -47,7 +47,7 @@ class MetricContext:
     def __init__(
         self,
         state: SuspensionState,
-        suspension: "CornerSuspension",
+        suspension: CornerSuspension,
         config: SuspensionConfig,
         road: RoadPlane | None = None,
         steering_axis: SteeringAxis | None = None,
@@ -143,7 +143,7 @@ class MetricContext:
         """
         Intersect the chassis-space steering axis with the local road plane.
 
-        Parameterises the line from the lower steering pivot through the upper
+        Parameterizes the line from the lower steering pivot through the upper
         pivot and solves ``n · (lower + t * direction) + c = 0`` against the
         ISO-style road datum, all expressed in chassis coordinates. This does
         not require world space or inferred chassis pitch. Returns None if the

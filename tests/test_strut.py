@@ -36,9 +36,9 @@ def _read_geometry(name: str) -> dict[str, object]:
 
 def _mirror_hardpoint_y(data: dict[str, object]) -> None:
     """Mirror every geometry hardpoint through the vehicle XZ plane."""
-    hardpoints = cast(dict[str, object], data["hardpoints"])
+    hardpoints = cast("dict[str, object]", data["hardpoints"])
     for position in hardpoints.values():
-        coordinates = cast(dict[str, float], position)
+        coordinates = cast("dict[str, float]", position)
         coordinates["y"] = -coordinates["y"]
 
 
@@ -74,8 +74,8 @@ def test_corner_rejects_declared_side_that_conflicts_with_hardpoints(
 ) -> None:
     data = _read_geometry("geometry.yaml")
     data["side"] = declared_side
-    hardpoints = cast(dict[str, object], data["hardpoints"])
-    axle_outboard = cast(dict[str, float], hardpoints["axle_outboard"])
+    hardpoints = cast("dict[str, object]", data["hardpoints"])
+    axle_outboard = cast("dict[str, float]", hardpoints["axle_outboard"])
     axle_outboard["y"] = axle_outboard_y
 
     with pytest.raises(ValueError, match=expected_message):
@@ -102,7 +102,7 @@ def test_coilover_rejects_missing_required_hardpoint(
     tmp_path: Path, missing: str
 ) -> None:
     data = _read_geometry("corner_strut_geometry.yaml")
-    hardpoints = cast(dict[str, object], data["hardpoints"])
+    hardpoints = cast("dict[str, object]", data["hardpoints"])
     assert isinstance(hardpoints, dict)
     del hardpoints[missing]
 

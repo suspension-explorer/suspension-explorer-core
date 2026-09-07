@@ -67,7 +67,7 @@ def test_architectures_declare_supported_simple_shims() -> None:
         ShimType.TOE,
     } <= DoubleWishboneSuspension.SUPPORTED_SHIMS
     assert {ShimType.PUSHROD, ShimType.TOE} <= MultiLinkSuspension.SUPPORTED_SHIMS
-    assert MacPhersonSuspension.SUPPORTED_SHIMS == frozenset({ShimType.TOE})
+    assert frozenset({ShimType.TOE}) == MacPhersonSuspension.SUPPORTED_SHIMS
 
 
 def test_pushrod_shim_requires_pushrod_rocker_actuation() -> None:

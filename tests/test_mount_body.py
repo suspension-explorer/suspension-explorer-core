@@ -62,7 +62,7 @@ def _build_corner_with_mount(
     The mount key is always written, so this works whether or not the stock
     YAML already carries one.
     """
-    with open(geometry_path, "r", encoding="utf-8") as file:
+    with geometry_path.open(encoding="utf-8") as file:
         data = yaml.safe_load(file)
     data["actuation"]["mount"] = mount.value
     if shim_setup_thickness is not None:
@@ -77,7 +77,7 @@ def _build_corner_with_mount(
 
 
 def _heave_sweep(displacements: tuple[float, ...]) -> SweepConfig:
-    """Build a wheel-center vertical travel sweep in relative millimetres.
+    """Build a wheel-center vertical travel sweep in relative millimeters.
 
     The steering rack point is held at its design lateral position across the
     sweep. Without this second dimension a corner keeps a free steering degree
@@ -127,7 +127,7 @@ class TestActuationMountSchema:
             ActuationSpec.model_validate({"type": ActuationType.DIRECT})
 
     def test_full_geometry_spec_carries_mount_through_loader(self):
-        with open(STRUT_GEOMETRY, "r", encoding="utf-8") as file:
+        with STRUT_GEOMETRY.open(encoding="utf-8") as file:
             data = yaml.safe_load(file)
         data["actuation"]["mount"] = MountBody.UPRIGHT.value
         spec = parse_geometry_spec(data)
@@ -135,7 +135,7 @@ class TestActuationMountSchema:
         assert spec.actuation.mount is MountBody.UPRIGHT
 
     def test_full_geometry_spec_requires_mount(self):
-        with open(STRUT_GEOMETRY, "r", encoding="utf-8") as file:
+        with STRUT_GEOMETRY.open(encoding="utf-8") as file:
             data = yaml.safe_load(file)
         # Ensure no mount is present so the required field is genuinely missing.
         data["actuation"].pop("mount", None)

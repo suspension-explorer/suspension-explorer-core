@@ -123,7 +123,7 @@ def test_coilover_exposes_distinct_spring_length_and_ratio_response() -> None:
 def test_anti_geometry_exposes_force_ratio_and_angle_forms() -> None:
     contact = Point3((0.0, 800.0, 0.0))
     context = cast(
-        MetricContext,
+        "MetricContext",
         SimpleNamespace(
             config=SimpleNamespace(
                 axle_position=AxlePosition.FRONT,

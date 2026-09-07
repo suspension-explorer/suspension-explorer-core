@@ -302,5 +302,5 @@ def test_scalar_units_must_be_supported_metric_units() -> None:
             PointID.AXLE_INBOARD,
             Axis.X,
             name="coordinate_x",
-            unit=cast(MetricUnit, "  "),
+            unit=cast("MetricUnit", "  "),
         )

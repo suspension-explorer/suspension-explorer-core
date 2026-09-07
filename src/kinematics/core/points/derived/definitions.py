@@ -99,7 +99,7 @@ def get_wheel_outboard(positions: dict[PointKey, Any], wheel_width: float) -> An
     return p1 + v * (wheel_width / 2)
 
 
-def build_wheel_derived_spec(wheel: "WheelConfig") -> "DerivedPointsSpec":
+def build_wheel_derived_spec(wheel: WheelConfig) -> DerivedPointsSpec:
     """
     Build the standard wheel derived-point specification.
 

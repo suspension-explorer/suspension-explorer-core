@@ -36,7 +36,7 @@ def real_symbols(names: str) -> tuple[Any, ...]:
     """
     Create a tuple of real-valued SymPy symbols.
     """
-    return cast(tuple[Any, ...], sp.symbols(names, real=True))
+    return cast("tuple[Any, ...]", sp.symbols(names, real=True))
 
 
 def softnorm(sum_of_squares: Any) -> Any:
@@ -57,7 +57,7 @@ def print_snippet(
     """
     derivs = [sp.diff(residual, v) for v in variables]
     replacements, reduced = sp.cse(derivs, symbols=list(CSE_SYMBOLS))
-    reduced_exprs = cast(list[sp.Expr], reduced)
+    reduced_exprs = cast("list[sp.Expr]", reduced)
 
     print(f"# === {name} ===")
     for sym, expr in replacements:

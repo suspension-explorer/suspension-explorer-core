@@ -51,7 +51,8 @@ def jac_distance(p1: np.ndarray, p2: np.ndarray) -> np.ndarray:
     return np.array([t0 * t6, t2 * t6, t4 * t6, t1 * t6, t3 * t6, t5 * t6])
 
 
-# Residual: atan2(|v1 × v2|, v1 · v2) - α   where v1 = p2 - p1, v2 = p4 - p3
+# Residual: atan2(|cross(v1, v2)|, dot(v1, v2)) - alpha
+# where v1 = p2 - p1, v2 = p4 - p3
 def jac_angle(
     p1: np.ndarray,
     p2: np.ndarray,
@@ -119,10 +120,10 @@ def jac_angle(
             t17 * t18 * t25 * (t21 * t35 + t28 * t32) - t19 * t7,
             -t12 * t19 + t17 * t18 * t25 * (t24 * t33 + t28 * t31),
         ]
-    )  # noqa: E501
+    )
 
 
-# Residual: atan2(|v1 × v2|, v1 · v2) - α
+# Residual: atan2(|cross(v1, v2)|, dot(v1, v2)) - alpha
 # v1 = p1 - p2, v2 = p3 - p2 (vertex at p2)
 def jac_three_point_angle(p1: np.ndarray, p2: np.ndarray, p3: np.ndarray) -> np.ndarray:
     """
@@ -185,10 +186,10 @@ def jac_three_point_angle(p1: np.ndarray, p2: np.ndarray, p3: np.ndarray) -> np.
             t11 * t12 * t22 * (t17 * t39 - t26 * t38) - t13 * t3,
             t11 * t12 * t22 * (-t21 * t39 + t26 * t37) - t13 * t6,
         ]
-    )  # noqa: E501
+    )
 
 
-# Residual: |v1_hat × v2_hat| = |v1 × v2| / (|v1| · |v2|)
+# Residual: |cross(v1_hat, v2_hat)| = |cross(v1, v2)| / (|v1| * |v2|)
 def jac_vectors_parallel(
     p1: np.ndarray,
     p2: np.ndarray,
@@ -259,10 +260,10 @@ def jac_vectors_parallel(
             t26 * (t21 * t37 + t29 * t34) + t31 * t9,
             t11 * t31 + t26 * (t24 * t35 + t29 * t33),
         ]
-    )  # noqa: E501
+    )
 
 
-# Residual: v1_hat · v2_hat = (v1 · v2) / (|v1| · |v2|)
+# Residual: dot(v1_hat, v2_hat) = dot(v1, v2) / (|v1| * |v2|)
 def jac_vectors_perpendicular(
     p1: np.ndarray,
     p2: np.ndarray,
@@ -315,7 +316,7 @@ def jac_vectors_perpendicular(
             t10 * t19 + t16 * t4,
             t12 * t19 + t16 * t6,
         ]
-    )  # noqa: E501
+    )
 
 
 # Residual: softnorm(|p1 - p2|^2) - softnorm(|p3 - p4|^2)
@@ -364,7 +365,7 @@ def jac_equal_distance(
             -t10 * t13,
             -t12 * t13,
         ]
-    )  # noqa: E501
+    )
 
 
 # Residual: dot(p - plane_point, plane_normal)
@@ -386,7 +387,7 @@ def jac_point_on_plane(
     return np.array([nx, ny, nz])
 
 
-# Residual: v1 · (v2 × v3)   where vi = p(i+1) - p1  (scalar triple product)
+# Residual: dot(v1, cross(v2, v3))   where vi = p(i+1) - p1  (scalar triple product)
 def jac_coplanar(
     p1: np.ndarray,
     p2: np.ndarray,
@@ -444,4 +445,4 @@ def jac_coplanar(
             t10 * t20 + t16 * t6,
             t0 * t19 + t12 * t16,
         ]
-    )  # noqa: E501
+    )

@@ -13,9 +13,9 @@ making debugging easier while still testing the same code path.
 import csv
 import io
 import tempfile
+from collections.abc import Generator
 from importlib.util import find_spec
 from pathlib import Path
-from typing import Generator
 from unittest.mock import patch
 
 import numpy as np
@@ -43,7 +43,7 @@ def load_csv_data(file_path: Path) -> tuple[list[str], list[list[str]]]:
     """
     Load CSV data and return headers and rows, skipping comment lines.
     """
-    with open(file_path, "r") as f:
+    with file_path.open() as f:
         # Skip comment lines starting with #
         lines = []
         for line in f:
@@ -186,7 +186,7 @@ def compare_numerical_csv(
     )
 
     for row_idx, (actual_row, expected_row) in enumerate(
-        zip(actual_rows, expected_rows)
+        zip(actual_rows, expected_rows, strict=False)
     ):
         for col_idx, col_name in enumerate(actual_headers):
             # Skip solver metadata -- these vary across platforms.

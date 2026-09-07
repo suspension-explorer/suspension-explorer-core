@@ -1,13 +1,13 @@
 """
 MacPherson strut corner suspension implementation.
 
-The strut is modelled without a dedicated prismatic constraint, mirroring the
+The strut is modeled without a dedicated prismatic constraint, mirroring the
 rigid-upright approach used by the double wishbone:
 
 - The lower arm locates the lower ball joint on its arc.
-- Modelling choice: the strut axis is taken to be coincident with the
+- Modeling choice: the strut axis is taken to be coincident with the
   steering axis, which runs from the moving lower ball joint to the fixed
-  strut top mount. Real struts often sit a few millimetres off the steering
+  strut top mount. Real struts often sit a few millimeters off the steering
   axis to reduce spring side load; this model deliberately ignores that
   offset. The authored strut clamp point (STRUT_BOTTOM) must therefore lie
   on the ball-joint-to-top-mount line at design, with only small authoring
@@ -21,9 +21,10 @@ rigid-upright approach used by the double wishbone:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import partial
-from typing import TYPE_CHECKING, ClassVar, Sequence
+from typing import TYPE_CHECKING, ClassVar, override
 
 from kinematics.core.constraints import (
     Constraint,
@@ -76,7 +77,7 @@ if TYPE_CHECKING:
     from kinematics.core.steering_response import SuspensionHoldCatalogue
 
 # How far the authored strut clamp may sit off the design steering axis, in
-# millimetres, before the coincident-axis modelling choice is considered
+# millimeters, before the coincident-axis modeling choice is considered
 # violated rather than an authoring rounding error. Within the tolerance the
 # clamp is projected exactly onto the axis; beyond it we refuse the geometry
 # instead of silently reshaping an intentionally offset strut.
@@ -164,10 +165,12 @@ class MacPhersonSuspension(CornerSuspension):
             )
         super().__post_init__()
 
+    @override
     def required_points(self) -> frozenset[PointID]:
         """Return the strut and selected heading-link point requirements."""
         return self.REQUIRED_POINTS | self.wheel_heading_link.REQUIRED_POINTS
 
+    @override
     def output_points(self) -> tuple[PointKey, ...]:
         """Return authored, heading-link, and derived strut points."""
         return tuple(
@@ -180,6 +183,7 @@ class MacPhersonSuspension(CornerSuspension):
             )
         )
 
+    @override
     def validate_hardpoints(self) -> None:
         """Validate the point set and the strut axis definition."""
         super().validate_hardpoints()
@@ -224,29 +228,35 @@ class MacPhersonSuspension(CornerSuspension):
         clamp_vector = self.hardpoints[PointID.STRUT_BOTTOM] - ball_joint
         return float(clamp_vector.data.dot(strut_axis.data))
 
+    @override
     def free_points(self) -> Sequence[PointID]:
         """Return the moving upright group and heading-link points."""
         return (*self.FREE_POINTS, *self.wheel_heading_link.free_points)
 
+    @override
     def steering_axis_points(self) -> tuple[PointID, PointID]:
         """The steering axis runs from the lower ball joint to the strut top."""
         return (PointID.LOWER_WISHBONE_OUTBOARD, PointID.STRUT_TOP)
 
+    @override
     def rack_attachment_point(self) -> PointID | None:
         """Return the track-rod rack pickup for a steered corner."""
         if isinstance(self.wheel_heading_link, TrackRod):
             return self.wheel_heading_link.inboard_point
         return None
 
+    @override
     def damper_points(self) -> tuple[PointKey, PointKey] | None:
         """The strut is the spring/damper: top mount to upright clamp."""
         return (PointID.STRUT_TOP, PointID.STRUT_BOTTOM)
 
+    @override
     def spring_points(self) -> tuple[PointKey, PointKey] | None:
         """The strut coil spring shares the top mount and upright clamp."""
         return (PointID.STRUT_TOP, PointID.STRUT_BOTTOM)
 
-    def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
+    @override
+    def suspension_hold_catalogue(self) -> SuspensionHoldCatalogue | None:
         """Declare strut and lower-arm fixed-travel steering definitions."""
         from kinematics.core.steering_response import (
             SuspensionHoldCatalogue,
@@ -289,6 +299,7 @@ class MacPhersonSuspension(CornerSuspension):
             ),
         )
 
+    @override
     def derivative_metric_definitions(
         self,
     ) -> tuple[DerivativeMetricDefinition, ...]:
@@ -312,6 +323,7 @@ class MacPhersonSuspension(CornerSuspension):
             ),
         )
 
+    @override
     def initial_state(self) -> SuspensionState:
         """Build the initial state from hardpoints plus derived points."""
         if self._initial_state is not None:
@@ -327,6 +339,7 @@ class MacPhersonSuspension(CornerSuspension):
         )
         return self._initial_state
 
+    @override
     def constraints(self) -> list[Constraint]:
         """Build lower-arm, upright, strut, and heading-link constraints."""
         initial_state = self.initial_state()
@@ -367,6 +380,7 @@ class MacPhersonSuspension(CornerSuspension):
         constraints.extend(self.wheel_heading_link.constraints(initial_state))
         return constraints
 
+    @override
     def derived_spec(self) -> DerivedPointsSpec:
         """Derived strut clamp and standard wheel points."""
         if self.config is None:
@@ -422,6 +436,7 @@ class MacPhersonSuspension(CornerSuspension):
             d2=strut_plane_offset,
         )
 
+    @override
     def compute_side_view_instant_center(self, state: SuspensionState) -> Point3 | None:
         """Intersect the instant axis with the wheel center's side-view plane."""
         instant_axis = self.compute_instant_axis(state)
@@ -433,6 +448,7 @@ class MacPhersonSuspension(CornerSuspension):
             axis_point, axis_direction, wheel_center_y
         )
 
+    @override
     def compute_front_view_instant_center(
         self, state: SuspensionState
     ) -> Point3 | None:
@@ -446,6 +462,7 @@ class MacPhersonSuspension(CornerSuspension):
             axis_point, axis_direction, Axis.X, wheel_center_x
         )
 
+    @override
     def elements(self) -> tuple[SuspensionElement, ...]:
         """Return the physical elements in this corner."""
         heading_link_outboard = self.wheel_heading_link.outboard_point

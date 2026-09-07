@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import re
 from collections import OrderedDict
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Callable, Mapping, Protocol, Sequence
+from typing import Protocol
 
 import numpy as np
 
@@ -91,7 +92,7 @@ class PointCoordinateResponse:
         name: str,
         unit: MetricUnit,
         label: str | None = None,
-    ) -> "PointCoordinateResponse":
+    ) -> PointCoordinateResponse:
         """Build a coordinate response along a principal chassis axis."""
         direction = np.zeros(3, dtype=np.float64)
         direction[int(axis)] = 1.0
@@ -112,7 +113,7 @@ class PointCoordinateResponse:
         name: str,
         unit: MetricUnit,
         label: str | None = None,
-    ) -> "PointCoordinateResponse":
+    ) -> PointCoordinateResponse:
         """Build a coordinate response, normalizing the supplied axis."""
         if isinstance(axis, Axis):
             return cls.from_chassis_axis(
@@ -199,7 +200,7 @@ class PointDisplacementMagnitudeResponse:
         name: str,
         unit: MetricUnit,
         label: str | None = None,
-    ) -> "PointDisplacementMagnitudeResponse":
+    ) -> PointDisplacementMagnitudeResponse:
         """Build the response with a copied three-component reference."""
         raw_reference = extract_array(reference)
         if raw_reference.shape != (3,):

@@ -9,7 +9,7 @@ to act as a kingpin: the corner declares no physical steering axis and its
 steering geometry is reported exclusively through the motion-derived
 (screw-axis) virtual metric family.
 
-Installed actuation and spring behaviour is composed through the same typed
+Installed actuation and spring behavior is composed through the same typed
 mechanism fields as the double wishbone. Because every locating rod is a
 two-force member, a rigid off-axis pickup can only ride the upright; a
 direct spring pickup may alternatively ride a lower link's centreline as a
@@ -18,8 +18,9 @@ derived point (a damper fork clamped around the link).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, Sequence
+from typing import TYPE_CHECKING, ClassVar, override
 
 from kinematics.core.constraints import Constraint, DistanceConstraint
 from kinematics.core.elements import (
@@ -233,6 +234,7 @@ class MultiLinkSuspension(CornerSuspension):
             )
         super().__post_init__()
 
+    @override
     def required_points(self) -> frozenset[PointID]:
         """Return base and selected mechanism point requirements."""
         return (
@@ -243,6 +245,7 @@ class MultiLinkSuspension(CornerSuspension):
             | self.damper.required_points
         )
 
+    @override
     def validate_hardpoints(self) -> None:
         """Validate base geometry and selected mechanism compatibility."""
         super().validate_hardpoints()
@@ -259,6 +262,7 @@ class MultiLinkSuspension(CornerSuspension):
             self.damper,
         )
 
+    @override
     def free_points(self) -> Sequence[PointID]:
         """Return base and selected mechanism moving points.
 
@@ -275,6 +279,7 @@ class MultiLinkSuspension(CornerSuspension):
             ),
         )
 
+    @override
     def output_points(self) -> tuple[PointKey, ...]:
         """Return base and selected mechanism output points."""
         return composed_output_points(
@@ -288,15 +293,18 @@ class MultiLinkSuspension(CornerSuspension):
             self.damper,
         )
 
+    @override
     def damper_points(self) -> tuple[PointKey, PointKey] | None:
         """Return selected linear spring/damper endpoints."""
         return self.damper.damper_points or self.spring.damper_points
 
+    @override
     def spring_points(self) -> tuple[PointKey, PointKey] | None:
         """Return the linear coil spring endpoints, when selected."""
         return self.spring.damper_points
 
-    def suspension_hold_catalogue(self) -> "SuspensionHoldCatalogue | None":
+    @override
+    def suspension_hold_catalogue(self) -> SuspensionHoldCatalogue | None:
         """Declare the locked-internals hold for multi-link steering response.
 
         Without wishbone hinges there is no fixed-axis arm-angle coordinate to
@@ -333,16 +341,19 @@ class MultiLinkSuspension(CornerSuspension):
             ),
         )
 
+    @override
     def steering_axis_points(self) -> tuple[PointID, PointID] | None:
         """No two ball joints define a kingpin; the steering axis is virtual."""
         return None
 
+    @override
     def rack_attachment_point(self) -> PointID | None:
         """Return the track-rod rack pickup for a steered corner."""
         if isinstance(self.wheel_heading_link, TrackRod):
             return self.wheel_heading_link.inboard_point
         return None
 
+    @override
     def initial_state(self) -> SuspensionState:
         """Build the initial state from hardpoints plus derived points."""
         if self._initial_state is not None:
@@ -358,6 +369,7 @@ class MultiLinkSuspension(CornerSuspension):
         )
         return self._initial_state
 
+    @override
     def constraints(self) -> list[Constraint]:
         """Build link-length, rigid-carrier, and mechanism constraints."""
         initial_state = self.initial_state()
@@ -404,6 +416,7 @@ class MultiLinkSuspension(CornerSuspension):
         constraints.extend(self.damper.constraints(initial_state, self.actuation))
         return constraints
 
+    @override
     def derivative_metric_definitions(
         self,
     ) -> tuple[DerivativeMetricDefinition, ...]:
@@ -417,6 +430,7 @@ class MultiLinkSuspension(CornerSuspension):
             self.damper,
         )
 
+    @override
     def topology_metric_values(self, state: SuspensionState) -> MetricRow:
         """Compose state metrics from actuation and spring mechanisms."""
         return composed_topology_metric_values(
@@ -427,6 +441,7 @@ class MultiLinkSuspension(CornerSuspension):
             self.spring,
         )
 
+    @override
     def topology_metric_specs(self) -> tuple[MetricSpec, ...]:
         """Compose state metric metadata from installed corner mechanisms."""
         return (
@@ -434,6 +449,7 @@ class MultiLinkSuspension(CornerSuspension):
             *self.spring.topology_metric_specs(),
         )
 
+    @override
     def derived_spec(self) -> DerivedPointsSpec:
         """Wheel derived points, plus the on-link spring pickup if selected.
 
@@ -450,6 +466,7 @@ class MultiLinkSuspension(CornerSuspension):
             {**actuation_spec.dependencies, **wheel_spec.dependencies},
         )
 
+    @override
     def compute_side_view_instant_center(self, state: SuspensionState) -> Point3 | None:
         """
         A multi-link carrier has no plane-intersection instant axis.
@@ -460,6 +477,7 @@ class MultiLinkSuspension(CornerSuspension):
         """
         return None
 
+    @override
     def compute_front_view_instant_center(
         self, state: SuspensionState
     ) -> Point3 | None:
@@ -471,6 +489,7 @@ class MultiLinkSuspension(CornerSuspension):
         """
         return None
 
+    @override
     def elements(self) -> tuple[SuspensionElement, ...]:
         """Return the physical elements in this corner."""
         heading_link_outboard = self.wheel_heading_link.outboard_point

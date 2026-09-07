@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from typing import override
 
 from kinematics.core.enums import Axis
 from kinematics.core.primitives.point_ref import PointKey
@@ -97,6 +98,7 @@ class RigidLinkElement(SuspensionElement):
             raise ValueError(f"Invalid rigid-link element type: {self.type.value}")
 
     @property
+    @override
     def point_keys(self) -> tuple[PointKey, ...]:
         """
         Return both link endpoints.
@@ -130,6 +132,7 @@ class VariableLengthLinkElement(SuspensionElement):
             )
 
     @property
+    @override
     def point_keys(self) -> tuple[PointKey, ...]:
         """
         Return both link endpoints.
@@ -148,6 +151,7 @@ class RackElement(SuspensionElement):
     translation_axis: Axis
 
     @property
+    @override
     def point_keys(self) -> tuple[PointKey, ...]:
         """
         Return the rack joint points in left-to-right order.
@@ -166,6 +170,7 @@ class UprightElement(SuspensionElement):
     segments: tuple[tuple[PointKey, PointKey], ...]
 
     @property
+    @override
     def point_keys(self) -> tuple[PointKey, ...]:
         """
         Return every upright point in declaration order without duplicates.
@@ -197,6 +202,7 @@ class TorsionElement(SuspensionElement):
             raise ValueError("A U-bar requires two ordered arm attachments")
 
     @property
+    @override
     def point_keys(self) -> tuple[PointKey, ...]:
         """
         Return the rotation-axis and attachment points.
@@ -215,6 +221,7 @@ class TBarElement(SuspensionElement):
     right_attachment: PointKey
 
     @property
+    @override
     def point_keys(self) -> tuple[PointKey, ...]:
         """
         Return the pivot and both crossbar endpoints.
@@ -232,6 +239,7 @@ class RockerElement(SuspensionElement):
     pickups: tuple[RockerPickup, ...]
 
     @property
+    @override
     def point_keys(self) -> tuple[PointKey, ...]:
         """
         Return the rocker axis and pickup points.
@@ -251,6 +259,7 @@ class WheelElement(SuspensionElement):
     wheel_contact_centre: PointKey
 
     @property
+    @override
     def point_keys(self) -> tuple[PointKey, ...]:
         """
         Return all wheel and hub reference points.

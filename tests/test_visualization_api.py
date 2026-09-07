@@ -64,7 +64,7 @@ def test_geometry_visualization_checks_reconstructed_road_plane(
     monkeypatch.setattr(api, "create_four_view_plot", lambda **_: None)
 
     result = api.visualize_geometry(
-        cast(Suspension, suspension), tmp_path / "geometry.png"
+        cast("Suspension", suspension), tmp_path / "geometry.png"
     )
 
     assert result.wheel_contact_centre_z == tuple(

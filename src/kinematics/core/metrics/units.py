@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import override
 
 
 class MetricUnit(Enum):
@@ -19,7 +20,7 @@ class MetricUnit(Enum):
         """Return the export symbol for this unit."""
         return self.value
 
-    def __truediv__(self, denominator: "MetricUnit") -> "MetricUnitQuotient":
+    def __truediv__(self, denominator: MetricUnit) -> MetricUnitQuotient:
         """Compose a derivative quotient unit."""
         if not isinstance(denominator, MetricUnit):
             return NotImplemented
@@ -38,6 +39,7 @@ class MetricUnitQuotient:
         """Return the export symbol for this quotient."""
         return f"{self.numerator.symbol}/{self.denominator.symbol}"
 
+    @override
     def __str__(self) -> str:
         """Render the quotient for output metadata."""
         return self.symbol

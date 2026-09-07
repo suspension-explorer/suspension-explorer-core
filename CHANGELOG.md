@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Expanded Ruff lint checks and enabled all ty diagnostics as errors, with
+  targeted exceptions for numerical annotations and established domain patterns.
+- Added formatting and spelling checks to CI, and enforced American spelling
+  in source code and tests while preserving existing public identifiers.
+- Updated annotations and lint fixes across the solver, CLI, and tests to meet
+  the stricter checks.
+
 ## [0.8.0] - 2026-09-06
 
 ### Added

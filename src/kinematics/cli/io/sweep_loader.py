@@ -15,10 +15,10 @@ def load_sweep(
 ) -> SweepConfig:
     """Load, validate, and expand a sweep YAML file."""
     try:
-        with open(path, "r", encoding="utf-8") as file:
+        with path.open(encoding="utf-8") as file:
             raw_data = yaml.safe_load(file)
     except FileNotFoundError:
-        raise FileNotFoundError(f"Sweep file not found: {path}")
+        raise FileNotFoundError(f"Sweep file not found: {path}") from None
     except yaml.YAMLError as error:
         raise ValueError(f"Error parsing YAML: {error}") from error
 

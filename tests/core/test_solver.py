@@ -22,30 +22,27 @@ from kinematics.core.targeting import SweepConfig
 
 @pytest.fixture
 def simple_positions():
-    positions_dict = {
+    return {
         PointID.LOWER_WISHBONE_INBOARD_FRONT: Point3([-1.0, 0.0, 0.0]),
         PointID.LOWER_WISHBONE_INBOARD_REAR: Point3([1.0, 0.0, 0.0]),
         PointID.LOWER_WISHBONE_OUTBOARD: Point3([0.0, 1.0, 0.0]),
     }
-    return positions_dict
 
 
 @pytest.fixture
 def length_forward_leg(simple_positions):
-    x_forward_leg = np.linalg.norm(
+    return np.linalg.norm(
         simple_positions[PointID.LOWER_WISHBONE_INBOARD_FRONT]
         - simple_positions[PointID.LOWER_WISHBONE_OUTBOARD],
     )
-    return x_forward_leg
 
 
 @pytest.fixture
 def length_rearward_leg(simple_positions):
-    x_rearward_leg = np.linalg.norm(
+    return np.linalg.norm(
         simple_positions[PointID.LOWER_WISHBONE_INBOARD_REAR]
         - simple_positions[PointID.LOWER_WISHBONE_OUTBOARD]
     )
-    return x_rearward_leg
 
 
 @pytest.fixture
@@ -198,7 +195,7 @@ def test_solve_least_squares_problem_rejects_underdetermined_lm():
     def residual_function(x: np.ndarray) -> np.ndarray:
         return np.array([x[0] + x[1]])
 
-    with pytest.raises(ValueError, match="System is underdetermined"):
+    with pytest.raises(ValueError, match=r"System is underdetermined"):
         solve_least_squares_problem(
             residual_function=residual_function,
             x_0=np.zeros(2),
@@ -218,7 +215,7 @@ def test_solve_sweep_rejects_converged_infeasible_target(
         PointID.LOWER_WISHBONE_OUTBOARD, CoordinateAxis(Axis.Z), Scope.CORNER
     ).target(10.0, TargetValueMode.ABSOLUTE)
 
-    with pytest.raises(RuntimeError, match="sweep step 0.*Worst residual row"):
+    with pytest.raises(RuntimeError, match=r"sweep step 0.*Worst residual row"):
         solve_suspension_sweep(
             initial_state=initial_state,
             constraints=simple_constraints,

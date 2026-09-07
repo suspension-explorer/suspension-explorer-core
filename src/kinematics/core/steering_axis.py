@@ -194,7 +194,7 @@ def compute_steering_response_tangent(
             response_targets.targets,
             post_derived_update=suspension.apply_ground_closure,
         )
-    except Exception as error:  # noqa: BLE001 - one frame degrades explicitly
+    except Exception as error:
         return SteeringResponseTangent(
             targets=response_targets,
             tangent=None,

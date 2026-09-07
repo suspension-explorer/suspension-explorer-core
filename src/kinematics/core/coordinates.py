@@ -30,7 +30,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import TYPE_CHECKING, Final, Self
+from typing import TYPE_CHECKING, Final, Self, override
 
 import numpy as np
 
@@ -224,18 +224,22 @@ class PointCoordinate(_Coordinate):
         return _projected_identity(self.type, self.point, self.direction)
 
     @property
+    @override
     def selector_point(self) -> PointKey:
         return self.point
 
     @property
+    @override
     def driven_points(self) -> tuple[PointKey]:
         return self.point_keys
 
     @property
+    @override
     def parameter_point(self) -> str:
         return point_key_name(self.point)
 
     @property
+    @override
     def parameter_axis(self) -> str | None:
         return _axis_name(self.direction)
 
@@ -295,18 +299,22 @@ class ActuatorCoordinate(_Coordinate):
         return _projected_identity(self.type, self.id, self.direction)
 
     @property
+    @override
     def selector_point(self) -> PointKey:
         return self.point_keys[0]
 
     @property
+    @override
     def driven_points(self) -> tuple[PointKey]:
         return self.required_points
 
     @property
+    @override
     def parameter_axis(self) -> str | None:
         return _axis_name(self.direction)
 
     @property
+    @override
     def parameter_actuator(self) -> str:
         return self.id
 
@@ -370,10 +378,12 @@ class ElementLengthCoordinate(_Coordinate):
         return (self.type.value, self.id, *self.point_keys)
 
     @property
+    @override
     def parameter_element(self) -> str:
         return self.id
 
     @property
+    @override
     def export_id(self) -> str:
         return self.id if self.id.endswith("_length") else f"{self.id}_length"
 

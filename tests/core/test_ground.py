@@ -56,7 +56,7 @@ def test_collapsed_axle_tangents_do_not_define_a_road_plane() -> None:
 def test_road_plane_is_immutable() -> None:
     ground = RoadPlane.horizontal_at(Point3((0.0, 0.0, 0.0)))
     with pytest.raises(FrozenInstanceError):
-        setattr(ground, "offset_mm", 1.0)
+        ground.offset_mm = 1.0  # ty: ignore[invalid-assignment]
 
 
 @pytest.mark.parametrize(

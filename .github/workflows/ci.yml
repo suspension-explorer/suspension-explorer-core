@@ -21,6 +21,26 @@ jobs:
       - run: just install-core-ci
       - run: just test-core
 
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: extractions/setup-just@v2
+      - run: just install-ci
+      - run: just format-check
+
+  spellcheck:
+    name: Spellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: extractions/setup-just@v2
+      - run: just install-ci
+      - run: just spellcheck
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

@@ -26,12 +26,12 @@ centre; it is not a deformable-tyre contact patch.
 The mathematics
 ===============
 
-The shared plane is parameterised by a single scalar, the ground-normal angle
+The shared plane is parameterized by a single scalar, the ground-normal angle
 ``theta``, giving the plane normal ``n = (0, sin(theta), cos(theta))``.
 
 .. note::
-    The zero ``X`` component is a deliberate modelling assumption: with only
-    one axle modelled, longitudinal road grade is unknowable, so the plane is
+    The zero ``X`` component is a deliberate modeling assumption: with only
+    one axle modeled, longitudinal road grade is unknowable, so the plane is
     the axle's YZ ground line extruded along chassis ``±X`` — **zero
     longitudinal gradient is assumed throughout**. Whole-vehicle pitch is not
     observable from one axle and is not inferred elsewhere.
@@ -98,9 +98,10 @@ tangency solve for derivative metrics.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from math import atan2, isfinite, pi
-from typing import Any, Callable, Mapping, TypeVar
+from typing import Any, TypeVar
 
 import numpy as np
 
@@ -120,7 +121,7 @@ _GROUND_NORMAL_ANGLE_LIMIT = 80.0 * pi / 180.0
 # endpoint alike -- is clamped here, strictly inside the limit above, so a
 # saturated value can never sit on the singular boundary itself.
 _GROUND_SOLVE_LIMIT = _GROUND_NORMAL_ANGLE_LIMIT - 1e-6
-# The residual is a height difference in millimetres, so its convergence
+# The residual is a height difference in millimeters, so its convergence
 # tolerance is taken relative to the axle's own dimensions rather than as an
 # absolute picometre floor that float64 cannot reach at automotive scale.
 _ROOT_RELATIVE_TOLERANCE = 1e-12
@@ -313,7 +314,7 @@ def _geometry_scale(
     right_center: np.ndarray,
     right_radius: float,
 ) -> float:
-    """Return the characteristic length of the axle and its tyres, in millimetres."""
+    """Return the characteristic length of the axle and its tyres, in millimeters."""
     return max(
         1.0,
         left_radius,

@@ -8,7 +8,7 @@ in utility contexts without introducing circular dependencies.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, NamedTuple, Optional, TypeVar, overload
+from typing import TYPE_CHECKING, NamedTuple, TypeVar, overload
 
 import numpy as np
 from numpy.typing import NDArray
@@ -44,7 +44,7 @@ def compute_2d_vector_vector_intersection(
     line2_end: NDArray[np.float64],
     *,
     segments_only: bool = True,
-) -> Optional[LineIntersectionResult]:
+) -> LineIntersectionResult | None:
     """
     Compute the intersection of two 2D line segments or their infinite extensions.
 
@@ -106,7 +106,7 @@ def compute_2d_vector_vector_intersection(
     # Segment check with endpoint tolerance.
     if segments_only:
         # Tolerance scaled by segment size to catch endpoint hits.
-        tol = EPS_GEOMETRIC / max(max(len1, len2), 1.0)
+        tol = EPS_GEOMETRIC / max(len1, len2, 1.0)
         t1c = min(max(t1, 0.0), 1.0)
         t2c = min(max(t2, 0.0), 1.0)
         if abs(t1 - t1c) > tol or abs(t2 - t2c) > tol:
@@ -220,6 +220,5 @@ def perpendicular_2d(vector: np.ndarray, clockwise: bool = False) -> np.ndarray:
     if clockwise:
         # 90 degrees clockwise: [x, y] -> [y, -x].
         return np.array([vector[1], -vector[0]], dtype=np.float64)
-    else:
-        # 90 degrees anti-clockwise: [x, y] -> [-y, x].
-        return np.array([-vector[1], vector[0]], dtype=np.float64)
+    # 90 degrees anti-clockwise: [x, y] -> [-y, x].
+    return np.array([-vector[1], vector[0]], dtype=np.float64)

@@ -281,7 +281,7 @@ REQUIRED_POINT_IDS = frozenset(
 )
 
 
-def solve_camber_shim_assembly(
+def solve_camber_shim_assembly(  # noqa: PLR0915 - known long; split when next changed
     positions: dict[PointID, Point3],
     shim_config: CamberShimConfig,
     heading_link_inboard: PointID,

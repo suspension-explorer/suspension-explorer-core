@@ -135,7 +135,7 @@ def plot_front_view_comparison(
     )
 
     fig = plt.figure(figsize=(12, 8))
-    ax = cast(Axes3D, fig.add_subplot(111, projection="3d"))
+    ax = cast("Axes3D", fig.add_subplot(111, projection="3d"))
     configure_3d_axis(ax, "front", x_mid, y_mid, z_mid, max_range)
 
     # Helper: draw all elements for a suspension in a single color.

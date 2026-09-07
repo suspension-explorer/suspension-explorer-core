@@ -9,9 +9,10 @@ hooks rather than double-wishbone conventions. This file is the guard
 against reintroducing a concrete corner dependency anywhere in that chain.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar, Sequence
+from typing import ClassVar, override
 
 import pytest
 
@@ -91,6 +92,7 @@ class TrailingArmCorner(CornerSuspension):
         PointID.WHEEL_CONTACT_CENTRE,
     )
 
+    @override
     def initial_state(self) -> SuspensionState:
         if self._initial_state is None:
             self._initial_state = SuspensionState(
@@ -99,9 +101,11 @@ class TrailingArmCorner(CornerSuspension):
             )
         return self._initial_state
 
+    @override
     def free_points(self) -> Sequence[PointID]:
         return self.FREE_POINTS
 
+    @override
     def constraints(self) -> list[Constraint]:
         positions = self.initial_state().positions
 
@@ -124,15 +128,19 @@ class TrailingArmCorner(CornerSuspension):
         constraints.append(distance(KNUCKLE, PointID.WHEEL_CONTACT_CENTRE))
         return constraints
 
+    @override
     def derived_spec(self) -> DerivedPointsSpec:
         return DerivedPointsSpec({}, {})
 
+    @override
     def compute_side_view_instant_center(self, state: SuspensionState) -> None:
         return None
 
+    @override
     def compute_front_view_instant_center(self, state: SuspensionState) -> None:
         return None
 
+    @override
     def elements(self) -> tuple[SuspensionElement, ...]:
         return (
             RigidLinkElement(
@@ -143,17 +151,21 @@ class TrailingArmCorner(CornerSuspension):
             ),
         )
 
+    @override
     def wheel_axis_points(self) -> tuple[PointID, PointID]:
         # Not the double-wishbone convention: metrics must honor this or
         # fail on the missing AXLE_INBOARD/AXLE_OUTBOARD points.
         return (KNUCKLE, PointID.WHEEL_CENTER)
 
+    @override
     def steering_axis_points(self) -> tuple[PointID, PointID]:
         return (KNUCKLE, CHASSIS_FRONT)
 
+    @override
     def rack_attachment_point(self) -> PointID | None:
         return None
 
+    @override
     def topology_diagnostics(
         self,
         states: list[SuspensionState],
@@ -173,6 +185,7 @@ class TrailingArmCorner(CornerSuspension):
 class SteeredTrailingArmCorner(TrailingArmCorner):
     """Stub corner that claims a rack attachment for mixed-steering tests."""
 
+    @override
     def rack_attachment_point(self) -> PointID | None:
         return PointID.TRACKROD_INBOARD
 
