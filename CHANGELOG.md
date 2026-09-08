@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Added a versioned capability manifest API and `just manifest` generation flow
+  for architecture options, exact valid mechanism combinations, metric metadata,
+  and export-point sets. Generation uses production validators and declarations
+  with packaged reference geometry, without a sweep or CLI extras.
+- Added JSON Schema output, coverage checks, and a CI artifact generated from an
+  installed core wheel for independent website ingestion.
+
 ## [0.8.1] - 2026-09-07
 
 ### Changed

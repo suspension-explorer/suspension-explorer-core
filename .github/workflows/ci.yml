@@ -21,6 +21,24 @@ jobs:
       - run: just install-core-ci
       - run: just test-core
 
+  capability-manifest:
+    name: Capability manifest (installed wheel)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv build --wheel
+      - run: uv venv /tmp/manifest-env
+      - run: uv pip install --python /tmp/manifest-env/bin/python dist/*.whl
+      - name: Generate outside the source checkout
+        run: |
+          cd /tmp
+          /tmp/manifest-env/bin/python -m kinematics.core.capabilities --out "$GITHUB_WORKSPACE/dist/capabilities.json" --schema-out "$GITHUB_WORKSPACE/dist/capabilities.json.schema.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-capabilities
+          path: dist/capabilities*.json
+
   format:
     name: Format
     runs-on: ubuntu-latest

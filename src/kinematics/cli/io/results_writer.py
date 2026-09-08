@@ -22,6 +22,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from kinematics.core.export import StandardColumn
 from kinematics.core.metrics.registry import MetricSpec
 from kinematics.core.solver import SolverInfo
 
@@ -38,17 +39,6 @@ class MetadataKey(Enum):
     GEOMETRY_HASH = "geometry_hash"
     SWEEP_HASH = "sweep_hash"
     COLUMN_UNITS = "column_units"
-
-
-class StandardColumn(Enum):
-    """
-    Standard column names in result files.
-    """
-
-    STEP_INDEX = "step_index"
-    SOLVER_CONVERGED = "solver_converged"
-    SOLVER_NFEV = "solver_nfev"
-    SOLVER_MAX_RESIDUAL = "solver_max_residual"
 
 
 class SupportedFormat(Enum):
