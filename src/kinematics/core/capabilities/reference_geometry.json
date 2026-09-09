@@ -1,0 +1,472 @@
+{
+  "double_wishbone": {
+    "hardpoints": {
+      "lower_wishbone_inboard_front": {
+        "x": 250,
+        "y": 400,
+        "z": 200
+      },
+      "lower_wishbone_inboard_rear": {
+        "x": -250,
+        "y": 450,
+        "z": 200
+      },
+      "lower_wishbone_outboard": {
+        "x": 0,
+        "y": 900,
+        "z": 200
+      },
+      "upper_wishbone_inboard_front": {
+        "x": 225,
+        "y": 350,
+        "z": 500
+      },
+      "upper_wishbone_inboard_rear": {
+        "x": -275,
+        "y": 350,
+        "z": 500
+      },
+      "upper_wishbone_outboard": {
+        "x": -25,
+        "y": 750,
+        "z": 500
+      },
+      "trackrod_inboard": {
+        "x": 50,
+        "y": 200,
+        "z": 250
+      },
+      "trackrod_outboard": {
+        "x": 150,
+        "y": 800,
+        "z": 275
+      },
+      "axle_inboard": {
+        "x": -20,
+        "y": 800,
+        "z": 308.426
+      },
+      "axle_outboard": {
+        "x": -20,
+        "y": 950,
+        "z": 313.426
+      },
+      "pushrod_outboard": {
+        "x": 0,
+        "y": 870,
+        "z": 240
+      },
+      "pushrod_inboard": {
+        "x": 0,
+        "y": 340,
+        "z": 500
+      },
+      "rocker_axis_a": {
+        "x": 100,
+        "y": 340,
+        "z": 450
+      },
+      "rocker_axis_b": {
+        "x": -100,
+        "y": 340,
+        "z": 450
+      },
+      "strut_bottom": {
+        "x": 0,
+        "y": 300,
+        "z": 470
+      },
+      "strut_top": {
+        "x": 0,
+        "y": 150,
+        "z": 500
+      },
+      "damper_chassis": [
+        0,
+        300,
+        300
+      ],
+      "damper_rocker": [
+        0,
+        300,
+        470
+      ],
+      "heave_link_rocker": [
+        0,
+        280,
+        490
+      ]
+    },
+    "config": {
+      "steering": {
+        "type": "rack"
+      },
+      "wheel": {
+        "offset": 0,
+        "tire": {
+          "aspect_ratio": 0.55,
+          "section_width": 270,
+          "rim_diameter": 13
+        }
+      },
+      "cg_position": {
+        "x": 1250,
+        "y": 0,
+        "z": 450
+      },
+      "wheelbase": 2500.0
+    }
+  },
+  "macpherson": {
+    "hardpoints": {
+      "lower_wishbone_inboard_front": {
+        "x": 250,
+        "y": 400,
+        "z": 200
+      },
+      "lower_wishbone_inboard_rear": {
+        "x": -250,
+        "y": 450,
+        "z": 200
+      },
+      "lower_wishbone_outboard": {
+        "x": 0,
+        "y": 900,
+        "z": 200
+      },
+      "strut_top": {
+        "x": -40,
+        "y": 700,
+        "z": 850
+      },
+      "strut_bottom": {
+        "x": -14,
+        "y": 830,
+        "z": 427.5
+      },
+      "trackrod_inboard": {
+        "x": 50,
+        "y": 200,
+        "z": 250
+      },
+      "trackrod_outboard": {
+        "x": 150,
+        "y": 800,
+        "z": 275
+      },
+      "axle_inboard": {
+        "x": -20,
+        "y": 800,
+        "z": 308.426
+      },
+      "axle_outboard": {
+        "x": -20,
+        "y": 950,
+        "z": 313.426
+      }
+    },
+    "config": {
+      "steering": {
+        "type": "rack"
+      },
+      "wheel": {
+        "offset": 0,
+        "tire": {
+          "aspect_ratio": 0.55,
+          "section_width": 270,
+          "rim_diameter": 13
+        }
+      },
+      "cg_position": {
+        "x": 1250,
+        "y": 0,
+        "z": 450
+      },
+      "wheelbase": 2500.0
+    }
+  },
+  "multi_link": {
+    "hardpoints": {
+      "upper_front_link_inboard": {
+        "x": 110,
+        "y": 468.5,
+        "z": 460
+      },
+      "upper_front_link_outboard": {
+        "x": 8.5,
+        "y": 729.5,
+        "z": 451.5
+      },
+      "upper_rear_link_inboard": {
+        "x": -146,
+        "y": 465,
+        "z": 439.5
+      },
+      "upper_rear_link_outboard": {
+        "x": -31.5,
+        "y": 726,
+        "z": 448.5
+      },
+      "lower_front_link_inboard": {
+        "x": 232,
+        "y": 467.5,
+        "z": 178.5
+      },
+      "lower_front_link_outboard": {
+        "x": 39.5,
+        "y": 782.5,
+        "z": 197
+      },
+      "lower_rear_link_inboard": {
+        "x": -56,
+        "y": 439,
+        "z": 204
+      },
+      "lower_rear_link_outboard": {
+        "x": 1,
+        "y": 789.5,
+        "z": 200.5
+      },
+      "trackrod_inboard": {
+        "x": -137.5,
+        "y": 502.5,
+        "z": 199
+      },
+      "trackrod_outboard": {
+        "x": -85.5,
+        "y": 816,
+        "z": 195
+      },
+      "axle_inboard": {
+        "x": 0,
+        "y": 725,
+        "z": 316
+      },
+      "axle_outboard": {
+        "x": 0,
+        "y": 875,
+        "z": 316
+      },
+      "strut_top": {
+        "x": 0,
+        "y": 150,
+        "z": 500
+      },
+      "strut_bottom": {
+        "x": 0,
+        "y": 300,
+        "z": 470
+      },
+      "pushrod_outboard": {
+        "x": 0,
+        "y": 870,
+        "z": 240
+      },
+      "pushrod_inboard": {
+        "x": 0,
+        "y": 340,
+        "z": 500
+      },
+      "rocker_axis_a": {
+        "x": 100,
+        "y": 340,
+        "z": 450
+      },
+      "rocker_axis_b": {
+        "x": -100,
+        "y": 340,
+        "z": 450
+      },
+      "damper_chassis": [
+        0,
+        300,
+        300
+      ],
+      "damper_rocker": [
+        0,
+        300,
+        470
+      ],
+      "heave_link_rocker": [
+        0,
+        280,
+        490
+      ]
+    },
+    "config": {
+      "steering": {
+        "type": "rack"
+      },
+      "wheel": {
+        "offset": 0,
+        "tire": {
+          "aspect_ratio": 0.55,
+          "section_width": 205,
+          "rim_diameter": 16
+        }
+      },
+      "cg_position": {
+        "x": 1080,
+        "y": 0,
+        "z": 520
+      },
+      "wheelbase": 2700.0
+    }
+  },
+  "trailing_arm": {
+    "hardpoints": {
+      "trailing_arm_pivot_a": {
+        "x": 1000,
+        "y": 500,
+        "z": 300
+      },
+      "trailing_arm_pivot_b": {
+        "x": 900,
+        "y": 700,
+        "z": 300
+      },
+      "trailing_arm_outboard": {
+        "x": 500,
+        "y": 850,
+        "z": 250
+      },
+      "axle_inboard": {
+        "x": 500,
+        "y": 800,
+        "z": 350
+      },
+      "axle_outboard": {
+        "x": 500,
+        "y": 1000,
+        "z": 350
+      },
+      "torsion_bar_axis_a": {
+        "x": 1000,
+        "y": 350,
+        "z": 300
+      },
+      "torsion_bar_axis_b": {
+        "x": 1000,
+        "y": 650,
+        "z": 300
+      },
+      "strut_top": {
+        "x": 750,
+        "y": 650,
+        "z": 750
+      },
+      "strut_bottom": {
+        "x": 600,
+        "y": 850,
+        "z": 350
+      }
+    },
+    "config": {
+      "steering": {
+        "type": "none"
+      },
+      "wheel": {
+        "offset": 0,
+        "tire": {
+          "aspect_ratio": 0.55,
+          "section_width": 270,
+          "rim_diameter": 13
+        }
+      },
+      "cg_position": {
+        "x": 1250,
+        "y": 0,
+        "z": 450
+      },
+      "wheelbase": 2500.0,
+      "axle_position": "rear"
+    }
+  },
+  "u_bar": {
+    "hardpoints": {
+      "pushrod_outboard": {
+        "x": 0,
+        "y": 870,
+        "z": 240
+      },
+      "pushrod_inboard": {
+        "x": 0,
+        "y": 430,
+        "z": 480
+      },
+      "rocker_axis_a": {
+        "x": 100,
+        "y": 340,
+        "z": 450
+      },
+      "rocker_axis_b": {
+        "x": -100,
+        "y": 340,
+        "z": 450
+      },
+      "droplink_rocker": {
+        "x": 0,
+        "y": 250,
+        "z": 450
+      },
+      "droplink_u_bar": {
+        "x": 80,
+        "y": 250,
+        "z": 300
+      }
+    },
+    "center": {
+      "arb_u_bar_axis_a": {
+        "x": 0,
+        "y": 250,
+        "z": 300
+      },
+      "arb_u_bar_axis_b": {
+        "x": 0,
+        "y": -250,
+        "z": 300
+      }
+    }
+  },
+  "t_bar": {
+    "hardpoints": {
+      "pushrod_outboard": {
+        "x": 0,
+        "y": 870,
+        "z": 240
+      },
+      "pushrod_inboard": {
+        "x": 100,
+        "y": 430,
+        "z": 480
+      },
+      "rocker_axis_a": {
+        "x": 0,
+        "y": 250,
+        "z": 400
+      },
+      "rocker_axis_b": {
+        "x": 0,
+        "y": 300,
+        "z": 500
+      },
+      "droplink_rocker": {
+        "x": 60,
+        "y": 250,
+        "z": 450
+      },
+      "droplink_t_bar": {
+        "x": 20,
+        "y": 220,
+        "z": 430
+      }
+    },
+    "center": {
+      "arb_t_bar_pivot": {
+        "x": 0,
+        "y": 0,
+        "z": 250
+      }
+    }
+  }
+}

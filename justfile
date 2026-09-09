@@ -4,6 +4,10 @@ setup:
     uv sync --all-extras --dev
     uv pip install -e .
 
+# Export the website/API capability contract without CLI extras or a solve.
+manifest out="dist/capabilities.json":
+    uv run python -m kinematics.core.capabilities --out "{{out}}" --schema-out "{{out}}.schema.json"
+
 # Install dependencies.
 install:
     uv sync --all-extras --dev

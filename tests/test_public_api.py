@@ -10,6 +10,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 CORE_PACKAGE = PROJECT_ROOT / "src" / "kinematics" / "core"
 CLI_ONLY_DEPENDENCIES = ("matplotlib", "pyarrow", "typer", "yaml")
 PUBLIC_CORE_MODULES = {
+    "kinematics.core.capabilities",
     "kinematics.core.assembly",
     "kinematics.core.coordinates",
     "kinematics.core.elements",

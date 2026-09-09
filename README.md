@@ -615,6 +615,58 @@ already-built corners and the optional shared anti-roll and heave mechanisms;
 new locating architectures belong in `suspensions/corner/`, not in a new axle
 class.
 
+## Capability manifest
+
+Generate the versioned website/API reference contract with core dependencies only:
+
+```bash
+just manifest
+# Write to a selected path:
+just manifest /tmp/capabilities.json
+# From an installed package, including outside a repository checkout:
+python -m kinematics.core.capabilities --out capabilities.json --schema-out capabilities.schema.json
+```
+
+The default outputs are `dist/capabilities.json` and
+`dist/capabilities.json.schema.json`. CI also publishes these files in the
+`core-capabilities` artifact after generating them from an installed wheel.
+The Python API is `kinematics.core.capabilities.create_manifest()`.
+
+The manifest contains the package version, registered architectures and scopes,
+supported setup shims, all valid combinations of finite mechanism selectors,
+canonical metric metadata, per-configuration metric and output-point sets, and
+flat-export naming conventions. `null` means an architecture does not expose
+that selector; `"none"` is an explicit mechanism choice. Metric units preserve
+derivative operands, such as `mm/mm` or `deg/mm`.
+
+Generation enumerates the production selector enums and checks combinations with
+the registered geometry schemas and actuation builder. It instantiates accepted
+combinations with packaged reference hardpoints and reads the same metric and
+position declarations used by exports. It does not run a sweep, require CLI
+extras, import test fixtures, or infer compatibility by parsing documentation.
+Reference coordinates provide valid geometry for metadata discovery; they are
+not design recommendations or a guarantee about other numerical hardpoints.
+
+When adding an architecture or mechanism, update its production declarations and,
+where needed, `core/capabilities/reference.py` and `reference_geometry.json`.
+Failure to build an accepted reference combination aborts generation. Coverage
+tests require every registered architecture/scope and every selector enum value
+to be represented, and compare state declarations with actual state outputs.
+
+This is the exhaustive catalogue of built-in metric identities and finite
+mechanism selections. It does not enumerate arbitrary hardpoints, numeric setup
+thicknesses, custom derivatives, or all possible sweep target names. Setup shim
+support is reported separately; pushrod shims require pushrod-rocker actuation.
+Declared metrics can return empty values when a calculation is undefined or
+required physical inputs are absent. The CLI's existing CSV/Parquet format is
+unchanged. Increment `schema_version` for a breaking manifest contract change.
+
+In the website repository, `just reference-ingest /path/to/capabilities.json`
+validates and saves this artifact and generates the reference pages. Use separate
+feature branches in core and website, merge/release core first, then ingest the
+released artifact and merge the website update. The website builds independently
+from its saved manifest.
+
 ## Development
 
 Common commands are:
