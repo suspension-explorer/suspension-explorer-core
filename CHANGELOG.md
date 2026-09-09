@@ -13,6 +13,26 @@ All notable changes to this project will be documented in this file.
 - Added JSON Schema output, coverage checks, and a CI artifact generated from an
   installed core wheel for independent website ingestion.
 
+### Breaking changes
+
+- Renamed the public `centre` and `catalogue` identifiers to their American
+  spellings, completing the spelling work that v0.8.1 deliberately stopped short
+  of. `PointID.WHEEL_CONTACT_CENTRE` becomes `PointID.WHEEL_CONTACT_CENTER`,
+  `get_wheel_contact_centre` becomes `get_wheel_contact_center`, and
+  `suspension_hold_catalogue` becomes `suspension_hold_catalog`. There are no
+  legacy aliases.
+- Export column names follow the rename. `wheel_contact_centre_x/y/z` become
+  `wheel_contact_center_x/y/z`, and `wheel_contact_centre_z`,
+  `wheel_contact_centre_road_distance_mm`, and `wheel_contact_centres_on_road`
+  take the matching `center` spellings. Stored sweep output written by an
+  earlier version must be regenerated to load.
+- Geometry and sweep YAML that names these points must use the new spellings.
+
+### Changed
+
+- Removed the codespell exemptions for `centre` and `catalogue`, so American
+  spelling is now enforced across identifiers as well as prose.
+
 ## [0.8.1] - 2026-09-07
 
 ### Changed
