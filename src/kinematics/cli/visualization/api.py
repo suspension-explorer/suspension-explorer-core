@@ -74,20 +74,20 @@ class GeometryVisualizationResult:
     """
     Contact-plane check returned after rendering a static geometry.
 
-    ``wheel_contact_centre_z`` remains available as the raw chassis-coordinate
+    ``wheel_contact_center_z`` remains available as the raw chassis-coordinate
     diagnostic.  It is not used to decide whether a point is on the road: the
     chassis origin may be vertically translated or rolled relative to the
     reconstructed road plane.
     """
 
     output_path: Path
-    wheel_contact_centre_z: tuple[float, ...]
-    wheel_contact_centre_road_distance_mm: tuple[float, ...]
-    wheel_contact_centres_on_road: bool
+    wheel_contact_center_z: tuple[float, ...]
+    wheel_contact_center_road_distance_mm: tuple[float, ...]
+    wheel_contact_centers_on_road: bool
 
 
-def _road_plane_for_wheel_contact_centres(
-    contact_centres: tuple[Point3, ...],
+def _road_plane_for_wheel_contact_centers(
+    contact_centers: tuple[Point3, ...],
 ) -> RoadPlane:
     """Reconstruct the supported road datum from rendered contact points.
 
@@ -96,12 +96,12 @@ def _road_plane_for_wheel_contact_centres(
     longitudinally-extruded plane as the axle contact closure.  The renderer
     has no supported topology with any other wheel count.
     """
-    if len(contact_centres) == 1:
-        return RoadPlane.horizontal_at(contact_centres[0])
-    if len(contact_centres) == 2:
-        return RoadPlane.from_axle_contact_centres(*contact_centres)
+    if len(contact_centers) == 1:
+        return RoadPlane.horizontal_at(contact_centers[0])
+    if len(contact_centers) == 2:
+        return RoadPlane.from_axle_contact_centers(*contact_centers)
     raise ValueError(
-        "Suspension assembly must expose one corner or two axle wheel contact centres"
+        "Suspension assembly must expose one corner or two axle wheel contact centers"
     )
 
 
@@ -164,18 +164,18 @@ def visualize_geometry(
     state = suspension.initial_state()
     render_model = build_render_model(suspension)
     positions = render_model.positions(state)
-    contact_centres = tuple(
-        Point3(positions[references.wheel_contact_centre])
+    contact_centers = tuple(
+        Point3(positions[references.wheel_contact_center])
         for references in render_model.visualizer.wheel_references
     )
-    if not contact_centres:
-        raise ValueError("Suspension assembly has no wheel contact centres")
-    road = _road_plane_for_wheel_contact_centres(contact_centres)
-    wheel_contact_centre_z = tuple(
-        float(contact_centre[2]) for contact_centre in contact_centres
+    if not contact_centers:
+        raise ValueError("Suspension assembly has no wheel contact centers")
+    road = _road_plane_for_wheel_contact_centers(contact_centers)
+    wheel_contact_center_z = tuple(
+        float(contact_center[2]) for contact_center in contact_centers
     )
-    wheel_contact_centre_road_distance_mm = tuple(
-        road.signed_distance(contact_centre) for contact_centre in contact_centres
+    wheel_contact_center_road_distance_mm = tuple(
+        road.signed_distance(contact_center) for contact_center in contact_centers
     )
 
     # Create the four-view plot.
@@ -189,9 +189,9 @@ def visualize_geometry(
 
     return GeometryVisualizationResult(
         output_path=output_path,
-        wheel_contact_centre_z=wheel_contact_centre_z,
-        wheel_contact_centre_road_distance_mm=wheel_contact_centre_road_distance_mm,
-        wheel_contact_centres_on_road=bool(
-            np.all(np.isclose(wheel_contact_centre_road_distance_mm, 0.0, atol=1e-2))
+        wheel_contact_center_z=wheel_contact_center_z,
+        wheel_contact_center_road_distance_mm=wheel_contact_center_road_distance_mm,
+        wheel_contact_centers_on_road=bool(
+            np.all(np.isclose(wheel_contact_center_road_distance_mm, 0.0, atol=1e-2))
         ),
     )

@@ -25,7 +25,7 @@ from sympy.printing.pycode import pycode
 # like x1, x2, …
 CSE_SYMBOLS = sp.symbols(" ".join(f"t{i}" for i in range(200)))
 
-# Softnorm regularisation: the residual uses sqrt(s + ε²) - ε, but the
+# Softnorm regularization: the residual uses sqrt(s + ε²) - ε, but the
 # bias correction is constant and vanishes under differentiation.  The
 # symbolic expressions here use sqrt(s + ε²) only — the derivatives are
 # the same either way.

@@ -1,4 +1,4 @@
-"""Wheel contact centres from flat-ground corners and a coupled axle solve.
+"""Wheel contact centers from flat-ground corners and a coupled axle solve.
 
 Why this module exists
 ======================
@@ -11,17 +11,17 @@ the road must be *inferred* from wheel tangency rather than authored.
 
 For a standalone corner there is not enough information to orient a road: the
 corner assumes a flat, horizontal road (``+Z`` normal) and its road contact is
-simply the lowest point of the wheel disc, :func:`get_wheel_contact_centre`.
+simply the lowest point of the wheel disc, :func:`get_wheel_contact_center`.
 
 For a two-corner axle the assumption of one horizontal plane per corner breaks
 down: on an asymmetric state (roll, one-wheel bump), each corner's "flat road"
 sits at a different height, and any consumer comparing the two sides — roll
-centre construction, ride height, CG height — silently mixes two different
+center construction, ride height, CG height — silently mixes two different
 ground references. The fix is one shared ground plane that is *simultaneously
 tangent to both wheel discs*. That is what
-:func:`solve_axle_wheel_contact_centres` computes.  Each returned point is the
+:func:`solve_axle_wheel_contact_centers` computes.  Each returned point is the
 nominal-radius rigid-disc approximation of the ISO 8855 §4.1.4 wheel contact
-centre; it is not a deformable-tyre contact patch.
+center; it is not a deformable-tire contact patch.
 
 The mathematics
 ===============
@@ -36,13 +36,13 @@ The shared plane is parameterized by a single scalar, the ground-normal angle
     longitudinal gradient is assumed throughout**. Whole-vehicle pitch is not
     observable from one axle and is not inferred elsewhere.
 
-For one wheel with centre ``C``, unit spin axis ``a``, and nominal radius
+For one wheel with center ``C``, unit spin axis ``a``, and nominal radius
 ``R``, the point of the wheel plane that touches a plane with unit normal
 ``n`` is the disc's support point in the ``-n`` direction, restricted to the
 wheel plane::
 
     q = n - (n . a) a          # road normal projected into the wheel plane
-    P = C - R q / ||q||        # wheel contact centre
+    P = C - R q / ||q||        # wheel contact center
 
 Both discs touch one plane when their support points have equal height along
 the normal, giving the scalar residual whose root is solved here::
@@ -64,7 +64,7 @@ Root selection and the seed
 axles). To keep a sweep on one physical branch, callers thread the previously
 accepted root through the ``seed`` parameter; the solver converges to, or
 selects, the root nearest that seed. With no seed, the estimate from the two
-independent flat-ground contact centres is used. This threading is *explicit and
+independent flat-ground contact centers is used. This threading is *explicit and
 stateless*: the function has no memory, and identical inputs plus an identical
 seed always reproduce the same root. (An earlier design kept a hidden
 continuation cache inside the derived-point graph; the post-solve closure
@@ -74,9 +74,9 @@ How the results are used
 ========================
 
 :meth:`AxleSuspension.apply_ground_closure` calls
-:func:`solve_axle_wheel_contact_centres` once per accepted solver state — a
+:func:`solve_axle_wheel_contact_centers` once per accepted solver state — a
 post-solve closure, not a solver constraint — and writes the two contact
-centres into the state under ``WHEEL_CONTACT_CENTRE``.
+centers into the state under ``WHEEL_CONTACT_CENTER``.
 :class:`kinematics.core.road.RoadPlane` reconstructs the same longitudinally
 extruded plane from those independent outputs. Metrics consume it directly in
 chassis coordinates, while :mod:`kinematics.core.pose` uses it separately to
@@ -137,11 +137,11 @@ def _as_ground_vector(position: Any) -> np.ndarray | DualVec3:
     """Return a raw or dual vector from a geometry position value."""
     if isinstance(position, DualVec3):
         if not np.isfinite(position.val).all() or not np.isfinite(position.deriv).all():
-            raise ValueError("Wheel contact centre requires finite point inputs")
+            raise ValueError("Wheel contact center requires finite point inputs")
         return position
     vector = position.data
     if not np.isfinite(vector).all():
-        raise ValueError("Wheel contact centre requires finite point inputs")
+        raise ValueError("Wheel contact center requires finite point inputs")
     return vector
 
 
@@ -160,7 +160,7 @@ def _ensure_finite_ground_vector(
         else np.isfinite(vector).all()
     )
     if not finite:
-        raise ValueError(f"Wheel contact centre produced non-finite {description}")
+        raise ValueError(f"Wheel contact center produced non-finite {description}")
     return vector
 
 
@@ -209,7 +209,7 @@ def _wheel_plane_support_point(
 ) -> np.ndarray | DualVec3:
     """Return the wheel-plane point tangent to a ground plane with ``ground_normal``."""
     if not isfinite(radius) or radius <= EPS_GEOMETRIC:
-        raise ValueError("Wheel contact centre requires a finite positive radius")
+        raise ValueError("Wheel contact center requires a finite positive radius")
     # The dot overload is dual-aware, but ty cannot correlate its scalar result
     # with the dual/raw vector union carried by this generic helper.
     projected_normal = ground_normal - dot(ground_normal, spin_axis) * spin_axis  # ty: ignore[unsupported-operator]
@@ -254,7 +254,7 @@ def _flat_ground_normal_angle_estimate(
     right_axis: np.ndarray,
     right_radius: float,
 ) -> float:
-    """Estimate the ground-normal angle from standalone contact centres."""
+    """Estimate the ground-normal angle from standalone contact centers."""
     flat_normal = np.array((0.0, 0.0, 1.0))
     left_support = _wheel_plane_support_point(
         left_center, left_axis, left_radius, flat_normal
@@ -265,7 +265,7 @@ def _flat_ground_normal_angle_estimate(
     lateral_separation = float(left_support[Axis.Y] - right_support[Axis.Y])
     vertical_separation = float(left_support[Axis.Z] - right_support[Axis.Z])
     if abs(lateral_separation) <= EPS_GEOMETRIC:
-        raise ValueError("Cannot determine axle contact centres with collapsed track")
+        raise ValueError("Cannot determine axle contact centers with collapsed track")
     if lateral_separation < 0.0:
         # Orient the separation from vehicle right to left. Without this,
         # laterally crossed supports give an estimate near +/-pi, which the
@@ -275,26 +275,26 @@ def _flat_ground_normal_angle_estimate(
     return _clamp_ground_normal_angle(-atan2(vertical_separation, lateral_separation))
 
 
-def seed_from_contact_centres(
-    left_contact_centre: np.ndarray | DualVec3 | Point3,
-    right_contact_centre: np.ndarray | DualVec3 | Point3,
+def seed_from_contact_centers(
+    left_contact_center: np.ndarray | DualVec3 | Point3,
+    right_contact_center: np.ndarray | DualVec3 | Point3,
 ) -> float | None:
-    """Recover the ground-normal angle implied by two stored contact centres.
+    """Recover the ground-normal angle implied by two stored contact centers.
 
-    Accepted states carry the previously solved contact centres, so the angle
+    Accepted states carry the previously solved contact centers, so the angle
     of the line through them is an exact-root seed for the next solve — this
     is how branch continuity survives without any hidden solver state.
     Returns ``None`` when the stored points cannot orient a line.
     """
     left = _primal_vector(
-        left_contact_centre.data
-        if isinstance(left_contact_centre, Point3)
-        else left_contact_centre
+        left_contact_center.data
+        if isinstance(left_contact_center, Point3)
+        else left_contact_center
     )
     right = _primal_vector(
-        right_contact_centre.data
-        if isinstance(right_contact_centre, Point3)
-        else right_contact_centre
+        right_contact_center.data
+        if isinstance(right_contact_center, Point3)
+        else right_contact_center
     )
     if not (np.isfinite(left).all() and np.isfinite(right).all()):
         return None
@@ -314,7 +314,7 @@ def _geometry_scale(
     right_center: np.ndarray,
     right_radius: float,
 ) -> float:
-    """Return the characteristic length of the axle and its tyres, in millimeters."""
+    """Return the characteristic length of the axle and its tires, in millimeters."""
     return max(
         1.0,
         left_radius,
@@ -329,7 +329,7 @@ def _root_derivative_threshold(
     right_center: np.ndarray,
     right_radius: float,
 ) -> float:
-    """Scale the uniqueness guard to the physical axle and tyre dimensions."""
+    """Scale the uniqueness guard to the physical axle and tire dimensions."""
     return EPS_GEOMETRIC * _geometry_scale(
         left_center, left_radius, right_center, right_radius
     )
@@ -341,7 +341,7 @@ def _root_tolerance_mm(
     right_center: np.ndarray,
     right_radius: float,
 ) -> float:
-    """Scale the residual tolerance to the physical axle and tyre dimensions."""
+    """Scale the residual tolerance to the physical axle and tire dimensions."""
     return _ROOT_RELATIVE_TOLERANCE * _geometry_scale(
         left_center, left_radius, right_center, right_radius
     )
@@ -386,7 +386,7 @@ def _ground_residual_and_slope(
     Seeding the angle with a unit dual part yields ``d(residual)/d(angle)``
     analytically from a single evaluation.  Because no finite-difference step is
     taken, the slope is defined wherever the residual is -- including on the
-    clamped domain boundary, which a centred difference could not straddle.
+    clamped domain boundary, which a centered difference could not straddle.
     """
     dual = _shared_plane_residual(
         left_center,
@@ -399,9 +399,9 @@ def _ground_residual_and_slope(
     )
     assert isinstance(dual, DualScalar)
     if not isfinite(dual.val):
-        raise ValueError("Shared wheel contact centre has non-finite residual")
+        raise ValueError("Shared wheel contact center has non-finite residual")
     if not isfinite(dual.deriv):
-        raise ValueError("Shared wheel contact centre has non-finite angle slope")
+        raise ValueError("Shared wheel contact center has non-finite angle slope")
     return dual.val, dual.deriv
 
 
@@ -414,9 +414,9 @@ def _validate_ground_root(
     """Require a finite, satisfied, locally unique shared-plane root."""
     value, slope = residual_and_slope(normal_angle)
     if abs(value) > tolerance:
-        raise ValueError("Shared wheel contact centre does not satisfy its plane")
+        raise ValueError("Shared wheel contact center does not satisfy its plane")
     if abs(slope) <= derivative_threshold:
-        raise ValueError("Shared wheel contact centre is locally non-unique")
+        raise ValueError("Shared wheel contact center is locally non-unique")
     return normal_angle
 
 
@@ -450,7 +450,7 @@ def _search_ground_normal_angle(
         )
         assert not isinstance(value, DualScalar)
         if not isfinite(value):
-            raise ValueError("Shared wheel contact centre has non-finite residual")
+            raise ValueError("Shared wheel contact center has non-finite residual")
         return value
 
     def residual_and_slope(normal_angle: float) -> tuple[float, float]:
@@ -516,7 +516,7 @@ def _search_ground_normal_angle(
                 )
             )
     if not roots:
-        raise ValueError("Unable to find shared wheel contact centres")
+        raise ValueError("Unable to find shared wheel contact centers")
     return _validate_ground_root(
         residual_and_slope,
         min(roots, key=lambda root: abs(root - selection_seed)),
@@ -577,14 +577,14 @@ def _shared_ground_normal_angle(
         primal_left_center, left_radius, primal_right_center, right_radius
     )
     if abs(angle_slope) <= derivative_threshold:
-        raise ValueError("Shared wheel contact centre is locally singular")
+        raise ValueError("Shared wheel contact center is locally singular")
     return DualScalar(normal_angle, -input_residual.deriv / angle_slope)
 
 
-def get_wheel_contact_centre(
+def get_wheel_contact_center(
     positions: Mapping[PointKey, Any], tire_radius: float
 ) -> Point3 | DualVec3:
-    """Return a nominal-radius rigid-disc contact centre on flat +Z ground."""
+    """Return a nominal-radius rigid-disc contact center on flat +Z ground."""
     wheel_center = _as_ground_vector(positions[PointID.WHEEL_CENTER])
     spin_axis = _wheel_spin_axis(positions, PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD)
     return _make_position(
@@ -595,8 +595,8 @@ def get_wheel_contact_centre(
 
 
 @dataclass(frozen=True)
-class AxleWheelContactCentres:
-    """One coupled solution: both wheel contact centres and the solved angle.
+class AxleWheelContactCenters:
+    """One coupled solution: both wheel contact centers and the solved angle.
 
     ``normal_angle`` is the primal ground-normal angle in radians; it is the
     seed to pass to the next state's solve for branch continuity.
@@ -607,7 +607,7 @@ class AxleWheelContactCentres:
     normal_angle: float
 
 
-def solve_axle_wheel_contact_centres(
+def solve_axle_wheel_contact_centers(
     positions: Mapping[_K, Any],
     *,
     left_center: _K,
@@ -619,8 +619,8 @@ def solve_axle_wheel_contact_centres(
     right_axis_outboard: _K,
     right_radius: float,
     seed: float | None = None,
-) -> AxleWheelContactCentres:
-    """Solve both contact centres on the axle's common zero-grade ground plane.
+) -> AxleWheelContactCenters:
+    """Solve both contact centers on the axle's common zero-grade ground plane.
 
     Stateless: the only cross-state coupling is the explicit ``seed``. The
     single scalar solve serves both sides, so the two returned points lie on
@@ -649,7 +649,7 @@ def solve_axle_wheel_contact_centres(
     primal_angle = (
         normal_angle.val if isinstance(normal_angle, DualScalar) else normal_angle
     )
-    return AxleWheelContactCentres(
+    return AxleWheelContactCenters(
         left=_make_position(left_support),
         right=_make_position(right_support),
         normal_angle=float(primal_angle),

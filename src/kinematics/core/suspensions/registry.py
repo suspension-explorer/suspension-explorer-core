@@ -1,4 +1,4 @@
-"""Single catalogue of supported suspension geometry types."""
+"""Single catalog of supported suspension geometry types."""
 
 from collections.abc import Callable
 from dataclasses import dataclass

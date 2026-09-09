@@ -20,7 +20,7 @@ from kinematics.core.schema.sweep import SweepSpec, build_sweep_config
 from kinematics.core.steering_response import (
     SteeringResponseDefinition,
     SuspensionHoldAvailability,
-    SuspensionHoldCatalogue,
+    SuspensionHoldCatalog,
     SuspensionHoldOption,
     materialize_steering_response_targets,
 )
@@ -38,33 +38,33 @@ def _position_snapshot(state):
     return {point: position.data.copy() for point, position in state.positions.items()}
 
 
-def test_double_wishbone_catalogue_is_layout_owned_and_warns_for_damper_hold() -> None:
+def test_double_wishbone_catalog_is_layout_owned_and_warns_for_damper_hold() -> None:
     without_damper = load_geometry(DATA_DIR / "geometry.yaml")
     with_damper = load_geometry(DATA_DIR / "corner_rocker_damper_geometry.yaml")
     assert isinstance(without_damper, DoubleWishboneSuspension)
     assert isinstance(with_damper, DoubleWishboneSuspension)
 
-    catalogue = without_damper.suspension_hold_catalogue()
-    assert catalogue is not None
-    assert catalogue.default_option_id == "lower_wishbone_angle"
-    assert [option.id for option in catalogue.options] == [
+    catalog = without_damper.suspension_hold_catalog()
+    assert catalog is not None
+    assert catalog.default_option_id == "lower_wishbone_angle"
+    assert [option.id for option in catalog.options] == [
         "lower_wishbone_angle",
         "upper_wishbone_angle",
     ]
-    assert [option.label for option in catalogue.options] == [
+    assert [option.label for option in catalog.options] == [
         "Lower wishbone angle",
         "Upper wishbone angle",
     ]
 
-    damper_catalogue = with_damper.suspension_hold_catalogue()
-    assert damper_catalogue is not None
-    assert damper_catalogue.default_option_id == "lower_wishbone_angle"
-    assert [option.label for option in damper_catalogue.options] == [
+    damper_catalog = with_damper.suspension_hold_catalog()
+    assert damper_catalog is not None
+    assert damper_catalog.default_option_id == "lower_wishbone_angle"
+    assert [option.label for option in damper_catalog.options] == [
         "Lower wishbone angle",
         "Upper wishbone angle",
         "Damper length",
     ]
-    damper = damper_catalogue.option("damper_length")
+    damper = damper_catalog.option("damper_length")
     assert damper.availability is SuspensionHoldAvailability.AVAILABLE_WITH_WARNING
     assert damper.warning is not None
 
@@ -77,9 +77,9 @@ def test_double_wishbone_catalogue_is_layout_owned_and_warns_for_damper_hold() -
 
 def test_arm_angle_coordinate_has_exact_analytical_carried_point_gradient() -> None:
     suspension = load_geometry(DATA_DIR / "geometry.yaml")
-    catalogue = suspension.suspension_hold_catalogue()
-    assert catalogue is not None
-    coordinate = catalogue.option("lower_wishbone_angle").hold.coordinates[0]
+    catalog = suspension.suspension_hold_catalog()
+    assert catalog is not None
+    coordinate = catalog.option("lower_wishbone_angle").hold.coordinates[0]
     assert isinstance(coordinate, ArmAngleCoordinate)
 
     positions = suspension.initial_state().positions
@@ -131,13 +131,13 @@ def test_macpherson_hold_uses_bumped_current_strut_length_without_mutation() -> 
         np.testing.assert_array_equal(position.data, before[point])
 
 
-def test_axle_catalogue_composes_one_semantic_option_into_two_corner_holds() -> None:
+def test_axle_catalog_composes_one_semantic_option_into_two_corner_holds() -> None:
     suspension = load_geometry(DATA_DIR / "macpherson_axle_geometry.yaml")
     assert isinstance(suspension, AxleSuspension)
-    catalogue = suspension.suspension_hold_catalogue()
-    assert catalogue is not None
-    assert catalogue.default_option_id == "strut_length"
-    assert [option.id for option in catalogue.options] == [
+    catalog = suspension.suspension_hold_catalog()
+    assert catalog is not None
+    assert catalog.default_option_id == "strut_length"
+    assert [option.id for option in catalog.options] == [
         "strut_length",
         "lower_arm_angle",
     ]
@@ -180,28 +180,28 @@ def test_axle_catalogue_composes_one_semantic_option_into_two_corner_holds() -> 
         np.testing.assert_array_equal(position.data, before[point])
 
 
-def test_axle_catalogue_rejects_mismatched_corner_option_semantics(
+def test_axle_catalog_rejects_mismatched_corner_option_semantics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     suspension = load_geometry(DATA_DIR / "macpherson_axle_geometry.yaml")
     assert isinstance(suspension, AxleSuspension)
     right = suspension.corners[Side.RIGHT]
-    right_catalogue = right.suspension_hold_catalogue()
-    assert right_catalogue is not None
+    right_catalog = right.suspension_hold_catalog()
+    assert right_catalog is not None
     mismatched_options = tuple(
         replace(option, label="Different physical hold")
-        if option.id == right_catalogue.default_option_id
+        if option.id == right_catalog.default_option_id
         else option
-        for option in right_catalogue.options
+        for option in right_catalog.options
     )
     monkeypatch.setattr(
         right,
-        "suspension_hold_catalogue",
-        lambda: replace(right_catalogue, options=mismatched_options),
+        "suspension_hold_catalog",
+        lambda: replace(right_catalog, options=mismatched_options),
     )
 
     with pytest.raises(ValueError, match="incompatible semantics"):
-        suspension.suspension_hold_catalogue()
+        suspension.suspension_hold_catalog()
 
 
 def test_definition_rejects_duplicate_holds_and_absent_definition_is_unavailable() -> (
@@ -251,12 +251,12 @@ def test_steering_only_option_allows_an_empty_suspension_hold() -> None:
         description="No independent travel coordinates are required.",
         hold=CoordinateHold(),
     )
-    catalogue = SuspensionHoldCatalogue(
+    catalog = SuspensionHoldCatalog(
         default_option_id=option.id,
         options=(option,),
     )
 
-    assert catalogue.option("steering_only").hold.coordinates == ()
+    assert catalog.option("steering_only").hold.coordinates == ()
 
 
 def test_default_option_id_must_refer_to_an_available_peer() -> None:
@@ -276,7 +276,7 @@ def test_default_option_id_must_refer_to_an_available_peer() -> None:
     )
 
     with pytest.raises(ValueError, match="Default suspension-hold option"):
-        SuspensionHoldCatalogue(
+        SuspensionHoldCatalog(
             default_option_id=unavailable.id,
             options=(available, unavailable),
         )

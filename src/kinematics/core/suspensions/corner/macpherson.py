@@ -74,7 +74,7 @@ from kinematics.core.suspensions.corner.toe_link import ToeLink
 from kinematics.core.suspensions.corner.track_rod import TrackRod
 
 if TYPE_CHECKING:
-    from kinematics.core.steering_response import SuspensionHoldCatalogue
+    from kinematics.core.steering_response import SuspensionHoldCatalog
 
 # How far the authored strut clamp may sit off the design steering axis, in
 # millimeters, before the coincident-axis modeling choice is considered
@@ -122,17 +122,17 @@ class MacPhersonSuspension(CornerSuspension):
         PointID.WHEEL_CENTER,
         PointID.WHEEL_INBOARD,
         PointID.WHEEL_OUTBOARD,
-        PointID.WHEEL_CONTACT_CENTRE,
+        PointID.WHEEL_CONTACT_CENTER,
     )
     OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
         *LOCATING_OUTPUT_POINTS,
         *WHEEL_OUTPUT_POINTS,
     )
-    # The contact centre is reported but never driven. On an axle it comes from a
+    # The contact center is reported but never driven. On an axle it comes from a
     # coupled solve across both corners, with a bounded validity domain and
     # non-unique roots; the standalone flat-ground construction is the same
     # quantity, so it is refused as a target at both scopes.
-    OUTPUT_ONLY_POINTS: ClassVar[tuple[PointID, ...]] = (PointID.WHEEL_CONTACT_CENTRE,)
+    OUTPUT_ONLY_POINTS: ClassVar[tuple[PointID, ...]] = (PointID.WHEEL_CONTACT_CENTER,)
 
     # Free points that move during solving. The strut top is a fixed chassis
     # mount and the strut clamp is derived from the lower ball joint and top.
@@ -256,10 +256,10 @@ class MacPhersonSuspension(CornerSuspension):
         return (PointID.STRUT_TOP, PointID.STRUT_BOTTOM)
 
     @override
-    def suspension_hold_catalogue(self) -> SuspensionHoldCatalogue | None:
+    def suspension_hold_catalog(self) -> SuspensionHoldCatalog | None:
         """Declare strut and lower-arm fixed-travel steering definitions."""
         from kinematics.core.steering_response import (
-            SuspensionHoldCatalogue,
+            SuspensionHoldCatalog,
             SuspensionHoldOption,
         )
 
@@ -275,7 +275,7 @@ class MacPhersonSuspension(CornerSuspension):
             hinge_point_b=PointID.LOWER_WISHBONE_INBOARD_REAR,
             carried_point=PointID.LOWER_WISHBONE_OUTBOARD,
         )
-        return SuspensionHoldCatalogue(
+        return SuspensionHoldCatalog(
             default_option_id="strut_length",
             options=(
                 SuspensionHoldOption(
@@ -511,7 +511,7 @@ class MacPhersonSuspension(CornerSuspension):
                 outboard=PointID.WHEEL_OUTBOARD,
                 axle_inboard=PointID.AXLE_INBOARD,
                 axle_outboard=PointID.AXLE_OUTBOARD,
-                wheel_contact_centre=PointID.WHEEL_CONTACT_CENTRE,
+                wheel_contact_center=PointID.WHEEL_CONTACT_CENTER,
             ),
             *self.wheel_heading_link.elements(),
         )

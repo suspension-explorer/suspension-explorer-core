@@ -180,12 +180,12 @@ def test_incomplete_suspension_hold_is_reported_as_rank_deficient(
 def test_redundant_consistent_wishbone_holds_are_accepted() -> None:
     """Two coordinates spanning the same travel mode remain a valid hold."""
     suspension = load_geometry(DATA_DIR / "geometry.yaml")
-    catalogue = suspension.suspension_hold_catalogue()
+    catalog = suspension.suspension_hold_catalog()
     definition = suspension.resolve_suspension_hold()
-    assert catalogue is not None
+    assert catalog is not None
     assert definition is not None
-    lower = catalogue.option("lower_wishbone_angle").hold.coordinates[0]
-    upper = catalogue.option("upper_wishbone_angle").hold.coordinates[0]
+    lower = catalog.option("lower_wishbone_angle").hold.coordinates[0]
+    upper = catalog.option("upper_wishbone_angle").hold.coordinates[0]
     redundant = replace(
         definition,
         hold=CoordinateHold((lower, upper)),
@@ -227,12 +227,12 @@ def test_redundant_consistent_wishbone_holds_are_accepted() -> None:
 def test_conflicting_real_hold_basis_is_rejected_as_inconsistent() -> None:
     """Fixed wishbone travel cannot also fix a steering-driven damper."""
     suspension = load_geometry(DATA_DIR / "corner_rocker_damper_geometry.yaml")
-    catalogue = suspension.suspension_hold_catalogue()
+    catalog = suspension.suspension_hold_catalog()
     definition = suspension.resolve_suspension_hold()
-    assert catalogue is not None
+    assert catalog is not None
     assert definition is not None
-    lower = catalogue.option("lower_wishbone_angle").hold.coordinates[0]
-    damper = catalogue.option("damper_length").hold.coordinates[0]
+    lower = catalog.option("lower_wishbone_angle").hold.coordinates[0]
+    damper = catalog.option("damper_length").hold.coordinates[0]
     state = suspension.initial_state()
 
     canonical = compute_steering_response_tangent(

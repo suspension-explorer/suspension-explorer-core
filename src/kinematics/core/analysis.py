@@ -66,7 +66,7 @@ from kinematics.core.targeting import SweepConfig
 
 if TYPE_CHECKING:
     from kinematics.core.steering_response import (
-        SuspensionHoldCatalogue,
+        SuspensionHoldCatalog,
     )
 
 if TYPE_CHECKING:
@@ -144,8 +144,8 @@ class SuspensionHoldOptionInfo:
 
 
 @dataclass(frozen=True)
-class SuspensionHoldCatalogueInfo:
-    """Renderer-neutral suspension-hold catalogue."""
+class SuspensionHoldCatalogInfo:
+    """Renderer-neutral suspension-hold catalog."""
 
     default_option_id: str
     options: tuple[SuspensionHoldOptionInfo, ...]
@@ -204,7 +204,7 @@ class StaticPose:
     elements: list[NamedElementPath]
     wheel_references: list[WheelReferences]
     drive_coordinates: list[CoordinateInfo]
-    suspension_hold_catalogue: SuspensionHoldCatalogueInfo | None
+    suspension_hold_catalog: SuspensionHoldCatalogInfo | None
 
 
 @dataclass(frozen=True)
@@ -280,14 +280,14 @@ def _steering_response_info(
     )
 
 
-def _suspension_hold_catalogue_info(
-    catalogue: SuspensionHoldCatalogue | None,
-) -> SuspensionHoldCatalogueInfo | None:
+def _suspension_hold_catalog_info(
+    catalog: SuspensionHoldCatalog | None,
+) -> SuspensionHoldCatalogInfo | None:
     """Convert topology capability metadata without adding UI policy."""
-    if catalogue is None:
+    if catalog is None:
         return None
-    return SuspensionHoldCatalogueInfo(
-        default_option_id=catalogue.default_option_id,
+    return SuspensionHoldCatalogInfo(
+        default_option_id=catalog.default_option_id,
         options=tuple(
             SuspensionHoldOptionInfo(
                 id=option.id,
@@ -301,7 +301,7 @@ def _suspension_hold_catalogue_info(
                     for coordinate in option.hold.coordinates
                 ),
             )
-            for option in catalogue.options
+            for option in catalog.options
         ),
     )
 
@@ -460,7 +460,7 @@ def _static_setup_sweep(suspension: Suspension) -> SweepConfig:
 
     Installed mechanism coordinates preserve the authored spring/damper and
     actuator positions while setup link lengths are applied. A bare corner has
-    no installed travel coordinate, so wheel-centre height supplies the same
+    no installed travel coordinate, so wheel-center height supplies the same
     fixed-travel boundary condition used by a conventional setup operation.
     """
     coordinates = list(suspension.drive_coordinates())
@@ -637,7 +637,7 @@ def initial_pose(suspension: Suspension) -> StaticPose:
             _coordinate_info(coordinate)
             for coordinate in suspension.drive_coordinates()
         ],
-        suspension_hold_catalogue=_suspension_hold_catalogue_info(
-            suspension.suspension_hold_catalogue()
+        suspension_hold_catalog=_suspension_hold_catalog_info(
+            suspension.suspension_hold_catalog()
         ),
     )

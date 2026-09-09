@@ -5,9 +5,9 @@ Provides the top-level entry points for computing post-solve kinematic
 metrics. Returns ordered mappings ready for direct export integration.
 
 Solved geometry remains in chassis coordinates. Axle metrics share an
-ISO 8855 style local or equivalent road plane reconstructed from the two tyre
-wheel contact centres; standalone corners use a level local plane through their
-contact centre. Metric evaluation does not use world-space vehicle placement.
+ISO 8855 style local or equivalent road plane reconstructed from the two tire
+wheel contact centers; standalone corners use a level local plane through their
+contact center. Metric evaluation does not use world-space vehicle placement.
 """
 
 from __future__ import annotations
@@ -80,17 +80,17 @@ def compute_metrics_for_axle_state(
 ) -> AxleMetricRows:
     """Compute corner and axle metrics against one axle-local road plane.
 
-    The plane is reconstructed from the two wheel contact centres and expressed
+    The plane is reconstructed from the two wheel contact centers and expressed
     in chassis coordinates. It follows the ISO 8855 local or equivalent
     road-plane concept. Individual metric docstrings state whether they resolve
-    values in chassis, road, or tyre axes. World-space presentation does not
+    values in chassis, road, or tire axes. World-space presentation does not
     participate in metric calculation.
     """
     axle_row: MetricRow = OrderedDict()
     corner_rows: dict[Side, MetricRow] = {}
-    road = RoadPlane.from_axle_contact_centres(
-        state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE)),
-        state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE)),
+    road = RoadPlane.from_axle_contact_centers(
+        state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTER)),
+        state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTER)),
     )
     steering_axes_by_side = _steering_axes_by_side(steering_response_axes)
     for side in (Side.LEFT, Side.RIGHT):
@@ -226,8 +226,8 @@ def compute_metrics_for_state(
     Solved positions and directions remain in chassis coordinates. When
     supplied, ``road`` is the axle's shared ISO-style local road plane,
     expressed in that same basis. A standalone corner instead receives a level
-    road plane through its wheel contact centre. Individual calculations may
-    use chassis, road, or tyre axes as documented, but none uses world space.
+    road plane through its wheel contact center. Individual calculations may
+    use chassis, road, or tire axes as documented, but none uses world space.
 
     Args:
         state: The solved SuspensionState to analyze.
@@ -237,7 +237,7 @@ def compute_metrics_for_state(
             appended only when these are supplied.
         road: Optional shared axle road plane in chassis coordinates.
             Standalone corner callers omit this and use the horizontal plane
-            through their wheel contact centre.
+            through their wheel contact center.
         steering_response_axis: Optional isolated steering-response result.
             A valid result supplies the additive virtual steering metrics;
             an invalid or unavailable result leaves those values undefined.

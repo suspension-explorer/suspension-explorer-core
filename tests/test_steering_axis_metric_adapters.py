@@ -40,7 +40,7 @@ def _context(*, steering_axis: SteeringAxis | None = None) -> MetricContext:
     state = suspension.initial_state()
     road = RoadPlane.through(
         Direction3([0.0, -0.15, 1.0]),
-        state.get(PointID.WHEEL_CONTACT_CENTRE),
+        state.get(PointID.WHEEL_CONTACT_CENTER),
     )
     return MetricContext(
         state,
@@ -59,19 +59,19 @@ def _common_outputs(ctx: MetricContext) -> tuple[float, ...]:
     offset = calculate_steering_axis_offset_at_ground(
         axis,
         ctx.road,
-        ctx.wheel_contact_centre,
+        ctx.wheel_contact_center,
         ctx.wheel_axis,
         ctx.side_sign,
     )
     scrub = calculate_scrub_radius(
         axis,
         ctx.road,
-        ctx.wheel_contact_centre,
+        ctx.wheel_contact_center,
     )
     trail = calculate_mechanical_trail(
         axis,
         ctx.road,
-        ctx.wheel_contact_centre,
+        ctx.wheel_contact_center,
         ctx.wheel_axis,
         ctx.side_sign,
     )

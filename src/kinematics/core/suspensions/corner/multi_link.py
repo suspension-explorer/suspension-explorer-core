@@ -12,7 +12,7 @@ steering geometry is reported exclusively through the motion-derived
 Installed actuation and spring behavior is composed through the same typed
 mechanism fields as the double wishbone. Because every locating rod is a
 two-force member, a rigid off-axis pickup can only ride the upright; a
-direct spring pickup may alternatively ride a lower link's centreline as a
+direct spring pickup may alternatively ride a lower link's centerline as a
 derived point (a damper fork clamped around the link).
 """
 
@@ -76,7 +76,7 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
     from kinematics.core.metrics.main import MetricRow
     from kinematics.core.metrics.registry import MetricSpec
-    from kinematics.core.steering_response import SuspensionHoldCatalogue
+    from kinematics.core.steering_response import SuspensionHoldCatalog
 
 
 @dataclass
@@ -142,7 +142,7 @@ class MultiLinkSuspension(CornerSuspension):
         PointID.AXLE_OUTBOARD,
     )
     # The upright carries a pickup rigidly anywhere. A lower locating rod,
-    # being a two-force member, carries one only on its own centreline as a
+    # being a two-force member, carries one only on its own centerline as a
     # derived point (a damper fork clamped around the link).
     MOUNT_BODIES: ClassVar[dict[MountBody, tuple[PointID, ...]]] = {
         MountBody.UPRIGHT: UPRIGHT_BODY,
@@ -179,17 +179,17 @@ class MultiLinkSuspension(CornerSuspension):
         PointID.WHEEL_CENTER,
         PointID.WHEEL_INBOARD,
         PointID.WHEEL_OUTBOARD,
-        PointID.WHEEL_CONTACT_CENTRE,
+        PointID.WHEEL_CONTACT_CENTER,
     )
     OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
         *LOCATING_OUTPUT_POINTS,
         *WHEEL_OUTPUT_POINTS,
     )
-    # The contact centre is reported but never driven. On an axle it comes from a
+    # The contact center is reported but never driven. On an axle it comes from a
     # coupled solve across both corners, with a bounded validity domain and
     # non-unique roots; the standalone flat-ground construction is the same
     # quantity, so it is refused as a target at both scopes.
-    OUTPUT_ONLY_POINTS: ClassVar[tuple[PointID, ...]] = (PointID.WHEEL_CONTACT_CENTRE,)
+    OUTPUT_ONLY_POINTS: ClassVar[tuple[PointID, ...]] = (PointID.WHEEL_CONTACT_CENTER,)
 
     # Free points that move during solving.
     FREE_POINTS: ClassVar[tuple[PointID, ...]] = (
@@ -266,7 +266,7 @@ class MultiLinkSuspension(CornerSuspension):
     def free_points(self) -> Sequence[PointID]:
         """Return base and selected mechanism moving points.
 
-        An on-link spring pickup is a derived point on the rod centreline,
+        An on-link spring pickup is a derived point on the rod centerline,
         so it is excluded from the spring's declared moving points.
         """
         return (
@@ -304,7 +304,7 @@ class MultiLinkSuspension(CornerSuspension):
         return self.spring.damper_points
 
     @override
-    def suspension_hold_catalogue(self) -> SuspensionHoldCatalogue | None:
+    def suspension_hold_catalog(self) -> SuspensionHoldCatalog | None:
         """Declare the locked-internals hold for multi-link steering response.
 
         Without wishbone hinges there is no fixed-axis arm-angle coordinate to
@@ -314,7 +314,7 @@ class MultiLinkSuspension(CornerSuspension):
         steering screw; that coupling is part of the meaning of the result.
         """
         from kinematics.core.steering_response import (
-            SuspensionHoldCatalogue,
+            SuspensionHoldCatalog,
             SuspensionHoldOption,
         )
 
@@ -323,7 +323,7 @@ class MultiLinkSuspension(CornerSuspension):
         damper = self._installed_damper_coordinate()
         if damper is None:
             return None
-        return SuspensionHoldCatalogue(
+        return SuspensionHoldCatalog(
             default_option_id="damper_length",
             options=(
                 SuspensionHoldOption(
@@ -453,7 +453,7 @@ class MultiLinkSuspension(CornerSuspension):
     def derived_spec(self) -> DerivedPointsSpec:
         """Wheel derived points, plus the on-link spring pickup if selected.
 
-        An on-link pickup rides the rod centreline at its authored axial
+        An on-link pickup rides the rod centerline at its authored axial
         offset from the inboard joint, so it follows the link through every
         solved state without contributing solver unknowns.
         """
@@ -472,7 +472,7 @@ class MultiLinkSuspension(CornerSuspension):
         A multi-link carrier has no plane-intersection instant axis.
 
         The bump motion of the carrier is a general screw, so the classical
-        side-view instant-centre construction does not apply and the derived
+        side-view instant-center construction does not apply and the derived
         swing-arm metrics are reported as undefined.
         """
         return None
@@ -554,7 +554,7 @@ class MultiLinkSuspension(CornerSuspension):
                 outboard=PointID.WHEEL_OUTBOARD,
                 axle_inboard=PointID.AXLE_INBOARD,
                 axle_outboard=PointID.AXLE_OUTBOARD,
-                wheel_contact_centre=PointID.WHEEL_CONTACT_CENTRE,
+                wheel_contact_center=PointID.WHEEL_CONTACT_CENTER,
             ),
         )
         return (

@@ -33,7 +33,7 @@ def test_visualization_api_import_does_not_require_matplotlib() -> None:
 
 
 @pytest.mark.parametrize(
-    "contact_centres",
+    "contact_centers",
     [
         ((25.0, 800.0, 125.0),),
         ((25.0, 800.0, 125.0), (25.0, -800.0, 225.0)),
@@ -43,16 +43,16 @@ def test_visualization_api_import_does_not_require_matplotlib() -> None:
 def test_geometry_visualization_checks_reconstructed_road_plane(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
-    contact_centres: tuple[tuple[float, float, float], ...],
+    contact_centers: tuple[tuple[float, float, float], ...],
 ) -> None:
     """Chassis-coordinate Z is not a valid road-contact check."""
     references = tuple(
-        SimpleNamespace(wheel_contact_centre=f"contact_centre_{index}")
-        for index in range(len(contact_centres))
+        SimpleNamespace(wheel_contact_center=f"contact_center_{index}")
+        for index in range(len(contact_centers))
     )
     positions = {
-        reference.wheel_contact_centre: contact_centre
-        for reference, contact_centre in zip(references, contact_centres, strict=True)
+        reference.wheel_contact_center: contact_center
+        for reference, contact_center in zip(references, contact_centers, strict=True)
     }
     render_model = SimpleNamespace(
         visualizer=SimpleNamespace(wheel_references=references),
@@ -67,10 +67,10 @@ def test_geometry_visualization_checks_reconstructed_road_plane(
         cast("Suspension", suspension), tmp_path / "geometry.png"
     )
 
-    assert result.wheel_contact_centre_z == tuple(
-        contact_centre[2] for contact_centre in contact_centres
+    assert result.wheel_contact_center_z == tuple(
+        contact_center[2] for contact_center in contact_centers
     )
-    assert result.wheel_contact_centre_road_distance_mm == pytest.approx(
-        (0.0,) * len(contact_centres)
+    assert result.wheel_contact_center_road_distance_mm == pytest.approx(
+        (0.0,) * len(contact_centers)
     )
-    assert result.wheel_contact_centres_on_road
+    assert result.wheel_contact_centers_on_road

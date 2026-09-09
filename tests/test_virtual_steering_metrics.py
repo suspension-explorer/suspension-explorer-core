@@ -138,7 +138,7 @@ def test_missing_suspension_hold_keeps_virtual_columns_null(
 ) -> None:
     suspension = load_geometry(DATA_DIR / "geometry.yaml")
     sweep = load_sweep(DATA_DIR / "sweep.yaml", suspension)
-    monkeypatch.setattr(suspension, "suspension_hold_catalogue", lambda: None)
+    monkeypatch.setattr(suspension, "suspension_hold_catalog", lambda: None)
     evaluated = solve_evaluated_sweep(suspension, sweep)
     analysis = analyze_evaluated_sweep(suspension, sweep, evaluated)
 

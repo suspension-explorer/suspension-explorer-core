@@ -60,7 +60,7 @@ class MetricContext:
         self.road = (
             road
             if road is not None
-            else RoadPlane.horizontal_at(state.get(PointID.WHEEL_CONTACT_CENTRE))
+            else RoadPlane.horizontal_at(state.get(PointID.WHEEL_CONTACT_CENTER))
         )
 
     @cached_property
@@ -70,33 +70,33 @@ class MetricContext:
 
     @cached_property
     def design_wheel_center(self) -> Point3:
-        """Return the design wheel-centre position in chassis coordinates."""
+        """Return the design wheel-center position in chassis coordinates."""
         return self.design_state.get(PointID.WHEEL_CENTER)
 
     @cached_property
-    def design_wheel_contact_centre(self) -> Point3:
-        """Return the design wheel contact centre in chassis coordinates."""
-        return self.design_state.get(PointID.WHEEL_CONTACT_CENTRE)
+    def design_wheel_contact_center(self) -> Point3:
+        """Return the design wheel contact center in chassis coordinates."""
+        return self.design_state.get(PointID.WHEEL_CONTACT_CENTER)
 
     @cached_property
     def side_view_ic(self) -> Point3 | None:
-        """Return the side-view instant centre in chassis coordinates."""
+        """Return the side-view instant center in chassis coordinates."""
         return self.suspension.compute_side_view_instant_center(self.state)
 
     @cached_property
     def front_view_ic(self) -> Point3 | None:
-        """Return the front-view instant centre in chassis coordinates."""
+        """Return the front-view instant center in chassis coordinates."""
         return self.suspension.compute_front_view_instant_center(self.state)
 
     @cached_property
     def wheel_center(self) -> Point3:
-        """Return the current wheel-centre position in chassis coordinates."""
+        """Return the current wheel-center position in chassis coordinates."""
         return self.state.get(PointID.WHEEL_CENTER)
 
     @cached_property
-    def wheel_contact_centre(self) -> Point3:
-        """Return the current wheel contact centre in chassis coordinates."""
-        return self.state.get(PointID.WHEEL_CONTACT_CENTRE)
+    def wheel_contact_center(self) -> Point3:
+        """Return the current wheel contact center in chassis coordinates."""
+        return self.state.get(PointID.WHEEL_CONTACT_CENTER)
 
     @cached_property
     def wheel_axis(self) -> Direction3:
@@ -160,7 +160,7 @@ class MetricContext:
 
     @cached_property
     def tire_radius(self) -> float:
-        """Return the nominal tyre radius, independent of reference system."""
+        """Return the nominal tire radius, independent of reference system."""
         return self.config.wheel.tire.nominal_radius
 
     @cached_property
@@ -170,5 +170,5 @@ class MetricContext:
 
     @cached_property
     def cg_position(self) -> Point3:
-        """Return the configured centre of gravity in chassis coordinates."""
+        """Return the configured center of gravity in chassis coordinates."""
         return self.config.cg_position.copy()

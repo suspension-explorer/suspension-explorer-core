@@ -40,7 +40,7 @@ EXPECTED_POINT_IDS = (
     "wheel_center",
     "wheel_inboard",
     "wheel_outboard",
-    "wheel_contact_centre",
+    "wheel_contact_center",
     "camber_shim_face_point_a",
     "camber_shim_face_point_b",
     "camber_shim_face_normal",

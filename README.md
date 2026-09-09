@@ -43,7 +43,7 @@ tool.
 | Wheel-heading control     | Translating steering rack or fixed toe link                                               | Select `steering.type: rack` or `steering.type: none`; front/rear position does not select steering automatically. |
 | Double-wishbone actuation | Direct or pushrod-rocker, mounted to the lower wishbone or upright                        | Direct actuation cannot be combined with a torsion bar.                                                            |
 | Double-wishbone springs   | None, coilover, or torsion bar                                                            | A torsion bar requires pushrod-rocker actuation.                                                                   |
-| Multi-link corners        | Four independent locating rods plus track rod or toe link; actuation on the upright or a direct spring on a lower link's centreline | No physical kingpin exists; steering geometry reports through the virtual (screw-axis) metric family only.        |
+| Multi-link corners        | Four independent locating rods plus track rod or toe link; actuation on the upright or a direct spring on a lower link's centerline | No physical kingpin exists; steering geometry reports through the virtual (screw-axis) metric family only.        |
 | Axle mechanisms           | U-bar or T-bar anti-roll mechanism and rocker-to-rocker heave link                        | These mechanisms require a double-wishbone axle with pushrod-rocker actuation.                                     |
 | Setup changes             | Pushrod/pullrod ride-height shims, toe shims, and outboard double-wishbone camber shims    | Pushrod shims require pushrod-rocker actuation; explicit asymmetric axles require corresponding side-local setup.  |
 | Outputs                   | Solved point positions, solver statistics, diagnostics, metrics, in either CSV or Parquet | Plotting and animation require the optional visualization dependencies.                                            |
@@ -104,23 +104,23 @@ plane, ground plane, and world `Z = 0` plane coincide. Road grade, road bank,
 yaw, and non-planar surfaces are outside the model.
 
 At design condition the chassis and world axes are aligned, the front axle
-centreline is `X = 0`, and the wheel contact-centre line is `Z = 0`. During a sweep,
+centerline is `X = 0`, and the wheel contact-center line is `Z = 0`. During a sweep,
 fixed hardpoints remain fixed in chassis space while the road plane may move
-relative to them as the modelled axle heaves or rolls. This represents
+relative to them as the modeled axle heaves or rolls. This represents
 suspension motion associated with vehicle-generated vertical, lateral, or
 longitudinal forces; the solver is kinematic and does not calculate those
 forces or a dynamic body attitude.
 
-The axle contact closure models each tyre as a rigid disc and returns two
-wheel contact centres. It constructs the single plane tangent to both wheels
+The axle contact closure models each tire as a rigid disc and returns two
+wheel contact centers. It constructs the single plane tangent to both wheels
 and extrudes the contact line parallel to chassis X. Consequently:
 
 - local axle heave and roll relative to the road are observable;
 - longitudinal road gradient is zero by construction;
 - one axle cannot determine whole-vehicle pitch, yaw, or longitudinal
   translation, so these are assigned zero rather than inferred;
-- an opposite-axle pivot is neither required nor modelled; and
-- `wheel_contact_centre` is an output and cannot be a sweep target.
+- an opposite-axle pivot is neither required nor modeled; and
+- `wheel_contact_center` is an output and cannot be a sweep target.
 
 The resulting `WorldSpace` value is a presentation transform only. It maps the
 same axle-local road plane to world `Z = 0`, preserves chassis +X as world +X,
@@ -136,12 +136,12 @@ Metric reference systems are deliberate:
   positive means toe-in; it is reported alongside, rather than substituted for,
   the ISO vehicle-fixed `steer_angle`;
 - `steering_axis_offset_ground`, `scrub_radius`, and `mechanical_trail` use
-  the ISO tyre axes on the local road plane;
+  the ISO tire axes on the local road plane;
 - `track` is the ISO rest dimension on horizontal ground; `track_change`,
   `ride_height_change`, swing-arm lengths, and geometric anti percentages use
   the axle-local road plane represented in chassis coordinates;
-- wheel travel, heave, instant-centre coordinates, rack displacement, and
-  roll-centre coordinates use chassis axes; and
+- wheel travel, heave, instant-center coordinates, rack displacement, and
+  roll-center coordinates use chassis axes; and
 - damper length and other Euclidean link lengths are invariant under the
   chassis-to-world rigid transform.
 
@@ -149,10 +149,10 @@ Metric reference systems are deliberate:
 the chassis origin to the axle-local road plane. It is not a full-vehicle ride
 height or pitch result. Likewise, the exported `roll` is a kinematic axle
 state calculated as the ISO suspension roll angle of the current line joining
-the wheel centres, not a solved sprung-mass attitude. The anti percentages are
+the wheel centers, not a solved sprung-mass attitude. The anti percentages are
 geometric construction metrics; they do not predict pitch under load.
 
-The contact model omits tyre deflection, loaded radius, contact-patch extent,
+The contact model omits tire deflection, loaded radius, contact-patch extent,
 forces, compliance, and interaction with another axle. A future full-vehicle
 model could observe pitch from both axles, but that degree of freedom is
 intentionally absent from the present single-axle model.
@@ -263,7 +263,7 @@ not a steering actuator.
 ### Setup shims
 
 Simple setup shims are declared in the corner `config` using design and setup
-stack thicknesses in millimetres:
+stack thicknesses in millimeters:
 
 ```yaml
 config:
@@ -351,8 +351,8 @@ uv run kinematics visualize --geometry geometry.yaml --output geometry.png
 ```
 
 This validates and builds the geometry, reports whether every derived wheel
-contact centre lies on the reconstructed road plane, and writes a static
-image. The diagnostic also prints each centre's raw chassis Z coordinate and
+contact center lies on the reconstructed road plane, and writes a static
+image. The diagnostic also prints each center's raw chassis Z coordinate and
 signed road-plane distance. It requires `[cli,viz]`.
 
 ### 4. Solve and export the sweep
@@ -529,14 +529,14 @@ also report an additive, motion-derived family using the suffix `_virtual`:
 `scrub_radius_virtual`, and `mechanical_trail_virtual`. Each is ordered beside
 its physical counterpart and displayed with labels such as `Caster, Virtual`.
 Here **virtual steering axis** means the isolated steering-response screw-axis
-line above. The values use the same chassis, tyre, road-plane, and sign
+line above. The values use the same chassis, tire, road-plane, and sign
 conventions as their physical-axis counterparts. They are `None` when that
 frame has no valid finite axis; selecting another published hold changes only
 the virtual family and never the original physical metrics. Screw pitch and
 angular rate remain separate axis properties
 rather than being folded into these five line-based geometry values.
 
-Holding wheel-centre height during the authored sweep is not the same as fixing
+Holding wheel-center height during the authored sweep is not the same as fixing
 the wishbones: it adds the suspension travel needed to cancel vertical motion
 from steering around an inclined axis. That remains the correct solved path, but
 it no longer changes the virtual steering definition. At each of those states,
@@ -653,7 +653,7 @@ Failure to build an accepted reference combination aborts generation. Coverage
 tests require every registered architecture/scope and every selector enum value
 to be represented, and compare state declarations with actual state outputs.
 
-This is the exhaustive catalogue of built-in metric identities and finite
+This is the exhaustive catalog of built-in metric identities and finite
 mechanism selections. It does not enumerate arbitrary hardpoints, numeric setup
 thicknesses, custom derivatives, or all possible sweep target names. Setup shim
 support is reported separately; pushrod shims require pushrod-rocker actuation.
@@ -707,7 +707,7 @@ The AGPL version is free to use, including for commercial engineering,
 research, education, motorsport, and hobby projects, provided that you comply
 with its terms.
 
-Alternative commercial licensing is intended for organisations that want to
+Alternative commercial licensing is intended for organizations that want to
 incorporate Suspension Explorer Core into proprietary or closed-source
 software or services where complying with the AGPL is not suitable.
 
@@ -719,8 +719,8 @@ For commercial licensing, contact
 Yes.
 
 The AGPL applies to the software, not simply to data processed by the
-software. Using Suspension Explorer Core to analyse a commercial race car,
-confidential vehicle programme, Formula Student car, or other proprietary
+software. Using Suspension Explorer Core to analyze a commercial race car,
+confidential vehicle program, Formula Student car, or other proprietary
 design does not by itself require you to disclose:
 
 - hardpoint coordinates;
@@ -755,14 +755,14 @@ rights to include accepted contributions under both licensing models.
 
 Before contributing, please read [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Pull requests include the following contributor acknowledgement:
+Pull requests include the following contributor acknowledgment:
 
 > - [ ] I have read and agree to the contributor terms in
 >       `CONTRIBUTING.md`. I confirm that I own this contribution or have
 >       authority to submit it, and I assign the copyright in my contribution
 >       to Nick McCleery, as maintainer of Suspension Explorer Core, on the
 >       terms stated there. By checking this box and submitting this pull
->       request, I intend this acknowledgement to constitute my electronic
+>       request, I intend this acknowledgment to constitute my electronic
 >       signature and acceptance of those terms.
 
 Accepted contributions remain available as part of the open-source project

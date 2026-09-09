@@ -78,7 +78,7 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.derivatives import DerivativeMetricDefinition
     from kinematics.core.metrics.main import MetricRow
     from kinematics.core.metrics.registry import MetricSpec
-    from kinematics.core.steering_response import SuspensionHoldCatalogue
+    from kinematics.core.steering_response import SuspensionHoldCatalog
 
 
 @dataclass
@@ -146,17 +146,17 @@ class DoubleWishboneSuspension(CornerSuspension):
         PointID.WHEEL_CENTER,
         PointID.WHEEL_INBOARD,
         PointID.WHEEL_OUTBOARD,
-        PointID.WHEEL_CONTACT_CENTRE,
+        PointID.WHEEL_CONTACT_CENTER,
     )
     OUTPUT_POINTS: ClassVar[tuple[PointID, ...]] = (
         *LOCATING_OUTPUT_POINTS,
         *WHEEL_OUTPUT_POINTS,
     )
-    # The contact centre is reported but never driven. On an axle it comes from a
+    # The contact center is reported but never driven. On an axle it comes from a
     # coupled solve across both corners, with a bounded validity domain and
     # non-unique roots; the standalone flat-ground construction is the same
     # quantity, so it is refused as a target at both scopes.
-    OUTPUT_ONLY_POINTS: ClassVar[tuple[PointID, ...]] = (PointID.WHEEL_CONTACT_CENTRE,)
+    OUTPUT_ONLY_POINTS: ClassVar[tuple[PointID, ...]] = (PointID.WHEEL_CONTACT_CENTER,)
 
     # Free points that move during solving.
     FREE_POINTS: ClassVar[tuple[PointID, ...]] = (
@@ -262,11 +262,11 @@ class DoubleWishboneSuspension(CornerSuspension):
         return self.spring.damper_points
 
     @override
-    def suspension_hold_catalogue(self) -> SuspensionHoldCatalogue | None:
+    def suspension_hold_catalog(self) -> SuspensionHoldCatalog | None:
         """Declare semantic fixed-travel choices for double-wishbone steering."""
         from kinematics.core.steering_response import (
             SuspensionHoldAvailability,
-            SuspensionHoldCatalogue,
+            SuspensionHoldCatalog,
             SuspensionHoldOption,
         )
 
@@ -339,7 +339,7 @@ class DoubleWishboneSuspension(CornerSuspension):
                 )
             )
 
-        return SuspensionHoldCatalogue(
+        return SuspensionHoldCatalog(
             default_option_id="lower_wishbone_angle",
             options=tuple(options),
         )
@@ -627,7 +627,7 @@ class DoubleWishboneSuspension(CornerSuspension):
                 outboard=PointID.WHEEL_OUTBOARD,
                 axle_inboard=PointID.AXLE_INBOARD,
                 axle_outboard=PointID.AXLE_OUTBOARD,
-                wheel_contact_centre=PointID.WHEEL_CONTACT_CENTRE,
+                wheel_contact_center=PointID.WHEEL_CONTACT_CENTER,
             ),
         )
         return (

@@ -1,4 +1,4 @@
-"""Create a deterministic catalogue from production suspension declarations."""
+"""Create a deterministic catalog from production suspension declarations."""
 
 from __future__ import annotations
 

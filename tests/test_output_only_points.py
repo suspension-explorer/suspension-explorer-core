@@ -1,6 +1,6 @@
 """Tests for derived points that are reported but cannot be driven.
 
-The wheel contact centre is an observable derived from the solved wheel
+The wheel contact center is an observable derived from the solved wheel
 state. It is deliberately unsupported as an actuator because the axle
 construction is branch-sensitive and has a bounded validity domain, so it is
 declared output-only and rejected as a sweep target.
@@ -58,7 +58,7 @@ def test_corner_rejects_ground_tangent_sweep_target(test_data_dir: Path) -> None
     corner = load_geometry(test_data_dir / "geometry.yaml")
     spec = _spec(
         _rack_target(),
-        _target(PointID.WHEEL_CONTACT_CENTRE, Axis.Z),
+        _target(PointID.WHEEL_CONTACT_CENTER, Axis.Z),
     )
 
     with pytest.raises(ValueError, match=OUTPUT_ONLY_MESSAGE):
@@ -69,13 +69,13 @@ def test_output_only_rejection_uses_the_point_declaration_guidance(
     test_data_dir: Path,
 ) -> None:
     corner = load_geometry(test_data_dir / "geometry.yaml")
-    spec = _spec(_target(PointID.WHEEL_CONTACT_CENTRE, Axis.Z))
+    spec = _spec(_target(PointID.WHEEL_CONTACT_CENTER, Axis.Z))
 
     with pytest.raises(ValueError) as error:
         build_sweep_config(spec, corner)
 
     message = str(error.value)
-    # The guidance names the honest control: wheel-centre Z is the heave
+    # The guidance names the honest control: wheel-center Z is the heave
     # input, and ride height is read back from the solved metric.
     assert "'wheel_center'" in message
     assert "heave input" in message
@@ -91,7 +91,7 @@ def test_direct_sweep_config_cannot_bypass_output_only_validation(
         [
             [
                 PointCoordinate(
-                    PointID.WHEEL_CONTACT_CENTRE, CoordinateAxis(Axis.Z), Scope.CORNER
+                    PointID.WHEEL_CONTACT_CENTER, CoordinateAxis(Axis.Z), Scope.CORNER
                 ).target(0.0)
             ]
         ]
@@ -105,7 +105,7 @@ def test_macpherson_corner_rejects_ground_tangent_sweep_target(
     test_data_dir: Path,
 ) -> None:
     corner = load_geometry(test_data_dir / "macpherson_geometry.yaml")
-    spec = _spec(_target(PointID.WHEEL_CONTACT_CENTRE, Axis.Z))
+    spec = _spec(_target(PointID.WHEEL_CONTACT_CENTER, Axis.Z))
 
     with pytest.raises(ValueError, match=OUTPUT_ONLY_MESSAGE):
         build_sweep_config(spec, corner)
@@ -115,7 +115,7 @@ def test_axle_rejects_ground_tangent_sweep_target(test_data_dir: Path) -> None:
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
     spec = _spec(
         _target(PointID.WHEEL_CENTER, Axis.Z, Side.LEFT),
-        _target(PointID.WHEEL_CONTACT_CENTRE, Axis.Z, Side.RIGHT),
+        _target(PointID.WHEEL_CONTACT_CENTER, Axis.Z, Side.RIGHT),
         _rack_target(),
     )
 
@@ -181,8 +181,8 @@ def test_axle_catalog_marks_both_ground_tangents_output_only(
     points = axle.assembly().points
     tangents = frozenset(
         {
-            PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE),
-            PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE),
+            PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTER),
+            PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTER),
         }
     )
 

@@ -2,7 +2,7 @@
 Plot distance constraint residual and its analytical gradient.
 
 Generates PNG figures showing the residual function and Jacobian
-for the DistanceConstraint, illustrating the softnorm regularisation
+for the DistanceConstraint, illustrating the softnorm regularization
 behavior near zero separation.
 """
 
@@ -12,7 +12,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import mcplotlib
 import numpy as np
-from mcplotlib import colours
+from mcplotlib import colors
 
 # -- Style setup -------------------------------------------------------
 mcplotlib.style.use_mc_style(
@@ -27,8 +27,8 @@ EPS_SQ = EPS**2
 
 OUTPUT_DIR = Path(__file__).parent.parent
 
-c1, c2 = colours.QUALITATIVE_2A  # pink, blue
-c3 = colours.QUALITATIVE_6A[3]  # purple
+c1, c2 = colors.QUALITATIVE_2A  # pink, blue
+c3 = colors.QUALITATIVE_6A[3]  # purple
 c_naive = "#000000"
 
 

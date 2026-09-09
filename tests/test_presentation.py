@@ -225,7 +225,7 @@ def test_cli_renderer_adds_styles_to_unstyled_element_paths(
     assert [link.element for link in rendered] == list(paths)
     assert all(point in positions for link in rendered for point in link.points)
     assert all(link.style.color for link in rendered)
-    assert ElementType.WHEEL_CONTACT_CENTRE in ELEMENT_STYLES
+    assert ElementType.WHEEL_CONTACT_CENTER in ELEMENT_STYLES
     torsion_bar_paths = [
         path.points for path in paths if path.type is ElementType.TORSION_BAR
     ]
@@ -246,16 +246,16 @@ def test_cli_renderer_has_distinct_heave_link_style() -> None:
     assert heave_style.linestyle == "--"
 
 
-def test_wheel_reference_uses_contact_centre_name(
+def test_wheel_reference_uses_contact_center_name(
     test_data_dir: Path,
 ) -> None:
     suspension = load_geometry(test_data_dir / "geometry.yaml")
     reference = wheel_references(suspension.assembly())[0]
 
-    assert reference.wheel_contact_centre == "wheel_contact_centre"
+    assert reference.wheel_contact_center == "wheel_contact_center"
 
 
-def test_wheel_element_and_path_use_canonical_contact_centre_name(
+def test_wheel_element_and_path_use_canonical_contact_center_name(
     test_data_dir: Path,
 ) -> None:
     suspension = load_geometry(test_data_dir / "geometry.yaml")
@@ -266,39 +266,39 @@ def test_wheel_element_and_path_use_canonical_contact_centre_name(
     path = next(
         path
         for path in named_element_paths(assembly)
-        if path.type is ElementType.WHEEL_CONTACT_CENTRE
+        if path.type is ElementType.WHEEL_CONTACT_CENTER
     )
 
-    assert wheel.wheel_contact_centre is PointID.WHEEL_CONTACT_CENTRE
-    assert path.type.value == "wheel_contact_centre"
-    assert path.label == "Wheel Contact Centre"
+    assert wheel.wheel_contact_center is PointID.WHEEL_CONTACT_CENTER
+    assert path.type.value == "wheel_contact_center"
+    assert path.label == "Wheel Contact Center"
 
 
-def test_cli_renderer_styles_wheel_contact_centre_as_a_marker(
+def test_cli_renderer_styles_wheel_contact_center_as_a_marker(
     test_data_dir: Path,
 ) -> None:
     suspension = load_geometry(test_data_dir / "geometry.yaml")
     render_model = build_render_model(suspension)
     visualizer = render_model.visualizer
 
-    contact_centres = [
+    contact_centers = [
         link
         for link in visualizer.links
-        if link.element.type is ElementType.WHEEL_CONTACT_CENTRE
+        if link.element.type is ElementType.WHEEL_CONTACT_CENTER
     ]
 
-    assert len(contact_centres) == 1
-    assert all(len(link.points) == 1 for link in contact_centres)
-    assert all(link.style.linewidth == 0.0 for link in contact_centres)
-    assert all(link.style.markersize > 0.0 for link in contact_centres)
+    assert len(contact_centers) == 1
+    assert all(len(link.points) == 1 for link in contact_centers)
+    assert all(link.style.linewidth == 0.0 for link in contact_centers)
+    assert all(link.style.markersize > 0.0 for link in contact_centers)
     assert all(
         len(link.points) > 1
         for link in visualizer.links
-        if link.element.type is not ElementType.WHEEL_CONTACT_CENTRE
+        if link.element.type is not ElementType.WHEEL_CONTACT_CENTER
     )
 
 
-def test_cli_renderer_static_and_animation_topology_includes_contact_centre(
+def test_cli_renderer_static_and_animation_topology_includes_contact_center(
     test_data_dir: Path,
 ) -> None:
     plt = pytest.importorskip("matplotlib.pyplot")
@@ -319,7 +319,7 @@ def test_cli_renderer_static_and_animation_topology_includes_contact_centre(
             positions,
             view_name="iso",
         )
-        # The single-point contact centre is drawn as a scatter collection.
+        # The single-point contact center is drawn as a scatter collection.
         assert len(static_axis.collections) == 1
 
         animation_axis = fig.add_subplot(122, projection="3d")

@@ -5,7 +5,7 @@ Defines the ordered set of corner-level metrics and their export column names.
 This is the single place to add, remove, or reorder exported metrics.
 
 Reference systems belong to each calculation's docstring rather than the
-catalog metadata. Instant-centre coordinate extractors below report principal
+catalog metadata. Instant-center coordinate extractors below report principal
 chassis coordinates using the ISO 8855 vehicle-axis orientation.
 """
 
@@ -85,7 +85,7 @@ def _build_steering_metrics(
         return calculate_steering_axis_offset_at_ground(
             axis,
             ctx.road,
-            ctx.wheel_contact_centre,
+            ctx.wheel_contact_center,
             ctx.wheel_axis,
             ctx.side_sign,
         )
@@ -97,7 +97,7 @@ def _build_steering_metrics(
         return calculate_scrub_radius(
             axis,
             ctx.road,
-            ctx.wheel_contact_centre,
+            ctx.wheel_contact_center,
         )
 
     def mechanical_trail(ctx: MetricContext) -> float | None:
@@ -107,7 +107,7 @@ def _build_steering_metrics(
         return calculate_mechanical_trail(
             axis,
             ctx.road,
-            ctx.wheel_contact_centre,
+            ctx.wheel_contact_center,
             ctx.wheel_axis,
             ctx.side_sign,
         )
@@ -216,7 +216,7 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
 
     def _ic_coord(attr: str, axis: Axis) -> Callable[[MetricContext], float | None]:
         def extract(ctx: MetricContext) -> float | None:
-            """Extract one chassis-axis coordinate from an instant centre."""
+            """Extract one chassis-axis coordinate from an instant center."""
             ic = getattr(ctx, attr)
             return None if ic is None else float(ic[axis])
 
@@ -468,7 +468,7 @@ def get_default_corner_derivative_metrics(
         (
             DerivativeMetricDefinition(
                 response=PointCoordinateResponse.from_axis(
-                    PointID.WHEEL_CONTACT_CENTRE,
+                    PointID.WHEEL_CONTACT_CENTER,
                     (0.0, side_sign, 0.0),
                     name="half_track",
                     unit=MetricUnit.MM,
@@ -499,7 +499,7 @@ def get_default_corner_derivative_metrics(
             ),
             DerivativeMetricDefinition(
                 response=PointCoordinateResponse.from_axis(
-                    PointID.WHEEL_CONTACT_CENTRE,
+                    PointID.WHEEL_CONTACT_CENTER,
                     (0.0, -side_sign, 0.0),
                     name="contact_patch_lateral_migration",
                     unit=MetricUnit.MM,

@@ -1,7 +1,7 @@
 """Road-plane geometry shared by contact closure, metrics, and presentation.
 
 ISO 8855:2011 distinguishes the earth-fixed ``ground plane`` (§2.5) from the
-local or equivalent ``road plane`` (§2.7) at a tyre contact.  The supported
+local or equivalent ``road plane`` (§2.7) at a tire contact.  The supported
 world-space presentation uses a straight, level road, while chassis-coordinate
 road planes may be banked or graded relative to the moving chassis.
 During a solve, however, points remain in chassis coordinates and the road
@@ -36,7 +36,7 @@ class RoadPlane:
     ``normal`` points away from the road and must have a resolvable upward
     component.  Banked and graded road planes are supported; vertical planes
     are not physical road surfaces in this model.  The representation is
-    otherwise general, while :meth:`from_axle_contact_centres` records this
+    otherwise general, while :meth:`from_axle_contact_centers` records this
     application's single-axle convention by forcing the longitudinal normal
     component to zero.
     """
@@ -70,23 +70,23 @@ class RoadPlane:
         return cls.through(Direction3((0.0, 0.0, 1.0)), point)
 
     @classmethod
-    def from_axle_contact_centres(cls, left: Point3, right: Point3) -> RoadPlane:
-        """Construct the axle-local road plane through both wheel contact centres.
+    def from_axle_contact_centers(cls, left: Point3, right: Point3) -> RoadPlane:
+        """Construct the axle-local road plane through both wheel contact centers.
 
         The result is the unique upward plane through the two points whose
         normal has zero chassis-X component.  This is the same longitudinally
-        extruded plane used by the coupled tyre-contact closure.  It supports
+        extruded plane used by the coupled tire-contact closure.  It supports
         axle heave and roll without pretending that one axle determines
         whole-vehicle pitch.
 
         Raises:
-            ValueError: If the contact centres do not define a usable lateral line.
+            ValueError: If the contact centers do not define a usable lateral line.
         """
         dy = float(left[Axis.Y]) - float(right[Axis.Y])
         dz = float(left[Axis.Z]) - float(right[Axis.Z])
         magnitude = hypot(dy, dz)
         if magnitude < EPS_GEOMETRIC:
-            raise ValueError("Axle wheel contact centres do not define a road plane")
+            raise ValueError("Axle wheel contact centers do not define a road plane")
 
         normal_y = -dz / magnitude
         normal_z = dy / magnitude
@@ -94,7 +94,7 @@ class RoadPlane:
             normal_y = -normal_y
             normal_z = -normal_z
         if normal_z <= EPS_GEOMETRIC:
-            raise ValueError("Axle wheel contact centres imply a vertical road plane")
+            raise ValueError("Axle wheel contact centers imply a vertical road plane")
 
         return cls.through(Direction3((0.0, normal_y, normal_z)), left)
 

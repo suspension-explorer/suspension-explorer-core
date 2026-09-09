@@ -85,7 +85,7 @@ class ActuationDirect:
 
     The locating architecture supplies ``spring_pickup_body``. Ordinarily it
     contains at least three anchors on the rigid body carrying the pickup. A
-    two-joint rod may instead carry a centreline pickup when
+    two-joint rod may instead carry a centerline pickup when
     ``derive_pickup_on_link`` is true; that pickup is a derived point rather
     than an independent solver variable.
     """
@@ -162,7 +162,7 @@ class ActuationDirect:
                 raise ValueError(
                     f"{self.moving_pickup_point.name} sits {off_axis:.3f} mm off "
                     f"the line from {inboard.name} to {outboard.name}. A "
-                    "two-joint rod carries a pickup only on its own centreline."
+                    "two-joint rod carries a pickup only on its own centerline."
                 )
             axial = self.pickup_axial_offset(hardpoints)
             if axial <= EPS_GEOMETRIC or axial >= rod_length - EPS_GEOMETRIC:
@@ -203,7 +203,7 @@ class ActuationDirect:
         self,
         hardpoints: Mapping[PointKey, Point3],
     ) -> DerivedPointsSpec[PointID]:
-        """Return the optional centreline pickup contribution."""
+        """Return the optional centerline pickup contribution."""
         if not self.derive_pickup_on_link or self.moving_pickup_point not in hardpoints:
             return DerivedPointsSpec({}, {})
         if len(self.spring_pickup_body) != 2:
@@ -253,7 +253,7 @@ class ActuationDirect:
         return ()
 
 
-# How far an authored on-link pickup may sit off the rod centreline, in
+# How far an authored on-link pickup may sit off the rod centerline, in
 # millimeters, before the coincident-with-the-link modeling choice is
 # considered violated rather than an authoring rounding error.
 LINK_PICKUP_ALIGNMENT_TOLERANCE_MM = 1.0

@@ -51,11 +51,11 @@ def test_multi_link_declares_expected_point_roles(multi_link):
     assert outboard_joints <= set(multi_link.free_points())
 
 
-def test_hold_catalogue_offers_only_locked_internals(multi_link):
-    catalogue = multi_link.suspension_hold_catalogue()
-    assert catalogue is not None
-    assert catalogue.default_option_id == "damper_length"
-    assert [option.id for option in catalogue.options] == ["damper_length"]
+def test_hold_catalog_offers_only_locked_internals(multi_link):
+    catalog = multi_link.suspension_hold_catalog()
+    assert catalog is not None
+    assert catalog.default_option_id == "damper_length"
+    assert [option.id for option in catalog.options] == ["damper_length"]
 
 
 def test_static_state_reproduces_input_geometry(multi_link):
@@ -105,7 +105,7 @@ def test_metrics_report_virtual_steering_family_only(multi_link):
     assert row["kpi_virtual"] == pytest.approx(13.0, abs=0.3)
     assert row["caster_virtual"] == pytest.approx(4.0, abs=0.3)
 
-    # Undefined plane-intersection instant centres degrade to None.
+    # Undefined plane-intersection instant centers degrade to None.
     assert row["svic_x"] is None
     assert row["fvic_y"] is None
 
@@ -130,9 +130,9 @@ def test_axle_builds_mirrors_and_solves():
     right_point = right.hardpoints[PointID.UPPER_FRONT_LINK_INBOARD]
     assert float(right_point[1]) == pytest.approx(-float(left_point[1]))
 
-    catalogue = suspension.suspension_hold_catalogue()
-    assert catalogue is not None
-    assert catalogue.default_option_id == "damper_length"
+    catalog = suspension.suspension_hold_catalog()
+    assert catalog is not None
+    assert catalog.default_option_id == "damper_length"
 
     sweep = load_sweep(TEST_DATA / "axle_steer_sweep.yaml", suspension)
     _states, infos = solve_sweep(suspension, sweep)
@@ -186,7 +186,7 @@ def test_springless_direct_actuation_omits_uninstalled_pickup(mount):
     assert PointID.STRUT_BOTTOM not in suspension.assembly().points.all
 
 
-def test_off_centreline_link_pickup_is_rejected():
+def test_off_centerline_link_pickup_is_rejected():
     import yaml
 
     from kinematics.core.input import build_suspension
@@ -194,7 +194,7 @@ def test_off_centreline_link_pickup_is_rejected():
     with (TEST_DATA / "multi_link_geometry.yaml").open() as handle:
         data = yaml.safe_load(handle)
     data["hardpoints"]["strut_bottom"] = {"x": -4.7, "y": 754.45, "z": 230}
-    with pytest.raises(ValueError, match="centreline"):
+    with pytest.raises(ValueError, match="centerline"):
         build_suspension(data)
 
 
@@ -242,4 +242,4 @@ def test_unsteered_corner_installs_toe_link():
     assert isinstance(suspension, MultiLinkSuspension)
     assert suspension.rack_attachment_point() is None
     assert suspension.steering_actuator_coordinate() is None
-    assert suspension.suspension_hold_catalogue() is None
+    assert suspension.suspension_hold_catalog() is None

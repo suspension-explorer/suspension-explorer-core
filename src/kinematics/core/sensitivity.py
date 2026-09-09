@@ -250,7 +250,7 @@ def compute_state_tangents(
 
     ``post_derived_update`` mirrors the sweep's post-solve ground closure: it
     is applied to the dual position map after the derived-point update so
-    closure outputs (the coupled wheel contact centres) carry their implicit
+    closure outputs (the coupled wheel contact centers) carry their implicit
     derivatives into the tangent field instead of the zero seed.
     """
     # ResidualComputer mutates its state buffer, so use a scratch state.

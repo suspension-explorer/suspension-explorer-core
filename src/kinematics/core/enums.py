@@ -71,7 +71,7 @@ class PointID(IntEnum):
 
     # Geometric support point where the wheel plane is tangent to the axle's
     # shared, zero-grade ground plane.
-    WHEEL_CONTACT_CENTRE = 21
+    WHEEL_CONTACT_CENTER = 21
 
     # Outboard camber shim geometry. Datum points A and B lie on the design
     # mid-thickness plane; the face normal is perpendicular to that plane.
@@ -130,10 +130,10 @@ class PointID(IntEnum):
     @property
     def output_only_target_guidance(self) -> str | None:
         """Return point-specific guidance when an output cannot be driven."""
-        if self is PointID.WHEEL_CONTACT_CENTRE:
+        if self is PointID.WHEEL_CONTACT_CENTER:
             return (
                 "Target 'wheel_center' along Z as the available heave input; "
-                "wheel orientation can still move the wheel contact centre, so read "
+                "wheel orientation can still move the wheel contact center, so read "
                 "ride height from the 'ride_height_change' metric of the solved "
                 "output."
             )
@@ -183,7 +183,7 @@ class MountBody(StrEnum):
 
     Three-point-plus bodies carry a pickup rigidly anywhere. A two-joint
     locating rod is a two-force member, so it carries a pickup only on its
-    own centreline, as a derived point at a fixed axial position.
+    own centerline, as a derived point at a fixed axial position.
     """
 
     LOWER_WISHBONE = "lower_wishbone"

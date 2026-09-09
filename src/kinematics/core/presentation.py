@@ -92,7 +92,7 @@ class WheelReferences:
     outboard: str
     axle_inboard: str
     axle_outboard: str
-    wheel_contact_centre: str
+    wheel_contact_center: str
 
 
 def axis_projection_name(projection: AxisProjection) -> str:
@@ -216,9 +216,9 @@ def _element_paths(
     if isinstance(element, WheelElement):
         return (
             ElementPath(
-                (element.wheel_contact_centre,),
-                ElementType.WHEEL_CONTACT_CENTRE,
-                f"{element.label} Contact Centre",
+                (element.wheel_contact_center,),
+                ElementType.WHEEL_CONTACT_CENTER,
+                f"{element.label} Contact Center",
             ),
         )
     raise TypeError(f"Unsupported suspension element: {type(element)!r}")
@@ -382,7 +382,7 @@ def wheel_references(assembly: SuspensionAssembly) -> list[WheelReferences]:
             outboard=point_key_name(wheel.outboard),
             axle_inboard=point_key_name(wheel.axle_inboard),
             axle_outboard=point_key_name(wheel.axle_outboard),
-            wheel_contact_centre=point_key_name(wheel.wheel_contact_centre),
+            wheel_contact_center=point_key_name(wheel.wheel_contact_center),
         )
         for wheel in assembly.wheels
     ]

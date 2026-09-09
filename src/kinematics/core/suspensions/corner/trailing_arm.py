@@ -150,9 +150,9 @@ class TrailingArmSuspension(CornerSuspension):
         PointID.WHEEL_CENTER,
         PointID.WHEEL_INBOARD,
         PointID.WHEEL_OUTBOARD,
-        PointID.WHEEL_CONTACT_CENTRE,
+        PointID.WHEEL_CONTACT_CENTER,
     )
-    OUTPUT_ONLY_POINTS: ClassVar[tuple[PointID, ...]] = (PointID.WHEEL_CONTACT_CENTRE,)
+    OUTPUT_ONLY_POINTS: ClassVar[tuple[PointID, ...]] = (PointID.WHEEL_CONTACT_CENTER,)
     FREE_POINTS: ClassVar[tuple[PointID, ...]] = (PointID.TRAILING_ARM_OUTBOARD,)
 
     spring_type: CornerSpringType = CornerSpringType.COILOVER
@@ -510,7 +510,7 @@ class TrailingArmSuspension(CornerSuspension):
                 outboard=PointID.WHEEL_OUTBOARD,
                 axle_inboard=PointID.AXLE_INBOARD,
                 axle_outboard=PointID.AXLE_OUTBOARD,
-                wheel_contact_centre=PointID.WHEEL_CONTACT_CENTRE,
+                wheel_contact_center=PointID.WHEEL_CONTACT_CENTER,
             ),
         )
         if self.spring_type is CornerSpringType.COILOVER:

@@ -63,7 +63,7 @@ def test_steering_response_axis_is_recomputed_per_frame() -> None:
     assert float(np.max(np.ptp(directions, axis=0))) > 1e-4
 
 
-def test_wheel_centre_height_control_does_not_contaminate_virtual_metrics() -> None:
+def test_wheel_center_height_control_does_not_contaminate_virtual_metrics() -> None:
     """Authored jacking remains real, but the suspension hold excludes it."""
     suspension, sweep, evaluated = _solve("axle_steer_sweep.yaml")
     authored_tangents = compute_sweep_tangents(suspension, sweep, evaluated.states)
@@ -78,14 +78,14 @@ def test_wheel_centre_height_control_does_not_contaminate_virtual_metrics() -> N
 
     lower_key = PointRef(Side.LEFT, PointID.LOWER_WISHBONE_OUTBOARD)
     upper_key = PointRef(Side.LEFT, PointID.UPPER_WISHBONE_OUTBOARD)
-    wheel_centre_key = PointRef(Side.LEFT, PointID.WHEEL_CENTER)
+    wheel_center_key = PointRef(Side.LEFT, PointID.WHEEL_CENTER)
     lower_rate = authored_rack_tangent.rate(lower_key)
     upper_rate = authored_rack_tangent.rate(upper_key)
 
     assert np.linalg.norm(lower_rate) > 0.05
     assert lower_rate == pytest.approx(upper_rate, abs=2e-5)
     assert lower_rate[:2] == pytest.approx(np.zeros(2), abs=2e-8)
-    assert authored_rack_tangent.rate(wheel_centre_key)[2] == pytest.approx(
+    assert authored_rack_tangent.rate(wheel_center_key)[2] == pytest.approx(
         0.0,
         abs=2e-10,
     )

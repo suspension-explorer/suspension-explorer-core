@@ -54,7 +54,7 @@ ELEMENT_STYLES = {
     ElementType.ANTI_ROLL_BAR: LinkStyle("teal"),
     ElementType.TORSION_BAR: LinkStyle("teal"),
     # A single point rather than a path, so it is drawn as a marker alone.
-    ElementType.WHEEL_CONTACT_CENTRE: LinkStyle(
+    ElementType.WHEEL_CONTACT_CENTER: LinkStyle(
         "black",
         linewidth=0.0,
         markersize=15.0,

@@ -95,8 +95,8 @@ def test_recession_and_lateral_migration_are_design_relative_and_inward_positive
     state[PointID.WHEEL_CENTER] = state.get(PointID.WHEEL_CENTER) + Vector3(
         (-5.0, 0.0, 0.0)
     )
-    state[PointID.WHEEL_CONTACT_CENTRE] = state.get(
-        PointID.WHEEL_CONTACT_CENTRE
+    state[PointID.WHEEL_CONTACT_CENTER] = state.get(
+        PointID.WHEEL_CONTACT_CENTER
     ) + Vector3((0.0, -3.0, 0.0))
     context = MetricContext(state, suspension, suspension.config)
 
@@ -132,7 +132,7 @@ def test_anti_geometry_exposes_force_ratio_and_angle_forms() -> None:
             ),
             road=RoadPlane.horizontal_at(contact),
             side_view_ic=Point3((-500.0, 800.0, 300.0)),
-            wheel_contact_centre=contact,
+            wheel_contact_center=contact,
             wheel_center=Point3((0.0, 800.0, 250.0)),
             cg_position=Point3((1250.0, 0.0, 450.0)),
             wheelbase=2500.0,
