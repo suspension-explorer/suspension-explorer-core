@@ -347,7 +347,7 @@ class ActuatorCoordinate(_Coordinate):
 
 @dataclass(frozen=True, kw_only=True)
 class ElementLengthCoordinate(_Coordinate):
-    """True pin-centre length between two declared element endpoints."""
+    """True pin-center length between two declared element endpoints."""
 
     id: str
     label: str

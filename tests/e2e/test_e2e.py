@@ -435,8 +435,8 @@ class TestCliEndToEnd:
         result = visualize_geometry(suspension, output_file)
 
         assert output_file.exists()
-        assert len(result.wheel_contact_centre_z) == 2
-        assert result.wheel_contact_centres_on_road
+        assert len(result.wheel_contact_center_z) == 2
+        assert result.wheel_contact_centers_on_road
 
     @requires_viz
     def test_csv_output_with_animation(

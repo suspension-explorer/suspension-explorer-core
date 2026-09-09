@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from kinematics.core.steering_axis import SteeringResponseAxisResult
     from kinematics.core.steering_response import (
         SteeringResponseDefinition,
-        SuspensionHoldCatalogue,
+        SuspensionHoldCatalog,
     )
 
 
@@ -340,7 +340,7 @@ class Suspension(ABC):
         Write post-solve ground outputs into ``positions``; return the solved seed.
 
         The base suspension has no coupled ground geometry, so this is a no-op.
-        Axles overwrite both wheel contact centres with the coupled shared-plane
+        Axles overwrite both wheel contact centers with the coupled shared-plane
         solution and return the solved ground-normal angle so a sweep can thread
         it into the next state's solve as an explicit, stateless seed.
         """
@@ -450,7 +450,7 @@ class Suspension(ABC):
         """Return the steering actuator coordinate, if this suspension has one."""
         return None
 
-    def suspension_hold_catalogue(self) -> SuspensionHoldCatalogue | None:
+    def suspension_hold_catalog(self) -> SuspensionHoldCatalog | None:
         """Return topology-owned suspension holds for virtual steering."""
         return None
 
@@ -466,8 +466,8 @@ class Suspension(ABC):
         )
 
         steering = self.steering_actuator_coordinate()
-        catalogue = self.suspension_hold_catalogue()
-        if steering is None or catalogue is None:
+        catalog = self.suspension_hold_catalog()
+        if steering is None or catalog is None:
             if requested_option_id not in (None, "layout_default"):
                 raise ValueError(
                     f"Suspension type '{self.reported_type_key().value}' does not "
@@ -475,9 +475,9 @@ class Suspension(ABC):
                 )
             return None
         uses_default = requested_option_id in (None, "layout_default")
-        option_id = catalogue.default_option_id if uses_default else requested_option_id
+        option_id = catalog.default_option_id if uses_default else requested_option_id
         assert option_id is not None
-        option = catalogue.option(option_id)
+        option = catalog.option(option_id)
         if option.availability is SuspensionHoldAvailability.UNAVAILABLE:
             reason = option.unavailable_reason or "The option is unavailable."
             raise ValueError(f"Suspension hold '{option.id}' is unavailable: {reason}")

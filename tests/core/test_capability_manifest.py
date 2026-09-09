@@ -1,4 +1,4 @@
-"""Contract and coverage checks for the published capability catalogue."""
+"""Contract and coverage checks for the published capability catalog."""
 
 import json
 import subprocess

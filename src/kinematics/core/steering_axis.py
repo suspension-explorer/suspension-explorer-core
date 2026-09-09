@@ -23,8 +23,8 @@ therefore describe a counterfactual infinitesimal direction through the actual
 configuration; they do not move the suspension back to design condition.
 
 This target basis is intentionally independent of the authored sweep target basis. A
-wheel-centre-height target is not a suspension-travel lock: steering about an
-inclined kingpin would normally move the wheel centre vertically, so holding
+wheel-center-height target is not a suspension-travel lock: steering about an
+inclined kingpin would normally move the wheel center vertically, so holding
 that height forces a compensating suspension-travel response.  Fitting the
 resulting absolute upright motion yields the correct screw axis of combined
 steering and jacking, but not an isolated steering axis.  Replacing the authored

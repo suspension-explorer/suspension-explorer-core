@@ -10,7 +10,7 @@ from functools import partial
 from typing import Any
 
 from kinematics.core.enums import PointID
-from kinematics.core.points.derived.ground import get_wheel_contact_centre
+from kinematics.core.points.derived.ground import get_wheel_contact_center
 from kinematics.core.points.derived.manager import DerivedPointsSpec
 from kinematics.core.primitives.point_ref import PointKey
 from kinematics.core.primitives.vector_utils.generic import normalize_vector
@@ -31,7 +31,7 @@ def get_point_along_line(
 
 def get_axle_midpoint(positions: dict[PointKey, Any]) -> Any:
     """
-    Compute the centre point between the inboard and outboard axle positions.
+    Compute the center point between the inboard and outboard axle positions.
 
     Args:
         positions: Dictionary containing AXLE_INBOARD and AXLE_OUTBOARD.
@@ -46,28 +46,28 @@ def get_axle_midpoint(positions: dict[PointKey, Any]) -> Any:
 
 def get_wheel_center(positions: dict[PointKey, Any], wheel_offset: float) -> Any:
     """
-    Determine wheel centre from hub face using the ISO/SAE wheel-offset convention.
+    Determine wheel center from hub face using the ISO/SAE wheel-offset convention.
 
     Starting at AXLE_OUTBOARD (the hub mounting face), this moves along the
     axle axis toward inboard for positive wheel offset.
 
     Args:
         positions: Dictionary containing AXLE_INBOARD and AXLE_OUTBOARD.
-        wheel_offset: Offset from hub mounting face to wheel centre plane in mm.
+        wheel_offset: Offset from hub mounting face to wheel center plane in mm.
 
     Returns:
-        The wheel-centre position.
+        The wheel-center position.
     """
     p1 = positions[PointID.AXLE_OUTBOARD]  # Hub face.
     p2 = positions[PointID.AXLE_INBOARD]  # Axle inboard point.
     v = normalize_vector(p1 - p2)  # Points outboard from axle inboard to hub face.
-    # Positive ISO/SAE offset places the centreline inboard.
+    # Positive ISO/SAE offset places the centerline inboard.
     return p1 - v * wheel_offset
 
 
 def get_wheel_inboard(positions: dict[PointKey, Any], wheel_width: float) -> Any:
     """
-    Determine the inboard wheel edge from the centre and total wheel width.
+    Determine the inboard wheel edge from the center and total wheel width.
 
     Args:
         positions: Dictionary containing AXLE_INBOARD and WHEEL_CENTER.
@@ -84,7 +84,7 @@ def get_wheel_inboard(positions: dict[PointKey, Any], wheel_width: float) -> Any
 
 def get_wheel_outboard(positions: dict[PointKey, Any], wheel_width: float) -> Any:
     """
-    Determine the outboard wheel edge from the centre and total wheel width.
+    Determine the outboard wheel edge from the center and total wheel width.
 
     Args:
         positions: Dictionary containing AXLE_INBOARD and WHEEL_CENTER.
@@ -104,10 +104,10 @@ def build_wheel_derived_spec(wheel: WheelConfig) -> DerivedPointsSpec:
     Build the standard wheel derived-point specification.
 
     Every corner whose wheel spin axis is AXLE_INBOARD -> AXLE_OUTBOARD derives
-    the wheel centre, rim faces, and flat-ground wheel contact centre the same way.
-    When both corners are composed, AxleSuspension removes the WHEEL_CONTACT_CENTRE
+    the wheel center, rim faces, and flat-ground wheel contact center the same way.
+    When both corners are composed, AxleSuspension removes the WHEEL_CONTACT_CENTER
     entries from the composed derived-point graph entirely and writes both
-    contact centres from its post-solve ground closure instead, so no
+    contact centers from its post-solve ground closure instead, so no
     per-corner flat-ground result can reach an axle state.
     """
     tire_radius = wheel.tire.nominal_radius
@@ -120,8 +120,8 @@ def build_wheel_derived_spec(wheel: WheelConfig) -> DerivedPointsSpec:
         PointID.WHEEL_OUTBOARD: partial(
             get_wheel_outboard, wheel_width=wheel.tire.section_width
         ),
-        PointID.WHEEL_CONTACT_CENTRE: partial(
-            get_wheel_contact_centre, tire_radius=tire_radius
+        PointID.WHEEL_CONTACT_CENTER: partial(
+            get_wheel_contact_center, tire_radius=tire_radius
         ),
     }
     dependencies = {
@@ -129,7 +129,7 @@ def build_wheel_derived_spec(wheel: WheelConfig) -> DerivedPointsSpec:
         PointID.WHEEL_CENTER: {PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD},
         PointID.WHEEL_INBOARD: {PointID.WHEEL_CENTER, PointID.AXLE_INBOARD},
         PointID.WHEEL_OUTBOARD: {PointID.WHEEL_CENTER, PointID.AXLE_INBOARD},
-        PointID.WHEEL_CONTACT_CENTRE: {
+        PointID.WHEEL_CONTACT_CENTER: {
             PointID.WHEEL_CENTER,
             PointID.AXLE_INBOARD,
             PointID.AXLE_OUTBOARD,

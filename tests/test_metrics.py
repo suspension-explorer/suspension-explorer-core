@@ -206,7 +206,7 @@ def test_steering_axis_ground_intersection_uses_ground_tangent_height(
 ) -> None:
     """
     The steering-axis ground intersection should be evaluated on the
-    horizontal plane through the wheel contact centre, not on chassis Z = 0.
+    horizontal plane through the wheel contact center, not on chassis Z = 0.
     """
     suspension = load_geometry(double_wishbone_geometry_file)
     assert isinstance(suspension, DoubleWishboneSuspension)
@@ -220,10 +220,10 @@ def test_steering_axis_ground_intersection_uses_ground_tangent_height(
     upper = state.get(PointID.UPPER_WISHBONE_OUTBOARD).copy()
     direction = upper - lower
 
-    ground_tangent_data = state.get(PointID.WHEEL_CONTACT_CENTRE).data.copy()
+    ground_tangent_data = state.get(PointID.WHEEL_CONTACT_CENTER).data.copy()
     ground_tangent_data[2] = 123.456
     ground_tangent = Point3(ground_tangent_data)
-    state[PointID.WHEEL_CONTACT_CENTRE] = ground_tangent
+    state[PointID.WHEEL_CONTACT_CENTER] = ground_tangent
 
     expected_t = (ground_tangent[2] - lower[2]) / direction[2]
     expected_intersection = lower + expected_t * direction
@@ -236,7 +236,7 @@ def test_steering_axis_ground_intersection_uses_ground_tangent_height(
         actual_intersection.data,
         expected_intersection.data,
         atol=TEST_TOLERANCE,
-        err_msg=("Steering-axis intersection should use wheel contact centre Z height"),
+        err_msg=("Steering-axis intersection should use wheel contact center Z height"),
     )
 
 
@@ -300,7 +300,7 @@ def test_iso_steering_ground_metrics_use_wheel_relative_axes(
     ground_pt = ctx.steering_axis_ground_intersection
     assert ground_pt is not None
 
-    displacement = ground_pt - ctx.wheel_contact_centre
+    displacement = ground_pt - ctx.wheel_contact_center
     ground_normal = ctx.road.normal
     wheel_outboard_ground = (
         ctx.wheel_axis.vector() - ground_normal * ctx.wheel_axis.dot(ground_normal)
@@ -328,7 +328,7 @@ def test_iso_steering_ground_metrics_use_wheel_relative_axes(
         mechanical_trail,
         displacement[Axis.X],
         atol=1e-3,
-    ), "Mechanical trail should follow tyre X_T, not chassis X"
+    ), "Mechanical trail should follow tire X_T, not chassis X"
 
 
 def test_steering_geometry_uses_actual_banked_ground_plane(
@@ -343,7 +343,7 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
     state = suspension.initial_state().copy()
     axle_inboard = state.get(PointID.AXLE_INBOARD)
     state[PointID.AXLE_OUTBOARD] = axle_inboard + Vector3((80.0, 150.0, 60.0))
-    tangent = state.get(PointID.WHEEL_CONTACT_CENTRE)
+    tangent = state.get(PointID.WHEEL_CONTACT_CENTER)
 
     bank_angle = radians(12.0)
     tangent_y = cos(bank_angle)
@@ -373,7 +373,7 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
     outboard_axis = (
         ctx.wheel_axis.vector() - ground_normal * ctx.wheel_axis.dot(ground_normal)
     ).normalize()
-    displacement = intersection - ctx.wheel_contact_centre
+    displacement = intersection - ctx.wheel_contact_center
     forward_axis = (ctx.side_sign * outboard_axis.cross(ground_normal)).normalize()
     lateral_axis = ground_normal.cross(forward_axis).normalize()
     expected_offset = -ctx.side_sign * float(displacement.dot(lateral_axis))
@@ -383,19 +383,19 @@ def test_steering_geometry_uses_actual_banked_ground_plane(
     steering_axis_offset = calculate_steering_axis_offset_at_ground(
         steering_axis,
         ctx.road,
-        ctx.wheel_contact_centre,
+        ctx.wheel_contact_center,
         ctx.wheel_axis,
         ctx.side_sign,
     )
     scrub_radius = calculate_scrub_radius(
         steering_axis,
         ctx.road,
-        ctx.wheel_contact_centre,
+        ctx.wheel_contact_center,
     )
     mechanical_trail = calculate_mechanical_trail(
         steering_axis,
         ctx.road,
-        ctx.wheel_contact_centre,
+        ctx.wheel_contact_center,
         ctx.wheel_axis,
         ctx.side_sign,
     )
@@ -443,7 +443,7 @@ def test_anti_geometry_uses_perpendicular_cg_height_above_the_ground_plane(
         for candidate in states
         if suspension.compute_side_view_instant_center(candidate) is not None
     )
-    tangent = state.get(PointID.WHEEL_CONTACT_CENTRE)
+    tangent = state.get(PointID.WHEEL_CONTACT_CENTER)
 
     ground = _banked_ground_through(tangent, 12.0)
     ctx = MetricContext(
@@ -521,7 +521,7 @@ def test_anti_dive_on_flat_ground_equals_the_chassis_z_formula(
     )
     ctx = MetricContext(state=state, suspension=suspension, config=config)
 
-    tangent = state.get(PointID.WHEEL_CONTACT_CENTRE)
+    tangent = state.get(PointID.WHEEL_CONTACT_CENTER)
     svic = ctx.side_view_ic
     assert svic is not None
     run = float(tangent[Axis.X]) - float(svic[Axis.X])
@@ -561,7 +561,7 @@ def test_anti_squat_resolves_the_rise_along_a_banked_ground_normal(
         for candidate in states
         if suspension.compute_side_view_instant_center(candidate) is not None
     )
-    tangent = state.get(PointID.WHEEL_CONTACT_CENTRE)
+    tangent = state.get(PointID.WHEEL_CONTACT_CENTER)
     ground = _banked_ground_through(tangent, 12.0)
     ctx = MetricContext(state=state, suspension=suspension, config=config, road=ground)
 
@@ -599,12 +599,12 @@ def test_anti_cg_height_is_shared_by_both_corners_of_a_banked_axle(
     assert axle.config is not None
 
     state = axle.initial_state().copy()
-    left_tangent_ref = PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE)
+    left_tangent_ref = PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTER)
     left_tangent = state.get(left_tangent_ref)
     state.set(left_tangent_ref, left_tangent + Vector3((0.0, 0.0, 40.0)))
 
     left = state.get(left_tangent_ref)
-    right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE))
+    right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTER))
     lateral = (left - right).normalize()
     ground = RoadPlane.through(
         Direction3(Direction3((1.0, 0.0, 0.0)).cross(lateral)),
@@ -628,7 +628,7 @@ def test_anti_cg_height_is_shared_by_both_corners_of_a_banked_axle(
         assert height is not None
         heights[side] = height
         chassis_z_heights[side] = float(corner_config.cg_position[Axis.Z]) - float(
-            corner_state.get(PointID.WHEEL_CONTACT_CENTRE)[Axis.Z]
+            corner_state.get(PointID.WHEEL_CONTACT_CENTER)[Axis.Z]
         )
 
     np.testing.assert_allclose(
@@ -650,7 +650,7 @@ def test_fvsa_sign_follows_the_ground_line_rather_than_chassis_y(
     assert isinstance(suspension, DoubleWishboneSuspension)
     assert suspension.config is not None
     state = suspension.initial_state()
-    tangent = state.get(PointID.WHEEL_CONTACT_CENTRE)
+    tangent = state.get(PointID.WHEEL_CONTACT_CENTER)
 
     # Place the FVIC so its chassis-Y and along-ground components disagree on
     # a 45-degree bank; the solved geometry never sits this close to the

@@ -78,7 +78,7 @@ def visualize(
     Visualize a suspension geometry at its design condition.
 
     This command loads a single geometry file, calculates its initial state, and
-    generates a debug plot. It also reports whether the wheel contact centres
+    generates a debug plot. It also reports whether the wheel contact centers
     points lie on the reconstructed design road plane.
 
     Example:
@@ -95,17 +95,17 @@ def visualize(
         output_path=output,
     )
     road_distances = ", ".join(
-        f"{value:.3f}" for value in result.wheel_contact_centre_road_distance_mm
+        f"{value:.3f}" for value in result.wheel_contact_center_road_distance_mm
     )
-    if result.wheel_contact_centres_on_road:
+    if result.wheel_contact_centers_on_road:
         typer.secho(
-            "Geometry Check: OK. Wheel contact centres lie on the reconstructed "
+            "Geometry Check: OK. Wheel contact centers lie on the reconstructed "
             f"design road plane (distances = {road_distances} mm).",
             fg=typer.colors.GREEN,
         )
     else:
         typer.secho(
-            "Geometry Check: WARNING. Wheel contact centres do not lie on the "
+            "Geometry Check: WARNING. Wheel contact centers do not lie on the "
             "reconstructed design road plane.",
             fg=typer.colors.RED,
         )

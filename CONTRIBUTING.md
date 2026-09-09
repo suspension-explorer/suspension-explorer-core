@@ -59,10 +59,10 @@ architectures, solver changes, public API changes, or larger refactors.
 When submitting a pull request:
 
 - Keep the change focused where practical.
-- Include tests for new behaviour or bug fixes.
-- Update documentation where behaviour or public APIs change.
+- Include tests for new behavior or bug fixes.
+- Update documentation where behavior or public APIs change.
 - Make sure the relevant development checks pass.
-- Personally accept the contributor terms by checking the acknowledgement in
+- Personally accept the contributor terms by checking the acknowledgment in
   the pull request template. A maintainer or other person cannot accept the
   terms on your behalf.
 
@@ -78,8 +78,8 @@ Where possible, please include:
 - The Suspension Explorer Core version or commit where you observed the issue.
 - A minimal reproducing geometry, preferably as YAML.
 - The command, API call, or analysis that produces the problem.
-- The behaviour you expected.
-- The behaviour you observed.
+- The behavior you expected.
+- The behavior you observed.
 - Any relevant traceback, warning, or solver diagnostics.
 
 Please avoid including confidential or proprietary vehicle data in public

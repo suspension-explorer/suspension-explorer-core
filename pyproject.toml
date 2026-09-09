@@ -191,12 +191,9 @@ exclude_lines = [
 skip = ".git,*.pyc,*.pyo,__pycache__,*.egg-info,.venv,venv,.mypy_cache,.ruff_cache"
 # Ignore words that are valid in our domain (e.g., technical terms, variable names).
 #
-# "writeable" is the NumPy array flag name. "centre" and "catalogue" spellings
-# are load-bearing identifiers in the wire schema (PointID.WHEEL_CONTACT_CENTRE
-# and suspension_hold_catalogue both reach the frontend), so renaming them is a
-# deliberate cross-repo change rather than a spelling fix.
-ignore-words-list = "nd,writeable,centre,centres,centred,catalogue,catalogues"
-# en-GB_to_en-US enforces American spelling (behaviour, modelled, normalised...).
+# "writeable" is the NumPy array flag name.
+ignore-words-list = "nd,writeable"
+# en-GB_to_en-US enforces American spelling by flagging the en-GB variants.
 builtin = "clear,rare,informal,usage,en-GB_to_en-US"
 
 # ty type checker settings.

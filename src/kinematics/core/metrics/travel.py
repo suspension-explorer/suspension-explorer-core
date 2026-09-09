@@ -38,21 +38,21 @@ def calculate_half_track(ctx: MetricContext) -> float | None:
     """
     Half-track at this corner in mm.
 
-    Half-track is the lateral distance of the wheel contact centre from the
+    Half-track is the lateral distance of the wheel contact center from the
     vehicle centerline, measured as the magnitude of its chassis Y coordinate.
     Unlike the axle-level track metric, it is not resolved along the current
     local road plane.
 
         half_track = |CP_y(current)|
     """
-    return abs(float(ctx.wheel_contact_centre[Axis.Y]))
+    return abs(float(ctx.wheel_contact_center[Axis.Y]))
 
 
 def calculate_wheel_center_recession(ctx: MetricContext) -> float:
-    """Return rearward wheel-centre travel from design in mm.
+    """Return rearward wheel-center travel from design in mm.
 
     Chassis X is forward, so recession is design X minus current X. Positive
-    means the wheel centre moved rearward.
+    means the wheel center moved rearward.
     """
     return float(ctx.design_wheel_center[Axis.X] - ctx.wheel_center[Axis.X])
 
@@ -61,10 +61,10 @@ def calculate_contact_patch_lateral_migration(ctx: MetricContext) -> float:
     """Return inboard contact-patch travel from design in mm.
 
     The lateral displacement is folded by side so positive always means
-    movement toward the vehicle centreline.
+    movement toward the vehicle centerline.
     """
-    design_y = float(ctx.design_wheel_contact_centre[Axis.Y])
-    current_y = float(ctx.wheel_contact_centre[Axis.Y])
+    design_y = float(ctx.design_wheel_contact_center[Axis.Y])
+    current_y = float(ctx.wheel_contact_center[Axis.Y])
     return ctx.side_sign * (design_y - current_y)
 
 

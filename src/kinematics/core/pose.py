@@ -7,7 +7,7 @@ forward/left/up and earth-fixed Z points upwards, opposite gravity.
 
 Suspension Explorer models only a straight, level road. The road and ground
 planes therefore coincide with world ``Z = 0``. The axle's coupled wheel
-contact centres define that plane in chassis coordinates. Contact closure
+contact centers define that plane in chassis coordinates. Contact closure
 deliberately extrudes it parallel to chassis X, so this single-axle transform
 represents local heave and roll but assigns zero pitch, yaw, and longitudinal
 translation. Those unobservable whole-vehicle degrees of freedom are not
@@ -87,21 +87,21 @@ def world_space_for_axle_state(
 ) -> WorldSpace | None:
     """Construct the supported ISO earth-fixed frame for one axle state.
 
-    The road plane comes from the same two output wheel contact centres as metric
+    The road plane comes from the same two output wheel contact centers as metric
     calculations.  Chassis +X remains world +X because the closure gives the
     plane no longitudinal gradient.  The origin is the intersection of the
     road plane with chassis ``X = 0`` and ``Y = 0``.
 
     Returns ``None`` when the authored design condition is not level or the
-    current contact-centre pair cannot define the supported axle-local road plane.
+    current contact-center pair cannot define the supported axle-local road plane.
     """
     if axle.design_road_plane is None:
         return None
 
-    left = state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE))
-    right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE))
+    left = state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTER))
+    right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTER))
     try:
-        road = RoadPlane.from_axle_contact_centres(left, right)
+        road = RoadPlane.from_axle_contact_centers(left, right)
     except ValueError:
         return None
 

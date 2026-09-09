@@ -41,8 +41,8 @@ from kinematics.core.enums import (
 from kinematics.core.holds import CoordinateHold
 from kinematics.core.metrics.main import AxleMetricRows, compute_metrics_for_axle_state
 from kinematics.core.points.derived.ground import (
-    seed_from_contact_centres,
-    solve_axle_wheel_contact_centres,
+    seed_from_contact_centers,
+    solve_axle_wheel_contact_centers,
 )
 from kinematics.core.points.derived.manager import (
     DerivedPointsSpec,
@@ -80,7 +80,7 @@ if TYPE_CHECKING:
     from kinematics.core.metrics.registry import MetricSpec
     from kinematics.core.sensitivity import TangentField
     from kinematics.core.steering_axis import SteeringResponseAxisResult
-    from kinematics.core.steering_response import SuspensionHoldCatalogue
+    from kinematics.core.steering_response import SuspensionHoldCatalog
 
 
 class _CornerPositionView(Mapping[PointID, Any]):
@@ -231,7 +231,7 @@ class AxleSuspension(Suspension):
         return tuple(coordinates)
 
     @override
-    def suspension_hold_catalogue(self) -> SuspensionHoldCatalogue | None:
+    def suspension_hold_catalog(self) -> SuspensionHoldCatalog | None:
         """Compose compatible corner options into one axle-level selection.
 
         Each semantic option remains one user choice but expands to one
@@ -242,26 +242,26 @@ class AxleSuspension(Suspension):
         """
         from kinematics.core.steering_response import (
             SuspensionHoldAvailability,
-            SuspensionHoldCatalogue,
+            SuspensionHoldCatalog,
             SuspensionHoldOption,
         )
 
-        catalogues = tuple(
-            self.corners[side].suspension_hold_catalogue()
+        catalogs = tuple(
+            self.corners[side].suspension_hold_catalog()
             for side in (Side.LEFT, Side.RIGHT)
         )
-        if any(catalogue is None for catalogue in catalogues):
+        if any(catalog is None for catalog in catalogs):
             return None
-        left_catalogue, right_catalogue = catalogues
-        assert left_catalogue is not None and right_catalogue is not None
-        if left_catalogue.default_option_id != right_catalogue.default_option_id:
+        left_catalog, right_catalog = catalogs
+        assert left_catalog is not None and right_catalog is not None
+        if left_catalog.default_option_id != right_catalog.default_option_id:
             raise ValueError(
                 "Axle corners declare incompatible suspension-hold defaults"
             )
 
-        right_by_id = {option.id: option for option in right_catalogue.options}
+        right_by_id = {option.id: option for option in right_catalog.options}
         composed: list[SuspensionHoldOption] = []
-        for left_option in left_catalogue.options:
+        for left_option in left_catalog.options:
             right_option = right_by_id.get(left_option.id)
             if right_option is None:
                 continue
@@ -320,8 +320,8 @@ class AxleSuspension(Suspension):
 
         if not composed:
             return None
-        return SuspensionHoldCatalogue(
-            default_option_id=left_catalogue.default_option_id,
+        return SuspensionHoldCatalog(
+            default_option_id=left_catalog.default_option_id,
             options=tuple(composed),
         )
 
@@ -347,7 +347,7 @@ class AxleSuspension(Suspension):
 
         state = SuspensionState(positions, free_points)
         self.anti_roll.add_to_state(state)
-        # Corners construct their own flat-road contact centres before they are
+        # Corners construct their own flat-road contact centers before they are
         # composed; the closure overwrites both with the coupled shared-plane
         # solution so the design state carries one consistent ground.
         self.apply_ground_closure(state.positions)
@@ -388,12 +388,12 @@ class AxleSuspension(Suspension):
 
     @override
     def closure_points(self) -> tuple[PointKey, ...]:
-        """Return the coupled contact centres when ground closure owns them."""
+        """Return the coupled contact centers when ground closure owns them."""
         if self._ground_closure_plan() is None:
             return ()
         return (
-            PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE),
-            PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE),
+            PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTER),
+            PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTER),
         )
 
     @cached_property
@@ -405,10 +405,10 @@ class AxleSuspension(Suspension):
         rejected rather than reinterpreted as a rolled design condition.
         """
         state = self.initial_state()
-        left = state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE))
-        right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE))
+        left = state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTER))
+        right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTER))
         try:
-            road = RoadPlane.from_axle_contact_centres(left, right)
+            road = RoadPlane.from_axle_contact_centers(left, right)
         except ValueError:
             return None
         if not road.normal.almost_equals(
@@ -504,13 +504,13 @@ class AxleSuspension(Suspension):
         functions.update(anti_roll_spec.functions)
         dependencies.update(anti_roll_spec.dependencies)
         if self._ground_closure_plan() is not None:
-            # The coupled contact centres are post-solve closure outputs, not derived
+            # The coupled contact centers are post-solve closure outputs, not derived
             # points: dropping the composed flat-ground entries means nothing
-            # can silently write per-corner flat-road centres into an axle state.
+            # can silently write per-corner flat-road centers into an axle state.
             for side in (Side.LEFT, Side.RIGHT):
-                contact_centre = PointRef(side, PointID.WHEEL_CONTACT_CENTRE)
-                functions.pop(contact_centre, None)
-                dependencies.pop(contact_centre, None)
+                contact_center = PointRef(side, PointID.WHEEL_CONTACT_CENTER)
+                functions.pop(contact_center, None)
+                dependencies.pop(contact_center, None)
         return DerivedPointsSpec(functions, dependencies)
 
     def _ground_closure_plan(self) -> dict[str, Any] | None:
@@ -518,8 +518,8 @@ class AxleSuspension(Suspension):
 
         The closure needs both corners' wheel radii and spin axes. Corners
         without a wheel configuration have no radius to couple, and a custom
-        corner that solves its own authored contact centre as a free point owns
-        that point outright; both cases leave contact-centre ownership with the
+        corner that solves its own authored contact center as a free point owns
+        that point outright; both cases leave contact-center ownership with the
         corners.
         """
         left_corner = self.corners[Side.LEFT]
@@ -527,8 +527,8 @@ class AxleSuspension(Suspension):
         if left_corner.config is None or right_corner.config is None:
             return None
         if (
-            PointID.WHEEL_CONTACT_CENTRE in left_corner.free_points()
-            or PointID.WHEEL_CONTACT_CENTRE in right_corner.free_points()
+            PointID.WHEEL_CONTACT_CENTER in left_corner.free_points()
+            or PointID.WHEEL_CONTACT_CENTER in right_corner.free_points()
         ):
             return None
 
@@ -551,29 +551,29 @@ class AxleSuspension(Suspension):
         positions: dict[PointKey, Any],
         seed: float | None = None,
     ) -> float | None:
-        """Overwrite both wheel contact centres with the coupled solution.
+        """Overwrite both wheel contact centers with the coupled solution.
 
         Runs once per accepted state, after solving. With no explicit ``seed``,
-        the angle implied by the contact-centre values already stored in
+        the angle implied by the contact-center values already stored in
         ``positions``
         is recovered as the seed, so branch continuity needs no hidden state.
         Returns the solved primal ground-normal angle, or ``None`` when the
-        corners own their contact centres.
+        corners own their contact centers.
         """
         plan = self._ground_closure_plan()
         if plan is None:
             return None
-        left_contact_centre = PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE)
-        right_contact_centre = PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE)
+        left_contact_center = PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTER)
+        right_contact_center = PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTER)
         if seed is None:
-            stored_left = positions.get(left_contact_centre)
-            stored_right = positions.get(right_contact_centre)
+            stored_left = positions.get(left_contact_center)
+            stored_right = positions.get(right_contact_center)
             if stored_left is not None and stored_right is not None:
-                seed = seed_from_contact_centres(stored_left, stored_right)
-        contact_centres = solve_axle_wheel_contact_centres(positions, **plan, seed=seed)
-        positions[left_contact_centre] = contact_centres.left
-        positions[right_contact_centre] = contact_centres.right
-        return contact_centres.normal_angle
+                seed = seed_from_contact_centers(stored_left, stored_right)
+        contact_centers = solve_axle_wheel_contact_centers(positions, **plan, seed=seed)
+        positions[left_contact_center] = contact_centers.left
+        positions[right_contact_center] = contact_centers.right
+        return contact_centers.normal_angle
 
     @staticmethod
     def _wrap_derived(function: PositionFn, side: Side) -> PositionFn:

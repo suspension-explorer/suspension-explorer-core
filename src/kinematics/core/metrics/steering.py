@@ -126,7 +126,7 @@ def calculate_kpi(axis: SteeringAxis, side_sign: float) -> float | None:
 
     This is ISO 8855:2011 steering-axis inclination (§7.2.5), resolved in the
     chassis YZ plane against chassis +Z. Positive KPI means the top of the axis
-    tilts inward toward the vehicle centreline.
+    tilts inward toward the vehicle centerline.
 
     ``side_sign`` is ``+1`` for left and ``-1`` for right. ``None`` marks an
     unspecified vehicle side rather than inventing an inward direction.
@@ -139,34 +139,34 @@ def calculate_kpi(axis: SteeringAxis, side_sign: float) -> float | None:
 def calculate_scrub_radius(
     axis: SteeringAxis,
     road: RoadPlane,
-    contact_centre: Point3,
+    contact_center: Point3,
 ) -> float | None:
     """Return unsigned road-plane scrub radius for ``axis``.
 
     Following ISO 8855:2011 scrub radius (§7.2.10), this is the distance in the
-    local road plane from the tyre contact centre to the steering-axis
+    local road plane from the tire contact center to the steering-axis
     intersection. It is not the signed lateral steering-axis offset. ``None``
     indicates that the axis does not intersect the road plane.
     """
-    displacement = _road_displacement(axis, road, contact_centre)
+    displacement = _road_displacement(axis, road, contact_center)
     return displacement.norm() if displacement is not None else None
 
 
 def calculate_steering_axis_offset_at_ground(
     axis: SteeringAxis,
     road: RoadPlane,
-    contact_centre: Point3,
+    contact_center: Point3,
     wheel_axis: Vector3 | Direction3,
     side_sign: float,
 ) -> float | None:
     """Return inward-positive steering-axis offset at ground for ``axis``.
 
     Following ISO 8855:2011 steering-axis offset at ground (§7.2.6), this is
-    the signed lateral component along tyre ``Y_T`` from the contact centre to
+    the signed lateral component along tire ``Y_T`` from the contact center to
     the axis intersection with the local road plane. ``None`` indicates that
-    the line or tyre-road basis cannot be resolved.
+    the line or tire-road basis cannot be resolved.
     """
-    displacement = _road_displacement(axis, road, contact_centre)
+    displacement = _road_displacement(axis, road, contact_center)
     tyre_axes = _tyre_road_axes(wheel_axis, road, side_sign)
     if displacement is None or tyre_axes is None:
         return None
@@ -177,18 +177,18 @@ def calculate_steering_axis_offset_at_ground(
 def calculate_mechanical_trail(
     axis: SteeringAxis,
     road: RoadPlane,
-    contact_centre: Point3,
+    contact_center: Point3,
     wheel_axis: Vector3 | Direction3,
     side_sign: float,
 ) -> float | None:
     """Return ahead-positive wheel-relative mechanical trail for ``axis``.
 
     This is ISO 8855:2011 castor offset at ground (§7.2.3): the longitudinal
-    component along tyre ``X_T`` from the contact centre to the axis-road
-    intersection. It follows the steered tyre basis rather than chassis X.
-    ``None`` indicates that the line or tyre-road basis cannot be resolved.
+    component along tire ``X_T`` from the contact center to the axis-road
+    intersection. It follows the steered tire basis rather than chassis X.
+    ``None`` indicates that the line or tire-road basis cannot be resolved.
     """
-    displacement = _road_displacement(axis, road, contact_centre)
+    displacement = _road_displacement(axis, road, contact_center)
     tyre_axes = _tyre_road_axes(wheel_axis, road, side_sign)
     if displacement is None or tyre_axes is None:
         return None
@@ -203,11 +203,11 @@ def calculate_steering_axis_longitudinal_offset_at_wheel_center(
     wheel_axis: Vector3 | Direction3,
     side_sign: float,
 ) -> float | None:
-    """Return rearward-positive steering-axis offset at wheel-centre height.
+    """Return rearward-positive steering-axis offset at wheel-center height.
 
-    The steering axis is intersected with the plane through the wheel centre
-    parallel to the local road. The displacement is resolved along the tyre's
-    forward axis, so a steering axis behind the wheel centre is positive.
+    The steering axis is intersected with the plane through the wheel center
+    parallel to the local road. The displacement is resolved along the tire's
+    forward axis, so a steering axis behind the wheel center is positive.
     """
     displacement = _wheel_center_plane_displacement(axis, road, wheel_center)
     tyre_axes = _tyre_road_axes(wheel_axis, road, side_sign)
@@ -224,11 +224,11 @@ def calculate_steering_axis_lateral_offset_at_wheel_center(
     wheel_axis: Vector3 | Direction3,
     side_sign: float,
 ) -> float | None:
-    """Return inboard-positive steering-axis offset at wheel-centre height.
+    """Return inboard-positive steering-axis offset at wheel-center height.
 
     The intersection construction matches
     :func:`calculate_steering_axis_longitudinal_offset_at_wheel_center`.
-    Folding the tyre-lateral component by vehicle side makes an inboard axis
+    Folding the tire-lateral component by vehicle side makes an inboard axis
     positive for both left and right corners.
     """
     displacement = _wheel_center_plane_displacement(axis, road, wheel_center)
@@ -242,13 +242,13 @@ def calculate_steering_axis_lateral_offset_at_wheel_center(
 def _road_displacement(
     axis: SteeringAxis,
     road: RoadPlane,
-    contact_centre: Point3,
+    contact_center: Point3,
 ) -> Vector3 | None:
     """Return contact-to-axis-intersection displacement in the road plane."""
     intersection = axis.intersect_road(road)
-    if intersection is None or not np.isfinite(contact_centre.data).all():
+    if intersection is None or not np.isfinite(contact_center.data).all():
         return None
-    return intersection - contact_centre
+    return intersection - contact_center
 
 
 def _wheel_center_plane_displacement(
@@ -256,7 +256,7 @@ def _wheel_center_plane_displacement(
     road: RoadPlane,
     wheel_center: Point3,
 ) -> Vector3 | None:
-    """Return wheel-centre-to-axis displacement in a road-parallel plane."""
+    """Return wheel-center-to-axis displacement in a road-parallel plane."""
     wheel_center_plane = RoadPlane.through(road.normal, wheel_center)
     intersection = axis.intersect_road(wheel_center_plane)
     if intersection is None or not np.isfinite(wheel_center.data).all():
@@ -269,7 +269,7 @@ def _tyre_road_axes(
     road: RoadPlane,
     side_sign: float,
 ) -> tuple[Direction3, Direction3] | None:
-    """Return tyre-forward and tyre-lateral directions within ``road``."""
+    """Return tire-forward and tire-lateral directions within ``road``."""
     if abs(side_sign) < EPS_GEOMETRIC or not np.isfinite(wheel_axis.data).all():
         return None
     magnitude = float(np.linalg.norm(wheel_axis.data))

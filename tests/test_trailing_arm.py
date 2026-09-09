@@ -89,7 +89,7 @@ def test_coilover_semi_trailing_arm_solves_about_an_oblique_axis(coilover):
     assert abs(final_toe - first_toe) > 0.01
 
 
-def test_torsion_bar_centres_on_pivot_with_direct_arm_twist_and_damper():
+def test_torsion_bar_centers_on_pivot_with_direct_arm_twist_and_damper():
     torsion = load_geometry(TEST_DATA / "trailing_arm_torsion_geometry.yaml")
     assert isinstance(torsion, TrailingArmSuspension)
     bar = next(

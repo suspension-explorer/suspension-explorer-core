@@ -148,7 +148,7 @@ _MULTI_LINK_DIRECT_MOUNTS = (
 def check_multi_link_mount(actuation: ActuationSpec) -> None:
     """Restrict mounts to bodies a multi-link corner can actually offer.
 
-    Direct actuation may ride the upright or the centreline of a lower
+    Direct actuation may ride the upright or the centerline of a lower
     locating rod (a fork clamped around the link). Pushrod-rocker actuation
     needs a rigid off-axis pickup, which only the upright provides.
     """
@@ -163,7 +163,7 @@ def check_multi_link_mount(actuation: ActuationSpec) -> None:
     if actuation.mount not in _MULTI_LINK_DIRECT_MOUNTS:
         raise ValueError(
             "Multi-link direct actuation must mount on the upright or on a "
-            "lower link's centreline"
+            "lower link's centerline"
         )
 
 

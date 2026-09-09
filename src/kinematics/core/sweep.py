@@ -17,7 +17,7 @@ semantically separate derivative product.  At every accepted state the
 suspension topology provides a steering actuator and an independent set of
 suspension-travel holds.  The steering-response module solves that analytical
 derivative at the current state and fits each upright's screw axis.  This keeps
-virtual steering metrics independent of wheel-centre, damper, heave, or roll
+virtual steering metrics independent of wheel-center, damper, heave, or roll
 targets used to reach the state while still avoiding nonlinear perturbation or
 finite differences.
 
@@ -114,7 +114,7 @@ def _ground_closure_finalizer(
 ) -> Callable[[dict[PointKey, Any]], None]:
     """Build the accepted-state finaliser that applies the ground closure.
 
-    The coupled wheel contact centres are pure outputs, solved once per
+    The coupled wheel contact centers are pure outputs, solved once per
     accepted state inside the solver's accept path, so no state can leave the
     solver with stale closure values. Each solved root seeds the next state's
     closure, keeping a multi-root geometry on one continuous branch.
@@ -410,8 +410,8 @@ def evaluate_solved_sweep(
     stale closure outputs into metrics and the caller's states are never
     mutated. The returned :class:`EvaluatedSweep` holds the finalized copies.
     Seeds thread exactly as they do during solving: the first state recovers
-    its seed from its stored contact-centre values and each solved root seeds the
-    next state, so already-finalised states reproduce their stored values.
+    its seed from its stored contact-center values and each solved root seeds the
+    next state, so already-finalized states reproduce their stored values.
     """
     if len(states) != len(solver_stats):
         raise ValueError(
@@ -442,7 +442,7 @@ def _evaluate_finalized_sweep(
 
     :func:`solve_evaluated_sweep` comes here directly so the sweep is closed
     exactly once, at solving time; only externally supplied states pay the
-    copy-and-finalise pass in :func:`evaluate_solved_sweep`.
+    copy-and-finalize pass in :func:`evaluate_solved_sweep`.
     """
     tangents, derivative_error = _compute_sweep_tangents_safely(
         suspension,

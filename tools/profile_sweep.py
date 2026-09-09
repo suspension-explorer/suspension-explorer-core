@@ -5,7 +5,7 @@ Profile a full-axle solve/analyze sweep and print the hottest functions.
 Runs the same rocker/ARB axle-articulation sweep the benchmarks use (two
 coupled corners with opposed wheel travel) under cProfile, then prints the top 30
 functions by cumulative time. Use this to find where the solve spends its
-time before reaching for any optimisation.
+time before reaching for any optimization.
 
 Run
 ---

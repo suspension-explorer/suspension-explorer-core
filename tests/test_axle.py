@@ -301,8 +301,8 @@ def test_ground_closure_is_applied_at_every_public_state_boundary(
     assert isinstance(axle, AxleSuspension)
     sweep = load_sweep(test_data_dir / "axle_sweep.yaml", axle)
     tangent_refs = (
-        PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE),
-        PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE),
+        PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTER),
+        PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTER),
     )
 
     raw_states, raw_stats = solve_suspension_sweep(
@@ -393,8 +393,8 @@ def test_axle_metrics_reject_degenerate_road_contacts(test_data_dir: Path) -> No
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
     assert isinstance(axle, AxleSuspension)
     state = axle.initial_state().copy()
-    left_tangent = PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE)
-    right_tangent = PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE)
+    left_tangent = PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTER)
+    right_tangent = PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTER)
     state.set(left_tangent, state.get(right_tangent))
 
     with pytest.raises(ValueError):
@@ -429,14 +429,14 @@ def test_axle_metrics_share_one_ground_line_instance_with_both_corners(
     road = received_ground[0]
     assert road.normal[Axis.X] == pytest.approx(0.0, abs=1e-12)
     for side in (Side.LEFT, Side.RIGHT):
-        tangent = state.get(PointRef(side, PointID.WHEEL_CONTACT_CENTRE))
+        tangent = state.get(PointRef(side, PointID.WHEEL_CONTACT_CENTER))
         assert road.signed_distance(tangent) == pytest.approx(0.0, abs=1e-8)
 
 
-def _road_datum_from_axle_contact_centres(state: SuspensionState) -> RoadPlane:
+def _road_datum_from_axle_contact_centers(state: SuspensionState) -> RoadPlane:
     """Build the zero-grade YZ road plane implied by the stored contacts."""
-    left = state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE))
-    right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE))
+    left = state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTER))
+    right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTER))
     dy = float(left[Axis.Y] - right[Axis.Y])
     dz = float(left[Axis.Z] - right[Axis.Z])
     magnitude = hypot(dy, dz)
@@ -458,7 +458,7 @@ def test_ride_height_change_uses_axle_local_road_plane(test_data_dir: Path) -> N
     state = states[-1]
     rows = compute_metrics_for_state_from_suspension(state, axle)
     assert isinstance(rows, AxleMetricRows)
-    current_ground = _road_datum_from_axle_contact_centres(state)
+    current_ground = _road_datum_from_axle_contact_centers(state)
     design_road = axle.design_road_plane
     assert design_road is not None
     chassis_origin = Point3((0.0, 0.0, 0.0))
@@ -469,7 +469,7 @@ def test_ride_height_change_uses_axle_local_road_plane(test_data_dir: Path) -> N
 
 
 def test_iso_roll_track_and_generic_track_change(test_data_dir: Path) -> None:
-    """Axle attitude uses wheel centres; ISO track remains the rest dimension."""
+    """Axle attitude uses wheel centers; ISO track remains the rest dimension."""
     axle = load_geometry(test_data_dir / "axle_geometry.yaml")
     assert isinstance(axle, AxleSuspension)
     spec = yaml.safe_load(
@@ -498,13 +498,13 @@ def test_iso_roll_track_and_generic_track_change(test_data_dir: Path) -> None:
     )
 
     design = axle.initial_state()
-    design_left = design.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE))
-    design_right = design.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE))
+    design_left = design.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTER))
+    design_right = design.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTER))
     expected_track = abs(float(design_left[Axis.Y] - design_right[Axis.Y]))
 
-    road = _road_datum_from_axle_contact_centres(state)
-    current_left = state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTRE))
-    current_right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTRE))
+    road = _road_datum_from_axle_contact_centers(state)
+    current_left = state.get(PointRef(Side.LEFT, PointID.WHEEL_CONTACT_CENTER))
+    current_right = state.get(PointRef(Side.RIGHT, PointID.WHEEL_CONTACT_CENTER))
     current_track = abs(float(road.lateral.dot(current_left - current_right)))
 
     assert rows.axle["roll"] == pytest.approx(expected_roll)

@@ -373,10 +373,10 @@ def test_damper_locked_rack_sweep_allows_wheel_center_motion() -> None:
     states, _ = solve_sweep(suspension, sweep)
     damper = sweep.target_sweeps[0][0]
     lengths = [damper.coordinate.measure(state.positions) for state in states]
-    wheel_centres = [state.get(PointID.WHEEL_CENTER).data for state in states]
+    wheel_centers = [state.get(PointID.WHEEL_CENTER).data for state in states]
 
     assert max(lengths) - min(lengths) < 1e-5
-    assert not np.allclose(wheel_centres[0], wheel_centres[-1])
+    assert not np.allclose(wheel_centers[0], wheel_centers[-1])
 
     tangents = compute_sweep_tangents(suspension, sweep, states)
     assert all(len(fields) == 2 for fields in tangents.per_step)

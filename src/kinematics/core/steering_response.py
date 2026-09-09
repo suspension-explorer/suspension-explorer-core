@@ -10,7 +10,7 @@ response solves the permanent constraint rates together with
 
 This module owns only the domain declaration and the corresponding absolute
 target basis.  It neither performs the tangent solve nor fits an axis.  In
-particular, it never consults authored sweep targets: a wheel-centre-height
+particular, it never consults authored sweep targets: a wheel-center-height
 target and a damper-length target can reach the same state but define different
 partials.  The held values are measured from the supplied solved state so that
 the target set is a complete, internally consistent description of the local
@@ -104,7 +104,7 @@ class SuspensionHoldOption:
 
 
 @dataclass(frozen=True)
-class SuspensionHoldCatalogue:
+class SuspensionHoldCatalog:
     """All suspension holds published by one topology for virtual steering."""
 
     default_option_id: str
@@ -237,7 +237,7 @@ def materialize_steering_response_targets(
     The steering target is first, followed by topology-declared travel holds in
     their stored order.  Current-value factories own the coordinate measurement
     formulas, avoiding a steering-specific copy of projected-position or
-    pin-centre-length math.
+    pin-center-length math.
     """
     if definition is None:
         return None

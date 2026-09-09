@@ -354,7 +354,7 @@ def build_actuation(
             )
         if external_pickups:
             raise ValueError("Direct actuation does not accept rocker pickups")
-        # A two-joint rod carries the pickup on its centreline as a derived
+        # A two-joint rod carries the pickup on its centerline as a derived
         # point; a three-point-plus body carries it rigidly anywhere.
         return ActuationDirect(
             spring_pickup_body=mount_body,
