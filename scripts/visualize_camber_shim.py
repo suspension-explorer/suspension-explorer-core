@@ -3,6 +3,9 @@ Visualization script for camber shim effects.
 
 Generates side-by-side comparisons of stock vs. shimmed suspension geometry,
 demonstrating how camber shims rotate the upright about the lower ball joint.
+
+Run from the repository root:
+    uv run python scripts/visualize_camber_shim.py
 """
 
 from dataclasses import replace

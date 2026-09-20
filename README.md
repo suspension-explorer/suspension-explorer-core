@@ -14,14 +14,13 @@
 # `suspension-explorer-core`
 
 > [!WARNING]
-> Suspension Explorer is experimental and under active development. If using it for any
-> real-world project, please validate its results independently before using them for
-> design decisions.
+> Suspension Explorer is experimental and under active development. Independently
+> validate results before using them for real-world design decisions.
 
 Suspension Explorer is a geometric constraint solver for vehicle suspension
 kinematics. This repository contains the open-core Python solver and its CLI
 adapter. It can validate suspension geometry, solve coordinated bump, roll, and
-steering sweeps, calculate suspension metrics, export results, and render simple
+steering sweeps, calculate suspension metrics, export results, and render
 plots or animations.
 
 The solver models ideal rigid parts and joints. It calculates geometry and
@@ -34,9 +33,9 @@ tool.
   <em>A double-wishbone suspension at its design condition.</em>
 </p>
 
-## What is supported
+## Supported models and outputs
 
-| Area                      | Supported                                                                                 | Important limits                                                                                                   |
+| Area                      | Supported                                                                                 | Limits                                                                                                             |
 | ------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Locating architectures    | Double wishbone, MacPherson strut, multi-link (five-rod), and semi-trailing arm           | Each may be built as one corner or a composed two-corner axle.                                                     |
 | Axle geometry             | Mirrored or explicitly authored left and right corners                                    | If `hardpoints.right` is omitted, the complete left geometry and side-local setup are mirrored through `Y = 0`.    |
@@ -56,11 +55,11 @@ anti-squat geometry,
 damper and mechanism travel, and applicable motion ratios. Metric availability
 depends on the architecture and installed mechanisms.
 
-Analytical constraint Jacobians are used by the nonlinear solver. Applicable
+The nonlinear solver uses analytical constraint Jacobians. Applicable
 motion ratios and response derivatives are evaluated from the solved constraint
 Jacobian rather than by finite differencing adjacent sweep steps.
 
-### Explicitly outside the current model
+### Model limitations
 
 - Multibody dynamics, inertia, damping, applied loads, and transient behavior.
 - Bushing, chassis, tire, or component compliance.
@@ -86,13 +85,13 @@ Suspension Explorer uses the ISO 8855 vehicle coordinate system:
 
 Hardpoints describe the design-condition assembly in chassis space. Fixed
 chassis hardpoints remain fixed while suspension, wheel, and tire points move
-relative to them. Left-side hardpoints therefore normally have positive Y
+relative to them. Left-side hardpoints normally have positive Y
 coordinates and right-side hardpoints normally have negative Y coordinates.
 
 ### Chassis and world axis systems
 
-The system introduces two right-handed coordinate systems as `Chassis` and
-`World`. Chassis space follows the ISO 8855:2011 vehicle axis system: X points
+Suspension Explorer defines two right-handed coordinate systems: `Chassis` and `World`.
+Chassis space follows the ISO 8855:2011 vehicle axis system: X points
 forwards, Y left, and Z upwards, with the basis fixed to the sprung mass.
 Solver variables, constraints, hardpoints, and solved positions exist only in
 this system.
@@ -127,7 +126,7 @@ same axle-local road plane to world `Z = 0`, preserves chassis +X as world +X,
 and rotates/translates for local roll and heave. Metric calculation does not
 consume this transform.
 
-Metric reference systems are deliberate:
+Metrics use the following reference systems:
 
 - `camber` is the ISO vehicle-relative camber angle, while road-relative wheel
   inclination is not currently exported;
@@ -145,7 +144,7 @@ Metric reference systems are deliberate:
 - damper length and other Euclidean link lengths are invariant under the
   chassis-to-world rigid transform.
 
-`ride_height_change` is therefore the change in perpendicular clearance from
+`ride_height_change` is the change in perpendicular clearance from
 the chassis origin to the axle-local road plane. It is not a full-vehicle ride
 height or pitch result. Likewise, the exported `roll` is a kinematic axle
 state calculated as the ISO suspension roll angle of the current line joining
@@ -153,9 +152,8 @@ the wheel centers, not a solved sprung-mass attitude. The anti percentages are
 geometric construction metrics; they do not predict pitch under load.
 
 The contact model omits tire deflection, loaded radius, contact-patch extent,
-forces, compliance, and interaction with another axle. A future full-vehicle
-model could observe pitch from both axles, but that degree of freedom is
-intentionally absent from the present single-axle model.
+forces, compliance, and interaction with another axle. A full-vehicle model could
+infer pitch from both axles; the current single-axle model does not.
 
 ## Installation
 
@@ -170,8 +168,8 @@ Install the transport-independent solver API:
 uv pip install "kinematics @ git+https://github.com/suspension-explorer/suspension-explorer-core.git"
 ```
 
-This installs NumPy, SciPy, and Pydantic. It does not install YAML, CLI, export,
-or plotting dependencies.
+The core installation includes NumPy, SciPy, and Pydantic. YAML, CLI, export,
+and plotting dependencies require optional extras.
 
 ### CLI and file export
 
@@ -262,7 +260,7 @@ not a steering actuator.
 
 ### Setup shims
 
-Simple setup shims are declared in the corner `config` using design and setup
+Setup shims are declared in the corner `config` using design and setup
 stack thicknesses in millimeters:
 
 ```yaml
@@ -350,10 +348,10 @@ any held controls.
 uv run kinematics visualize --geometry geometry.yaml --output geometry.png
 ```
 
-This validates and builds the geometry, reports whether every derived wheel
-contact center lies on the reconstructed road plane, and writes a static
-image. The diagnostic also prints each center's raw chassis Z coordinate and
-signed road-plane distance. It requires `[cli,viz]`.
+The `visualize` command validates and builds the geometry, reports whether every
+derived wheel contact center lies on the reconstructed road plane, and writes a
+static image. The diagnostic also prints each center's raw chassis Z coordinate
+and signed road-plane distance. The command requires `[cli,viz]`.
 
 ### 4. Solve and export the sweep
 
@@ -458,9 +456,8 @@ targets:
 
 ## Python API
 
-`kinematics.core` accepts already-decoded mappings and has no YAML or filesystem
-dependency. This is the preferred boundary for applications embedding the
-solver:
+`kinematics.core` is the preferred API for applications embedding the solver. It
+accepts decoded mappings and has no YAML or filesystem dependency:
 
 ```python
 from kinematics.core.analysis import analyze_sweep
@@ -482,9 +479,9 @@ The CLI is a thin adapter around this core API for YAML input and file output.
 
 ### Steering-response axes
 
-> A steering-response axis is obtained from unit positive rack motion at the
-> current solved configuration while topology-declared suspension-travel
-> coordinates are held at their current values.
+A steering-response axis is calculated from unit positive rack motion at the
+current solved configuration while topology-declared suspension-travel
+coordinates are held at their current values.
 
 The response is a separate analytical derivative at each already-solved state;
 it does not inherit the targets that authored the surrounding sweep. A double
@@ -503,8 +500,8 @@ analysis:
     suspension_hold: upper_wishbone_angle
 ```
 
-This block changes analysis only; it never adds a target to the state solve.
-Each option names the local counterfactual it represents. Availability warnings,
+The `analysis.virtual_steering` block selects the suspension hold for response
+analysis without adding a target to the state solve. Availability warnings,
 such as fixed damper length with an upright-mounted pushrod, remain in structured
 analysis output.
 
@@ -514,9 +511,10 @@ direction, angular rate, screw pitch, rigid-body fit residuals, point count, and
 an explicit validity status. The same data is drawn as a clipped dash-dot line
 in every view of CLI animations without contributing to automatic plot bounds.
 
-This is an instantaneous kinematic axis, not necessarily a physical kingpin or
-ball-joint line. A spatial linkage or a real steering-to-spring coupling may
-produce nonzero screw pitch. An incomplete or inconsistent suspension hold,
+The steering-response axis is instantaneous and kinematic, and need not coincide
+with a physical kingpin or ball-joint line. A spatial linkage or a real
+steering-to-spring coupling may produce nonzero screw pitch. An incomplete or
+inconsistent suspension hold,
 near-pure translation, degenerate upright geometry, or a poor rigid-body fit
 leaves the axis unavailable for that frame and reports a diagnostic. The response
 uses an analytical tangent at that state; it does not finite-difference adjacent
@@ -528,8 +526,8 @@ also report an additive, motion-derived family using the suffix `_virtual`:
 `caster_virtual`, `kpi_virtual`, `steering_axis_offset_ground_virtual`,
 `scrub_radius_virtual`, and `mechanical_trail_virtual`. Each is ordered beside
 its physical counterpart and displayed with labels such as `Caster, Virtual`.
-Here **virtual steering axis** means the isolated steering-response screw-axis
-line above. The values use the same chassis, tire, road-plane, and sign
+The **virtual steering axis** is the isolated steering-response screw-axis
+line. Virtual metrics use the same chassis, tire, road-plane, and sign
 conventions as their physical-axis counterparts. They are `None` when that
 frame has no valid finite axis; selecting another published hold changes only
 the virtual family and never the original physical metrics. Screw pitch and
@@ -538,10 +536,9 @@ rather than being folded into these five line-based geometry values.
 
 Holding wheel-center height during the authored sweep is not the same as fixing
 the wishbones: it adds the suspension travel needed to cancel vertical motion
-from steering around an inclined axis. That remains the correct solved path, but
-it no longer changes the virtual steering definition. At each of those states,
-the selected suspension hold fixes current suspension travel and recovers the
-steering-only response.
+from steering around an inclined axis. The solved path leaves the virtual steering
+definition unchanged. At each solved state, the selected suspension hold fixes
+current suspension travel and recovers the steering-only response.
 For the ideal double-wishbone fixture, the default fitted virtual line
 therefore agrees with the ball-joint line even while the authored internals move
 between frames.
@@ -550,7 +547,7 @@ Internally, physical pivots and the motion fit each establish the same
 source-agnostic `SteeringAxis` representation. One common geometry path then
 computes its road intersection, caster, KPI, offset, scrub radius, and trail.
 
-## How the solver works
+## Solver design
 
 ```text
 decoded geometry mapping
@@ -580,9 +577,9 @@ constraint and target residuals. The problem is solved as nonlinear least
 squares with SciPy's Levenberg-Marquardt implementation and analytical
 Jacobians.
 
-This lets the same suspension topology be driven by targets such as wheel-center
-height and rack displacement without deriving a separate closed-form solution
-for every motion. The previous solved state seeds the next step, and diagnostics
+The constraint model supports targets such as wheel-center height and rack
+displacement without a separate closed-form solution for every motion. The previous
+solved state seeds the next step, and diagnostics
 report convergence, residual acceptance, branch continuity, derivative
 availability, mechanism chirality, and transmission-margin problems.
 
@@ -605,6 +602,9 @@ src/kinematics/
   cli/                     YAML, export, terminal, and visualization adapters
 tests/
   data/                    Valid example geometries, sweeps, and e2e references
+scripts/
+  plot_bump_sweep.py        Bump-sweep plots and animation
+  visualize_camber_shim.py  Camber-shim geometry and comparison plots
 tools/
   generate_jacobians.py    Symbolic Jacobian generator
 ```
@@ -615,61 +615,11 @@ already-built corners and the optional shared anti-roll and heave mechanisms;
 new locating architectures belong in `suspensions/corner/`, not in a new axle
 class.
 
-## Capability manifest
-
-Generate the versioned website/API reference contract with core dependencies only:
-
-```bash
-just manifest
-# Write to a selected path:
-just manifest /tmp/capabilities.json
-# From an installed package, including outside a repository checkout:
-python -m kinematics.core.capabilities --out capabilities.json --schema-out capabilities.schema.json
-```
-
-The default outputs are `dist/capabilities.json` and
-`dist/capabilities.json.schema.json`. CI also publishes these files in the
-`core-capabilities` artifact after generating them from an installed wheel.
-The Python API is `kinematics.core.capabilities.create_manifest()`.
-
-The manifest contains the package version, registered architectures and scopes,
-supported setup shims, all valid combinations of finite mechanism selectors,
-canonical metric metadata, per-configuration metric and output-point sets, and
-flat-export naming conventions. `null` means an architecture does not expose
-that selector; `"none"` is an explicit mechanism choice. Metric units preserve
-derivative operands, such as `mm/mm` or `deg/mm`.
-
-Generation enumerates the production selector enums and checks combinations with
-the registered geometry schemas and actuation builder. It instantiates accepted
-combinations with packaged reference hardpoints and reads the same metric and
-position declarations used by exports. It does not run a sweep, require CLI
-extras, import test fixtures, or infer compatibility by parsing documentation.
-Reference coordinates provide valid geometry for metadata discovery; they are
-not design recommendations or a guarantee about other numerical hardpoints.
-
-When adding an architecture or mechanism, update its production declarations and,
-where needed, `core/capabilities/reference.py` and `reference_geometry.json`.
-Failure to build an accepted reference combination aborts generation. Coverage
-tests require every registered architecture/scope and every selector enum value
-to be represented, and compare state declarations with actual state outputs.
-
-This is the exhaustive catalog of built-in metric identities and finite
-mechanism selections. It does not enumerate arbitrary hardpoints, numeric setup
-thicknesses, custom derivatives, or all possible sweep target names. Setup shim
-support is reported separately; pushrod shims require pushrod-rocker actuation.
-Declared metrics can return empty values when a calculation is undefined or
-required physical inputs are absent. The CLI's existing CSV/Parquet format is
-unchanged. Increment `schema_version` for a breaking manifest contract change.
-
-In the website repository, `just reference-ingest /path/to/capabilities.json`
-validates and saves this artifact and generates the reference pages. Use separate
-feature branches in core and website, merge/release core first, then ingest the
-released artifact and merge the website update. The website builds independently
-from its saved manifest.
-
 ## Development
 
-Common commands are:
+See [Contributing](CONTRIBUTING.md) for development guidance and
+[Capability manifest](docs/capability-manifest.md) for reference-data generation
+and website updates.
 
 ```bash
 just test
@@ -677,6 +627,16 @@ just check
 just format
 just spellcheck
 ```
+
+Generate camber-shim geometry and comparison plots from the repository root:
+
+```bash
+uv run python scripts/visualize_camber_shim.py
+```
+
+The script requires the CLI and visualization dependencies and writes
+`camber_shim_design.png`, `camber_shim_setup.png`, and
+`camber_shim_comparison.png` to the current directory.
 
 Run manual visualization tests with:
 

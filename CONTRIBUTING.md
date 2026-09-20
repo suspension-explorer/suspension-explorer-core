@@ -90,6 +90,9 @@ issues.
 Common development commands are documented in the
 [README](README.md#development).
 
+See [Capability manifest](docs/capability-manifest.md) for reference-data
+generation, declaration updates, validation, and the website release workflow.
+
 ```bash
 just test
 just check

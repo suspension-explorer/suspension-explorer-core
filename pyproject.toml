@@ -129,7 +129,6 @@ ignore = [
     "PLR0915",
     "T201",
 ]
-"visualize_*.py" = ["D103", "T201", "PLR2004"]
 # Developer scripts print to the terminal by design.
 "tools/**/*.py" = ["D103", "T201", "PLR2004", "PLC0415", "PLR0915"]
 "scripts/**/*.py" = ["D103", "T201", "PLR2004", "PLC0415", "PLR0915"]
@@ -202,7 +201,6 @@ builtin = "clear,rare,informal,usage,en-GB_to_en-US"
 exclude = [
     "src/kinematics/generated/",
     "src/kinematics/cli/visualization/",
-    "visualize_*.py",
     "tools/",
     "scripts/",
 ]
