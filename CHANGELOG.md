@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Tightened the README and moved capability-manifest generation, validation,
+  and website-release guidance to `docs/capability-manifest.md`, linked from
+  the README and contributing guide.
+- Moved `visualize_camber_shim.py` into `scripts/` and updated its documented
+  invocation, smoke tests, and lint/type-check configuration. Script behavior
+  is unchanged.
+
 ## [0.9.0] - 2026-09-09
 
 ### Added
