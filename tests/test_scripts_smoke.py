@@ -18,7 +18,7 @@ matplotlib.use("Agg")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PLOT_BUMP_SWEEP = REPO_ROOT / "scripts" / "plot_bump_sweep.py"
-VISUALIZE_CAMBER_SHIM = REPO_ROOT / "visualize_camber_shim.py"
+VISUALIZE_CAMBER_SHIM = REPO_ROOT / "scripts" / "visualize_camber_shim.py"
 
 
 def _load_script(path: Path) -> Any:
