@@ -1,0 +1,87 @@
+[
+  {
+    "key": "fsae_pushrod",
+    "description": "FSAE / FSUK-scale pushrods, horizontal rocker axes, inboard coilovers, a T-bar ARB and a central heave element. Illustrative hardpoints.",
+    "geometry": "fsae_pushrod.yaml",
+    "sweep": "axle-bump.yaml",
+    "features": [
+      "race_example",
+      "steered",
+      "pushrod_rocker",
+      "pushrod",
+      "horizontal_rocker",
+      "coilover",
+      "damper",
+      "t_bar",
+      "heave_link"
+    ]
+  },
+  {
+    "key": "fsae_pullrod",
+    "description": "FSAE / FSUK-scale pullrods, near-vertical rocker axes, low inboard coilovers, a T-bar ARB and a central heave element. Illustrative hardpoints.",
+    "geometry": "fsae_pullrod.yaml",
+    "sweep": "axle-bump.yaml",
+    "features": [
+      "race_example",
+      "steered",
+      "pushrod_rocker",
+      "pullrod",
+      "vertical_rocker",
+      "coilover",
+      "damper",
+      "t_bar",
+      "heave_link"
+    ]
+  },
+  {
+    "key": "indycar_pushrod",
+    "description": "IndyCar-inspired pushrods and near-vertical rockers with inboard coilovers, a transverse U-bar ARB and a central third element. Illustrative hardpoints.",
+    "geometry": "indycar_pushrod.yaml",
+    "sweep": "axle-bump.yaml",
+    "features": [
+      "race_example",
+      "steered",
+      "pushrod_rocker",
+      "pushrod",
+      "vertical_rocker",
+      "coilover",
+      "damper",
+      "u_bar",
+      "heave_link"
+    ]
+  },
+  {
+    "key": "formula_one_pushrod",
+    "description": "Double-wishbone pushrod layout with horizontal rockers, coaxial torsion bars, separate dampers, a U-bar ARB and a rocker-to-rocker heave link. Shares an approximately 10-degree caster baseline with the pullrod layout.",
+    "geometry": "formula_one_pushrod.yaml",
+    "sweep": "axle-bump.yaml",
+    "features": [
+      "race_example",
+      "steered",
+      "pushrod_rocker",
+      "pushrod",
+      "horizontal_rocker",
+      "torsion_bar",
+      "damper",
+      "u_bar",
+      "heave_link"
+    ]
+  },
+  {
+    "key": "formula_one_pullrod",
+    "description": "F1-inspired pullrods mounted to the upper wishbones, with low horizontal rockers, coaxial torsion bars, separate transverse dampers, a T-bar ARB and a central heave element. Shares an approximately 10-degree caster baseline with the pushrod layout.",
+    "geometry": "formula_one_pullrod.yaml",
+    "sweep": "axle-bump.yaml",
+    "features": [
+      "race_example",
+      "steered",
+      "pushrod_rocker",
+      "pullrod",
+      "horizontal_rocker",
+      "torsion_bar",
+      "damper",
+      "t_bar",
+      "heave_link"
+    ]
+  }
+]

@@ -110,6 +110,11 @@ class DoubleWishboneSuspension(CornerSuspension):
         PointID.LOWER_WISHBONE_INBOARD_REAR,
         PointID.LOWER_WISHBONE_OUTBOARD,
     )
+    UPPER_WISHBONE_BODY: ClassVar[tuple[PointID, PointID, PointID]] = (
+        PointID.UPPER_WISHBONE_INBOARD_FRONT,
+        PointID.UPPER_WISHBONE_INBOARD_REAR,
+        PointID.UPPER_WISHBONE_OUTBOARD,
+    )
     UPRIGHT_BODY: ClassVar[tuple[PointID, ...]] = (
         PointID.UPPER_WISHBONE_OUTBOARD,
         PointID.LOWER_WISHBONE_OUTBOARD,
@@ -122,6 +127,7 @@ class DoubleWishboneSuspension(CornerSuspension):
     )
     MOUNT_BODIES: ClassVar[dict[MountBody, tuple[PointID, ...]]] = {
         MountBody.LOWER_WISHBONE: LOWER_WISHBONE_BODY,
+        MountBody.UPPER_WISHBONE: UPPER_WISHBONE_BODY,
         MountBody.UPRIGHT: UPRIGHT_BODY,
     }
 

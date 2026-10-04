@@ -574,6 +574,7 @@ class CornerSpringNone:
     free_points: tuple[PointID, ...] = ()
     output_points: tuple[PointID, ...] = ()
     rocker_mounted_points: tuple[PointID, ...] = ()
+    rocker_pickups: tuple[RockerPickup, ...] = ()
     damper_points: tuple[PointID, PointID] | None = None
 
     def validate(self, actuation: Actuation) -> None:
@@ -617,7 +618,7 @@ class CornerSpringNone:
 
 @dataclass(frozen=True)
 class CornerSpringCoilover:
-    """Linear corner coil spring or coilover."""
+    """Combined linear coil spring and damper with shared attachment points."""
 
     required_points: frozenset[PointID] = COIL_SPRING_POINTS
     free_points: tuple[PointID, ...] = (PointID.STRUT_BOTTOM,)
@@ -626,6 +627,9 @@ class CornerSpringCoilover:
         PointID.STRUT_BOTTOM,
     )
     rocker_mounted_points: tuple[PointID, ...] = (PointID.STRUT_BOTTOM,)
+    rocker_pickups: tuple[RockerPickup, ...] = (
+        RockerPickup(PointID.STRUT_BOTTOM, RockerPickupType.COILOVER),
+    )
     damper_points: tuple[PointID, PointID] = (
         PointID.STRUT_TOP,
         PointID.STRUT_BOTTOM,
@@ -686,7 +690,7 @@ class CornerSpringCoilover:
         """Return the physical spring/damper link."""
         return (
             VariableLengthLinkElement(
-                label="Spring/Damper",
+                label="Coilover",
                 type=ElementType.SPRING_DAMPER,
                 point_a=PointID.STRUT_TOP,
                 point_b=PointID.STRUT_BOTTOM,
@@ -702,6 +706,7 @@ class CornerSpringTorsionBar:
     free_points: tuple[PointID, ...] = ()
     output_points: tuple[PointID, ...] = ()
     rocker_mounted_points: tuple[PointID, ...] = ()
+    rocker_pickups: tuple[RockerPickup, ...] = ()
     damper_points: tuple[PointID, PointID] | None = None
 
     def validate(self, actuation: Actuation) -> None:
@@ -973,7 +978,7 @@ def composed_mechanism_elements(
 ) -> tuple[SuspensionElement, ...]:
     """Return physical elements declared by the installed mechanisms."""
     return (
-        *actuation.elements(damper.rocker_pickups),
+        *actuation.elements((*spring.rocker_pickups, *damper.rocker_pickups)),
         *spring.elements(actuation),
         *damper.elements(actuation),
     )

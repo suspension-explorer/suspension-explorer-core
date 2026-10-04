@@ -4,7 +4,35 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Added five researched race-car example axles with pushrod and pullrod
+  actuation, horizontal and vertical rockers, coilovers or torsion bars and
+  separate dampers, anti-roll bars, and central heave links. Included bump and
+  roll profiles and an exporter for the web app.
+- Added the `upper_wishbone` actuation mount for double-wishbone geometries.
+
+### Fixed
+
+- Treat a held rack target as satisfied for geometries without a steering rack,
+  allowing one bump or heave profile to work with steered and unsteered models.
+- Separate the FSAE / FSUK-Style and F1-Style pullrod rocker pickups and their paired
+  mounts. Check that every example's rod and inboard mechanism clears the
+  wishbones, uprights, and steering linkage throughout bump, roll, and steering
+  sweeps, and link the published coordinate reference.
+- Include the coilover pickup arm in rocker presentation. Label combined
+  spring-and-damper elements Coilover.
+
 ### Changed
+
+- Give the F1-Style pushrod and pullrod examples the same wheel, steering,
+  tire, vehicle, and setup baseline while retaining distinct actuation and
+  inboard mechanism layouts. Mount the pullrod to the upper wishbone and give
+  both layouts about 10 degrees of positive caster.
+- Use Title Case race example names with square-bracket qualifiers and slash
+  separators, including ARB type and heave links. Name illustrative layouts
+  F1-Style, IndyCar-Style, and FSAE / FSUK-Style. The F1-Style pushrod example
+  retains the original app DWB mechanism configuration, U-bar, and heave link.
 
 - Tightened the README and moved capability-manifest generation, validation,
   and website-release guidance to `docs/capability-manifest.md`, linked from

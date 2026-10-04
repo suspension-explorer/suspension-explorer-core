@@ -1,8 +1,8 @@
 """Tests for selectable actuation mount bodies.
 
 These tests cover the mount option that lets a corner actuation pickup be fixed
-to a chosen rigid body: a direct coil spring or a pushrod outboard end may be
-carried by the lower wishbone or by the upright. They exercise the schema, the
+to a chosen rigid body: a direct coil spring or a rod outboard end may be
+carried by either wishbone or by the upright. They exercise the schema, the
 build-time body lookup, the solved physical invariants, and the mount-body
 anchor validation.
 """
@@ -183,6 +183,19 @@ class TestBuildActuationMountMapping:
         assert (
             actuation.pushrod_outboard_body
             == DoubleWishboneSuspension.LOWER_WISHBONE_BODY
+        )
+
+    def test_pushrod_rocker_upper_wishbone_uses_upper_wishbone_body(self):
+        spec = ActuationSpec(
+            type=ActuationType.PUSHROD_ROCKER, mount=MountBody.UPPER_WISHBONE
+        )
+        actuation = build_actuation(
+            spec, mount_bodies=DoubleWishboneSuspension.MOUNT_BODIES
+        )
+        assert isinstance(actuation, ActuationPushrodRocker)
+        assert (
+            actuation.pushrod_outboard_body
+            == DoubleWishboneSuspension.UPPER_WISHBONE_BODY
         )
 
     def test_unknown_mount_body_is_rejected(self):
@@ -366,14 +379,21 @@ class TestMountedSpringSolveInvariants:
         )
         assert travel_separation > 1.0
 
-    def test_lower_wishbone_mounted_pushrod_holds_rigid_and_keeps_length(self):
-        # The stock pushrod_outboard (0, 870, 240) sits 40 mm off the plane of
-        # the lower wishbone anchors, so the chiral attachment is well defined.
-        suspension = _build_corner_with_mount(ROCKER_GEOMETRY, MountBody.LOWER_WISHBONE)
+    @pytest.mark.parametrize(
+        "mount,anchors",
+        [
+            (MountBody.LOWER_WISHBONE, DoubleWishboneSuspension.LOWER_WISHBONE_BODY),
+            (MountBody.UPPER_WISHBONE, DoubleWishboneSuspension.UPPER_WISHBONE_BODY),
+        ],
+    )
+    def test_wishbone_mounted_rod_holds_rigid_and_keeps_length(self, mount, anchors):
+        # The stock pickup is offset from each wishbone plane, defining a
+        # chiral attachment that remains rigid through wheel travel.
+        suspension = _build_corner_with_mount(ROCKER_GEOMETRY, mount)
         design = suspension.initial_state().positions
         design_distances = {
             anchor: _distance(design, PointID.PUSHROD_OUTBOARD, anchor)
-            for anchor in DoubleWishboneSuspension.LOWER_WISHBONE_BODY
+            for anchor in anchors
         }
         design_pushrod_length = _distance(
             design, PointID.PUSHROD_OUTBOARD, PointID.PUSHROD_INBOARD

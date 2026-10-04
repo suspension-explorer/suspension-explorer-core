@@ -187,6 +187,7 @@ class MountBody(StrEnum):
     """
 
     LOWER_WISHBONE = "lower_wishbone"
+    UPPER_WISHBONE = "upper_wishbone"
     UPRIGHT = "upright"
     LOWER_FRONT_LINK = "lower_front_link"
     LOWER_REAR_LINK = "lower_rear_link"

@@ -40,7 +40,7 @@ tool.
 | Locating architectures    | Double wishbone, MacPherson strut, multi-link (five-rod), and semi-trailing arm           | Each may be built as one corner or a composed two-corner axle.                                                     |
 | Axle geometry             | Mirrored or explicitly authored left and right corners                                    | If `hardpoints.right` is omitted, the complete left geometry and side-local setup are mirrored through `Y = 0`.    |
 | Wheel-heading control     | Translating steering rack or fixed toe link                                               | Select `steering.type: rack` or `steering.type: none`; front/rear position does not select steering automatically. |
-| Double-wishbone actuation | Direct or pushrod-rocker, mounted to the lower wishbone or upright                        | Direct actuation cannot be combined with a torsion bar.                                                            |
+| Double-wishbone actuation | Direct or pushrod-rocker, mounted to either wishbone or the upright                      | Direct actuation cannot be combined with a torsion bar.                                                            |
 | Double-wishbone springs   | None, coilover, or torsion bar                                                            | A torsion bar requires pushrod-rocker actuation.                                                                   |
 | Multi-link corners        | Four independent locating rods plus track rod or toe link; actuation on the upright or a direct spring on a lower link's centerline | No physical kingpin exists; steering geometry reports through the virtual (screw-axis) metric family only.        |
 | Axle mechanisms           | U-bar or T-bar anti-roll mechanism and rocker-to-rocker heave link                        | These mechanisms require a double-wishbone axle with pushrod-rocker actuation.                                     |
@@ -648,6 +648,14 @@ Generated analytical Jacobians live in `src/kinematics/core/jacobians.py`. Edit
 their symbolic definitions in `tools/generate_jacobians.py` and regenerate them
 with `just generate-jacobians` rather than manually changing generated
 expressions.
+
+## Race-car examples
+
+[Representative race-car layouts](examples/race-cars/README.md) include
+FSAE / FSUK-Style pushrod and pullrod coilovers, an IndyCar-Style axle, and
+F1-Style torsion-bar axles with separate dampers. They demonstrate horizontal
+rockers, near-vertical rockers, T-bar and U-bar ARBs, and central heave
+elements. Runnable bump/roll profiles and research sources accompany the YAML.
 
 ## License
 

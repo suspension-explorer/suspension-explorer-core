@@ -64,6 +64,7 @@ def test_corner_rocker_paths_include_perpendicular_arm_projection(
     assert {path.label for path in paths if "Rocker" in path.label} == {
         "Rocker Axis",
         "Rocker Pushrod Arm",
+        "Rocker Coilover Arm",
     }
 
     axis_start = np.asarray(positions[point_key_name(projection.rotation_axis[0])])
@@ -75,10 +76,31 @@ def test_corner_rocker_paths_include_perpendicular_arm_projection(
     assert np.dot(axis_end - axis_start, pickup - projected) == pytest.approx(0.0)
 
 
-def test_independent_damper_adds_projected_rocker_arm(
+@pytest.mark.parametrize(
+    ("geometry", "pickup_type", "pickup_point", "arm_label"),
+    [
+        (
+            "corner_rocker_damper_geometry.yaml",
+            RockerPickupType.DAMPER,
+            PointID.DAMPER_ROCKER,
+            "Rocker Damper Arm",
+        ),
+        (
+            "corner_strut_rocker_geometry.yaml",
+            RockerPickupType.COILOVER,
+            PointID.STRUT_BOTTOM,
+            "Rocker Coilover Arm",
+        ),
+    ],
+)
+def test_damper_or_coilover_adds_projected_rocker_arm(
     test_data_dir: Path,
+    geometry: str,
+    pickup_type: RockerPickupType,
+    pickup_point: PointID,
+    arm_label: str,
 ) -> None:
-    suspension = load_geometry(test_data_dir / "corner_rocker_damper_geometry.yaml")
+    suspension = load_geometry(test_data_dir / geometry)
     assembly = suspension.assembly()
     positions = resolve_positions(suspension.initial_state().positions, assembly)
 
@@ -86,20 +108,18 @@ def test_independent_damper_adds_projected_rocker_arm(
         element for element in assembly.elements if isinstance(element, RockerElement)
     )
     damper_pickup = next(
-        pickup for pickup in rocker.pickups if pickup.type is RockerPickupType.DAMPER
+        pickup for pickup in rocker.pickups if pickup.type is pickup_type
     )
     projection = AxisProjection(damper_pickup.point, rocker.rotation_axis)
     path = next(
-        path
-        for path in named_element_paths(assembly)
-        if path.label == "Rocker Damper Arm"
+        path for path in named_element_paths(assembly) if path.label == arm_label
     )
 
-    assert damper_pickup.point is PointID.DAMPER_ROCKER
+    assert damper_pickup.point is pickup_point
     assert path.type is ElementType.ROCKER
     assert path.points == (
-        "damper_rocker",
-        "damper_rocker_axis_projection_rocker_axis_a_rocker_axis_b",
+        point_key_name(pickup_point),
+        axis_projection_name(projection),
     )
 
     axis_start = np.asarray(positions[point_key_name(projection.rotation_axis[0])])

@@ -1,0 +1,120 @@
+# Illustrative layout, not measured team hardpoints. See README.md for sources.
+# X forward, Y left, Z up; the right corner mirrors the left across Y = 0.
+# pushrod_* and pushrod_rocker also represent pullrods in the kinematic schema.
+type: double_wishbone
+scope: axle
+name: FSAE / FSUK-Style [Pushrod / Horizontal Rockers / T-Bar ARB / Heave Link]
+version: 1.0.0
+units: millimeters
+vehicle_config:
+  cg_position:
+    x: -728.5
+    y: 0
+    z: 280
+  wheelbase: 1550
+  front_brake_bias: 0.6
+  driven_axle: rear
+axle_config:
+  axle_position: front
+  steering:
+    type: rack
+  actuation:
+    type: pushrod_rocker
+    mount: upright
+  spring:
+    type: coilover
+  damper:
+    type: none
+  anti_roll:
+    type: t_bar
+  heave_link:
+    type: rocker_to_rocker
+  wheel:
+    offset: 0
+    tire:
+      rim_diameter: 10
+      section_width: 190
+      aspect_ratio: 0.542105
+hardpoints:
+  left:
+    lower_wishbone_inboard_front:
+      x: 180.0
+      y: 180.0
+      z: 145
+    lower_wishbone_inboard_rear:
+      x: -180.0
+      y: 200.0
+      z: 150
+    lower_wishbone_outboard:
+      x: 8.0
+      y: 555.0
+      z: 135
+    upper_wishbone_inboard_front:
+      x: 150.0
+      y: 170.0
+      z: 320
+    upper_wishbone_inboard_rear:
+      x: -165.0
+      y: 185.0
+      z: 325
+    upper_wishbone_outboard:
+      x: -12.0
+      y: 535.0
+      z: 305
+    trackrod_inboard:
+      x: -110.0
+      y: 180.0
+      z: 200
+    trackrod_outboard:
+      x: -100.0
+      y: 555.0
+      z: 205
+    axle_inboard:
+      x: 0
+      y: 500.0
+      z: 230
+    axle_outboard:
+      x: 0
+      y: 600.0
+      z: 230
+    pushrod_outboard:
+      x: 0
+      y: 545.0
+      z: 150
+    rocker_axis_a:
+      x: -90
+      y: 210.0
+      z: 340
+    rocker_axis_b:
+      x: 90
+      y: 210.0
+      z: 340
+    pushrod_inboard:
+      x: 0
+      y: 310.0
+      z: 370
+    droplink_rocker:
+      x: -45
+      y: 140.0
+      z: 355
+    heave_link_rocker:
+      x: 35
+      y: 145.0
+      z: 405
+    droplink_t_bar:
+      x: -155
+      y: 140.0
+      z: 280
+    strut_bottom:
+      x: 0
+      y: 180.0
+      z: 405
+    strut_top:
+      x: 0
+      y: 40.0
+      z: 405
+  center:
+    arb_t_bar_pivot:
+      x: -300
+      y: 0
+      z: 280

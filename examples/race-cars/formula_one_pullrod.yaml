@@ -1,0 +1,144 @@
+# Illustrative layout, not measured team hardpoints. See README.md for sources.
+# X forward, Y left, Z up; the right corner mirrors the left across Y = 0.
+# pushrod_* and pushrod_rocker also represent pullrods in the kinematic schema.
+# Wheel, steering, vehicle, and setup values match the F1-Style pushrod baseline.
+# Separate rocker pickup stations; translate paired mounts along the X axis.
+type: double_wishbone
+scope: axle
+name: F1-Style [Pullrod / Horizontal Rockers / T-Bar ARB / Heave Link]
+version: 0.0.1
+units: millimeters
+vehicle_config:
+  cg_position:
+    x: 1250
+    y: 0
+    z: 450
+  wheelbase: 2500.0
+  front_brake_bias: 0.6
+  driven_axle: rear
+axle_config:
+  axle_position: front
+  steering:
+    type: rack
+  actuation:
+    type: pushrod_rocker
+    mount: upper_wishbone
+  spring:
+    type: torsion_bar
+  damper:
+    type: linear
+  anti_roll:
+    type: t_bar
+  heave_link:
+    type: rocker_to_rocker
+  wheel:
+    offset: 0
+    tire:
+      aspect_ratio: 0.55
+      section_width: 270
+      rim_diameter: 13
+  left_setup:
+    camber_shim:
+      shim_face_point_a:
+        x: -53.0
+        y: 750.0
+        z: 510.0
+      shim_face_point_b:
+        x: -53.0
+        y: 750.0
+        z: 490.0
+      shim_face_normal:
+        x: 0.0
+        y: 1.0
+        z: 0.0
+      design_thickness: 30.0
+      setup_thickness: 30.0
+    pushrod_shim:
+      design_thickness: 0.0
+      setup_thickness: 0.0
+    toe_shim:
+      design_thickness: 0.0
+      setup_thickness: 0.0
+hardpoints:
+  left:
+    lower_wishbone_inboard_front:
+      x: 250
+      y: 400
+      z: 200
+    lower_wishbone_inboard_rear:
+      x: -250
+      y: 450
+      z: 200
+    lower_wishbone_outboard:
+      x: 0
+      y: 900
+      z: 200
+    upper_wishbone_inboard_front:
+      x: 225
+      y: 350
+      z: 500
+    upper_wishbone_inboard_rear:
+      x: -275
+      y: 350
+      z: 500
+    upper_wishbone_outboard:
+      x: -53
+      y: 750
+      z: 500
+    trackrod_inboard:
+      x: 125
+      y: 200
+      z: 250
+    trackrod_outboard:
+      x: 150
+      y: 800
+      z: 275
+    axle_inboard:
+      x: -20
+      y: 800
+      z: 308.426
+    axle_outboard:
+      x: -20
+      y: 950
+      z: 313.426
+    pushrod_outboard:
+      x: 0
+      y: 795.0
+      z: 425
+    rocker_axis_a:
+      x: 20
+      y: 300
+      z: 280
+    rocker_axis_b:
+      x: -180
+      y: 300
+      z: 280
+    pushrod_inboard:
+      x: 0
+      y: 355
+      z: 210
+    droplink_rocker:
+      x: -150
+      y: 230
+      z: 280
+    heave_link_rocker:
+      x: -50
+      y: 310
+      z: 340
+    droplink_t_bar:
+      x: -150
+      y: 230
+      z: 360
+    damper_rocker:
+      x: -100
+      y: 310
+      z: 320
+    damper_chassis:
+      x: -100
+      y: 110
+      z: 320
+  center:
+    arb_t_bar_pivot:
+      x: -300
+      y: 0
+      z: 360

@@ -48,6 +48,43 @@ def test_rack_hold_is_captured_once_during_bump_sweep() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "geometry_file,sides",
+    [
+        ("trailing_arm_torsion_geometry.yaml", ("left",)),
+        ("trailing_arm_axle_geometry.yaml", ("left", "right")),
+    ],
+)
+def test_rack_hold_is_already_satisfied_for_unsteered_geometry(
+    geometry_file: str, sides: tuple[str, ...]
+) -> None:
+    suspension = load_geometry(DATA_DIR / geometry_file)
+    targets = [
+        {
+            "type": "point",
+            "point": "wheel_center",
+            "side": side,
+            "direction": {"axis": "z"},
+            "start": -5,
+            "stop": 5,
+        }
+        for side in sides
+    ]
+    targets.append(
+        {
+            "type": "actuator_position",
+            "actuator": "rack",
+            "direction": {"axis": "y"},
+            "hold": True,
+        }
+    )
+    sweep = build_sweep({"steps": 3, "targets": targets}, suspension)
+
+    assert sweep.hold.coordinates == ()
+    states, _ = solve_sweep(suspension, sweep)
+    assert len(states) == 3
+
+
 def test_element_length_hold_closes_steering_sweep() -> None:
     suspension = load_geometry(DATA_DIR / "corner_rocker_damper_geometry.yaml")
     sweep = build_sweep(
