@@ -1,0 +1,124 @@
+# Illustrative layout, not measured team hardpoints. See README.md for sources.
+# X forward, Y left, Z up; the right corner mirrors the left across Y = 0.
+# pushrod_* and pushrod_rocker also represent pullrods in the kinematic schema.
+type: double_wishbone
+scope: axle
+name: IndyCar-Style [Pushrod / Vertical Rockers / U-Bar ARB / Heave Link]
+version: 1.0.0
+units: millimeters
+vehicle_config:
+  cg_position:
+    x: -1410.0
+    y: 0
+    z: 380
+  wheelbase: 3000
+  front_brake_bias: 0.6
+  driven_axle: rear
+axle_config:
+  axle_position: front
+  steering:
+    type: rack
+  actuation:
+    type: pushrod_rocker
+    mount: upright
+  spring:
+    type: coilover
+  damper:
+    type: none
+  anti_roll:
+    type: u_bar
+  heave_link:
+    type: rocker_to_rocker
+  wheel:
+    offset: 0
+    tire:
+      rim_diameter: 13
+      section_width: 270
+      aspect_ratio: 0.610741
+hardpoints:
+  left:
+    lower_wishbone_inboard_front:
+      x: 232.5
+      y: 232.5
+      z: 245
+    lower_wishbone_inboard_rear:
+      x: -232.5
+      y: 258.333333
+      z: 250
+    lower_wishbone_outboard:
+      x: 10.333333
+      y: 730.0
+      z: 235
+    upper_wishbone_inboard_front:
+      x: 193.75
+      y: 219.583333
+      z: 420
+    upper_wishbone_inboard_rear:
+      x: -213.125
+      y: 238.958333
+      z: 425
+    upper_wishbone_outboard:
+      x: -15.5
+      y: 710.0
+      z: 405
+    trackrod_inboard:
+      x: -142.083333
+      y: 232.5
+      z: 300
+    trackrod_outboard:
+      x: -129.166667
+      y: 730.0
+      z: 305
+    axle_inboard:
+      x: 0
+      y: 675.0
+      z: 330
+    axle_outboard:
+      x: 0
+      y: 775.0
+      z: 330
+    pushrod_outboard:
+      x: 0
+      y: 720.0
+      z: 250
+    rocker_axis_a:
+      x: -86
+      y: 271.25
+      z: 445
+    rocker_axis_b:
+      x: -74
+      y: 271.25
+      z: 595
+    pushrod_inboard:
+      x: 35.0
+      y: 302.0
+      z: 520
+    droplink_rocker:
+      x: -100
+      y: 167.916667
+      z: 520
+    heave_link_rocker:
+      x: -10
+      y: 187.291667
+      z: 520
+    droplink_u_bar:
+      x: -250
+      y: 167.916667
+      z: 450
+    strut_bottom:
+      x: -150
+      y: 213.125
+      z: 520
+    strut_top:
+      x: -380
+      y: 213.125
+      z: 520
+  center:
+    arb_u_bar_axis_a:
+      x: -250
+      y: 167.916667
+      z: 350
+    arb_u_bar_axis_b:
+      x: -250
+      y: -167.916667
+      z: 350

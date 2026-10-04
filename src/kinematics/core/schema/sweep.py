@@ -27,7 +27,13 @@ from kinematics.core.coordinates import (
     PointCoordinate,
     validate_sweep_controls,
 )
-from kinematics.core.enums import Axis, PointID, Scope, TargetValueMode
+from kinematics.core.enums import (
+    ActuatorPositionCoordinateID,
+    Axis,
+    PointID,
+    Scope,
+    TargetValueMode,
+)
 from kinematics.core.holds import CoordinateHold
 from kinematics.core.primitives.geometry import Direction3, extract_array
 from kinematics.core.primitives.point_ref import Side
@@ -360,6 +366,15 @@ def build_sweep_config(  # noqa: PLR0915 - known long; split when next changed
                         f"Actuator target '{target_spec.actuator}' requires a "
                         "suspension context to resolve its physical coordinate."
                     )
+                # A held rack means fixed steering. An unsteered suspension has
+                # no rack degree of freedom, so that condition is already met.
+                if (
+                    target_spec.hold
+                    and target_spec.actuator == ActuatorPositionCoordinateID.RACK.value
+                    and target_spec.side is None
+                    and suspension.steering_actuator_coordinate() is None
+                ):
+                    continue
                 coordinate = suspension.resolve_drive_coordinate(
                     target_spec.actuator,
                     target_spec.side,

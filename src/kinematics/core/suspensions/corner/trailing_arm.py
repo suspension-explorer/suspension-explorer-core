@@ -517,7 +517,7 @@ class TrailingArmSuspension(CornerSuspension):
             return (
                 *elements,
                 VariableLengthLinkElement(
-                    label="Spring/Damper",
+                    label="Coilover",
                     type=ElementType.SPRING_DAMPER,
                     point_a=PointID.STRUT_TOP,
                     point_b=PointID.STRUT_BOTTOM,
